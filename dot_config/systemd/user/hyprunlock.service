@@ -1,0 +1,13 @@
+[Unit]
+Description=changes hyprland to the main profile
+Conflicts=hyprlock.service
+Before=hyprlock.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/ln -sf /home/magni/.config/hypr/hyprland.conf.main /home/magni/.config/hypr/hyprland.conf
+ExecStartPost= /bin/sh -c "pgrep -x Hyprland && /usr/bin/hyprctl reload"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
