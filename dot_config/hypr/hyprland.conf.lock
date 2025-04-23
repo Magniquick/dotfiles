@@ -1,11 +1,7 @@
 decoration:blur:enabled = false
 animations:enabled = false
-exec = pgrep -x swww-daemon || swww init && swww -t none img ~/Pictures/wall.png
 #xwayland:enabled = false
-exec = pgrep -x waybar || waybar
-exec = pgrep -x dunst || /usr/bin/dunst
-exec = pgrep -x hypridle || hypridle
-exec-once = zsh ~/.config/hypr/lock.sh
+exec-once = sh ~/.config/hypr/lock.sh
 misc {
     force_default_wallpaper = 0
     disable_hyprland_logo = true

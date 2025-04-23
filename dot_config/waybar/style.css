@@ -1,0 +1,128 @@
+@import "mocha.css";
+
+* {
+	font-family: JetBrainsMono Nerd Font;
+}
+
+window#waybar {
+	background: transparent;
+}
+
+#workspaces button {
+	color: @subtext0;
+	/* margin: 0px 0;
+  box-shadow: inset 0 -3px transparent; */
+	transition: all 0.5s cubic-bezier(0.55, -0.68, 0.48, 1.68);
+	background-color: transparent;
+	padding-left: 7px;
+	padding-right: 7px;
+	border-radius: 2rem;
+}
+
+#workspaces button.active {
+	background: none; /* Remove predefined background color (white) */
+	color: @mauve;
+	border-radius: 1rem;
+}
+
+#workspaces button:hover {
+	background: none; /* Remove predefined background color (white) */
+	color: @rosewater;
+	padding-left: 7px;
+	padding-right: 7px;
+	border-radius: 1rem;
+}
+
+#workspaces,
+#mpris,
+#tray,
+#network,
+#idle_inhibitor,
+#backlight,
+#battery,
+#wireplumber {
+	font-family: 'JetBrainsMono Nerd Font Propo', sans-serif;
+	background-color: @base;
+	margin: 5px 1px 0px 1px;
+	padding-left: 7px;
+	padding-right: 7px;
+	border-radius: 2rem;
+}
+
+
+#clock {
+	font-family: 'JetBrainsMono Nerd Font Propo', sans-serif;
+	background-color: @base;
+	margin: 5px 7px 0px 1px;
+	padding-left: 7px;
+	padding-right: 7px;
+	border-radius: 2rem;
+}
+
+#custom-archicon {
+	font-family: 'JetBrainsMono Nerd Font Propo', sans-serif;
+    background-color: @base;
+    margin: 5px 1px 0px 7px; 
+    padding-left: 1px;       /* Decreased left padding */
+    padding-right: 1px;      /* Decreased right padding */
+    border-radius: 2rem;
+}
+
+
+#custom-archicon,
+#mpris {
+	color: @text;
+}
+
+#idle_inhibitor.activated {
+	color: @lavander;
+}
+
+#idle_inhibitor.deactivated {
+	color: @subtext0;
+}
+
+#clock {
+	color: @lavender;
+}
+
+#battery {
+	color: @green;
+}
+
+#battery.charging {
+	color: @green;
+}
+
+#battery.critical:not(.charging) {
+	color: @red;
+}
+
+#network {
+	color: @flamingo;
+}
+
+#backlight {
+	color: @yellow;
+}
+
+#wireplumber {
+	color: @pink;
+}
+
+#wireplumber.muted {
+	color: @red;
+}
+
+#tray {
+	border-radius: 1rem;
+}
+
+tooltip {
+	background: @base;
+	border: 1px solid @pink;
+}
+
+tooltip label {
+	color: @text;
+}

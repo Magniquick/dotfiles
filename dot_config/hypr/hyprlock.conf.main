@@ -6,7 +6,7 @@ $mpris_art = /tmp/hyde-mpris.jpg
 background {
     monitor =
     path = /home/magni/Pictures/lock.png
-    #blur_passes = 0
+    #blur_passes = 1
     #contrast = 0.8916
     #brightness = 0.8172
     #vibrancy = 0.1696
@@ -17,7 +17,7 @@ background {
 general {
     no_fade_in = false
     disable_loading_bar = false
-    grace = 1
+    grace = 0
 }
 
 # GREETINGS
@@ -92,9 +92,9 @@ shape {
 # USER
 label {
     monitor =
-    text =  $USER
+    text =󱐋 $USER
     font_size = 16
-    font_family = JetBrainsMono Nerd Font
+    font_family = JetB1rainsMono Nerd Font
     position =-630, -140
     halign = center
     valign = center
@@ -113,7 +113,7 @@ input-field {
     font_color = rgb(205, 214, 244)
     fade_on_empty = false
     font_family = JetBrainsMono Nerd Font
-    placeholder_text = <i><span foreground="##bac2de">🔒 Enter Pass :3</span></i>
+    placeholder_text = <span foreground="##bac2de"> <i>Enter Pass :3</i></span>
     hide_input = false
     position = -630, -220
     halign = center
@@ -122,76 +122,7 @@ input-field {
 
 # Dragons be here - music widget
 
-# Music blur div
-shape {
-    monitor =
-    size = 350, 110
-    color = rgba(88, 91, 112, 0.4)
-    rounding = 20
-    rotate = 0
-    position = -630, -350
-    halign = center
-    valign = center
-    zindex = 1
-}
-
-# Music Album Art
-image {
-    monitor =
-    path = $mpris_art
-    size = 86
-	border_size = 3
-	border_color = rgba(255, 255, 255, 0.8)
-    rounding = 5
-    rotate = 0
-    reload_time = 0
-    reload_cmd =
-    position = 167, -350
-    halign = left
-    valign = center
-    zindex = 5
-}
-
 # Empty label for loading music art
 label {
-    text = cmd[update:1000] ~/.config/hypr/scripts/musicart.sh
-}
-
-# PLAYER ARTIST
-label {
-    monitor =
-    text = cmd[update:1000] playerctl metadata xesam:artist
-    color = rgb(186, 194, 222)
-    font_size = 12
-    font_family = JetBrains Mono Nerd Font Mono ExtraBold
-    position = 270, -375
-    halign = left
-    valign = center
-    zindex = 5
-}
-
-# PLAYER TITLE
-label {
-    monitor =
-    text = cmd[update:1000] $hyprDir/scripts/truncate.sh "$(playerctl metadata xesam:title)"
-    color = rgb(205, 214, 244)
-    font_size = 14
-    font_family = JetBrains Mono Nerd Font Mono ExtraBold
-    position = 270, -350
-    halign = left
-    valign = center
-    zindex = 5
-}
-
-# PLAYER SOURCE
-label {
-    monitor =
-    text = cmd[update:1000] "$music"
-    color = rgb(166, 173, 200)
-    font_size = 12
-    font_family = JetBrains Mono Nerd Font
-    position = 270, -320
-    halign = left
-    valign = center
-    zindex = 5
+    text = cmd[update:10] ~/.config/hypr/scripts/musicart.sh
 }

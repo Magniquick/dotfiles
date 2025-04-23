@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Activate tab,  window, and workspace 
+
+sep="␞" # UTF-8 SYMBOL FOR RECORD SEPARATOR
+tabs=$(bt list | awk -v sep="$sep" -F "\t" '{print $2 sep $1}')
+tabs=$(echo -e "New Window\n$tabs" )
+active_window=$(hyprctl clients -j | jq -r '[.[] | select(.class == "brave-browser")] | sort_by(.focusHistoryID) | last.title | sub(" - Brave$"; "")')
+selected=$(echo "$tabs" \
+| rofi -dmenu -i -select "$active_window" -p "tabs "  -display-columns 1 -display-column-separator $sep -theme "$HOME"/.config/rofi/config/launcher.rasi \
+| head -1 )
+if [ "$selected" ]; then
+    if [ "$selected" == "New Window" ]; then
+        brave
+        exit 0
+    fi
+    tab_id=$(echo "$selected" | awk -F $sep '{print $2}')
+    echo "$tab_id"
+    bt activate "$tab_id"
+    bt_window_id=$(echo "$tab_id" | cut -d'.' -f2)
+    active_tab_id=$(bt active | grep "$bt_window_id" |cut -f1)
+    window_name=$(echo "$tabs" | grep "$active_tab_id" | awk -F $sep '{print $1}')
+    window_address=$(hyprctl clients -j | jq -r --arg x "$window_name" '.[] | select(.title | test($x; "i")) | .address')
+    hyprctl dispatch focuswindow address:"$window_address"
+fi

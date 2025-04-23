@@ -1,0 +1,127 @@
+// -*- mode: jsonc -*-
+{
+	// "layer": "top", // Waybar at top layer
+	// "position": "bottom", // Waybar position (top|bottom|left|right)
+	// "height": 35, // Waybar height (to be removed for auto height)
+	// "width": 1280, // Waybar width
+	"spacing": 4, // Gaps between modules (4px)
+	// Choose the order of the modules
+	"modules-left": [
+		"custom/archicon",
+		"hyprland/workspaces"
+	],
+	"modules-center": [
+		"mpris"
+	],
+	"modules-right": [
+		"idle_inhibitor",
+		"wireplumber",
+		"network",
+		"backlight",
+		"battery",
+		"clock"
+	],
+	"custom/archicon": {
+		"format": "{text}",
+		"return-type": "json",
+		"exec": "~/.config/waybar/scripts/status.sh",
+		"interval": 60,
+		"tooltip": true,
+		"on-click": "systemctl --user start trigger-powermenu.service",
+	},
+	"idle_inhibitor": {
+		"format": "{icon}",
+		"format-icons": {
+			"activated": "󰒳",
+			"deactivated": "󰒲",
+		},
+	},
+	"wireplumber": {
+		"format": "{volume}% {icon}",
+		"format-icons": [
+			" ",
+			" ",
+			" ",
+			" "
+		],
+		"format-muted": "0%  "
+	},
+	"tray": {
+		// "icon-size": 21,
+		"spacing": 10
+	},
+	"clock": {
+		// "timezone": "America/New_York",
+		"tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+		"format": "{:%I:%M %p}",
+		"format-alt": "{:%d/%m/%y}"
+	},
+	"backlight": {
+		// "device": "acpi_video1",
+		"format": "{percent}% {icon}",
+		"format-icons": [
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"󰃚",
+		],
+		"on-scroll-up": "brightnessctl -q set +1%",
+		"on-scroll-down": "brightnessctl -q set 1%-",
+	},
+	"battery": {
+		"states": {
+			// "good": 95,
+			"warning": 30,
+			"critical": 15,
+		},
+		"format": "{capacity}% {icon}",
+		"format-full": "{capacity}% {icon}",
+		"format-charging": "{capacity}% ",
+		//"format-plugged": "{capacity}% ",
+		"format-alt": "{time} {icon}",
+		// "format-good": "", // An empty format will hide the module
+		// "format-full": "",
+		"format-icons": [
+			" ",
+			" ",
+			" ",
+			" ",
+			" "
+		],
+	},
+	"network": {
+		// "interface": "wlp2*", // (Optional) To force the use of this interface
+		"format-wifi": "{icon}",
+		"format-ethernet": "󰈀",
+		"tooltip-format": "{essid} ({gwaddr}) via {ifname}",
+		"format-linked": "{ifname} (No IP) 󰤣 ",
+		"format-disconnected": "󰖪",
+		"format-alt": "{ifname}: {ipaddr}/{cidr}",
+		"format-icons": [
+			"󰤯",
+			"󰤟",
+			"󰤢",
+			"󰤥",
+			"󰤨"
+		]
+	},
+	"mpris": {
+		"format": "{status_icon}{artist} - {title}",
+		"status-icons": {
+			"paused": " ",
+			"playing": " ",
+		},
+		"max-length": 45,
+	},
+}

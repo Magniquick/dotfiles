@@ -5,8 +5,8 @@ Before=hyprunlock.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/ln -sf /home/magni/.config/hypr/hyprland.conf.lock /home/magni/.config/hypr/hyprland.conf
-ExecStartPost= /bin/sh -c "pgrep -x Hyprland && /usr/bin/hyprctl reload"
+ExecStart=/bin/ln -sf %E/hypr/hyprland.conf.lock %E/hypr/hyprland.conf
+ExecStartPost= /bin/sh -c "(pgrep -x Hyprland && /usr/bin/hyprctl reload) || :"
 RemainAfterExit=yes
 
 [Install]
