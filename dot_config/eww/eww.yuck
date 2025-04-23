@@ -1,7 +1,6 @@
 ; >>> Variables and constants
 ; ---------------------------
 (include "colors.yuck")
-(include "globals.yuck")
 
 
 ; >> Toggleable windows
