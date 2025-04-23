@@ -1,0 +1,4 @@
+arch_package_manager = "yay"
+disabled_backends= ["vscode"]
+[hostname_groups]
+magniquick = ["base", "devices", "zsh", "gui", "cybersec"]

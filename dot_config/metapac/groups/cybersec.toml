@@ -1,0 +1,20 @@
+arch = [
+	"binwalk",
+	"ida-free",
+	"wireshark-qt",
+	"hashcat",
+	"gdb",
+	"ghidra",
+	"openvpn",
+	"hexcurse-ng",
+	"nmap",
+	"burpsuite",
+	"gnu-netcat",
+	"checksec",
+	"inetutils",	# nc
+	"aircrack-ng",
+	"audacity",
+	"sleuthkit",	# fs forensics
+	"upx",
+	"perl-image-exiftool",
+]
