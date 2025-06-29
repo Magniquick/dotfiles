@@ -117,10 +117,10 @@
 		]
 	},
 	"mpris": {
-		"format": "{status_icon}{artist} - {title}",
+		"format": "{status_icon} {artist} - {title}",
 		"status-icons": {
-			"paused": " ",
-			"playing": " ",
+			"paused": "",
+			"playing": "",
 		},
 		"max-length": 45,
 	},

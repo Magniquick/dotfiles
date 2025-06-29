@@ -1,11 +1,11 @@
 $hyprDir = $HOME/.config/hypr
-$music = $hyprDir/scripts/music.sh
+$scripts = $hyprDir/scripts
 $mpris_art = /tmp/hyde-mpris.jpg
 
 # BACKGROUND
 background {
     monitor =
-    path = /home/magni/Pictures/lock.png
+    path = $HOME/Pictures/lock.png
     #blur_passes = 1
     #contrast = 0.8916
     #brightness = 0.8172
@@ -15,8 +15,8 @@ background {
 
 # GENERAL
 general {
-    no_fade_in = false
-    disable_loading_bar = false
+    #no_fade_in = false
+    #disable_loading_bar = false
     grace = 0
 }
 
@@ -60,7 +60,7 @@ label {
 # Profie-Photo
 image {
     monitor =
-    path = /home/magni/.config/hypr/pfp.webp
+    path = $hyprDir/pfp.webp
     border_size = 1
     border_color = rgba(137, 180, 250, 0.75)
     size = 160
@@ -124,5 +124,5 @@ input-field {
 
 # Empty label for loading music art
 label {
-    text = cmd[update:10] ~/.config/hypr/scripts/musicart.sh
+    text = cmd[update:50] $scripts/musicart.sh
 }

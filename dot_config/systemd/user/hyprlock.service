@@ -1,13 +1,37 @@
 [Unit]
-Description=changes hyprland to the lock screen profile
-Conflicts=hyprunlock.service
-Before=hyprunlock.service
+Description=Hyprland Lock Screen (hyprlock)
+After=graphical-session.target
+Requires=graphical-session.target
 
 [Service]
-Type=oneshot
-ExecStart=/bin/ln -sf %E/hypr/hyprland.conf.lock %E/hypr/hyprland.conf
-ExecStartPost= /bin/sh -c "(pgrep -x Hyprland && /usr/bin/hyprctl reload) || :"
-RemainAfterExit=yes
+Type=exec
+# Ensure hyprlock draws on your X/Wayland session
+Environment=DISPLAY=:0
+
+ExecStart=/usr/bin/hyprlock
+
+# if it launches successfully, we switch to the hyprlock-mode
+ExecStartPost=/usr/bin/systemctl --user disable hyprunlock-mode.service
+ExecStartPost=/usr/bin/systemctl --user enable hyprlock-mode.service
+
+# Unlock (terminate) on SIGUSR1
+KillSignal=USR1
+
+# Reload the hyprlock.conf by fully restarting the service
+ExecReload=/usr/bin/systemctl --user restart hyprlock.service
+
+# and on termination, switch back to the main profile
+ExecStopPost=/usr/bin/systemctl --user disable hyprlock-mode.service
+ExecStopPost=/usr/bin/systemctl --user enable hyprunlock-mode.service
+
+# If hyprlock crashes, restart it automatically
+Restart=on-failure
+
+# Make sure all child threads/processes die on stop
+KillMode=control-group
+
+# Allow up to 10s for graceful shutdown after SIGUSR1
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

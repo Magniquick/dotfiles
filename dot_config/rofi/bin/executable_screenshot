@@ -13,8 +13,8 @@ view=" View Images"
 options="$area\n$screen\n$window\n$ocr\n$view"
 perform_ocr() {
     local output_file="/tmp/ocr.png"
+    hypr_out=$(grim -g "$(slurp)" /tmp/ocr.png 2>&1)
 
-    hypr_out=$(hyprshot -s -m region -o /tmp -f ocr.png 2>&1)
     if grep -q 'invalid geometry' <<< "$hypr_out"; then
         notify-send "OCR" "Failed to take screenshot."
         return
@@ -22,13 +22,15 @@ perform_ocr() {
 
     # Try QR/barcode detection first
     local qr_result
-
-    while :; do
+    local try=5
+    while [ $try -gt 0 ]; do
         zbar_error=$(mktemp)
         qr_result=$(zbarimg --oneshot --raw "$output_file" 2> "$zbar_error")
 
         if grep -q 'ERROR' "$zbar_error"; then
-            sleep 0.1 # Wait for the image to be written
+            sleep 0.2 # Wait for the image to be written
+            echo "Retrying QR detection... ($try attempts left)"
+            ((try--))
         else
             break
         fi

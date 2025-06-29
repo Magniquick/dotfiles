@@ -149,3 +149,38 @@ element selected.active {
     background-color:               @BGA;
     color:                          @FG;
 }
+
+
+/* Unselected rows */
+element normal.urgent,
+element alternate.urgent {
+    background-color: @UGT;
+    text-color:       @FG;
+    border-radius:    9px;
+}
+
+element normal.active,
+element alternate.active {
+    background-color: @BGA;
+    text-color:       @FG;
+}
+
+/* The currently-selected row */
+element selected {
+    background-color: @BGA;
+    text-color:       @SEL;
+    border-radius:    10px;
+    border:           0px;
+}
+
+/* Selected + urgent */
+element selected.urgent {
+    background-color: @UGT;
+    text-color:       @FG;
+}
+
+/* Selected + active */
+element selected.active {
+    background-color: @BGA;
+    text-color:       @FG;
+}

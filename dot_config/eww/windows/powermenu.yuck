@@ -1,3 +1,7 @@
+;; -------------------------------
+;; powermenu.yuck (touch‐friendly)
+;; -------------------------------
+
 (defwindow powermenu [is-secondary]
   :monitor 0
   :geometry (geometry
@@ -10,53 +14,69 @@
   :exclusive false
   :focusable true
   :namespace "powermenu"
+
   (revealer
     :transition "crossfade"
-    :reveal "${powermenu-visible}"
-    :duration "300ms"
-    (eventbox
-      :halign "fill"
-      :valign "fill"
-      :onclick "${!powermenu-button-hovered} &&  ~/.config/eww/scripts/manage hide powermenu &"
-      :onmiddleclick "~/.config/eww/scripts/manage hide powermenu &"
-      :class "powermenu ${""}"
-      
-      (box :space-evenly false
-        :halign "center"
-        :valign "center"
-        :class "container"
-        :visible "${!is-secondary}"
+    :reveal     "${powermenu-visible}"
+    :duration   "300ms"
+
+    (overlay
+      ;; 1) Full‐screen transparent backdrop
+      (eventbox
+        :active   true
+        :hexpand  true  :vexpand true
+        :onclick  "~/.config/eww/scripts/manage hide powermenu &")
+
+      ;; 2) Actual menu container
+      (box
+        :class     "container"
+        :visible   "${!is-secondary}"
+        :halign    "center" :valign "center"
+        :hexpand   true     :vexpand true
+        :space-evenly false
+
+        ;; ─── LEFT SIDE ───────────────────────────
         (box
-          :class "left-side"
+          :class       "left-side"
           :orientation "vertical"
+          :halign      "fill" :valign "center"
+          :hexpand     true
+          :spacing     40
           :space-evenly false
-          :halign "fill"
-          :hexpand true
-          :valign "center"
-          :spacing 40
+
+          ;; Greeting
           (box
             :orientation "vertical"
+            :class       "greeting"
             :space-evenly false
-            :class "greeting"
             (box
-              :valign "start"
-              :class "headline"
+              :valign    "start"
+              :class     "headline"
               :space-evenly false
               "Hello"
               (box :class "little-heart" ""))
-            (box :valign "start" :class "subtitle" "(again)"))
-          (box :class "quote"
+            (box
+              :valign "start"
+              :class "subtitle"
+              "(again)"))
+
+          ;; Quote
+          (box
+            :class       "quote"
             :orientation "vertical"
             :space-evenly false
-            :valign "center"
-            :spacing 2
+            :valign      "center"
+            :spacing     2
             (box :class "marks" "❝")
-            (box :halign "center"
+            (box
               :orientation "vertical"
               :space-evenly false
-              :spacing 6
+              :spacing     6
+              :halign      "center"
               (box :halign "start" "“bnuuy art life”")
               (box :class "author" :halign "end" "-Karl Marx")))
+
+          ;; Palette
           (box :class "palette"
             :space-evenly false
             :halign "center"
@@ -67,6 +87,8 @@
             (box :valign "center" :class "border" (box :class "color"))
             (box :valign "center" :class "border" (box :class "color"))
             (box :valign "center" :class "border" (box :class "color"))))
+
+        ;; ─── RIGHT SIDE ──────────────────────────
         (box
           :class "right-side"
           :valign "fill"
@@ -81,6 +103,7 @@
               :halign "center"
               :space-evenly false
               (eventbox
+                :active true
                 :onhover "eww update bunny-head=\"${bunny-head-json.headpat}\""
                 :onhoverlost "eww update bunny-head=\"${bunny-head-json.default}\""
                 (box
@@ -95,13 +118,13 @@
             (overlay
               :height "114"
               (box :class "button-container ${powermenu-visible ? "revealed" : ""}"
-                :visible true
-                :orientation "vertical"
-                :hexpand true
-                :vexpand true
-                :halign "center"
-                :valign "start"
-                :space-evenly false
+                   :visible true
+                   :orientation "vertical"
+                   :hexpand true
+                   :vexpand true
+                   :halign "center"
+                   :valign "start"
+                   :space-evenly false
                 (box
                   (powermenu-button
                     :extra-class "Poweroff"
@@ -149,12 +172,17 @@
                 "${powermenu-button-selected}"
                 (box :class "blink" "_")))))))))
 
+;; -------------------------------
+;; powermenu-button widget
+;; -------------------------------
 (defwidget powermenu-button [extra-class text symbol onclick]
   (eventbox
-    :onhover "(sleep 0.02 && eww update powermenu-button-hovered=true powermenu-button-selected=\"${extra-class}\") &"
+    :active      true
+    :onhover     "(sleep 0.02 && eww update powermenu-button-hovered=true powermenu-button-selected=\"${extra-class}\") &"
     :onhoverlost "eww update powermenu-button-hovered=false powermenu-button-selected= &"
-    :onclick "${onclick}"
-    :cursor "hand2"
+    :onclick     "${onclick}"
+    :cursor      "hand2"
+
     (box
       :vexpand false
       :halign "center"
@@ -162,6 +190,10 @@
       :valign "start"
       :class "button ${extra-class} ${(powermenu-button-selected == extra-class) ? "this-selected" : (powermenu-button-selected == "") ? "nothing-selected" : "not-selected"}"
       (box :class "symbol" "${symbol}"))))
+
+;; -------------------------------
+;; Variables
+;; -------------------------------
 
 (defvar bunny-head-json "{ \"default\": \"( . .) \", \"headpat\": \"( ^ ^) \" }")
 (defvar bunny-head "( . .) ")

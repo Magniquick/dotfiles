@@ -29,19 +29,14 @@ hibernate() {
 }
 
 exit() {
-    echo Noop
+    "${eww}/manage" hide powermenu
+    loginctl lock-session
 }
+
 lock() {
-    builtin echo lockscreen > /tmp/eww-widget-input-active
-    swaymsg mode _eww_input
-    eww update \
-        screen-locked=true \
-        powermenu-button-selected= \
-        screen-lock-input= \
-        screen-lock-input-masked= \
-        screen-lock-input-last-action=clear \
-        screen-lock-auth-failed=false
+    systemctl reboot --boot-loader-entry=auto-windows
 }
+
 clear_selection() {
     eww update powermenu-button-selected=
 }

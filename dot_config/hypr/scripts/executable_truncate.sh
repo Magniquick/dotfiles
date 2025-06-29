@@ -1,7 +1,4 @@
-#!/bin/zsh
-
-# List of common stopwords (can be extended or customized)
-stopwords=("the" "and" "or" "a" "an" "to" "of" "in" "on" "at" "for" "with" "by")
+#!/bin/env bash
 
 # Function to truncate song name intelligently
 truncate_song_name() {
@@ -18,7 +15,7 @@ truncate_song_name() {
   fi
 
   # Split the song name into words
-  words=("${(@s/ /)song_name}")
+  IFS=" " read -r -a words <<< "$song_name"
   truncated=""
 
   # Truncate based on the max length

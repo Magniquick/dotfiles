@@ -1,5 +1,5 @@
 $hyprDir = $HOME/.config/hypr
-$scripts = $hyprDir/scripts/
+$scripts = $hyprDir/scripts
 $mpris_art = /tmp/hyde-mpris.jpg
 
 # BACKGROUND
@@ -15,8 +15,8 @@ background {
 
 # GENERAL
 general {
-    no_fade_in = false
-    disable_loading_bar = false
+    #no_fade_in = false
+    #disable_loading_bar = false
     grace = 0
 }
 
@@ -194,5 +194,5 @@ label {
 
 # Empty label for loading music art
 label {
-    text = cmd[update:10] $scripts/musicart.sh
+    text = cmd[update:50] $scripts/musicart.sh
 }

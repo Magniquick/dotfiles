@@ -126,10 +126,11 @@ element alternate.urgent {
 
 element normal.active,
 element alternate.active {
-    background-color:               @BGA;
-    text-color:                     @FG;
+    background-color:               @ON;
+    text-color:                     @SEL ;
 }
 
+element selected.active,
 element selected {
     background-color:               @BGA;
     text-color:                     @SEL;
@@ -141,9 +142,4 @@ element selected {
 element selected.urgent {
     background-color:               @UGT;
     text-color:                     @FG;
-}
-
-element selected.active {
-    background-color:               @BGA;
-    color:                          @FG;
 }
