@@ -194,5 +194,5 @@ label {
 
 # Empty label for loading music art
 label {
-    text = cmd[update:50] $scripts/musicart.sh
+    text = cmd[update:200] $scripts/musicart.sh
 }
