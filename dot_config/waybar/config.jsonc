@@ -27,14 +27,14 @@
 		"exec": "~/.config/waybar/scripts/status.sh",
 		"interval": 60,
 		"tooltip": true,
-		"on-click": "systemctl --user start trigger-powermenu.service",
+		"on-click": "systemctl --user start trigger-powermenu.service"
 	},
 	"idle_inhibitor": {
 		"format": "{icon}",
 		"format-icons": {
 			"activated": "󰒳",
-			"deactivated": "󰒲",
-		},
+			"deactivated": "󰒲"
+		}
 	},
 	"wireplumber": {
 		"format": "{volume}% {icon}",
@@ -52,9 +52,14 @@
 	},
 	"clock": {
 		// "timezone": "America/New_York",
-		"tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+		"tooltip-format": "<big>{:%Y %B}</big><small>{calendar}</small>",
 		"format": "{:%I:%M %p}",
-		"format-alt": "{:%d/%m/%y}"
+		"format-alt": "{:%d/%m/%y}",
+		"calendar":{
+			"format":{
+				"months": ""
+			}
+		}
 	},
 	"backlight": {
 		// "device": "acpi_video1",
@@ -74,16 +79,16 @@
 			"",
 			"",
 			"",
-			"󰃚",
+			"󰃚"
 		],
-		"on-scroll-up": "brightnessctl -q set +1%",
-		"on-scroll-down": "brightnessctl -q set 1%-",
+		"on-scroll-up": "brillo -U 1",
+		"on-scroll-down": "brillo -A 1"
 	},
 	"battery": {
 		"states": {
 			// "good": 95,
-			"warning": 30,
-			"critical": 15,
+			"warning": 25,
+			"critical": 15
 		},
 		"format": "{capacity}% {icon}",
 		"format-full": "{capacity}% {icon}",
@@ -98,13 +103,13 @@
 			" ",
 			" ",
 			" "
-		],
+		]
 	},
 	"network": {
 		// "interface": "wlp2*", // (Optional) To force the use of this interface
 		"format-wifi": "{icon}",
 		"format-ethernet": "󰈀",
-		"tooltip-format": "{essid} ({gwaddr}) via {ifname}",
+        "tooltip-format": "Network: {essid} ({gwaddr})\nSignal strength: {signaldBm}dBm ({signalStrength}%)\nFrequency: {frequency} GHz\nInterface: {ifname}",
 		"format-linked": "{ifname} (No IP) 󰤣 ",
 		"format-disconnected": "󰖪",
 		"format-alt": "{ifname}: {ipaddr}/{cidr}",
@@ -120,8 +125,8 @@
 		"format": "{status_icon} {artist} - {title}",
 		"status-icons": {
 			"paused": "",
-			"playing": "",
+			"playing": ""
 		},
-		"max-length": 45,
-	},
+		"max-length": 45
+	}
 }
