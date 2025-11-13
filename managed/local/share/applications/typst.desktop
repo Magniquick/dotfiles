@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Typst
+Comment=Open Typst webapp
+Exec=/home/magni/.local/bin/custom/typst.sh
+Icon=typst
+Terminal=false
+Type=Application
+Categories=Office;Publishing;TextEditor;

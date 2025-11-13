@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+eww="$HOME/.config/eww/scripts"
+eww_powermenu_selected_action="$(eww get powermenu-button-selected)"
+
+
+if [[ -z "$1" ]]; then
+    echo You did not specify an action
+    exit 1
+fi
+
+action=$1
+
+poweroff() {
+    systemctl poweroff
+}
+
+reboot() {
+    systemctl reboot
+}
+
+suspend() {
+    "${eww}/manage" hide powermenu
+    systemctl suspend
+}
+
+hibernate() {
+    "${eww}/manage" hide powermenu
+    systemctl hibernate
+}
+
+exit() {
+    "${eww}/manage" hide powermenu
+    loginctl lock-session
+}
+
+lock() {
+    systemctl reboot --boot-loader-entry=auto-windows
+}
+
+clear_selection() {
+    eww update powermenu-button-selected=
+}
+
+if [[ "$action" == "$eww_powermenu_selected_action" || "$action" == "confirm" ]]; then
+    $action
+elif [[ "$action" == "clear" ]]; then
+    clear_selection
+else
+    eww update powermenu-button-selected="$action"
+fi

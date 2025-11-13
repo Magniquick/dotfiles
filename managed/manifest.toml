@@ -1,0 +1,263 @@
+[[entries]]
+group = "config"
+relative_path = "atuin"
+digest = "7e3d44bdfa3f3cb3efe837270322864d6a6bb520bd337f7a7a23d2f547886934"
+size = 0
+mode = 448
+mtime_ns = 1762773703921942478
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "brave-flags.conf"
+digest = "87c1f59d73e32b07ddabeeeb9589c1a4cfd1067298a9235884676c3171378d77"
+size = 1079
+mode = 420
+mtime_ns = 1762773703916873375
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "captive-browser.toml"
+digest = "1bc05e753567f1d4656e002e42fcaa129aaecfe0d01cceb408de6c32f3c967de"
+size = 1391
+mode = 420
+mtime_ns = 1762773703916873375
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "dconf"
+digest = "f98534821dceddb42ad4a5f1ce1bde7c0a1019318ee6a25c6243501fc91f7e54"
+size = 0
+mode = 448
+mtime_ns = 1762773703933152204
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "dunst"
+digest = "9afb3a38f54bfa5fa0d3d561d3d5a3b1ba2681eae8dda79a9eff73970883b0cd"
+size = 0
+mode = 493
+mtime_ns = 1762773703917205719
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "environment.d"
+digest = "3a2ddba4b1ec11f4acba24dced5ce0a96cdb23ebd33484763cdf0779a919dfd7"
+size = 0
+mode = 493
+mtime_ns = 1762773703917350729
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "eww"
+digest = "78fb4045624b7eafd936ac95b596337f08b6f73ca7dcae46c09b4c9be8a01431"
+size = 0
+mode = 493
+mtime_ns = 1762773703918249475
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "hypr"
+digest = "071effac801a97f756d8ced207e87da595746196fedce3d1bd66f157d0c17509"
+size = 0
+mode = 493
+mtime_ns = 1762773703928536498
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "kitty"
+digest = "e8652a6152598d5b70c4f10c5d907b60e2d3e1a840f3c5043edbb888cb9fc2fd"
+size = 0
+mode = 493
+mtime_ns = 1762773703918548427
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "metapac"
+digest = "f0d9982a00c8a983c3209225d12a625b3a27f23d5719493d2f43d4b6576950ed"
+size = 0
+mode = 493
+mtime_ns = 1762773703918882227
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "nautilus"
+digest = "6662b8ab4cab4ebfaf0303f8fd7a3cca78d4b52f089917095b11d291d6aab626"
+size = 0
+mode = 493
+mtime_ns = 1762773703933299186
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "rofi"
+digest = "7b0ecb3afa011f1597de0f83d009ccc6ec190264bef0b9b68a908f0f9cffd106"
+size = 0
+mode = 493
+mtime_ns = 1762773703921466980
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "swaync"
+digest = "db4c8298115f3db5d7cbfa4d508e37d851353897cbd6f1d347f52ec6df362371"
+size = 0
+mode = 493
+mtime_ns = 1762773703933637435
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "systemd"
+digest = "472d1d6198cd672419985ec9fdd342ae0c6f5bc6464e7da01152fc5b14504313"
+size = 0
+mode = 493
+mtime_ns = 1762773703928963989
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "user-dirs.dirs"
+digest = "3c09bac1adbaca469fdba6e5b78bad0b456006c8b36bfa1f6053072b2891e5f6"
+size = 627
+mode = 384
+mtime_ns = 1762773703931466526
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "user-dirs.locale"
+digest = "e7ab2bfee30a493f2a2ca591c42c7d9ecbf876fa6673473a17aeb5712ca7a54f"
+size = 5
+mode = 420
+mtime_ns = 1762773703933637435
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "uwsm"
+digest = "408a6f93e5dacf485e236c427e606b2093f0f2d772ced0340880d07b110bbee4"
+size = 0
+mode = 493
+mtime_ns = 1762773703934262492
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "vicinae"
+digest = "a4f60ade64dbe27f17c5bc36a01b20ade8a5a8fb72b9515945a60fa088ac085d"
+size = 0
+mode = 493
+mtime_ns = 1762773703934400708
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "waybar"
+digest = "09927c85621bb2201ca9beecf1baa918fd19e37ac3f3ffdd80439b769afee689"
+size = 0
+mode = 493
+mtime_ns = 1762773703932595238
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "home"
+relative_path = "Templates"
+digest = "b3bae66d9725825844768d96b74495659eef11492ffc2d760f882331ecf35154"
+size = 0
+mode = 493
+mtime_ns = 1762773703936082943
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "local"
+relative_path = "bin/custom"
+digest = "8ae313be0f7738b03b02ac9783dff64b86b471b2737264b44a77fb213f083b58"
+size = 0
+mode = 493
+mtime_ns = 1762773703934847390
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "local"
+relative_path = "share/applications"
+digest = "64802b551c064111b5fa688b39b478f25820cbe33cc22cfbc3fb4f80c8cc6776"
+size = 0
+mode = 448
+mtime_ns = 1762773703935145545
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "local"
+relative_path = "share/icons/hicolor/48x48/apps/typst.png"
+digest = "e691e19689b38dfcba51006ec1bf7bab54f95b0ecc0b427f25d127f549d43aac"
+size = 16532
+mode = 420
+mtime_ns = 1762773703935813513
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "local"
+relative_path = "share/icons/hicolor/48x48/apps/whatsapp.png"
+digest = "8e4dfe43bcd4f78f5cd046bebdfc15b308d8a4906995c4d91bab49c18cb71504"
+size = 2501
+mode = 420
+mtime_ns = 1762773703935813513
+type = "file"
+uid = 1000
+gid = 1000

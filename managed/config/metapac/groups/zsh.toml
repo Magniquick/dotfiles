@@ -1,0 +1,37 @@
+arch = [
+	"brillo",
+	"pacman-contrib",	# used for updpkgsums
+	"topgrade",
+	"zsh",
+	"git",
+	"atuin",
+	"zoxide",
+	"fzf",
+	"eza",
+	"wl-clipboard",
+	"7zip",
+	"unzip",
+	"unrar",
+	"chezmoi",
+	"uv",
+	"jdk-openjdk",
+	"vim", # provides xxd and other tools
+	"rclone",
+	"rsync",
+
+	# shiny tools go here
+	"lazygit",
+	"htop",
+	"btop",
+	"less",
+	"fastfetch",
+	"powertop",
+	"android-tools",
+	"tailscale",
+	"xdg-ninja-git",
+	"github-cli",
+	"hyperfine",
+	"wget",
+	"yt-dlp",
+	"lutgen-bin"
+]

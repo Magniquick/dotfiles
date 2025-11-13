@@ -1,0 +1,41 @@
+arch = [
+	# mirrorlists
+	"alhp-keyring",
+	"alhp-mirrorlist",
+	"chaotic-keyring",
+	"chaotic-mirrorlist",
+	"cachyos-keyring",
+	"cachyos-mirrorlist",
+	"cachyos-v3-mirrorlist",
+	
+	# required (in order):
+	"base",			# contains systemd & systemd-boot
+	"base-devel",
+	"linux-cachyos",
+	"linux-lts",	# Backup kernel
+	"linux-firmware",
+	"intel-ucode",
+	"micro",
+
+	# systemd-boot hook to auto update
+	"systemd-boot-pacman-hook",
+	# paccache hook to remove old versions
+	"paccache-hook",
+
+	# can live without, might cause issues tho
+	"upd72020x-fw",
+	"btrfs-progs",
+	"dosfstools",	# FAT32, for EFI
+	# optional
+	"efibootmgr",
+	"iwd",
+	"dhcpcd",
+	"sudo", #TODO: switch to sudo-rs
+	"yay",
+	"metapac",
+	"gopreload-git",
+	"net-tools",
+	"acpid", 	# acpi daemon
+	"smartmontools",
+	"snapper", 	# btrfs snapshot manager # TODO: make backups
+]

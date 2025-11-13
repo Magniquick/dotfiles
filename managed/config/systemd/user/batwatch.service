@@ -1,0 +1,15 @@
+[Unit]
+Description=BatWatch battery monitor
+Documentation=https://github.com/magniquick/batwatch
+Wants=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/cargo/bin/batwatch
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

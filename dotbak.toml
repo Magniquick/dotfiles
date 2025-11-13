@@ -1,0 +1,43 @@
+[groups.config]
+base = "~/.config"
+entries = [
+    "atuin",
+    "brave-flags.conf",
+    "captive-browser.toml",
+    "dconf",
+    "dunst",
+    "environment.d",
+    "eww",
+    "hypr",
+    "kitty",
+    "metapac",
+    "nautilus",
+    "rofi",
+    "swaync",
+    "systemd",
+    "user-dirs.dirs",
+    "user-dirs.locale",
+    "uwsm",
+    "vicinae",
+    "waybar",
+]
+
+[groups.local]
+base = "~/.local"
+entries = [
+    "bin/custom",
+    "share/applications",
+    "share/icons/hicolor/48x48/apps/typst.png",
+    "share/icons/hicolor/48x48/apps/whatsapp.png",
+]
+
+[groups.home]
+base = "~"
+entries = [
+    "Templates",
+]
+
+[settings]
+managed_root = "./managed"
+manifest_path = "./managed/manifest.toml"
+dot_prefix_style = "underscore"

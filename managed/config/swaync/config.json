@@ -1,0 +1,101 @@
+{
+	"$schema": "/etc/xdg/swaync/configSchema.json",
+	"positionX": "right",
+	"positionY": "top",
+	"layer": "overlay",
+	"control-center-layer": "top",
+	"layer-shell": true,
+	"cssPriority": "user",
+	"control-center-margin-top": 7,
+	"control-center-margin-bottom": 7,
+	"control-center-margin-right": 5,
+	"control-center-margin-left": 0,
+	"notification-2fa-action": true,
+	"notification-inline-replies": true,
+	"notification-body-image-height": 160,
+	"notification-body-image-width": 200,
+	"notification-window-width": 340,
+	"timeout": 6,
+	"timeout-low": 3,
+	"timeout-critical": 0,
+	"fit-to-screen": true,
+	"control-center-width": 340,
+	"control-center-height": 500,
+	"keyboard-shortcuts": true,
+	"image-visibility": "when-available",
+	"transition-time": 200,
+	"hide-on-clear": false,
+	"hide-on-action": true,
+	"script-fail-notify": true,
+	"widgets": [
+		"dnd",
+		"buttons-grid",
+		"title",
+		"notifications"
+	],
+	"widget-config": {
+		"title": {
+			"text": "Notifications",
+			"clear-all-button": true,
+			"button-text": ""
+		},
+		"dnd": {
+			"text": "Do Not Disturb"
+		},
+		"label": {
+			"max-lines": 1,
+			"text": "Notification"
+		},
+		"buttons-grid": {
+			"actions": [
+				{
+					"label": "",
+					"command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+					"update-command": "sh -c 'set +e;wpctl get-volume  @DEFAULT_AUDIO_SINK@ | grep -qF MUTED && echo true || echo false'",
+					"type": "toggle"
+				},
+				{
+					"label": "",
+					"command": "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
+					"update-command": "sh -c 'set +e;wpctl get-volume  @DEFAULT_AUDIO_SOURCE@ | grep -qF MUTED && echo true || echo false'",
+					"type": "toggle"
+				},
+				{
+					"label": "󰤨",
+					"type": "toggle",
+					"active": true,
+					"command": "sh -c '$XDG_CONFIG_HOME/swaync/scripts/wifi.sh'",
+					"update-command": "iwctl -- device wlan0 show | grep -qF 'Powered               on' && echo true || echo false"
+				},
+				{
+					"label": "󰂯",
+					"type": "toggle",
+					"active": true,
+					"command": "sh -c '$XDG_CONFIG_HOME/swaync/scripts/bluetooth.sh'",
+					"update-command": "sh -c 'set +e;bluetoothctl show | grep -qF Powered:\\ yes && echo true || echo false'"
+				},
+				{
+					"label": "󰒳",
+					"command": "sh -c '$XDG_CONFIG_HOME/swaync/scripts/idle-inhibit.sh toggle'",
+					"active": true,
+					"update-command": "sh -c 'set +e;$XDG_CONFIG_HOME/swaync/scripts/idle-inhibit.sh is-on'",
+					"type": "toggle"
+				},
+				{
+					"label": "",
+					"command": "sh -c '$XDG_CONFIG_HOME/swaync/scripts/screenrec.sh'",
+					"update-command": "sh -c 'set +e;pgrep -x wl-screenrec > /dev/null && echo true || echo false'",
+					"type": "toggle"
+				},
+				{
+					"label": "",
+					"command": "hyprlock"
+				},
+				{
+					"label": "",
+					"command": "~/.config/hypr/scripts/wlogout.sh"
+				}
+			]
+		}
+	}
+}

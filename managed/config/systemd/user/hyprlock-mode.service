@@ -1,0 +1,12 @@
+[Unit]
+Description=changes hyprland to the lock screen profile
+Conflicts=hyprunlock.service
+Before=hyprunlock.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/ln -sf %E/hypr/hyprland.conf.lock %E/hypr/hyprland.conf
+ExecStartPost=/bin/sh -c "(pgrep -x Hyprland && /usr/bin/hyprctl reload) || :"
+
+[Install]
+WantedBy=default.target

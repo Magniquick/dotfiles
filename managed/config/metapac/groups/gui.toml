@@ -1,0 +1,52 @@
+arch = [
+	"uwsm",
+	"runapp",
+	"hyprland",
+	"hyprgrass-meta",	# Hyprgrass dependency
+	"adwaita-qt5",
+	"adwaita-qt6",
+	"rose-pine-hyprcursor",
+	"rofi",
+	"rofi-calc-git",
+	"waybar",
+	"xdg-desktop-portal-hyprland",
+	"xdg-desktop-portal-gtk",
+	"gnome-keyring",
+	"wev",	# for debugging purposes
+
+	"hyprpaper",
+	"eww",
+	"dunst",
+	"hypridle",
+	"hyprlock",
+	"hyprshot",
+	"zbar",
+	"tesseract",
+	"tesseract-data-eng",
+	"ripdrag-git",
+	"hyprsunset",
+	"hyprpolkitagent",
+
+	"btrfs-assistant",
+
+	"spicetify-cli",
+	"spotify",
+	"brave-bin",
+	"captive-browser-git", # to login to captive portals
+	"localsend",
+	"nautilus",
+	"nautilus-open-any-terminal",
+	"kitty",
+	"neovide",
+	"clapper",	# video player
+	"visual-studio-code-bin",
+	"qbittorrent",
+	"ventoy-bin",
+	"universal-android-debloater-bin",
+
+	# fonts
+	"ttf-jetbrains-mono-nerd",
+	"noto-fonts",
+	"noto-fonts-cjk",
+	"noto-fonts-emoji"
+]

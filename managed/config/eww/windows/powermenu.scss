@@ -1,0 +1,272 @@
+$powermenu_border_color: rgba($x8, 0.4);
+
+window.powermenu {
+  background: transparent;
+}
+
+.powermenu {
+  .container {
+    padding-left: 40px;
+  }
+
+  .greeting {
+    .headline {
+      font-family: "Battle Andy";
+      font-size: 80pt;
+      color: $x4;
+      // Adjust for the huge capitalized letter in the beginning
+      margin-right: 27px;
+    }
+    .subtitle {
+      margin-top: -34px;
+      margin-right: -54px;
+      font-family: $font_sans;
+      font-size: 17pt;
+      color: $x15;
+    }
+
+    .little-heart {
+      font-family: "JetBrainsMono NF";
+      font-size: 10pt;
+      color: $x1;
+      margin-left: 3px;
+      margin-bottom: 8px;
+    }
+  }
+
+  .palette {
+    padding-left: 4px * 4;
+    .border {
+      border: 4px solid $xbg;
+      border-radius: $round_max;
+      margin-left: -15px;
+      &:nth-child(1) .color { background: $x1; }
+      &:nth-child(2) .color { background: $x3; }
+      &:nth-child(3) .color { background: $x2; }
+      &:nth-child(4) .color { background: $x6; }
+      &:nth-child(5) .color { background: $x4; }
+      &:nth-child(6) .color { background: $x5; }
+
+      .color {
+        font-size: 34pt;
+        font-family: monospace;
+        font-weight: bold;
+        min-height: 29px;
+        min-width: 29px;
+        border-radius: $round_max;
+      }
+    }
+
+    .start {
+      min-width: 40px;
+      min-height: 6px;
+      border-radius: $round_max;
+      background: $x1;
+      margin-right: 10px;
+      margin-left: -10px;
+    }
+
+    .end {
+      min-width: 40px;
+      min-height: 6px;
+      border-radius: $round_max;
+      background: $x5;
+    }
+  }
+
+  .quote {
+    font-style: italic;
+    font-family: $font_sans;
+    font-size: 14pt;
+    .marks {
+      font-size: 27pt;
+      color: $x11;
+    }
+
+    .author {
+      color: $x15;
+    }
+  }
+
+  .terminal {
+    font-weight: bold;
+    color: $x15;
+    font-family: "monospace";
+    font-size: 17pt;
+    .bunny {
+      color: $xfg;
+    }
+    .blink {
+      animation-name: blink;
+      animation-duration: 1s;
+      animation-timing-function: steps(2);
+      animation-iteration-count: infinite;
+    }
+
+    &.flicker {
+      // 10 steps since we are using increments of 10% in the keyframes
+      animation: flicker 1.5s steps(10);
+      animation-delay: 0.3s;
+    }
+  }
+
+  .left-side {
+    // Bottom padding: to balance the space left at the top by the Battle Andy font
+    // Right padding: to extend the borders of left-side so that they meet with right-side
+    padding: 27px 74px 54px 47px;
+    // To balance the right padding
+    margin-left: -27px;
+    border: 6px solid $powermenu_border_color;
+    border-right: none;
+    border-radius: 27px 0 0 27px;
+  }
+
+  .right-side {
+    margin-left: -27px;
+    border-radius: 27px;
+    background: $xbg;
+    border: 6px dashed $powermenu_border_color;
+    padding: 0 47px;
+  }
+
+  .button-container {
+    .button {
+      font-family: "JetBrainsMono NF";
+      min-width: 54px;
+      min-height: 54px;
+      font-size: 30pt;
+      color: rgba($x8, 0.6);
+
+      &.Poweroff {
+        transition: color 0.5s 0.2s;
+      }
+      &.Reboot {
+        transition: color 0.5s 0.4s;
+      }
+      &.Exit {
+        transition: color 0.5s 0.6s;
+      }
+      &.Hibernate {
+        transition: color 0.5s 0.8s;
+      }
+      &.Suspend {
+        transition: color 0.5s 1.0s;
+      }
+      &.Windows {
+        transition: color 0.5s 1.2s;
+      }
+
+      &.nothing-selected {
+        opacity: 1;
+      }
+      &.this-selected {
+        opacity: 1;
+      }
+      &.not-selected {
+        opacity: 0.3;
+        border-color: transparent;
+      }
+
+    }
+
+    &.revealed {
+      .button {
+        &.Poweroff {
+          transition: color 0.5s 0.1s, opacity 0.4s;
+          color: $x1;
+        }
+        &.Reboot {
+          transition: color 0.5s 0.2s, opacity 0.4s;
+          color: $x2;
+        }
+        &.Exit {
+          transition: color 0.5s 0.3s, opacity 0.4s;
+          color: $x5;
+        }
+        &.Hibernate {
+          transition: color 0.5s 0.4s, opacity 0.4s;
+          color: $x6;
+        }
+        &.Suspend {
+          transition: color 0.5s 0.5s, opacity 0.4s;
+          color: $x3;
+        }
+        &.Windows {
+          transition: color 0.5s 0.6s, opacity 0.4s;
+          color: $x4;
+        }
+      }
+    }
+  }
+
+  .lock-container {
+    font-size: 47pt;
+    color: $xfg;
+
+    .symbol {
+      padding: 12px;
+    }
+
+    .symbol {
+      transition: border-color 0.3s;
+      border: 6px solid $powermenu_border_color;
+      border-radius: $round_max;
+    }
+
+    // Customization based on last action
+    &.clear .symbol {
+      border-color: $x0;
+    }
+    &.insert .symbol {
+      &.style1 {
+        border-color: $x1;
+      }
+      &.style2 {
+        border-color: $x3;
+      }
+      &.style3 {
+        border-color: $x2;
+      }
+      &.style4 {
+        border-color: $x6;
+      }
+      &.style5 {
+        border-color: $x4;
+      }
+      &.style6 {
+        border-color: $x5;
+      }
+    }
+    &.delete .symbol {
+      &.style1,
+      &.style3,
+      &.style5 {
+        border-color: $x8;
+      }
+
+      &.style2,
+      &.style4,
+      &.style6 {
+        border-color: $powermenu_border_color;
+      }
+    }
+  }
+}
+
+.powermenu,
+.powermenu-overlay {
+  background: rgba($xbg, 0.7);
+
+  &.locked {
+    background: $xbg;
+    animation-name: diagonal-fade;
+    animation-duration: 1.2s;
+    // A more violent "ease-in-out" timing function
+    // fast -> halt -> very fast
+    animation-timing-function: cubic-bezier(0.3,1,1,0);
+
+    .terminal {
+      color: $x1;
+    }
+  }
+}

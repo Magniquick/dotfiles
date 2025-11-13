@@ -1,0 +1,20 @@
+[Unit]
+Description=Hyprland Lock Screen (hyprlock)
+After=graphical-session.target
+Requires=graphical-session.target
+
+[Service]
+# Ensure hyprlock draws on your X/Wayland session
+Environment=DISPLAY=:0
+
+ExecStartPre=-%E/hypr/scripts/hyprlock_profile.sh
+ExecStart=/usr/bin/hyprctl --instance 0 'dispatch exec hyprlock'
+
+# If hyprlock crashes, restart it automatically
+Restart=on-failure
+RestartSec=5s
+
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

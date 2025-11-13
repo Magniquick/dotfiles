@@ -1,0 +1,21 @@
+arch = [
+	"linux-cachyos-nvidia",
+	"cuda",
+	"nvidia-prime",	# Never used, but might be useful later
+	"bbswitch-dkms",
+	"linux-cachyos-headers",
+	"intel-media-driver",
+	"vulkan-intel",
+
+	"bluez",
+	"bluez-utils",
+	"bluez-hid2hci",
+
+	"pipewire-audio",
+	"wireplumber",
+	"pipewire-alsa",
+	"pipewire-jack",
+	"pipewire-pulse",
+	"pavucontrol",
+	"alsa-tools",
+]

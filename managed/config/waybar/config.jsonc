@@ -1,0 +1,217 @@
+// -*- mode: jsonc -*-
+{
+	"spacing": 4, // Gaps between modules (4px)
+	"modules-left": [
+		"group/startmenu",
+		"hyprland/workspaces"
+	],
+	"modules-center": [
+		"mpris"
+	],
+	"modules-right": [
+		"group/controls",
+		"group/wireless",
+		"upower",
+		"clock",
+		"group/panel"
+	],
+	// left section
+	"group/startmenu": {
+		"orientation": "horizontal",
+		"drawer": {
+			"transition-duration": 0.2
+		},
+		"modules": [
+			"group/startmenu-always",
+			"power-profiles-daemon"
+		]
+	},
+	"group/startmenu-always": {
+		"orientation": "horizontal",
+		"modules": [
+			"custom/archicon",
+			"custom/updates",
+			"systemd-failed-units"
+		]
+	},
+	"custom/archicon": {
+		"format": "{text}",
+		"return-type": "json",
+		"exec": "~/.config/waybar/scripts/status.sh",
+		"interval": 60,
+		"tooltip": true,
+		"on-click": "systemctl --user start trigger-powermenu.service"
+	},
+	"systemd-failed-units": {
+		"format": " {nr_failed} units failed"
+	},
+	"custom/updates": {
+		"format": "{icon} {text}",
+		"return-type": "json",
+		"format-icons": {
+			"has-updates": "",	
+			"updated": ""
+		},
+		"hide-empty-text": true,
+		"exec-if": "which waybar-module-pacman-updates",
+		"exec": "waybar-module-pacman-updates --tooltip-align-columns --no-zero-output --interval-seconds 30 --network-interval-seconds 300",
+		"on-click": "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu"
+	},
+	"power-profiles-daemon": {
+		"format": "{icon}",
+		"tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+		"tooltip": true,
+		"format-icons": {
+			"default": "",
+			"performance": "",
+			"balanced": "󰾅",
+			"power-saver": "󰾆"
+		}
+	},
+	// center section
+	"mpris": {
+		"format": "{status_icon} {artist} - {title}",
+		"status-icons": {
+			"paused": "",
+			"playing": ""
+		},
+		"max-length": 45
+	},
+	// right section
+	"group/controls": {
+		"orientation": "horizontal",
+		"modules": [
+			"wireplumber",
+			"backlight",
+			"privacy"
+		]
+	},
+	"privacy": {
+		"icon-size": 14,
+		"icon-spacing": 8
+	},
+	"wireplumber": {
+		"format": "{icon}",
+		"tooltip-format": "Volume: {volume}%\nDevice: {source_desc}",
+		"format-icons": [
+			"",
+			"",
+			"",
+			""
+		],
+		"format-muted": "",
+		"on-scroll-up": "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%+",
+		"on-scroll-down": "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%-"
+	},
+	"backlight": {
+		// "device": "acpi_video1",
+		"format": "{icon}",
+		"format-icons": [
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"",
+			"󰃚"
+		],
+		"on-scroll-up": "brillo -U 1",
+		"on-scroll-down": "brillo -A 1",
+		"tooltip-format": "Brightness: {percent}%"
+	},
+	"group/wireless": {
+		"orientation": "horizontal",
+		"modules": [
+			"network",
+			"bluetooth"
+		]
+	},
+	"network": {
+		// "interface": "wlp2*", // (Optional) To force the use of this interface
+		"format-wifi": "{icon}",
+		"format-ethernet": "󰈀",
+		"tooltip-format": "{essid} ({gwaddr})\nIP: {ipaddr}/{cidr}\nSignal strength: {signalStrength}%\nFrequency: {frequency} GHz\nSpeed: ↑ {bandwidthUpBytes} ↓ {bandwidthDownBytes}",
+		"format-linked": "󰤣 ",
+		"on-click": "runapp kitty -o tab_bar_style=hidden --class impala -e 'impala'",
+		"format-disconnected": "󰖪",
+		"format-icons": [
+			"󰤯",
+			"󰤟",
+			"󰤢",
+			"󰤥",
+			"󰤨"
+		]
+	},
+	"bluetooth": {
+		"format-off": "󰂲",
+		"format-on": "󰂲",
+		"on-click": "runapp overskride",
+		"format-connected": " {device_alias}",
+		"format-connected-battery": " {device_alias} {device_battery_percentage}%",
+		// "format-device-preference": [ "device1", "device2" ], // preference list deciding the displayed device
+		"tooltip-format": "{num_connections} devices connected",
+		"tooltip-format-connected": "{num_connections} devices connected\n\n{device_enumerate}",
+		"tooltip-format-enumerate-connected": "{device_alias}\n\n{device_address}",
+		"tooltip-format-enumerate-connected-battery": "{device_alias}\n\n{device_address}\n\n{device_battery_percentage}%"
+	},
+	"upower": {
+		"icon-size": 15,
+		"format": " {percentage}",
+		"format-alt": " {time}"
+	},
+	"clock": {
+		// "timezone": "America/New_York",
+		"tooltip-format": "<big>{:%Y %B}</big><small>{calendar}</small>",
+		"format": "{:%I:%M %p}",
+		"format-alt": "{:%d/%m/%y}",
+		"calendar": {
+			"format": {
+				"months": "",
+				"today": "<span color='#f5c2e7'><big><b>{}</b></big></span>"
+			}
+		}
+	},
+	"group/panel": {
+		"orientation": "horizontal",
+		"drawer": {
+			"transition-duration": 0.2,
+			"transition-left-to-right": false
+		},
+		"modules": [
+			"custom/notification",
+			"tray"
+		]
+	},
+	"tray": {
+		// "icon-size": 21
+		"show-passive-items": true
+	},
+	"custom/notification": {
+		"tooltip": true,
+		"format": "<span size='16pt'>{icon}</span>",
+		"format-icons": {
+			"notification": "󱅫",
+			"none": "",
+			"dnd-notification": "󰂠",
+			"dnd-none": "󰪓",
+			"inhibited-notification": "󰂛",
+			"inhibited-none": "󰪑",
+			"dnd-inhibited-notification": "󰂛",
+			"dnd-inhibited-none": "󰪑"
+		},
+		"return-type": "json",
+		"exec-if": "which swaync-client",
+		"exec": "swaync-client -swb",
+		"on-click": "swaync-client -t -sw",
+		"on-click-right": "swaync-client -d -sw",
+		"escape": true
+	}
+}

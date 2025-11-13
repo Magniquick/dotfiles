@@ -1,0 +1,10 @@
+[Unit]
+Description=Ensure Wi-Fi is enabled on boot
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/iwctl -- adapter phy0 set-property Powered on
+
+[Install]
+WantedBy=default.target

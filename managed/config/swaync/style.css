@@ -1,0 +1,333 @@
+/* Colors */
+:root {
+  --red: #ed8796;
+  --maroon: #ee99a0;
+  --pink: #f5bde6;
+  --flamingo: #f0c6c6;
+  --peach: #f5a97f;
+  --yellow: #eed49f;
+  --sky: #91d7e3;
+  --sapphire: #7dc4e4;
+  --blue: #8aadf4;
+  --text: #cad3f5;
+  --subtext0: #a5adcb;
+  --subtext1: #b8c0e0;
+  --surface1: #494d64;
+  --surface2: #5b6078;
+  --base: #363a4f;
+  --mantle: #1e2030;
+
+  --bg-primary: var(--mantle);
+  --bg-secondary: var(--base);
+  --accent: var(--peach);
+  --accent-hover: var(--flamingo);
+  --accent-active: var(--yellow);
+
+  --summary: var(--text);
+  --title: var(--text);
+  --body: var(--subtext0);
+  --time: var(--subtext0);
+  --dnd: var(--subtext0);
+  --low: var(--surface1);
+  --normal: var(--flamingo);
+  --critical: var(--red);
+}
+
+* {
+  font-family: "JetbrainsMono NFP SemiBold";
+  font-style: italic;
+  transition: 200ms;
+}
+
+/* Notification */
+.notification-background,
+.notification-default-action,
+.floating-notifications,
+.notification {
+  all: unset;
+  opacity: 1;
+  background-color: inherit;
+  color: inherit;
+}
+
+.inline-reply-entry {
+  border-radius: 8px;
+  border: 2px solid var(--surface1);
+  color: var(--text);
+  background-color: var(--bg-secondary);
+}
+
+.floating-notifications>scrolledwindow {
+  border-radius: 8px 0 0 8px;
+  border: 3px solid var(--bg-secondary);
+  border-right: none;
+  color: var(--text);
+  background-color: var(--bg-primary);
+}
+
+.floating-notifications>scrolledwindow>widget>*:not(:last-child) {
+  border-bottom: 1px dashed var(--bg-secondary);
+}
+
+.notification.low {
+  border-right: 5px solid var(--low);
+}
+
+.notification.normal {
+  border-right: 5px solid var(--normal);
+}
+
+.notification.critical {
+  border-right: 5px solid var(--critical);
+}
+
+.notification .notification-content {
+  margin: 6px;
+}
+
+.notification .notification-content overlay {
+  /* icons */
+  margin: 4px;
+}
+
+.notification-content .summary {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--summary);
+}
+
+.notification.critical>*>.notification-content .summary {
+  color: var(--critical);
+}
+
+.notification-content .time {
+  opacity: 0;
+  min-width: 0;
+  margin: 0;
+  font-size: 0;
+  color: transparent;
+}
+
+.notification-content .body {
+  color: var(--body);
+}
+
+.notification>*:last-child>* {
+  min-height: 3.4em;
+}
+
+.close-button {
+  margin: 10px;
+  padding: 2px;
+  border-radius: 6.3px;
+  color: var(--bg-primary);
+}
+
+.close-button:hover {
+  background-color: var(--sky);
+}
+
+.close-button:active {
+  background-color: var(--pink);
+}
+
+.notification .notification-action {
+  border-radius: 7px;
+  color: var(--bg-primary);
+  margin: 0 12px 6px;
+  padding: 4px;
+  font-size: 0.8rem;
+  /* controls the button size not text size*/
+}
+
+.notification .notification-action:hover {
+  color: var(--accent-active);
+}
+
+.notification .notification-action:active {
+  background-color: var(--accent-active);
+}
+
+.notification.critical progress {
+  background-color: var(--critical);
+}
+
+.notification.normal progress {
+  background-color: var(--normal);
+}
+
+.notification.low progress {
+  background-color: var(--low);
+}
+
+.notification progress,
+.notification trough,
+.notification progressbar {
+  border-radius: 12px;
+  padding: 3px 0;
+}
+
+/* Control Center */
+
+.control-center {
+  background-color: var(--bg-primary);
+  color: var(--text);
+  border: 3px solid var(--bg-secondary);
+  padding: 10px;
+}
+
+.control-center .notification-background {
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px #45475a;
+  margin: 4px 0;
+}
+
+.control-center .notification-background .notification {
+  border-radius: 7px;
+  opacity: 1;
+}
+
+/* Notifications expanded-group */
+
+.notification-group {
+  font-size: 12px;
+  background-color: var(--bg-primary);
+}
+
+.notification-group-icon {
+  color: var(--text);
+}
+
+.notification-group-headers {
+  color: var(--text);
+}
+
+.notification-group-collapse-button,
+.notification-group-close-all-button {
+  background: var(--accent);
+  color: var(--subtext0);
+  border-radius: 6px;
+}
+
+.notification-group-collapse-button:hover,
+.notification-group-close-all-button:hover {
+  background: var(--critical);
+  color: var(--subtext0);
+}
+.control-center .notification-default-action {
+  background-color: var(--bg-primary);
+  border: 2px var(--base) dashed;
+}
+
+/* widget title */
+.widget-title {
+  color: var(--text);
+  padding: 0 12px 0 18px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.widget-title>label {
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.widget-title>button {
+  font-size: 0.92rem;
+  color: var(--text);
+  background: var(--bg-primary);
+  box-shadow: none;
+  padding: 0 10px;
+  margin: 0;
+}
+
+.widget-title>button:hover {
+  background: var(--critical);
+  color: var(--subtext0);
+}
+
+/* widget button grid */
+button {
+  border: 0;
+  min-width: 35px;
+  background: var(--bg-primary);
+}
+
+.widget-buttons-grid {
+  font-size: x-large;
+  background: var(--bg-primary);
+  margin-top: 0;
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button {
+  color: var(--text);
+  margin: 8px;
+  padding: 10px;
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button:hover {
+  background: alpha(var(--text), 0.55);
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button.toggle:checked {
+  background: var(--subtext0);
+}
+
+.widget-buttons-grid>flowbox>flowboxchild>button.toggle:checked label {
+  color: var(--base);
+}
+
+/* dnd widget */
+.widget-dnd {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: large;
+  color: var(--text);
+  margin-bottom: 0;
+}
+
+.widget-dnd>label {
+  color: var(--text);
+}
+
+.widget-dnd>switch {
+  background: var(--bg-primary);
+  color: var(--text);
+}
+
+.widget-dnd>switch:checked {
+  background: var(--critical);
+}
+
+/* music player widget
+.widget-mpris {
+  background: transparent;
+}
+
+.widget-mpris button {
+  background-color: transparent;
+  border-radius: 6px;
+}
+
+.widget-mpris button:hover {
+  background-color: var(--accent);
+  color: var(--subtext0);
+}
+ */
+
+/* sliders in backlight and volume */
+
+scale trough slider {
+  background: var(--text);
+}
+
+scale trough slider:hover {
+  background: var(--accent);
+}
+
+scale trough highlight {
+  background: var(--accent);
+}

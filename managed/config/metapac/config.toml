@@ -1,0 +1,4 @@
+enabled_backends = ["arch","uv","cargo"]
+
+[arch]
+package_manager = "yay"

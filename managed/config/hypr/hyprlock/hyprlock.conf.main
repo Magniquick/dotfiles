@@ -1,0 +1,121 @@
+source = $XDG_CONFIG_HOME/hypr/common/base.conf
+source = $hypr/common/base.conf
+
+$scripts = $hypr/scripts
+
+# BACKGROUND
+background {
+    monitor =
+    path = $HOME/Pictures/lock.png
+}
+
+# GENERAL
+general {
+    grace = 0
+}
+
+# GREETING
+label {
+    monitor =
+    text = Welcome!
+    color = $text
+    font_size = 55
+    font_family = JetBrainsMono Nerd Font
+    position = -630, 320
+    halign = center
+    valign = center
+}
+
+# TIME
+label {
+    monitor =
+    text = cmd[update:1000] echo "<span>$(date +"%I:%M")</span>"
+    color = $text
+    font_size = 40
+    font_family = JetBrainsMono Nerd Font
+    position = -630, 240
+    halign = center
+    valign = center
+}
+
+# DATE
+label {
+    monitor =
+    text = cmd[update:1000] echo -e "$(date +"%A, %B %d")"
+    color = $text_dim
+    font_size = 20
+    text_align = left
+    font_family = JetBrainsMono Nerd Font
+    position = -630, 175
+    halign = center
+    valign = center
+}
+
+# PROFILE PHOTO
+image {
+    monitor =
+    path = $hypr/common/pfp.webp
+    border_size = 1
+    border_color = $blue_glow
+    size = 160
+    rounding = -1
+    rotate = 0
+    reload_time = -1
+    reload_cmd =
+    position = -630, 25
+    halign = center
+    valign = center
+}
+
+# USER BOX
+shape {
+    monitor =
+    size = 320, 55
+    color = $overlay2_translucent
+    rounding = -1
+    border_size = 0
+    border_color = $text
+    rotate = 0
+    xray = false
+
+    position = -630, -140
+    halign = center
+    valign = center
+}
+
+# USER LABEL
+label {
+    monitor =
+    text = 󱐋 $USER
+    color = $text
+    font_size = 16
+    font_family = JetBrainsMono Nerd Font
+    position = -630, -140
+    halign = center
+    valign = center
+}
+
+# INPUT FIELD
+input-field {
+    monitor =
+    size = 320, 55
+    outline_thickness = 0
+    dots_size = 0.2
+    dots_spacing = 0.2
+    dots_center = true
+    outer_color = $text
+    inner_color = $overlay2_translucent
+    font_color = $text
+    fade_on_empty = false
+    font_family = JetBrainsMono Nerd Font
+    placeholder_text = <span foreground="##$subtext_hex"> <i>Enter Pass :3</i></span>
+    hide_input = false
+    position = -630, -220
+    halign = center
+    valign = center
+}
+
+# MUSIC WIDGET PLACEHOLDER (artwork loader)
+label {
+    text = cmd[update:2000] $scripts/musicart.sh
+}
