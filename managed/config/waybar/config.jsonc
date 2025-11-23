@@ -3,7 +3,7 @@
 	"spacing": 4, // Gaps between modules (4px)
 	"modules-left": [
 		"group/startmenu",
-		"hyprland/workspaces"
+		"group/workspace"
 	],
 	"modules-center": [
 		"mpris"
@@ -23,6 +23,7 @@
 		},
 		"modules": [
 			"group/startmenu-always",
+			"custom/updates",
 			"power-profiles-daemon"
 		]
 	},
@@ -30,7 +31,6 @@
 		"orientation": "horizontal",
 		"modules": [
 			"custom/archicon",
-			"custom/updates",
 			"systemd-failed-units"
 		]
 	},
@@ -67,6 +67,29 @@
 			"balanced": "󰾅",
 			"power-saver": "󰾆"
 		}
+	},
+	"group/workspace": {
+		"orientation": "horizontal",
+		"drawer": {
+			"transition-duration": 0.2
+		},
+		"modules": [
+			"hyprland/workspaces",
+			"hyprland/workspaces#special"
+		]
+	},
+	"hyprland/workspaces": {
+		"format":"{icon}"
+	},
+	"hyprland/workspaces#special": {
+		"format":"{icon}",
+		"format-icons":{
+			"default":"",
+			"magic":"<big></big>",
+			"spotify":"<big></big>",
+			"whatsapp":"<big>󰖣</big>"
+		},
+		"show-special": true
 	},
 	// center section
 	"mpris": {

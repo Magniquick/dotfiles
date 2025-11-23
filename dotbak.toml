@@ -11,6 +11,8 @@ entries = [
     "hypr",
     "kitty",
     "metapac",
+    "micro/colorschemes",
+    "micro/settings.json",
     "nautilus",
     "rofi",
     "swaync",

@@ -28,6 +28,15 @@
 	background-color: @base;
 }
 
+#workspace{
+	margin: 5px 0px 0px 0px;
+	border-radius: 2rem;
+	color: @text;
+	background-color: @base;
+}
+
+
+#workspace .module,
 #panel .module,
 #startmenu .module,
 #wireless .module,
@@ -45,28 +54,42 @@ window#waybar {
 	margin: 5px 0px 0px 0px;
 }
 
-
+#workspaces.special button.special,
 #workspaces button {
 	color: @subtext0;
 	transition: all 0.5s cubic-bezier(0.55, -0.68, 0.48, 1.68);
 	background-color: transparent;
 	padding-left: 7px;
 	padding-right: 7px;
-	border-radius: inherit;
+	border-radius: 2rem;
 }
 
+#workspaces.special button.active,
 #workspaces button.active {
 	background: none;
 	background-color: @surface1;
 	color: @mauve;
 }
 
+#workspaces.special button:hover,
 #workspaces button:hover {
 	background: inherit;
 	background-color: @surface0;
 	box-shadow: inherit;
 	text-shadow: inherit;
 }
+
+#workspaces.special button.active,
+#workspaces.special button:not(.special) {
+    padding: 0;
+    margin: 0;
+    font-size: 0;
+    border-width: 0;
+    min-width: 0;
+	background: none;
+	background-color: transparent;
+}
+
 
 #panel {
 	margin-right: 5px;

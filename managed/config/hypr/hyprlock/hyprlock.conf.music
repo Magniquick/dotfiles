@@ -1,4 +1,4 @@
-source = $XDG_CONFIG_HOME/hypr/common/base.conf
+source = ./common/base.conf
 source = $hypr/hyprlock/hyprlock.conf.main
 $mpris_art = /tmp/hyde-mpris
 
