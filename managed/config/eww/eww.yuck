@@ -5,7 +5,3 @@
 
 ; >> Toggleable windows
 (include "windows/powermenu.yuck")
-
-; >> Invisible utility windows
-; (include "windows/background.yuck")
-; (include "windows/dismiss.yuck")

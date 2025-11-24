@@ -10,9 +10,8 @@ if [[ "$artUrl" == file://* ]]; then
 elif [[ "$artUrl" == http* ]]; then
 	hash=$(echo -n "$artUrl" | sha256sum | awk '{print $1}')
 	artPath="/tmp/$hash"
-	[[ ! -f "$artPath" ]] && echo "downloading $artPath" && curl -s -o "$artPath" "$artUrl"
+	[[ ! -f "$artPath" ]] && curl -s -o "$artPath" "$artUrl"
 elif [[ "$artUrl" == '' ]]; then
-	#echo "No players found" >&2
 	exit 1
 fi
 
@@ -31,9 +30,8 @@ if ((W != H)); then
 fi
 
 # Update symbolic link if the art has changed
-#echo "artPath: $artPath"
+
 hash=$(basename "$artPath")
-#echo "hash: $hash"
 currentHash=$(basename "$(realpath "${THUMB}")")
 
 [[ "$hash" == "$currentHash" ]] && exit 0

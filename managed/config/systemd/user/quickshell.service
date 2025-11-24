@@ -1,0 +1,14 @@
+[Unit]
+Description=Quickshell bunni powermenu
+Documentation=https://quickshell.org/docs/
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/quickshell -c powermenu
+ExecStop=/usr/bin/quickshell kill
+Restart=on-failure
+
+[Install]
+WantedBy=waybar.service

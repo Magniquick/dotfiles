@@ -37,14 +37,9 @@ lock() {
     systemctl reboot --boot-loader-entry=auto-windows
 }
 
-clear_selection() {
-    eww update powermenu-button-selected=
-}
-
-if [[ "$action" == "$eww_powermenu_selected_action" || "$action" == "confirm" ]]; then
+# Double-clicking the same action executes it; first click just selects.
+if [[ "$action" == "$eww_powermenu_selected_action" ]]; then
     $action
-elif [[ "$action" == "clear" ]]; then
-    clear_selection
 else
     eww update powermenu-button-selected="$action"
 fi

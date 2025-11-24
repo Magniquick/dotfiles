@@ -5,6 +5,7 @@ window.powermenu {
 }
 
 .powermenu {
+  // Layout split: decorative left column, actions on the right
   .container {
     padding-left: 40px;
   }
@@ -55,22 +56,6 @@ window.powermenu {
         min-width: 29px;
         border-radius: $round_max;
       }
-    }
-
-    .start {
-      min-width: 40px;
-      min-height: 6px;
-      border-radius: $round_max;
-      background: $x1;
-      margin-right: 10px;
-      margin-left: -10px;
-    }
-
-    .end {
-      min-width: 40px;
-      min-height: 6px;
-      border-radius: $round_max;
-      background: $x5;
     }
   }
 
@@ -130,6 +115,7 @@ window.powermenu {
   }
 
   .button-container {
+    // Icon-only buttons with staggered reveal colors
     .button {
       font-family: "JetBrainsMono NF";
       min-width: 54px;
@@ -199,74 +185,4 @@ window.powermenu {
     }
   }
 
-  .lock-container {
-    font-size: 47pt;
-    color: $xfg;
-
-    .symbol {
-      padding: 12px;
-    }
-
-    .symbol {
-      transition: border-color 0.3s;
-      border: 6px solid $powermenu_border_color;
-      border-radius: $round_max;
-    }
-
-    // Customization based on last action
-    &.clear .symbol {
-      border-color: $x0;
-    }
-    &.insert .symbol {
-      &.style1 {
-        border-color: $x1;
-      }
-      &.style2 {
-        border-color: $x3;
-      }
-      &.style3 {
-        border-color: $x2;
-      }
-      &.style4 {
-        border-color: $x6;
-      }
-      &.style5 {
-        border-color: $x4;
-      }
-      &.style6 {
-        border-color: $x5;
-      }
-    }
-    &.delete .symbol {
-      &.style1,
-      &.style3,
-      &.style5 {
-        border-color: $x8;
-      }
-
-      &.style2,
-      &.style4,
-      &.style6 {
-        border-color: $powermenu_border_color;
-      }
-    }
-  }
-}
-
-.powermenu,
-.powermenu-overlay {
-  background: rgba($xbg, 0.7);
-
-  &.locked {
-    background: $xbg;
-    animation-name: diagonal-fade;
-    animation-duration: 1.2s;
-    // A more violent "ease-in-out" timing function
-    // fast -> halt -> very fast
-    animation-timing-function: cubic-bezier(0.3,1,1,0);
-
-    .terminal {
-      color: $x1;
-    }
-  }
 }

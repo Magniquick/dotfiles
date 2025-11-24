@@ -15,12 +15,14 @@
   :focusable true
   :namespace "powermenu"
 
+  ;; Fullscreen overlay with invisible backdrop that closes on click
   (revealer
     :transition "crossfade"
     :reveal     "${powermenu-visible}"
     :duration   "300ms"
 
     (overlay
+      :class "powermenu"
       ;; 1) Full‐screen transparent backdrop
       (eventbox
         :active   true
@@ -36,6 +38,7 @@
         :space-evenly false
 
         ;; ─── LEFT SIDE ───────────────────────────
+        ;; Greeting + palette are decorative; no logic attached
         (box
           :class       "left-side"
           :orientation "vertical"
@@ -115,6 +118,7 @@
                   "(\\x5C /)  "
                   "${bunny-head}"
                   (label :markup "c(<span foreground=\"${colors[1]}\">\"</span>)(<span foreground=\"${colors[1]}\">\"</span>)"))))
+            ;; Primary actions on the first row, secondary on the second
             (overlay
               :height "114"
               (box :class "button-container ${powermenu-visible ? "revealed" : ""}"
@@ -146,7 +150,7 @@
                     :extra-class "Hibernate"
                     :text "Hibernate"
                     :symbol "󰒲"
-                  :onclick " ~/.config/eww/scripts/do-powermenu-action hibernate & echo foo")
+                  :onclick " ~/.config/eww/scripts/do-powermenu-action hibernate &")
                   (powermenu-button
                     :extra-class "Suspend"
                     :text "Suspend"
@@ -169,7 +173,7 @@
               (box :halign "start"
                 :space-evenly false
                 " "
-                "${powermenu-button-selected}"
+                "${powermenu-button-selected != "" ? powermenu-button-selected : powermenu-button-hover}"
                 (box :class "blink" "_")))))))))
 
 ;; -------------------------------
@@ -178,8 +182,8 @@
 (defwidget powermenu-button [extra-class text symbol onclick]
   (eventbox
     :active      true
-    :onhover     "(sleep 0.02 && eww update powermenu-button-hovered=true powermenu-button-selected=\"${extra-class}\") &"
-    :onhoverlost "eww update powermenu-button-hovered=false powermenu-button-selected= &"
+    :onhover     "eww update powermenu-button-hover=\"${extra-class}\""
+    :onhoverlost "eww update powermenu-button-hover="
     :onclick     "${onclick}"
     :cursor      "hand2"
 
@@ -198,5 +202,5 @@
 (defvar bunny-head-json "{ \"default\": \"( . .) \", \"headpat\": \"( ^ ^) \" }")
 (defvar bunny-head "( . .) ")
 (defvar powermenu-visible false)
-(defvar powermenu-button-hovered false)
 (defvar powermenu-button-selected "")
+(defvar powermenu-button-hover "")

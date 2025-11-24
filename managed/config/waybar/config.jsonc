@@ -40,7 +40,7 @@
 		"exec": "~/.config/waybar/scripts/status.sh",
 		"interval": 60,
 		"tooltip": true,
-		"on-click": "systemctl --user start trigger-powermenu.service"
+		"on-click": "quickshell -c powermenu ipc call powermenu toggle"
 	},
 	"systemd-failed-units": {
 		"format": " {nr_failed} units failed"

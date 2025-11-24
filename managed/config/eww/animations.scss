@@ -3,35 +3,3 @@
   50% { opacity: 0; }
   100% { opacity: 1; }
 }
-
-$diagonal_fade_stripe_size: 56px;
-$diagonal_fade_opacity: 0.7;
-@keyframes diagonal-fade {
-    0% {
-      background: repeating-linear-gradient(
-      -55deg,
-      rgba($xbg, $diagonal_fade_opacity),
-      rgba($xbg, $diagonal_fade_opacity) $diagonal_fade_stripe_size,
-      rgba($xbg, $diagonal_fade_opacity) $diagonal_fade_stripe_size,
-      rgba($xbg, $diagonal_fade_opacity) $diagonal_fade_stripe_size * 2
-      );
-    }
-    50% {
-      background: repeating-linear-gradient(
-      -55deg,
-      rgba($xbg, $diagonal_fade_opacity),
-      rgba($xbg, $diagonal_fade_opacity) $diagonal_fade_stripe_size,
-      rgba($xbg, 1) $diagonal_fade_stripe_size,
-      rgba($xbg, 1) $diagonal_fade_stripe_size * 2
-      );
-    }
-    100% {
-      background: repeating-linear-gradient(
-      -55deg,
-      rgba($xbg, 1),
-      rgba($xbg, 1) $diagonal_fade_stripe_size,
-      rgba($xbg, 1) $diagonal_fade_stripe_size,
-      rgba($xbg, 1) $diagonal_fade_stripe_size * 2
-      );
-    }
-}

@@ -34,10 +34,10 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "dconf"
-digest = "e69a1a1aed44da943c8d97faba19651b7ebecd60f9a15d318df3df83149151fa"
+digest = "3867b68a0c42822bfa3c5fac4757849fe6812986deb8f19431a0623312b3472d"
 size = 0
 mode = 448
-mtime_ns = 1763151102640806342
+mtime_ns = 1764010832513584080
 type = "directory"
 uid = 1000
 gid = 1000
@@ -67,10 +67,10 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "eww"
-digest = "78fb4045624b7eafd936ac95b596337f08b6f73ca7dcae46c09b4c9be8a01431"
+digest = "76283a5cc22080bc960e3a6425595ce4549c9e18f98e1ef6dc9e0450e68a6780"
 size = 0
 mode = 493
-mtime_ns = 1745402326976587224
+mtime_ns = 1763924192328612959
 type = "directory"
 uid = 1000
 gid = 1000
@@ -78,10 +78,10 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "hypr"
-digest = "bb84ef458cacf12b2c92e5bc1213058c857a5ba2b6b7353950defddbe36871b7"
+digest = "19b84b464134c8bb35051c3f160193bb7d60da2c0e18e4ee0c16842ed4538303"
 size = 0
 mode = 493
-mtime_ns = 1763100821002232551
+mtime_ns = 1764010832514685442
 type = "directory"
 uid = 1000
 gid = 1000
@@ -110,11 +110,44 @@ gid = 1000
 
 [[entries]]
 group = "config"
+relative_path = "micro/colorschemes"
+digest = "67daaf2a46c5b588b31e46557d00c9eb4da6095204e52b9d3316b981504d56cb"
+size = 0
+mode = 493
+mtime_ns = 1763315723482907984
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "micro/settings.json"
+digest = "4ec9d518dfd87127e4c7de6bb24e9fb164b48345d88695a1ab4d6ecf31c783e6"
+size = 77
+mode = 420
+mtime_ns = 1763315758018431575
+type = "file"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
 relative_path = "nautilus"
 digest = "6662b8ab4cab4ebfaf0303f8fd7a3cca78d4b52f089917095b11d291d6aab626"
 size = 0
 mode = 493
 mtime_ns = 1750845998470736787
+type = "directory"
+uid = 1000
+gid = 1000
+
+[[entries]]
+group = "config"
+relative_path = "quickshell"
+digest = "5e4217614742bfe25e4652d6c29a79859ccc27caa0a99fac9592e073d6a839df"
+size = 0
+mode = 493
+mtime_ns = 1764007249669746623
 type = "directory"
 uid = 1000
 gid = 1000
@@ -133,10 +166,10 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "swaync"
-digest = "8fc80a0ad1753c14a7f68e58fe6f128d01f006347e4c2723577507dc54ac4f38"
+digest = "a44dec6e9a2d1507002eb7755fb94b6147604669f4e7bfd779c16a05844d8dae"
 size = 0
 mode = 493
-mtime_ns = 1762520559366167572
+mtime_ns = 1764010832512584168
 type = "directory"
 uid = 1000
 gid = 1000
@@ -155,7 +188,7 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "systemd"
-digest = "5912eb68545834c9901342d8e0bd796082f2d1c57dbef2ea78822ef5ea3ffaf5"
+digest = "aadddc844178f85b4ace92526b939d43da3243c4de447718b4e99d903b00ee29"
 size = 0
 mode = 493
 mtime_ns = 1762773703928963989
@@ -199,7 +232,7 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "vicinae"
-digest = "a4f60ade64dbe27f17c5bc36a01b20ade8a5a8fb72b9515945a60fa088ac085d"
+digest = "6b6d34dce3b7ab726a21cc49ac16cc6bb5597e908769e4c3e1cf3c13e21caff5"
 size = 0
 mode = 493
 mtime_ns = 1762871721304391900
@@ -210,13 +243,24 @@ gid = 1000
 [[entries]]
 group = "config"
 relative_path = "waybar"
-digest = "ffc922fb6a4d067d70ac5cbfb672781af80c68fc35b431a96936248579946a46"
+digest = "beb9d3ce73f7f17cea9a481a4cba4a851bbf2d4a9d378da9ca2709461c4aa920"
 size = 0
 mode = 493
-mtime_ns = 1762773703932595238
+mtime_ns = 1764010832514685442
 type = "directory"
 uid = 1000
 gid = 1000
+
+[[entries]]
+group = "etc"
+relative_path = "brave/policies/managed"
+digest = "0092635b386f5843086a2f8973aca4fc753d6f6979f0288c2f572e8f6ea5b334"
+size = 0
+mode = 493
+mtime_ns = 1762730382565785758
+type = "directory"
+uid = 0
+gid = 0
 
 [[entries]]
 group = "home"
@@ -232,7 +276,7 @@ gid = 1000
 [[entries]]
 group = "local"
 relative_path = "bin/custom"
-digest = "8ae313be0f7738b03b02ac9783dff64b86b471b2737264b44a77fb213f083b58"
+digest = "28e8de5fbb1eab30d30f5f0d226b923691085280eecd741dcbb215d73c9d5be1"
 size = 0
 mode = 493
 mtime_ns = 1760317443926437668
@@ -243,10 +287,10 @@ gid = 1000
 [[entries]]
 group = "local"
 relative_path = "share/applications"
-digest = "64802b551c064111b5fa688b39b478f25820cbe33cc22cfbc3fb4f80c8cc6776"
+digest = "1b649506daa0d45bbcd803e71c435d9985de9e7a8295290df3f40c5074f1b390"
 size = 0
 mode = 448
-mtime_ns = 1761939724624330816
+mtime_ns = 1764010832513584080
 type = "directory"
 uid = 1000
 gid = 1000

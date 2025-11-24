@@ -7,13 +7,13 @@ entries = [
     "dconf",
     "dunst",
     "environment.d",
-    "eww",
     "hypr",
     "kitty",
     "metapac",
     "micro/colorschemes",
     "micro/settings.json",
     "nautilus",
+    "quickshell",
     "rofi",
     "swaync",
     "sys64",
@@ -38,6 +38,12 @@ entries = [
 base = "~"
 entries = [
     "Templates",
+]
+
+[groups.etc]
+base = "/etc"
+entries = [
+    "brave/policies/managed",
 ]
 
 [settings]
