@@ -3,7 +3,7 @@ import QtQuick.Layouts
 
 Item {
   id: gridHolder
-  property var colors: PowermenuPalette.palette
+  property var colors: ColorPalette.palette
   property var actions: defaultActions()
   property string selection: ""
   property string hoverAction: ""

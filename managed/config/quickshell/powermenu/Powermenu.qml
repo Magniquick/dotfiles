@@ -6,7 +6,7 @@ import Quickshell.Wayland
 
 PanelWindow {
   id: window
-  property var colors: PowermenuPalette.palette
+  property var colors: ColorPalette.palette
   required property var targetScreen
   property string selection: ""
   property string hoverAction: ""
@@ -49,7 +49,7 @@ PanelWindow {
   }
 
   Shortcut {
-    sequences: ["Escape", "Q"]
+    sequences: ["Escape", "Q", "A"]
     enabled: window.visible
     context: Qt.ApplicationShortcut
     onActivated: requestClose()

@@ -10,7 +10,7 @@ ShellRoot {
   property string powermenuSelection: ""
   property string powermenuHover: ""
 
-  readonly property var palette: PowermenuPalette.palette
+  readonly property var palette: ColorPalette.palette
 
   function resetState() {
     powermenuSelection = ""
@@ -58,16 +58,6 @@ ShellRoot {
     function toggle(): void { root.togglePowermenu() }
     function show(): void { root.powermenuVisible = true; root.resetState() }
     function hide(): void { root.powermenuVisible = false; root.resetState() }
-  }
-
-  Shortcut {
-    sequence: "Escape" || "q"
-    enabled: powermenuVisible
-    context: Qt.ApplicationShortcut
-    onActivated: {
-      powermenuVisible = false
-      resetState()
-    }
   }
 
   Powermenu {

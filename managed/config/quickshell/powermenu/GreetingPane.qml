@@ -3,7 +3,7 @@ import QtQuick.Layouts
 
 Rectangle {
   id: left
-  property var colors: PowermenuPalette.palette
+  property var colors: ColorPalette.palette
   property color borderColor
   property int borderRadius: 27
   property int padLeft: 47

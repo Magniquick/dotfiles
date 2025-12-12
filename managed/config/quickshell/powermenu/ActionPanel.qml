@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 Rectangle {
   id: right
-  property var colors: PowermenuPalette.palette
+  property var colors: Palette.palette
   property color borderColor: Qt.rgba(0x58 / 255, 0x5B / 255, 0x70 / 255, 0.5)
   property int borderRadius: 27
   property int padH: 47

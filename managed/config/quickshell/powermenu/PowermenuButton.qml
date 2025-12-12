@@ -7,7 +7,7 @@ Rectangle {
   Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
   property string actionName
   property string icon
-  property color accent: PowermenuPalette.palette.red
+  property color accent: ColorPalette.palette.red
   property string selection: ""
   property string hoverAction: ""
   property int strokeWidth: 2
