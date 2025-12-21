@@ -6,7 +6,7 @@ killall rofi 2>/dev/null
 
 if [ ! -f "$STATE_FILE" ]; then
     echo "wifi" > "$STATE_FILE"
-    rofi -theme "$XDG_CONFIG_HOME/rofi/config/iwd.rasi" -show wifi -modi "wifi:iwdrofimenu"
+    vicinae vicinae://extensions/dagimg-dot/wifi-commander/scan-wifi
 else
     LAST=$(cat "$STATE_FILE")
     if [ "$LAST" = "wifi" ]; then
@@ -14,6 +14,6 @@ else
         "$XDG_CONFIG_HOME/rofi/bin/rofi-bluetooth"
     else
         echo "wifi" > "$STATE_FILE"
-        rofi -theme "$XDG_CONFIG_HOME/rofi/config/iwd.rasi" -show wifi -modi "wifi:iwdrofimenu"
+        vicinae vicinae://extensions/dagimg-dot/wifi-commander/scan-wifi
     fi
 fi

@@ -1,5 +1,6 @@
 // -*- mode: jsonc -*-
 {
+	"$schema": "file:///home/magni/Projects/waybar-config-schema/schema.json",
 	"spacing": 4, // Gaps between modules (4px)
 	"modules-left": [
 		"group/startmenu",
@@ -19,7 +20,7 @@
 	"group/startmenu": {
 		"orientation": "horizontal",
 		"drawer": {
-			"transition-duration": 0.2
+			"transition-duration": 200
 		},
 		"modules": [
 			"group/startmenu-always",
@@ -49,7 +50,7 @@
 		"format": "{icon} {text}",
 		"return-type": "json",
 		"format-icons": {
-			"has-updates": "",	
+			"has-updates": "",
 			"updated": ""
 		},
 		"hide-empty-text": true,
@@ -71,7 +72,7 @@
 	"group/workspace": {
 		"orientation": "horizontal",
 		"drawer": {
-			"transition-duration": 0.2
+			"transition-duration": 200
 		},
 		"modules": [
 			"hyprland/workspaces",
@@ -79,15 +80,15 @@
 		]
 	},
 	"hyprland/workspaces": {
-		"format":"{icon}"
+		"format": "{icon}"
 	},
 	"hyprland/workspaces#special": {
-		"format":"{icon}",
-		"format-icons":{
-			"default":"",
-			"magic":"<big></big>",
-			"spotify":"<big></big>",
-			"whatsapp":"<big>󰖣</big>"
+		"format": "{icon}",
+		"format-icons": {
+			"default": "",
+			"magic": "<big></big>",
+			"spotify": "<big></big>",
+			"whatsapp": "<big>󰖣</big>"
 		},
 		"show-special": true
 	},
@@ -175,7 +176,8 @@
 	},
 	"bluetooth": {
 		"format-off": "󰂲",
-		"format-on": "󰂲",
+		"format-on": "󰂰",
+		"format-disabled": "󰂱",
 		"on-click": "runapp overskride",
 		"format-connected": " {device_alias}",
 		"format-connected-battery": " {device_alias} {device_battery_percentage}%",
@@ -205,7 +207,7 @@
 	"group/panel": {
 		"orientation": "horizontal",
 		"drawer": {
-			"transition-duration": 0.2,
+			"transition-duration": 200,
 			"transition-left-to-right": false
 		},
 		"modules": [

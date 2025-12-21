@@ -1,15 +1,12 @@
 [Unit]
 Description=Persist Wayland clipboard (wl-clip-persist)
-Wants=wayland-session@hyprland.desktop.target
-After=wayland-session@hyprland.desktop.target
-BindsTo=wayland-session@hyprland.desktop.target
-PartOf=wayland-session@hyprland.desktop.target
+PartOf=graphical-session.target
+After=graphical-session.target
 
 [Service]
-Type=simple
 ExecStart=/usr/bin/wl-clip-persist --clipboard regular
 Restart=on-failure
 RestartSec=2
 
 [Install]
-WantedBy=wayland-session@hyprland.desktop.target
+WantedBy=graphical-session.target
