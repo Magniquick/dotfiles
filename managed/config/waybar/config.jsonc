@@ -178,7 +178,7 @@
 		"format-off": "󰂲",
 		"format-on": "󰂰",
 		"format-disabled": "󰂱",
-		"on-click": "runapp overskride",
+		"on-click": "runapp kitty -o tab_bar_style=hidden --class bluetui -e 'bluetui'",
 		"format-connected": " {device_alias}",
 		"format-connected-battery": " {device_alias} {device_battery_percentage}%",
 		// "format-device-preference": [ "device1", "device2" ], // preference list deciding the displayed device
@@ -212,8 +212,16 @@
 		},
 		"modules": [
 			"custom/notification",
-			"tray"
+			"tray",
+			"idle_inhibitor"
 		]
+	},
+	"idle_inhibitor": {
+		"format": "{icon}",
+		"format-icons": {
+			"activated": "󰒳",
+			"deactivated": "󰒲"
+		}
 	},
 	"tray": {
 		// "icon-size": 21

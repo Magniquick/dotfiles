@@ -1,106 +1,192 @@
 import QtQuick
-import QtQml
-import "./Label.qml"
-import "../theme"
+import QtQuick.Layouts
+import Quickshell.Services.Mpris
+import ".."
+import "../components"
 
-Item {
+ModuleContainer {
   id: root
-  property var mpris: null
-  property bool available: false
-  property var player: null
-  property string statusIcon: ""
-  property string text: ""
   property int maxLength: 45
+  property string fallbackText: ""
+  property var activePlayer: null
+  readonly property var players: Mpris.players.values
+  readonly property string statusText: root.activePlayer
+    ? root.statusIcon(root.activePlayer.playbackState)
+    : ""
+  readonly property string trackFullText: root.formatTrackText(root.activePlayer)
+  readonly property string trackText: root.clampText(root.trackFullText)
+  readonly property bool hasContent: root.statusText !== "" || root.trackFullText !== ""
+  tooltipTitle: root.activePlayer && root.activePlayer.identity
+    ? root.activePlayer.identity
+    : "Now Playing"
+  tooltipHoverable: true
+  tooltipText: root.trackFullText
+  tooltipContent: Component {
+    ColumnLayout {
+      spacing: Config.space.sm
 
-  implicitHeight: label.implicitHeight
-  implicitWidth: label.implicitWidth
+      TooltipCard {
+        content: [
+          Text {
+            text: root.trackFullText !== "" ? root.trackFullText : "Nothing playing"
+            color: Config.textColor
+            font.family: Config.fontFamily
+            font.pixelSize: Config.fontSize + 1
+            wrapMode: Text.Wrap
+            Layout.preferredWidth: 320
+            Layout.maximumWidth: 360
+          }
+        ]
+      }
 
-  function createMpris() {
-    const src = "import Quickshell.Services.Mpris; Mpris {}";
-    const comp = Qt.createComponent(src);
-    if (comp.status === Component.Ready) {
-      mpris = comp.createObject(root);
-      available = !!mpris;
-    } else {
-      comp.statusChanged.connect(function(status) {
-        if (status === Component.Ready) {
-          mpris = comp.createObject(root);
-          available = !!mpris;
+      TooltipCard {
+        content: [
+          RowLayout {
+            spacing: Config.space.sm
+
+            ActionIconButton {
+              icon: ""
+              enabled: !!root.activePlayer
+              visible: root.activePlayer && root.activePlayer.canGoPrevious
+              onClicked: if (root.activePlayer) root.activePlayer.previous()
+            }
+
+            ActionIconButton {
+              icon: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
+                ? ""
+                : ""
+              enabled: !!root.activePlayer && root.activePlayer.canTogglePlaying
+              onClicked: if (root.activePlayer && root.activePlayer.canTogglePlaying) root.activePlayer.togglePlaying()
+            }
+
+            ActionIconButton {
+              icon: ""
+              enabled: !!root.activePlayer && root.activePlayer.canGoNext
+              onClicked: if (root.activePlayer && root.activePlayer.canGoNext) root.activePlayer.next()
+            }
+
+            Item { Layout.fillWidth: true }
+
+            ActionChip {
+              text: "Shuffle"
+              active: root.activePlayer && root.activePlayer.shuffle
+              visible: root.activePlayer && root.activePlayer.shuffleSupported
+              onClicked: {
+                if (root.activePlayer && root.activePlayer.canControl && root.activePlayer.shuffleSupported)
+                  root.activePlayer.shuffle = !root.activePlayer.shuffle
+              }
+            }
+
+            ActionChip {
+              text: "Raise"
+              visible: root.activePlayer && root.activePlayer.canRaise
+              onClicked: if (root.activePlayer && root.activePlayer.canRaise) root.activePlayer.raise()
+            }
+          }
+        ]
+      }
+    }
+  }
+  collapsed: !root.activePlayer || !root.hasContent
+
+  function statusIcon(status) {
+    if (status === MprisPlaybackState.Playing)
+      return ""
+    if (status === MprisPlaybackState.Paused)
+      return ""
+    return ""
+  }
+
+  function clampText(text) {
+    if (!text)
+      return ""
+    if (text.length <= root.maxLength)
+      return text
+    return text.slice(0, root.maxLength - 3) + "..."
+  }
+
+  function isIgnoredPlayer(player) {
+    if (!player)
+      return true
+    const dbusName = player.dbusName ? player.dbusName.toLowerCase() : ""
+    const identity = player.identity ? player.identity.toLowerCase() : ""
+    const desktopEntry = player.desktopEntry ? player.desktopEntry.toLowerCase() : ""
+    return dbusName.indexOf("playerctld") >= 0 ||
+      identity === "playerctld" ||
+      desktopEntry === "playerctld"
+  }
+
+  function formatTrackText(player) {
+    if (!player)
+      return root.fallbackText
+    const artist = player.trackArtist || ""
+    const title = player.trackTitle || ""
+    const artistTitle = [artist, title].filter(part => part !== "").join(" - ")
+    return artistTitle ? artistTitle : root.fallbackText
+  }
+
+  function pickActivePlayer() {
+    const list = (root.players || []).filter(player => !root.isIgnoredPlayer(player))
+    for (let i = 0; i < list.length; i++) {
+      const player = list[i]
+      if (player && player.playbackState === MprisPlaybackState.Playing)
+        return player
+    }
+    for (let i = 0; i < list.length; i++) {
+      const player = list[i]
+      if (player && player.playbackState === MprisPlaybackState.Paused)
+        return player
+    }
+    return list.length > 0 ? list[0] : null
+  }
+
+  function refreshActivePlayer() {
+    const selected = root.pickActivePlayer()
+    if (selected !== root.activePlayer)
+      root.activePlayer = selected
+  }
+
+  Connections {
+    target: Mpris.players
+    function onValuesChanged() {
+      root.refreshActivePlayer()
+    }
+    function onObjectInsertedPost() {
+      root.refreshActivePlayer()
+    }
+    function onObjectRemovedPost() {
+      root.refreshActivePlayer()
+    }
+  }
+
+  Repeater {
+    model: Mpris.players
+    delegate: Item {
+      visible: false
+      width: 0
+      height: 0
+      Connections {
+        target: modelData
+        function onPlaybackStateChanged() {
+          root.refreshActivePlayer()
         }
-      });
+        function onIsPlayingChanged() {
+          root.refreshActivePlayer()
+        }
+        function onReady() {
+          root.refreshActivePlayer()
+        }
+      }
     }
   }
 
-  function activePlayer() {
-    if (!available || !mpris || !mpris.players)
-      return null;
-    const players = mpris.players.values || [];
-    if (players.length === 0)
-      return null;
-    const playing = players.find(p => p.isPlaying);
-    return playing || players[0];
-  }
+  Component.onCompleted: root.refreshActivePlayer()
 
-  function displayText(target) {
-    if (!target)
-      return "";
-    const artist = target.trackArtist || (target.trackArtists && target.trackArtists[0]) || "";
-    const title = target.trackTitle || "";
-    if (!artist && !title)
-      return "";
-    return `${artist} - ${title}`.trim();
-  }
-
-  function truncated(str) {
-    if (!str)
-      return "";
-    if (str.length <= maxLength)
-      return str;
-    return `${str.slice(0, Math.max(0, maxLength - 3))}...`;
-  }
-
-  function update() {
-    if (!available) {
-      player = null;
-      text = "";
-      statusIcon = "";
-      return;
+  content: [
+    IconTextRow {
+      spacing: root.contentSpacing
+      iconText: root.statusText
+      text: root.trackText
     }
-    const current = activePlayer();
-    player = current;
-    text = displayText(current);
-    const playing = current && current.isPlaying;
-    statusIcon = playing ? "" : "";
-  }
-
-  Component.onCompleted: createMpris()
-
-  Connections {
-    target: mpris ? mpris.players : null
-    function onModelReset() { update(); }
-    function onRowsInserted() { update(); }
-    function onRowsRemoved() { update(); }
-  }
-
-  Connections {
-    target: mpris
-    function onPlayersChanged() { update(); }
-  }
-
-  Timer {
-    interval: 1000
-    running: true
-    repeat: true
-    triggeredOnStart: true
-    onTriggered: update()
-  }
-
-  Label {
-    id: label
-    text: {
-      const combined = text ? `${statusIcon} ${text}` : "";
-      return root.truncated(combined);
-    }
-    elide: Text.ElideRight
-  }
+  ]
 }

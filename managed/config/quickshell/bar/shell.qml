@@ -1,5 +1,16 @@
+import QtQuick
+import QtQml
 import Quickshell
+import "."
 
 ShellRoot {
-  Bar { }
+  LoggingCategory {
+    name: "quickshell.dbus.properties"
+    defaultLogLevel: LoggingCategory.Critical
+  }
+
+  Variants {
+    model: Quickshell.screens
+    delegate: BarWindow {}
+  }
 }

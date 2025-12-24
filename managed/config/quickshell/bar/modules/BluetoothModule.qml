@@ -1,111 +1,248 @@
 import QtQuick
-import QtQuick.Controls
-import QtQml
+import QtQuick.Layouts
 import Quickshell
-import "./Label.qml"
-import "../theme"
+import Quickshell.Bluetooth
+import ".."
+import "../components"
 
-Item {
+ModuleContainer {
   id: root
-  property var bluetooth: null
-  property string icon: "󰂲"
-  property string text: ""
-  property bool available: false
+  property string iconOff: "󰂲"
+  property string iconOn: "󰂰"
+  property string iconDisabled: "󰂱"
+  property string iconConnected: ""
+  property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class bluetui -e 'bluetui'"
+
+  readonly property var bluetooth: Bluetooth
+
+  property var adapter: bluetooth.defaultAdapter
+  property var devices: bluetooth.devices ? bluetooth.devices.values : []
+  property var activeDevice: devices.length > 0 ? devices[0] : null
+  property var deviceSnapshot: []
+  property int pairedCount: 0
   property int connectedCount: 0
-  property string tooltipText: "Bluetooth off"
-  implicitHeight: label.implicitHeight
-  implicitWidth: label.implicitWidth
-  visible: available
+  property string connectedNames: ""
+  property var connectedDevice: null
+  property int connectedBattery: -1
+  property string adapterName: ""
 
-  function createBluetooth() {
-    const src = "import Quickshell.Bluetooth; Bluetooth {}";
-    const comp = Qt.createComponent(src);
-    if (comp.status === Component.Ready) {
-      bluetooth = comp.createObject(root);
-      available = !!bluetooth;
-    } else {
-      comp.statusChanged.connect(function(status) {
-        if (status === Component.Ready) {
-          bluetooth = comp.createObject(root);
-          available = !!bluetooth;
+  tooltipTitle: root.tooltipTitleText()
+  tooltipText: root.tooltipLabel()
+  tooltipHoverable: true
+  tooltipContent: Component {
+    ColumnLayout {
+      spacing: Config.space.sm
+
+      TooltipCard {
+        content: [
+          InfoRow {
+            label: "Status"
+            value: root.statusLabel()
+          },
+          InfoRow {
+            label: "Adapter"
+            value: root.adapterName
+            visible: root.adapterName !== ""
+          },
+          InfoRow {
+            label: "Connected"
+            value: root.connectedNames !== "" ? root.connectedNames : "None"
+          },
+          InfoRow {
+            label: "Paired"
+            value: root.pairedCount.toString()
+          }
+        ]
+      }
+
+      TooltipCard {
+        content: [
+          RowLayout {
+            spacing: 8
+            Layout.fillWidth: true
+
+            MetricBlock {
+              Layout.fillWidth: true
+              label: "Connected"
+              value: root.connectedCount.toString()
+              icon: root.iconConnected
+              accentColor: Config.green
+              fillRatio: Math.min(1, root.connectedCount / 4)
+              showFill: false
+            }
+
+            MetricBlock {
+              Layout.fillWidth: true
+              label: "Paired"
+              value: root.pairedCount.toString()
+              icon: root.iconOn
+              accentColor: Config.lavender
+              fillRatio: Math.min(1, root.pairedCount / 8)
+              showFill: false
+            }
+          }
+        ]
+      }
+
+      TooltipCard {
+        content: [
+          RowLayout {
+            spacing: 8
+            Layout.fillWidth: true
+
+            MetricBlock {
+              Layout.fillWidth: true
+              label: "Battery"
+              value: root.connectedBattery >= 0 ? root.connectedBattery + "%" : "n/a"
+              icon: "󰂎"
+              accentColor: Config.pink
+              fillRatio: root.connectedBattery >= 0 ? Math.min(1, root.connectedBattery / 100) : 0
+              showFill: false
+            }
+
+            MetricBlock {
+              Layout.fillWidth: true
+              label: "Devices"
+              value: root.devices.length.toString()
+              icon: root.iconOn
+              accentColor: Config.green
+              fillRatio: Math.min(1, root.devices.length / 8)
+              showFill: false
+            }
+          }
+        ]
+      }
+
+      TooltipActionsRow {
+        ActionChip {
+          text: "Open"
+          onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
         }
-      });
+
+        ActionChip {
+          text: "Refresh"
+          onClicked: root.refreshBluetooth()
+        }
+      }
     }
   }
 
-  function updateDisplay() {
-    if (!available || !bluetooth) {
-      icon = "󰂲";
-      text = "";
-      connectedCount = 0;
-      tooltipText = "Bluetooth unavailable";
-      return;
+  function stateColor() {
+    if (!adapter)
+      return Config.textMuted
+    if (!adapter.enabled)
+      return Config.red
+    if (!activeDevice)
+      return Config.textMuted
+    return Config.textColor
+  }
+
+  function tooltipLabel() {
+    if (!adapter)
+      return "Bluetooth: off"
+    if (!adapter.enabled)
+      return "Bluetooth: disabled"
+    if (activeDevice) {
+      const alias = activeDevice.alias || activeDevice.name || ""
+      return "Bluetooth: " + (alias ? alias : "connected")
     }
-    const adapter = bluetooth.defaultAdapter;
-    const devices = bluetooth.devices && bluetooth.devices.values ? bluetooth.devices.values : [];
-    if (!adapter || !adapter.enabled) {
-      icon = "󰂲";
-      text = "";
-      connectedCount = 0;
-      tooltipText = "Bluetooth off";
-      return;
+    return "Bluetooth: on"
+  }
+
+  function tooltipTitleText() {
+    if (!adapter)
+      return "Bluetooth"
+    if (!adapter.enabled)
+      return "Bluetooth"
+    if (activeDevice) {
+      const alias = activeDevice.alias || activeDevice.name || ""
+      return alias !== "" ? alias : "Bluetooth"
     }
+    return "Bluetooth"
+  }
 
-    const connected = devices.filter(d => d.connected);
-    connectedCount = connected.length;
-    if (connectedCount === 0) {
-      icon = "󰂲";
-      text = "";
-      tooltipText = "0 devices connected";
-      return;
+  function statusLabel() {
+    if (!adapter)
+      return "Off"
+    if (!adapter.enabled)
+      return "Disabled"
+    return connectedCount > 0 ? "Connected" : "On"
+  }
+
+  function deviceLabel(device) {
+    if (!device)
+      return ""
+    return device.alias || device.name || device.address || ""
+  }
+
+  function refreshBluetooth() {
+    const list = root.devices || []
+    root.deviceSnapshot = list.slice(0)
+    root.pairedCount = 0
+    root.connectedCount = 0
+    root.connectedDevice = null
+    root.connectedBattery = -1
+    root.connectedNames = ""
+    const names = []
+    for (let i = 0; i < list.length; i++) {
+      const device = list[i]
+      if (!device)
+        continue
+      if (device.paired)
+        root.pairedCount += 1
+      if (device.connected) {
+        root.connectedCount += 1
+        if (!root.connectedDevice)
+          root.connectedDevice = device
+        const label = root.deviceLabel(device)
+        if (label)
+          names.push(label)
+        if (root.connectedBattery < 0) {
+          const battery = Number.isFinite(device.batteryPercentage)
+            ? Math.round(device.batteryPercentage)
+            : (Number.isFinite(device.battery) ? Math.round(device.battery) : -1)
+          if (battery >= 0)
+            root.connectedBattery = battery
+        }
+      }
     }
-
-    const device = connected[0];
-    const name = device.name || device.deviceName || device.alias || "Device";
-    const battery = device.batteryAvailable ? ` ${Math.round(device.battery * 100)}%` : "";
-    icon = ` ${name}${battery}`;
-    text = icon;
-
-    const details = connected.map(d => {
-      const alias = d.name || d.deviceName || d.alias || "Device";
-      const addr = d.address || "";
-      const batt = d.batteryAvailable ? `${Math.round(d.battery * 100)}%` : "";
-      const battLine = batt ? `\n\n${batt}` : "";
-      return `${alias}\n${addr}${battLine}`;
-    });
-    tooltipText = `${connectedCount} devices connected${details.length ? "\n\n" + details.join("\n\n") : ""}`;
+    root.connectedNames = names.join(", ")
+    root.adapterName = adapter && adapter.name ? adapter.name : ""
   }
 
-  Component.onCompleted: createBluetooth()
-
-  Connections {
-    target: bluetooth
-    function onDevicesChanged() { updateDisplay(); }
-    function onDefaultAdapterChanged() { updateDisplay(); }
+  function displayText() {
+    if (!adapter)
+      return root.iconOff
+    if (!adapter.enabled)
+      return root.iconDisabled
+    if (activeDevice) {
+      const alias = activeDevice.alias || activeDevice.name || ""
+      return root.iconConnected + (alias ? " " + alias : "")
+    }
+    return root.iconOn
   }
 
-  Timer {
-    interval: 3000
-    running: true
-    repeat: true
-    triggeredOnStart: true
-    onTriggered: updateDisplay()
-  }
-
-  Label {
-    id: label
-    text: root.text || root.icon
-    color: Theme.colors.text
-    ToolTip.visible: mouseArea.containsMouse
-    ToolTip.text: tooltipText
-  }
+  content: [
+    IconLabel { text: root.displayText(); color: root.stateColor() }
+  ]
 
   MouseArea {
     anchors.fill: parent
-    id: mouseArea
-    hoverEnabled: true
-    onClicked: Quickshell.execDetached({
-      command: [ "runapp", "kitty", "-o", "tab_bar_style=hidden", "--class", "bluetui", "-e", "bluetui" ],
-    })
+    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
+  }
+
+  onTooltipActiveChanged: {
+    if (root.tooltipActive)
+      root.refreshBluetooth()
+  }
+
+  onDevicesChanged: {
+    if (root.tooltipActive)
+      root.refreshBluetooth()
+  }
+
+  onAdapterChanged: {
+    if (root.tooltipActive)
+      root.refreshBluetooth()
   }
 }
