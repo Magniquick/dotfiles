@@ -8,4 +8,3 @@ Text {
 
     text: `- ${summary}: ${body}`
 }
-

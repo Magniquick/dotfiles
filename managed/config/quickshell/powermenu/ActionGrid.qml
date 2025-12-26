@@ -3,6 +3,7 @@ import QtQuick.Layouts
 
 Item {
     id: gridHolder
+
     property var colors: ColorPalette.palette
     property var actions: defaultActions()
     property string selection: ""
@@ -15,17 +16,45 @@ Item {
     property int columns: 3
     property int iconPadding: 6
 
-    onSuppressNextHoverChanged: dropNextHover = suppressNextHover
-
     signal hovered(string actionName)
     signal unhovered
     signal activated(string actionName)
 
+    function defaultActions() {
+        return [({
+                    "name": "Poweroff",
+                    "icon": "",
+                    "accent": colors.red
+                }), ({
+                    "name": "Reboot",
+                    "icon": "",
+                    "accent": colors.green
+                }), ({
+                    "name": "Exit",
+                    "icon": "󰿅",
+                    "accent": colors.pink
+                }), ({
+                    "name": "Hibernate",
+                    "icon": "󰒲",
+                    "accent": colors.teal
+                }), ({
+                    "name": "Suspend",
+                    "icon": "󰤄",
+                    "accent": colors.yellow
+                }), ({
+                    "name": "Windows",
+                    "icon": "",
+                    "accent": colors.blue
+                })];
+    }
+
+    onSuppressNextHoverChanged: dropNextHover = suppressNextHover
     implicitWidth: grid.implicitWidth
     implicitHeight: grid.implicitHeight
 
     GridLayout {
         id: grid
+
         anchors.centerIn: parent
         columns: gridHolder.columns
         columnSpacing: gridHolder.iconPadding
@@ -33,6 +62,7 @@ Item {
 
         Repeater {
             model: gridHolder.actions
+
             delegate: PowermenuButton {
                 actionName: modelData.name
                 icon: modelData.icon
@@ -48,38 +78,14 @@ Item {
                     }
                     gridHolder.hovered(action);
                 }
-                onUnhovered: () => gridHolder.unhovered()
-                onActivated: action => gridHolder.activated(action)
+                onUnhovered: () => {
+                    return gridHolder.unhovered();
+                }
+                onActivated: action => {
+                    return gridHolder.activated(action);
+                }
                 mouseEnabled: gridHolder.hoverEnabled
             }
         }
-    }
-
-    function defaultActions() {
-        return [({
-                    name: "Poweroff",
-                    icon: "",
-                    accent: colors.red
-                }), ({
-                    name: "Reboot",
-                    icon: "",
-                    accent: colors.green
-                }), ({
-                    name: "Exit",
-                    icon: "󰿅",
-                    accent: colors.pink
-                }), ({
-                    name: "Hibernate",
-                    icon: "󰒲",
-                    accent: colors.teal
-                }), ({
-                    name: "Suspend",
-                    icon: "󰤄",
-                    accent: colors.yellow
-                }), ({
-                    name: "Windows",
-                    icon: "",
-                    accent: colors.blue
-                })];
     }
 }

@@ -1,10 +1,10 @@
-import QtQuick
 import "../"
+import QtQuick
 
 BarBlock {
-  id: text
-  content: BarText {
-    symbolText: ` ${Datetime.time}`
-  }
-}
+    id: text
 
+    content: BarText {
+        symbolText: ` ${Datetime.time}`
+    }
+}

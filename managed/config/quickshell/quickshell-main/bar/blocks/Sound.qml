@@ -4,37 +4,39 @@ import Quickshell
 import Quickshell.Services.Pipewire
 import Quickshell.Io
 import "../"
-import "root:/" 
+import "root:/"
 
 BarBlock {
     id: root
     property var sink: Pipewire.defaultAudioSink
 
-    PwObjectTracker { 
+    PwObjectTracker {
         objects: [Pipewire.defaultAudioSink]
         onObjectsChanged: {
-            sink = Pipewire.defaultAudioSink
+            sink = Pipewire.defaultAudioSink;
             if (sink?.audio) {
-                sink.audio.volumeChanged.connect(updateVolume)
+                sink.audio.volumeChanged.connect(updateVolume);
             }
         }
     }
 
     function updateVolume() {
         if (sink?.audio) {
-            const icon = sink.audio.muted ? "󰖁" : "󰕾"
-            content.symbolText = `${icon} ${Math.round(sink.audio.volume * 100)}%`
+            const icon = sink.audio.muted ? "󰖁" : "󰕾";
+            content.symbolText = `${icon} ${Math.round(sink.audio.volume * 100)}%`;
         }
     }
 
-    content: BarText { symbolText: `${sink?.audio?.muted ? "󰖁" : "󰕾"} ${Math.round(sink?.audio?.volume * 100)}%` }
+    content: BarText {
+        symbolText: `${sink?.audio?.muted ? "󰖁" : "󰕾"} ${Math.round(sink?.audio?.volume * 100)}%`
+    }
 
     MouseArea {
         anchors.fill: parent
         onClicked: toggleMenu()
-        onWheel: function(event) {
+        onWheel: function (event) {
             if (sink?.audio) {
-                sink.audio.volume = Math.max(0, Math.min(1, sink.audio.volume + (event.angleDelta.y / 120) * 0.05))
+                sink.audio.volume = Math.max(0, Math.min(1, sink.audio.volume + (event.angleDelta.y / 120) * 0.05));
             }
         }
     }
@@ -62,7 +64,7 @@ BarBlock {
             hoverEnabled: true
             onExited: {
                 if (!containsMouse) {
-                    closeTimer.start()
+                    closeTimer.start();
                 }
             }
             onEntered: closeTimer.stop()
@@ -99,7 +101,7 @@ BarBlock {
                             value: sink?.audio?.volume || 0
                             onValueChanged: {
                                 if (sink?.audio) {
-                                    sink.audio.volume = value
+                                    sink.audio.volume = value;
                                 }
                             }
 
@@ -133,8 +135,17 @@ BarBlock {
 
                     Repeater {
                         model: [
-                            { text: sink?.audio?.muted ? "Unmute" : "Mute", action: () => sink?.audio && (sink.audio.muted = !sink.audio.muted) },
-                            { text: "Pavucontrol", action: () => { pavucontrol.running = true; menuWindow.visible = false } }
+                            {
+                                text: sink?.audio?.muted ? "Unmute" : "Mute",
+                                action: () => sink?.audio && (sink.audio.muted = !sink.audio.muted)
+                            },
+                            {
+                                text: "Pavucontrol",
+                                action: () => {
+                                    pavucontrol.running = true;
+                                    menuWindow.visible = false;
+                                }
+                            }
                         ]
 
                         Rectangle {
@@ -157,7 +168,7 @@ BarBlock {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: {
-                                    modelData.action()
+                                    modelData.action();
                                 }
                             }
                         }
@@ -169,8 +180,8 @@ BarBlock {
 
     function toggleMenu() {
         if (root.QsWindow?.window?.contentItem) {
-            menuWindow.anchor.rect = root.QsWindow.window.contentItem.mapFromItem(root, 0, -menuWindow.height - 5, root.width, root.height)
-            menuWindow.visible = !menuWindow.visible
+            menuWindow.anchor.rect = root.QsWindow.window.contentItem.mapFromItem(root, 0, -menuWindow.height - 5, root.width, root.height);
+            menuWindow.visible = !menuWindow.visible;
         }
     }
 }

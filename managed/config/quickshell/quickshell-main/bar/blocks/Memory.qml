@@ -1,31 +1,35 @@
+import "../"
 import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
-import "../"
 
 BarBlock {
-  id: text
-  content: BarText {
-    symbolText: `- ${Math.floor(percentFree)}%`
-  }
+    id: text
 
-  property real percentFree
+    property real percentFree
 
-  Process {
-    id: memProc
-    command: ["sh", "-c", "free | grep Mem | awk '{print $3/$2 * 100.0}'"]
-    running: true
+    Process {
+        id: memProc
 
-    stdout: SplitParser {
-      onRead: data => percentFree = data
+        command: ["sh", "-c", "free | grep Mem | awk '{print $3/$2 * 100.0}'"]
+        running: true
+
+        stdout: SplitParser {
+            onRead: data => {
+                return percentFree = data;
+            }
+        }
     }
-  }
 
-  Timer {
-    interval: 2000
-    running: true
-    repeat: true
-    onTriggered: memProc.running = true
-  }
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: memProc.running = true
+    }
+
+    content: BarText {
+        symbolText: `- ${Math.floor(percentFree)}%`
+    }
 }

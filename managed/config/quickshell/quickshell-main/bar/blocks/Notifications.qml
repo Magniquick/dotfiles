@@ -1,20 +1,22 @@
+import "../"
 import QtQuick
 import Quickshell.Services.Notifications
-import "../"
 
 BarBlock {
     id: root
+
     property bool showNotification: false
 
     text: "  " + notifServer.trackedNotifications.values.length
-    onClicked: function() {
-      showNotification = !showNotification
+    onClicked: function () {
+        showNotification = !showNotification;
     }
 
     NotificationServer {
         id: notifServer
-        onNotification: (notification) => {
-            notification.tracked = true
+
+        onNotification: notification => {
+            notification.tracked = true;
         }
     }
 
@@ -31,4 +33,3 @@ BarBlock {
         }
     }
 }
-

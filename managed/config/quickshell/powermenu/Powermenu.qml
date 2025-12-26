@@ -1,11 +1,12 @@
-import Quickshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Quickshell
 import Quickshell.Wayland
 
 PanelWindow {
     id: window
+
     property var colors: ColorPalette.palette
     required property var targetScreen
     property string selection: ""
@@ -16,7 +17,7 @@ PanelWindow {
     property int headpatResetDelay: 200
     // Drives the staged button reveal animation.
     property bool revealButtons: false
-    readonly property color borderColor: Qt.rgba(0x58 / 255, 0x5B / 255, 0x70 / 255, 0.5)
+    readonly property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     readonly property int borderRadius: 27
 
     signal requestClose
@@ -30,6 +31,22 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.namespace: "powermenu"
+    onVisibleChanged: {
+        if (visible) {
+            hoverEnabled = false;
+            suppressNextHover = true;
+            revealButtons = false;
+            revealTimer.restart();
+            hoverEnableTimer.restart();
+        } else {
+            hoverEnabled = true;
+            suppressNextHover = false;
+            revealButtons = false;
+            revealTimer.stop();
+            hoverEnableTimer.stop();
+        }
+    }
+
     anchors {
         left: true
         right: true
@@ -58,6 +75,7 @@ PanelWindow {
 
     Timer {
         id: revealTimer
+
         interval: 30
         repeat: false
         onTriggered: revealButtons = true
@@ -65,6 +83,7 @@ PanelWindow {
 
     Timer {
         id: hoverEnableTimer
+
         interval: 450
         repeat: false
         onTriggered: hoverEnabled = true
@@ -72,18 +91,22 @@ PanelWindow {
 
     Item {
         id: content
+
         z: 1
         anchors.centerIn: parent
 
         Row {
             id: row
-            anchors.centerIn: parent
-            spacing: -27
+
             property real panelWidth: Math.max(leftPane.implicitWidth, rightPane.implicitWidth)
             property real panelHeight: Math.max(leftPane.implicitHeight, rightPane.implicitHeight)
 
+            anchors.centerIn: parent
+            spacing: -27
+
             GreetingPane {
                 id: leftPane
+
                 colors: window.colors
                 borderColor: window.borderColor
                 borderRadius: window.borderRadius
@@ -95,6 +118,7 @@ PanelWindow {
 
             ActionPanel {
                 id: rightPane
+
                 colors: window.colors
                 borderColor: window.borderColor
                 borderRadius: window.borderRadius
@@ -107,25 +131,13 @@ PanelWindow {
                 width: row.panelWidth
                 height: row.panelHeight
                 anchors.verticalCenter: parent.verticalCenter
-                onActionInvoked: actionName => window.actionInvoked(actionName)
-                onHoverUpdated: actionName => window.hoverUpdated(actionName)
+                onActionInvoked: actionName => {
+                    return window.actionInvoked(actionName);
+                }
+                onHoverUpdated: actionName => {
+                    return window.hoverUpdated(actionName);
+                }
             }
-        }
-    }
-
-    onVisibleChanged: {
-        if (visible) {
-            hoverEnabled = false;
-            suppressNextHover = true;
-            revealButtons = false;
-            revealTimer.restart();
-            hoverEnableTimer.restart();
-        } else {
-            hoverEnabled = true;
-            suppressNextHover = false;
-            revealButtons = false;
-            revealTimer.stop();
-            hoverEnableTimer.stop();
         }
     }
 }

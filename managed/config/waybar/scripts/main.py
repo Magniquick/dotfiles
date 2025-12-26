@@ -86,6 +86,7 @@ def get_tasks() -> list:
     to_do_tasks = list()
     for task in tasks_items:
         if task["status"] == "needsAction":
+            print(task)
             to_do_tasks.append(
                 (task["title"], get_unix_timestamp(task.get("due")), get_unix_timestamp(task.get("updated")))
             )

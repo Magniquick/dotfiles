@@ -16,13 +16,14 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-
         onEntered: () => {
             ws.hovered = true;
         }
         onExited: () => {
             ws.hovered = false;
         }
-        onClicked: () => console.log(`workspace ?`)
+        onClicked: () => {
+            return console.log(`workspace ?`);
+        }
     }
 }

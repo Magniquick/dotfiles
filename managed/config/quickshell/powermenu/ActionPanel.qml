@@ -3,8 +3,9 @@ import QtQuick.Layouts
 
 Rectangle {
     id: right
+
     property var colors: Palette.palette
-    property color borderColor: Qt.rgba(0x58 / 255, 0x5B / 255, 0x70 / 255, 0.5)
+    property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     property int borderRadius: 27
     property int padH: 47
     property int padTop: 0
@@ -25,12 +26,12 @@ Rectangle {
     color: colors.base
     border.width: 6
     border.color: "transparent"
-
     implicitWidth: rightContent.implicitWidth + padH * 2 + border.width * 2
     implicitHeight: rightContent.implicitHeight + padTop + padBottom + border.width * 2
 
     Canvas {
         id: dashBorder
+
         anchors.fill: parent
         anchors.margins: 0
         antialiasing: true
@@ -45,37 +46,31 @@ Rectangle {
             const bottom = height - halfStroke;
             const dash = strokeWidth * 0.4;
             const gap = strokeWidth * 0.2;
-
             ctx.clearRect(0, 0, width, height);
             ctx.strokeStyle = Qt.rgba(borderColor.r, borderColor.g, borderColor.b, 0.4);
             ctx.lineWidth = strokeWidth;
             ctx.setLineDash([dash, gap]);
             ctx.lineCap = "butt";
-
             const strokeSegment = drawFn => {
                 ctx.beginPath();
                 drawFn();
                 ctx.stroke();
             };
-
             strokeSegment(() => {
                 ctx.moveTo(left + radius, top);
                 ctx.lineTo(rightEdge - radius, top);
                 ctx.quadraticCurveTo(rightEdge, top, rightEdge, top + radius);
             });
-
             strokeSegment(() => {
                 ctx.moveTo(rightEdge, top + radius);
                 ctx.lineTo(rightEdge, bottom - radius);
                 ctx.quadraticCurveTo(rightEdge, bottom, rightEdge - radius, bottom);
             });
-
             strokeSegment(() => {
                 ctx.moveTo(rightEdge - radius, bottom);
                 ctx.lineTo(left + radius, bottom);
                 ctx.quadraticCurveTo(left, bottom, left, bottom - radius);
             });
-
             strokeSegment(() => {
                 ctx.moveTo(left, bottom - radius);
                 ctx.lineTo(left, top + radius);
@@ -86,6 +81,7 @@ Rectangle {
 
     Item {
         id: rightContentArea
+
         anchors.fill: parent
         anchors.leftMargin: padH
         anchors.rightMargin: padH
@@ -94,12 +90,14 @@ Rectangle {
 
         Column {
             id: rightContent
+
             anchors.centerIn: parent
             anchors.verticalCenterOffset: 12
             spacing: 30
 
             BunnyBlock {
                 id: bunny
+
                 anchors.horizontalCenter: parent.horizontalCenter
                 colors: right.colors
                 headpatResetDelay: right.headpatResetDelay
@@ -114,9 +112,15 @@ Rectangle {
                 hoverEnabled: right.hoverEnabled
                 suppressNextHover: right.suppressNextHover
                 reveal: right.reveal
-                onHovered: action => right.hoverUpdated(action)
-                onUnhovered: () => right.hoverUpdated("")
-                onActivated: action => right.actionInvoked(action)
+                onHovered: action => {
+                    return right.hoverUpdated(action);
+                }
+                onUnhovered: () => {
+                    return right.hoverUpdated("");
+                }
+                onActivated: action => {
+                    return right.actionInvoked(action);
+                }
             }
 
             FooterStatus {

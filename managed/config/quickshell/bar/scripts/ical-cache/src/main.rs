@@ -52,6 +52,17 @@ fn run() -> Result<(), String> {
     let args = Args::from_env()?;
     load_env(&args);
     let urls = resolve_urls(&args)?;
+
+    // Debug logging
+    {
+        use std::io::Write;
+        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open("/tmp/ical-debug.txt") {
+            writeln!(file, "Timestamp: {}", Local::now().to_rfc3339()).ok();
+            writeln!(file, "Args cache_dir: {}", args.cache_dir).ok();
+            writeln!(file, "Resolved URLs: {:?}", urls).ok();
+        }
+    }
+
     let cache_dir = PathBuf::from(&args.cache_dir);
     fs::create_dir_all(&cache_dir).map_err(|err| err.to_string())?;
 

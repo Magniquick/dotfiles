@@ -27,7 +27,7 @@ RowLayout {
                 Item {
                     required property int index
                     property bool focused: Hyprland.focusedMonitor?.activeWorkspace?.id === (index + 1)
-                    
+
                     width: workspaceText.width
                     height: workspaceText.height
 

@@ -1,7 +1,8 @@
-import QtQuick.Layouts
 import ".."
+import QtQuick.Layouts
 
 RowLayout {
-  id: root
-  spacing: Config.space.sm
+    id: root
+
+    spacing: Config.space.sm
 }
