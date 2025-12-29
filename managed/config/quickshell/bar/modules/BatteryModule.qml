@@ -8,55 +8,8 @@ import Quickshell.Services.UPower
 ModuleContainer {
     id: root
 
-    property bool showTime: false
     property int healthPercent: -1
-
-    function formatSeconds(seconds) {
-        if (!seconds || seconds <= 0)
-            return "";
-
-        const totalMinutes = Math.floor(seconds / 60);
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        if (hours <= 0)
-            return minutes + "m";
-
-        if (minutes <= 0)
-            return hours + "h";
-
-        return hours + "h " + minutes + "m";
-    }
-
-    function timeLabel(device) {
-        if (!device || !device.ready)
-            return "";
-
-        const time = device.timeToEmpty > 0 ? device.timeToEmpty : device.timeToFull;
-        const formatted = formatSeconds(time);
-        return formatted ? formatted : "";
-    }
-
-    function percentLabel(device) {
-        if (!device || !device.ready)
-            return "";
-
-        const rawPercent = device.percentage;
-        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
-        return Math.round(percent) + "%";
-    }
-
-    function batteryPercentValue(device) {
-        if (!device || !device.ready)
-            return 0;
-
-        const rawPercent = device.percentage;
-        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
-        return Math.max(0, Math.min(100, percent));
-    }
-
-    function healthLabel() {
-        return root.healthPercent >= 0 ? root.healthPercent + "%" : "—";
-    }
+    property bool showTime: false
 
     function batteryColor(device) {
         if (!device || !device.ready)
@@ -70,7 +23,6 @@ ModuleContainer {
 
         return Config.textColor;
     }
-
     function batteryIcon(device) {
         if (!device || !device.ready)
             return "";
@@ -94,7 +46,29 @@ ModuleContainer {
 
         return "";
     }
+    function batteryPercentValue(device) {
+        if (!device || !device.ready)
+            return 0;
 
+        const rawPercent = device.percentage;
+        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
+        return Math.max(0, Math.min(100, percent));
+    }
+    function formatSeconds(seconds) {
+        if (!seconds || seconds <= 0)
+            return "";
+
+        const totalMinutes = Math.floor(seconds / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        if (hours <= 0)
+            return minutes + "m";
+
+        if (minutes <= 0)
+            return hours + "h";
+
+        return hours + "h " + minutes + "m";
+    }
     function healthFromDevice(device) {
         function toPercent(value) {
             if (!isFinite(value))
@@ -127,13 +101,22 @@ ModuleContainer {
 
         return -1;
     }
+    function healthLabel() {
+        return root.healthPercent >= 0 ? root.healthPercent + "%" : "—";
+    }
+    function percentLabel(device) {
+        if (!device || !device.ready)
+            return "";
 
+        const rawPercent = device.percentage;
+        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
+        return Math.round(percent) + "%";
+    }
     function refreshHealth() {
         const fromDevice = root.healthFromDevice(UPower.displayDevice);
         if (fromDevice >= 0)
             root.healthPercent = fromDevice;
     }
-
     function stateLabel(device) {
         if (!device || !device.ready)
             return "Unknown";
@@ -152,18 +135,14 @@ ModuleContainer {
             return "Idle";
         }
     }
-
-    function tooltipLabel() {
-        const device = UPower.displayDevice;
+    function timeLabel(device) {
         if (!device || !device.ready)
-            return "Battery: unknown";
+            return "";
 
-        const percentText = root.percentLabel(device);
-        const timeText = root.timeLabel(device);
-        const timeSuffix = timeText ? " (" + timeText + ")" : "";
-        return "Battery: " + percentText + timeSuffix;
+        const time = device.timeToEmpty > 0 ? device.timeToEmpty : device.timeToFull;
+        const formatted = formatSeconds(time);
+        return formatted ? formatted : "";
     }
-
     function timeRemainingLabel(device) {
         if (!device || !device.ready)
             return "";
@@ -178,51 +157,30 @@ ModuleContainer {
         const formatted = root.formatSeconds(seconds);
         return formatted ? formatted + " left" : "";
     }
+    function tooltipLabel() {
+        const device = UPower.displayDevice;
+        if (!device || !device.ready)
+            return "Battery: unknown";
 
-    tooltipTitle: "Battery"
-    tooltipText: root.tooltipLabel()
-    tooltipHoverable: true
-    Component.onCompleted: root.refreshHealth()
-    onTooltipActiveChanged: {
-        if (root.tooltipActive)
-            root.refreshHealth();
+        const percentText = root.percentLabel(device);
+        const timeText = root.timeLabel(device);
+        const timeSuffix = timeText ? " (" + timeText + ")" : "";
+        return "Battery: " + percentText + timeSuffix;
     }
+
+    tooltipHoverable: true
+    tooltipText: root.tooltipLabel()
+    tooltipTitle: "Battery"
+
     content: [
         IconTextRow {
-            spacing: root.contentSpacing
-            iconText: root.batteryIcon(UPower.displayDevice)
             iconColor: root.batteryColor(UPower.displayDevice)
+            iconText: root.batteryIcon(UPower.displayDevice)
+            spacing: root.contentSpacing
             text: root.showTime ? root.timeLabel(UPower.displayDevice) : root.percentLabel(UPower.displayDevice)
             textColor: root.batteryColor(UPower.displayDevice)
         }
     ]
-
-    Connections {
-        function onReadyChanged() {
-            root.refreshHealth();
-        }
-
-        function onHealthPercentageChanged() {
-            root.refreshHealth();
-        }
-
-        function onEnergyCapacityChanged() {
-            root.refreshHealth();
-        }
-
-        function onPercentageChanged() {
-            root.refreshHealth();
-        }
-
-        target: UPower.displayDevice
-        ignoreUnknownSignals: true
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        onClicked: root.showTime = !root.showTime
-    }
-
     tooltipContent: Component {
         ColumnLayout {
             spacing: Config.space.md
@@ -234,47 +192,43 @@ ModuleContainer {
                 spacing: Config.space.md
 
                 Item {
-                    width: Config.space.xxl * 2
                     height: Config.space.xxl * 2
+                    width: Config.space.xxl * 2
 
                     Text {
                         anchors.centerIn: parent
-                        text: root.batteryIcon(UPower.displayDevice)
-                        font.pixelSize: Config.type.headlineLarge.size
                         color: root.batteryColor(UPower.displayDevice)
+                        font.pixelSize: Config.type.headlineLarge.size
+                        text: root.batteryIcon(UPower.displayDevice)
                     }
                 }
-
                 ColumnLayout {
                     spacing: Config.space.none
 
                     Text {
-                        text: root.percentLabel(UPower.displayDevice)
                         color: Config.textColor
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineMedium.size
                         font.weight: Font.Bold
+                        text: root.percentLabel(UPower.displayDevice)
                     }
-
                     Text {
-                        text: root.stateLabel(UPower.displayDevice)
                         color: Config.textMuted
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
+                        text: root.stateLabel(UPower.displayDevice)
                     }
                 }
-
                 Item {
                     Layout.fillWidth: true
                 }
             }
-
             ProgressBar {
                 Layout.fillWidth: true
-                height: Config.space.xs
-                value: root.batteryPercentValue(UPower.displayDevice) / 100
                 fillColor: root.batteryColor(UPower.displayDevice)
+                height: Config.space.xs
                 trackColor: Config.moduleBackgroundMuted
+                value: root.batteryPercentValue(UPower.displayDevice) / 100
             }
 
             // Power Mode Section
@@ -283,49 +237,78 @@ ModuleContainer {
                 spacing: Config.space.xs
 
                 Text {
-                    text: "POWER PROFILE"
+                    Layout.bottomMargin: Config.space.xs
                     color: Config.primary
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black
-                    Layout.bottomMargin: Config.space.xs
+                    text: "POWER PROFILE"
                 }
-
                 TooltipActionsRow {
                     spacing: Config.space.sm
 
                     ActionChip {
-                        text: "󰾆"
+                        Layout.fillWidth: true
                         active: PowerProfiles.profile === PowerProfile.PowerSaver
+                        text: "󰾆"
+
                         onClicked: PowerProfiles.profile = PowerProfile.PowerSaver
-                        Layout.fillWidth: true
                     }
-
                     ActionChip {
-                        text: "󰾅"
+                        Layout.fillWidth: true
                         active: PowerProfiles.profile === PowerProfile.Balanced
-                        onClicked: PowerProfiles.profile = PowerProfile.Balanced
-                        Layout.fillWidth: true
-                    }
+                        text: "󰾅"
 
+                        onClicked: PowerProfiles.profile = PowerProfile.Balanced
+                    }
                     ActionChip {
-                        text: ""
-                        active: PowerProfiles.profile === PowerProfile.Performance
-                        onClicked: PowerProfiles.profile = PowerProfile.Performance
                         Layout.fillWidth: true
+                        active: PowerProfiles.profile === PowerProfile.Performance
+                        text: ""
+
+                        onClicked: PowerProfiles.profile = PowerProfile.Performance
                     }
                 }
             }
 
             // Health Section
             InfoRow {
-                label: "Battery Health"
-                value: root.healthLabel()
-                icon: "󰁹"
                 Layout.fillWidth: true
+                icon: "󰁹"
+                label: "Battery Health"
                 opacity: 0.6
                 showLeader: false
+                value: root.healthLabel()
             }
         }
+    }
+
+    Component.onCompleted: root.refreshHealth()
+    onTooltipActiveChanged: {
+        if (root.tooltipActive)
+            root.refreshHealth();
+    }
+
+    Connections {
+        function onEnergyCapacityChanged() {
+            root.refreshHealth();
+        }
+        function onHealthPercentageChanged() {
+            root.refreshHealth();
+        }
+        function onPercentageChanged() {
+            root.refreshHealth();
+        }
+        function onReadyChanged() {
+            root.refreshHealth();
+        }
+
+        ignoreUnknownSignals: true
+        target: UPower.displayDevice
+    }
+    MouseArea {
+        anchors.fill: parent
+
+        onClicked: root.showTime = !root.showTime
     }
 }

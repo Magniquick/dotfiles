@@ -5,29 +5,27 @@ import QtQuick.Layouts
 Rectangle {
     id: button
 
-    property string actionName
-    property string icon
     property color accent: ColorPalette.palette.red
-    property string selection: ""
+    property string actionName
     property string hoverAction: ""
-    property int strokeWidth: 2
+    property string icon
+    property bool mouseEnabled: true
     property bool reveal: false
     property int revealDelay: 0
     property real revealProgress: 0
-    property bool mouseEnabled: true
+    property string selection: ""
+    property int strokeWidth: 2
 
+    signal activated(string actionName)
     signal hovered(string actionName)
     signal unhovered(string actionName)
-    signal activated(string actionName)
 
     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-    width: 54
-    height: 54
-    implicitWidth: width
-    implicitHeight: height
-    radius: 14
-    color: "transparent"
     border.width: 0
+    color: "transparent"
+    height: 54
+    implicitHeight: height
+    implicitWidth: width
     opacity: {
         var base = 1;
         if (selection !== "")
@@ -36,8 +34,17 @@ Rectangle {
             base = hoverAction === actionName ? 1 : 0.5;
         return base;
     }
+    radius: 14
     scale: revealProgress
     transformOrigin: Item.Center
+    width: 54
+
+    Behavior on opacity {
+        NumberAnimation {
+            duration: 220
+        }
+    }
+
     onRevealChanged: {
         revealIn.stop();
         revealOut.stop();
@@ -52,11 +59,11 @@ Rectangle {
 
         anchors.fill: parent
         anchors.margins: strokeWidth / 2
-        radius: Math.max(0, button.radius - strokeWidth / 2)
-        color: "transparent"
-        border.width: strokeWidth
-        border.color: selection === actionName ? accent : "transparent"
         antialiasing: true
+        border.color: selection === actionName ? accent : "transparent"
+        border.width: strokeWidth
+        color: "transparent"
+        radius: Math.max(0, button.radius - strokeWidth / 2)
 
         Behavior on border.color {
             ColorAnimation {
@@ -64,26 +71,24 @@ Rectangle {
             }
         }
     }
-
     Text {
         anchors.centerIn: parent
-        text: icon
-        font.pointSize: 30
-        font.family: "JetBrainsMono NFP"
         color: accent
+        font.family: "JetBrainsMono NFP"
+        font.pointSize: 30
         horizontalAlignment: Text.AlignHCenter
+        text: icon
         verticalAlignment: Text.AlignVCenter
     }
-
     MouseArea {
         anchors.fill: parent
-        hoverEnabled: mouseEnabled
         cursorShape: Qt.PointingHandCursor
+        hoverEnabled: mouseEnabled
+
+        onClicked: button.activated(button.actionName)
         onEntered: button.hovered(button.actionName)
         onExited: button.unhovered(button.actionName)
-        onClicked: button.activated(button.actionName)
     }
-
     SequentialAnimation {
         id: revealIn
 
@@ -92,31 +97,23 @@ Rectangle {
         PauseAnimation {
             duration: revealDelay
         }
-
         NumberAnimation {
-            target: button
-            property: "revealProgress"
-            to: 1
             duration: 250
-            easing.type: Easing.OutBack
             easing.overshoot: 3
+            easing.type: Easing.OutBack
+            property: "revealProgress"
+            target: button
+            to: 1
         }
     }
-
     NumberAnimation {
         id: revealOut
 
-        target: button
-        property: "revealProgress"
-        to: 0
         duration: 120
         easing.type: Easing.InOutQuad
+        property: "revealProgress"
         running: false
-    }
-
-    Behavior on opacity {
-        NumberAnimation {
-            duration: 220
-        }
+        target: button
+        to: 0
     }
 }

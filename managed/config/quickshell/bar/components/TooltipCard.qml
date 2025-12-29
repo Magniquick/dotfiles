@@ -5,21 +5,21 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    property alias content: contentColumn.data
-    property int padding: Config.space.md
-    property int spacing: Config.space.sm
     property color backgroundColor: Config.moduleBackgroundMuted
     property color borderColor: Config.outline
+    property alias content: contentColumn.data
     property bool outlined: false
+    property int padding: Config.space.md
+    property int spacing: Config.space.sm
 
     Layout.fillWidth: true
-    radius: Config.shape.corner.sm
-    color: root.backgroundColor
-    border.width: root.outlined ? 1 : 0
-    border.color: root.borderColor
     antialiasing: true
-    implicitWidth: contentColumn.implicitWidth + root.padding * 2
+    border.color: root.borderColor
+    border.width: root.outlined ? 1 : 0
+    color: root.backgroundColor
     implicitHeight: contentColumn.implicitHeight + root.padding * 2
+    implicitWidth: contentColumn.implicitWidth + root.padding * 2
+    radius: Config.shape.corner.sm
 
     ColumnLayout {
         id: contentColumn

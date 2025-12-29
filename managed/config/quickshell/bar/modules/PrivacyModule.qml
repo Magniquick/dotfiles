@@ -8,28 +8,24 @@ import Quickshell
 ModuleContainer {
     id: root
 
-    property bool micActive: false
     property bool cameraActive: false
-    property bool screenActive: false
-    property bool locationActive: false
-    property string micApps: ""
     property string cameraApps: ""
-    property string screenApps: ""
-    property string locationApps: ""
-    property string statusTooltip: "Privacy: idle"
-    property string micIcon: ""
-    property string cameraIcon: ""
-    property string screenIcon: "󰍹"
-    property string locationIcon: ""
-    property color micColor: Config.green
     property color cameraColor: Config.yellow
-    property color screenColor: Config.accent
+    property string cameraIcon: ""
+    property bool locationActive: false
+    property string locationApps: ""
     property color locationColor: Config.lavender
+    property string locationIcon: ""
+    property bool micActive: false
+    property string micApps: ""
+    property color micColor: Config.green
+    property string micIcon: ""
+    property bool screenActive: false
+    property string screenApps: ""
+    property color screenColor: Config.accent
+    property string screenIcon: "󰍹"
     readonly property string scriptPath: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "modules/privacy/privacy_dots.sh")
-
-    function buildStatus(label, apps) {
-        return apps !== "" ? label + ": " + apps : label + ": off";
-    }
+    property string statusTooltip: "Privacy: idle"
 
     function appLabel(apps) {
         if (!apps || apps.trim() === "")
@@ -37,22 +33,15 @@ ModuleContainer {
 
         return root.truncateApps(apps.trim());
     }
-
+    function buildStatus(label, apps) {
+        return apps !== "" ? label + ": " + apps : label + ": off";
+    }
     function truncateApps(apps) {
         if (apps.length <= 32)
             return apps;
 
         return apps.slice(0, 29) + "...";
     }
-
-    function updateTooltip() {
-        const micStatus = root.buildStatus("Mic", root.micApps);
-        const camStatus = root.buildStatus("Cam", root.cameraApps);
-        const locStatus = root.buildStatus("Location", root.locationApps);
-        const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
-        root.statusTooltip = micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
-    }
-
     function updateFromPayload(payload) {
         if (!payload || typeof payload !== "object") {
             root.micActive = false;
@@ -76,52 +65,46 @@ ModuleContainer {
         root.locationApps = payload.loc_app ? String(payload.loc_app).trim() : "";
         root.updateTooltip();
     }
+    function updateTooltip() {
+        const micStatus = root.buildStatus("Mic", root.micApps);
+        const camStatus = root.buildStatus("Cam", root.cameraApps);
+        const locStatus = root.buildStatus("Location", root.locationApps);
+        const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
+        root.statusTooltip = micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
+    }
 
-    contentSpacing: 8
-    tooltipTitle: "Privacy"
-    tooltipText: root.statusTooltip
-    tooltipHoverable: true
     collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive
+    contentSpacing: 8
+    tooltipHoverable: true
+    tooltipText: root.statusTooltip
+    tooltipTitle: "Privacy"
+
     content: [
         Row {
             spacing: root.contentSpacing
 
             IconLabel {
-                text: root.micIcon
                 color: root.micColor
+                text: root.micIcon
                 visible: root.micActive
             }
-
             IconLabel {
-                text: root.cameraIcon
                 color: root.cameraColor
+                text: root.cameraIcon
                 visible: root.cameraActive
             }
-
             IconLabel {
-                text: root.locationIcon
                 color: root.locationColor
+                text: root.locationIcon
                 visible: root.locationActive
             }
-
             IconLabel {
-                text: root.screenIcon
                 color: root.screenColor
+                text: root.screenIcon
                 visible: root.screenActive
             }
         }
     ]
-
-    CommandRunner {
-        id: privacyRunner
-
-        intervalMs: 3000
-        command: root.scriptPath
-        onRan: function (output) {
-            root.updateFromPayload(JsonUtils.parseObject(output));
-        }
-    }
-
     tooltipContent: Component {
         ColumnLayout {
             spacing: Config.space.sm
@@ -150,13 +133,24 @@ ModuleContainer {
                     }
                 ]
             }
-
             TooltipActionsRow {
                 ActionChip {
                     text: "Refresh"
+
                     onClicked: privacyRunner.trigger()
                 }
             }
+        }
+    }
+
+    CommandRunner {
+        id: privacyRunner
+
+        command: root.scriptPath
+        intervalMs: 3000
+
+        onRan: function (output) {
+            root.updateFromPayload(JsonUtils.parseObject(output));
         }
     }
 }

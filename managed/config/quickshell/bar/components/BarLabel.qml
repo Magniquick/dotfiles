@@ -3,10 +3,10 @@ import QtQuick
 
 Text {
     color: Config.textColor
+    elide: Text.ElideRight
     font.family: Config.fontFamily
     font.pixelSize: Config.type.bodyMedium.size
     font.weight: Config.type.bodyMedium.weight
-    elide: Text.ElideRight
     maximumLineCount: 1
     verticalAlignment: Text.AlignVCenter
 }

@@ -6,60 +6,24 @@ Rectangle {
 
     property bool active: false
     property color activeColor: Config.primary
-    property color inactiveColor: Config.surfaceVariant
-    property color hoverColor: Config.surfaceContainerHigh
     property color borderColor: Config.outline
-    property real disabledOpacity: Config.state.disabledOpacity
-    property bool hovered: false
-    property bool pressed: false
-    property bool hoverScaleEnabled: false
-    property real hoverScale: 1.02
     default property alias content: contentItem.data
+    property real disabledOpacity: Config.state.disabledOpacity
+    property color hoverColor: Config.surfaceContainerHigh
+    property real hoverScale: 1.02
+    property bool hoverScaleEnabled: false
+    property bool hovered: false
+    property color inactiveColor: Config.surfaceVariant
+    property bool pressed: false
 
     signal clicked
 
-    color: root.active ? root.activeColor : (root.hovered ? root.hoverColor : root.inactiveColor)
-    border.width: root.active ? 0 : 1
-    border.color: root.active ? root.activeColor : root.borderColor
-    scale: root.hoverScaleEnabled && root.hovered ? root.hoverScale : 1
     antialiasing: true
+    border.color: root.active ? root.activeColor : root.borderColor
+    border.width: root.active ? 0 : 1
+    color: root.active ? root.activeColor : (root.hovered ? root.hoverColor : root.inactiveColor)
     opacity: root.enabled ? 1 : root.disabledOpacity
-
-    Item {
-        id: contentItem
-
-        anchors.fill: parent
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: parent.radius
-        color: Config.onSurface
-        opacity: root.pressed ? Config.state.pressedOpacity : (root.hovered ? Config.state.hoverOpacity : 0)
-        visible: root.enabled
-        antialiasing: true
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onEntered: root.hovered = true
-        onExited: {
-            root.hovered = false;
-            root.pressed = false;
-        }
-        onPressed: root.pressed = true
-        onReleased: root.pressed = false
-        onClicked: root.clicked()
-    }
-
-    Behavior on color {
-        ColorAnimation {
-            duration: Config.motion.duration.shortMs
-            easing.type: Config.motion.easing.standard
-        }
-    }
+    scale: root.hoverScaleEnabled && root.hovered ? root.hoverScale : 1
 
     Behavior on border.color {
         ColorAnimation {
@@ -67,11 +31,44 @@ Rectangle {
             easing.type: Config.motion.easing.standard
         }
     }
-
+    Behavior on color {
+        ColorAnimation {
+            duration: Config.motion.duration.shortMs
+            easing.type: Config.motion.easing.standard
+        }
+    }
     Behavior on scale {
         NumberAnimation {
             duration: Config.motion.duration.shortMs
             easing.type: Config.motion.easing.standard
         }
+    }
+
+    Item {
+        id: contentItem
+
+        anchors.fill: parent
+    }
+    Rectangle {
+        anchors.fill: parent
+        antialiasing: true
+        color: Config.onSurface
+        opacity: root.pressed ? Config.state.pressedOpacity : (root.hovered ? Config.state.hoverOpacity : 0)
+        radius: parent.radius
+        visible: root.enabled
+    }
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        hoverEnabled: true
+
+        onClicked: root.clicked()
+        onEntered: root.hovered = true
+        onExited: {
+            root.hovered = false;
+            root.pressed = false;
+        }
+        onPressed: root.pressed = true
+        onReleased: root.pressed = false
     }
 }

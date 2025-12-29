@@ -4,21 +4,21 @@ import QtQuick.Layouts
 Item {
     id: gridHolder
 
-    property var colors: ColorPalette.palette
     property var actions: defaultActions()
-    property string selection: ""
-    property string hoverAction: ""
-    property bool reveal: false
-    property bool hoverEnabled: true
-    property bool suppressNextHover: false
+    property var colors: ColorPalette.palette
+    property int columns: 3
     // Local flag so we don't break the upstream binding when consuming the first hover.
     property bool dropNextHover: suppressNextHover
-    property int columns: 3
+    property string hoverAction: ""
+    property bool hoverEnabled: true
     property int iconPadding: 6
+    property bool reveal: false
+    property string selection: ""
+    property bool suppressNextHover: false
 
+    signal activated(string actionName)
     signal hovered(string actionName)
     signal unhovered
-    signal activated(string actionName)
 
     function defaultActions() {
         return [({
@@ -48,29 +48,35 @@ Item {
                 })];
     }
 
-    onSuppressNextHoverChanged: dropNextHover = suppressNextHover
-    implicitWidth: grid.implicitWidth
     implicitHeight: grid.implicitHeight
+    implicitWidth: grid.implicitWidth
+
+    onSuppressNextHoverChanged: dropNextHover = suppressNextHover
 
     GridLayout {
         id: grid
 
         anchors.centerIn: parent
-        columns: gridHolder.columns
         columnSpacing: gridHolder.iconPadding
+        columns: gridHolder.columns
         rowSpacing: gridHolder.iconPadding
 
         Repeater {
             model: gridHolder.actions
 
             delegate: PowermenuButton {
-                actionName: modelData.name
-                icon: modelData.icon
                 accent: modelData.accent
-                selection: gridHolder.selection
+                actionName: modelData.name
                 hoverAction: gridHolder.hoverAction
+                icon: modelData.icon
+                mouseEnabled: gridHolder.hoverEnabled
                 reveal: gridHolder.reveal
                 revealDelay: 80 * index
+                selection: gridHolder.selection
+
+                onActivated: action => {
+                    return gridHolder.activated(action);
+                }
                 onHovered: action => {
                     if (gridHolder.dropNextHover) {
                         gridHolder.dropNextHover = false;
@@ -81,10 +87,6 @@ Item {
                 onUnhovered: () => {
                     return gridHolder.unhovered();
                 }
-                onActivated: action => {
-                    return gridHolder.activated(action);
-                }
-                mouseEnabled: gridHolder.hoverEnabled
             }
         }
     }

@@ -7,25 +7,60 @@ import Quickshell.Io
 ModuleContainer {
     id: root
 
-    property int systemFailedCount: 0
-    property int userFailedCount: 0
-    property int failedCount: root.systemFailedCount + root.userFailedCount
-    property var systemFailedUnits: []
-    property var userFailedUnits: []
+    property bool debugLogging: false
     property bool enableEventRefresh: true
     property int eventDebounceMs: 750
-    property bool debugLogging: false
-    property bool systemPropsSignalPending: false
-    property bool userPropsSignalPending: false
+    property int failedCount: root.systemFailedCount + root.userFailedCount
     property string lastRefreshedLabel: ""
+    property int systemFailedCount: 0
+    property var systemFailedUnits: []
+    property bool systemPropsSignalPending: false
+    property int userFailedCount: 0
+    property var userFailedUnits: []
+    property bool userPropsSignalPending: false
 
+    function handleMonitorLine(source, data) {
+        const trimmed = data.trim();
+        if (trimmed === "")
+            return;
+
+        if (trimmed.indexOf("signal ") === 0) {
+            root.logEvent(source + "Monitor signal " + trimmed);
+            root.scheduleRefresh(source);
+        }
+    }
+    function handlePropsMonitorLine(source, data) {
+        const trimmed = data.trim();
+        if (trimmed === "")
+            return;
+
+        if (trimmed.indexOf("signal ") === 0) {
+            if (source === "system")
+                root.systemPropsSignalPending = true;
+            else
+                root.userPropsSignalPending = true;
+            root.logEvent(source + "Props signal " + trimmed);
+            return;
+        }
+        const pending = source === "system" ? root.systemPropsSignalPending : root.userPropsSignalPending;
+        if (!pending)
+            return;
+
+        if (trimmed.indexOf("string \"NFailedUnits\"") !== -1 || trimmed.indexOf("string \"FailedUnits\"") !== -1) {
+            root.logEvent(source + "Props matched failed units");
+            if (source === "system")
+                root.systemPropsSignalPending = false;
+            else
+                root.userPropsSignalPending = false;
+            root.scheduleRefresh(source + "-props");
+        }
+    }
     function logEvent(message) {
         if (!root.debugLogging)
             return;
 
         console.log("SystemdFailedModule " + new Date().toISOString() + " " + message);
     }
-
     function parseFailedUnits(text) {
         if (!text || text.trim() === "")
             return [];
@@ -65,83 +100,53 @@ ModuleContainer {
         }
         return units;
     }
-
     function refreshCounts(source) {
         root.logEvent("refreshCounts " + (source || "unknown"));
         systemRunner.trigger();
         userRunner.trigger();
     }
-
     function scheduleRefresh(source) {
         root.logEvent("scheduleRefresh " + source);
         if (!eventDebounce.running)
             eventDebounce.start();
     }
 
-    function handleMonitorLine(source, data) {
-        const trimmed = data.trim();
-        if (trimmed === "")
-            return;
-
-        if (trimmed.indexOf("signal ") === 0) {
-            root.logEvent(source + "Monitor signal " + trimmed);
-            root.scheduleRefresh(source);
-        }
-    }
-
-    function handlePropsMonitorLine(source, data) {
-        const trimmed = data.trim();
-        if (trimmed === "")
-            return;
-
-        if (trimmed.indexOf("signal ") === 0) {
-            if (source === "system")
-                root.systemPropsSignalPending = true;
-            else
-                root.userPropsSignalPending = true;
-            root.logEvent(source + "Props signal " + trimmed);
-            return;
-        }
-        const pending = source === "system" ? root.systemPropsSignalPending : root.userPropsSignalPending;
-        if (!pending)
-            return;
-
-        if (trimmed.indexOf("string \"NFailedUnits\"") !== -1 || trimmed.indexOf("string \"FailedUnits\"") !== -1) {
-            root.logEvent(source + "Props matched failed units");
-            if (source === "system")
-                root.systemPropsSignalPending = false;
-            else
-                root.userPropsSignalPending = false;
-            root.scheduleRefresh(source + "-props");
-        }
-    }
-
-    tooltipTitle: root.failedCount === 1 ? "Failed unit" : "Failed units"
+    collapsed: root.failedCount <= 0
     tooltipShowRefreshIcon: true
     tooltipSubtitle: root.lastRefreshedLabel
     tooltipText: root.failedCount > 0 ? (root.failedCount === 1 ? "Failed unit: " : "Failed units: ") + root.failedCount + " (system: " + root.systemFailedCount + ", user: " + root.userFailedCount + ")" : "Failed units: none"
-    collapsed: root.failedCount <= 0
+    tooltipTitle: root.failedCount === 1 ? "Failed unit" : "Failed units"
+
+    content: [
+        IconTextRow {
+            iconColor: Config.red
+            iconText: ""
+            spacing: root.contentSpacing
+            text: root.failedCount + (root.failedCount === 1 ? " unit failed" : " units failed")
+            textColor: Config.red
+        }
+    ]
+    tooltipContent: Component {
+        SystemdFailedTooltip {
+            systemUnits: root.systemFailedUnits
+            userUnits: root.userFailedUnits
+            width: 360
+        }
+    }
+
     Component.onCompleted: {
         root.tooltipRefreshRequested.connect(function () {
             root.refreshCounts("manual");
         });
         root.refreshCounts("startup");
     }
-    content: [
-        IconTextRow {
-            spacing: root.contentSpacing
-            iconText: ""
-            iconColor: Config.red
-            text: root.failedCount + (root.failedCount === 1 ? " unit failed" : " units failed")
-            textColor: Config.red
-        }
-    ]
 
     CommandRunner {
         id: systemRunner
 
-        intervalMs: 0
         command: "systemctl --failed --no-legend --plain --no-pager"
+        intervalMs: 0
+
         onOutputChanged: {
             root.systemFailedUnits = root.parseFailedUnits(output);
             root.systemFailedCount = root.systemFailedUnits.length;
@@ -149,12 +154,12 @@ ModuleContainer {
             root.logEvent("systemRunner output=" + root.systemFailedCount);
         }
     }
-
     CommandRunner {
         id: userRunner
 
-        intervalMs: 0
         command: "systemctl --user --failed --no-legend --plain --no-pager"
+        intervalMs: 0
+
         onOutputChanged: {
             root.userFailedUnits = root.parseFailedUnits(output);
             root.userFailedCount = root.userFailedUnits.length;
@@ -162,7 +167,6 @@ ModuleContainer {
             root.logEvent("userRunner output=" + root.userFailedCount);
         }
     }
-
     Process {
         id: systemMonitor
 
@@ -175,7 +179,6 @@ ModuleContainer {
             }
         }
     }
-
     Process {
         id: systemPropsMonitor
 
@@ -188,7 +191,6 @@ ModuleContainer {
             }
         }
     }
-
     Process {
         id: userMonitor
 
@@ -201,7 +203,6 @@ ModuleContainer {
             }
         }
     }
-
     Process {
         id: userPropsMonitor
 
@@ -214,23 +215,15 @@ ModuleContainer {
             }
         }
     }
-
     Timer {
         id: eventDebounce
 
         interval: root.eventDebounceMs
         repeat: false
+
         onTriggered: {
             root.logEvent("eventDebounce fired");
             root.refreshCounts("debounce");
-        }
-    }
-
-    tooltipContent: Component {
-        SystemdFailedTooltip {
-            width: 360
-            systemUnits: root.systemFailedUnits
-            userUnits: root.userFailedUnits
         }
     }
 }

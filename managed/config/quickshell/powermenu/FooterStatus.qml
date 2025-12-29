@@ -5,61 +5,57 @@ Column {
     id: footer
 
     property var colors
-    property string selection: ""
     property string hoverAction: ""
+    property string selection: ""
 
     spacing: 10
 
     Text {
-        text: "/ Pl5y1ng GØd /"
+        color: colors.subtext0
+        font.bold: true
         font.family: "monospace"
         font.pointSize: 17
-        font.bold: true
-        color: colors.subtext0
+        text: "/ Pl5y1ng GØd /"
     }
-
     Row {
         spacing: 8
 
         Text {
+            color: colors.subtext0
+            font.bold: true
+            font.family: "monospace"
+            font.pointSize: 17
             text: ""
-            font.family: "monospace"
-            font.pointSize: 17
-            font.bold: true
-            color: colors.subtext0
         }
-
         Text {
-            text: selection !== "" ? selection : hoverAction
+            color: colors.subtext0
+            font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            font.bold: true
-            color: colors.subtext0
+            text: selection !== "" ? selection : hoverAction
         }
-
         Text {
             id: cursor
 
-            text: "_"
+            color: colors.text
+            font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            font.bold: true
-            color: colors.text
+            text: "_"
 
             SequentialAnimation on opacity {
-                running: footer.QsWindow.window && footer.QsWindow.window.visible
                 loops: Animation.Infinite
+                running: footer.QsWindow.window && footer.QsWindow.window.visible
 
                 NumberAnimation {
+                    duration: 500
                     from: 1
                     to: 0
-                    duration: 500
                 }
-
                 NumberAnimation {
+                    duration: 500
                     from: 0
                     to: 1
-                    duration: 500
                 }
             }
         }

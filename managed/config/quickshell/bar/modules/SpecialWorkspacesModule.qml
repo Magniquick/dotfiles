@@ -7,18 +7,15 @@ import Quickshell.Hyprland
 Item {
     id: root
 
-    property var screen
-    property var iconMap: ({})
     readonly property var hyprland: Hyprland
+    property var iconMap: ({})
     property var monitor: root.screen ? hyprland.monitorFor(root.screen) : null
+    property var screen
 
-    function specialName(name) {
-        if (!name)
-            return "";
-
-        return name.startsWith("special:") ? name.slice(8) : name;
+    function iconFor(workspace) {
+        const name = specialName(workspace.name);
+        return root.iconMap[name] || "";
     }
-
     function isSpecial(workspace) {
         if (!workspace)
             return false;
@@ -28,14 +25,15 @@ Item {
 
         return workspace.id < 0;
     }
+    function specialName(name) {
+        if (!name)
+            return "";
 
-    function iconFor(workspace) {
-        const name = specialName(workspace.name);
-        return root.iconMap[name] || "";
+        return name.startsWith("special:") ? name.slice(8) : name;
     }
 
-    implicitWidth: workspaceRow.implicitWidth
     implicitHeight: workspaceRow.implicitHeight
+    implicitWidth: workspaceRow.implicitWidth
 
     RowLayout {
         id: workspaceRow
@@ -46,16 +44,16 @@ Item {
             model: hyprland.workspaces
 
             delegate: WorkspaceButton {
-                workspace: modelData
-                hyprland: hyprland
-                label: root.iconFor(modelData)
-                dispatchName: (modelData.name && modelData.name !== "") ? modelData.name : modelData.id
                 active: modelData.active
-                urgent: modelData.urgent
-                visible: root.isSpecial(modelData) && root.iconFor(modelData) !== "" && (!root.monitor || !modelData.monitor || modelData.monitor.name === root.monitor.name)
+                dispatchName: (modelData.name && modelData.name !== "") ? modelData.name : modelData.id
                 fontFamily: Config.iconFontFamily
                 fontSize: Config.iconSize
+                hyprland: hyprland
+                label: root.iconFor(modelData)
                 uniformWidth: false
+                urgent: modelData.urgent
+                visible: root.isSpecial(modelData) && root.iconFor(modelData) !== "" && (!root.monitor || !modelData.monitor || modelData.monitor.name === root.monitor.name)
+                workspace: modelData
             }
         }
     }

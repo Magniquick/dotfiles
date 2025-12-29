@@ -4,30 +4,30 @@ import QtQuick.Layouts
 Rectangle {
     id: right
 
-    property var colors: Palette.palette
     property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     property int borderRadius: 27
+    property alias bunnyHeadpatting: bunny.headpatting
+    property var colors: Palette.palette
+    property int headpatResetDelay: 200
+    property string hoverAction: ""
+    property bool hoverEnabled: true
+    property int iconPadding: 6
+    property int padBottom: 0
     property int padH: 47
     property int padTop: 0
-    property int padBottom: 0
-    property int iconPadding: 6
-    property int headpatResetDelay: 200
-    property string selection: ""
-    property string hoverAction: ""
     property bool reveal: false
-    property bool hoverEnabled: true
+    property string selection: ""
     property bool suppressNextHover: false
-    property alias bunnyHeadpatting: bunny.headpatting
 
     signal actionInvoked(string actionName)
     signal hoverUpdated(string actionName)
 
-    radius: borderRadius
-    color: colors.base
-    border.width: 6
     border.color: "transparent"
-    implicitWidth: rightContent.implicitWidth + padH * 2 + border.width * 2
+    border.width: 6
+    color: colors.base
     implicitHeight: rightContent.implicitHeight + padTop + padBottom + border.width * 2
+    implicitWidth: rightContent.implicitWidth + padH * 2 + border.width * 2
+    radius: borderRadius
 
     Canvas {
         id: dashBorder
@@ -35,6 +35,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 0
         antialiasing: true
+
         onPaint: {
             const ctx = getContext("2d");
             const strokeWidth = right.border.width;
@@ -78,15 +79,14 @@ Rectangle {
             });
         }
     }
-
     Item {
         id: rightContentArea
 
+        anchors.bottomMargin: padBottom
         anchors.fill: parent
         anchors.leftMargin: padH
         anchors.rightMargin: padH
         anchors.topMargin: padTop
-        anchors.bottomMargin: padBottom
 
         Column {
             id: rightContent
@@ -102,32 +102,31 @@ Rectangle {
                 colors: right.colors
                 headpatResetDelay: right.headpatResetDelay
             }
-
             ActionGrid {
                 anchors.horizontalCenter: parent.horizontalCenter
                 colors: right.colors
-                selection: right.selection
-                iconPadding: right.iconPadding
                 hoverAction: right.hoverAction
                 hoverEnabled: right.hoverEnabled
-                suppressNextHover: right.suppressNextHover
+                iconPadding: right.iconPadding
                 reveal: right.reveal
+                selection: right.selection
+                suppressNextHover: right.suppressNextHover
+
+                onActivated: action => {
+                    return right.actionInvoked(action);
+                }
                 onHovered: action => {
                     return right.hoverUpdated(action);
                 }
                 onUnhovered: () => {
                     return right.hoverUpdated("");
                 }
-                onActivated: action => {
-                    return right.actionInvoked(action);
-                }
             }
-
             FooterStatus {
                 anchors.horizontalCenter: parent.horizontalCenter
                 colors: right.colors
-                selection: right.selection
                 hoverAction: right.hoverAction
+                selection: right.selection
             }
         }
     }

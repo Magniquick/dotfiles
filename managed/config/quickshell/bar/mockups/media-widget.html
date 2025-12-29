@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Media Widget Mockups</title>
+<style>
+:root {
+  --bg: #0f1217;
+  --panel: #1a1f27;
+  --panel-2: #1e2430;
+  --panel-3: #202634;
+  --outline: #2a3140;
+  --text: #e9edf5;
+  --muted: #a9b2c2;
+  --accent: #8bd5ca;
+  --accent-2: #f2b482;
+  --accent-3: #b7a6ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+  padding: 28px;
+}
+h1 {
+  font-weight: 600;
+  font-size: 18px;
+  margin: 0 0 18px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.card {
+  border-radius: 16px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--outline);
+}
+.row {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.art {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #262d3b;
+  border: 1px solid #2e3646;
+}
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+.controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.time {
+  font-size: 11px;
+  color: var(--muted);
+}
+.btns {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #242a36;
+  border: 1px solid #2e3646;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #0b1116;
+  width: 32px;
+  height: 32px;
+}
+
+/* Wavy progress bar */
+.wave {
+  height: 12px;
+  margin-top: 10px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.06)),
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(255,255,255,0.08) 6px 7px),
+    linear-gradient(90deg, var(--accent) 0%, var(--accent) 45%, rgba(255,255,255,0.12) 45%);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--outline);
+}
+.wave::before {
+  content: "";
+  position: absolute;
+  inset: -30% 0 0 0;
+  background: radial-gradient(circle at 10% 60%, rgba(255,255,255,0.35), transparent 45%),
+              radial-gradient(circle at 35% 20%, rgba(255,255,255,0.2), transparent 55%),
+              radial-gradient(circle at 60% 70%, rgba(255,255,255,0.3), transparent 55%),
+              radial-gradient(circle at 85% 30%, rgba(255,255,255,0.2), transparent 55%);
+  opacity: 0.5;
+}
+
+/* Variant 2: split surface with bottom action strip */
+.card.split {
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+}
+.split .split-body {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+}
+.split .split-left {
+  background: var(--panel-2);
+  border-right: 1px solid var(--outline);
+  display: grid;
+  place-items: center;
+}
+.split .split-right {
+  background: var(--panel-3);
+  padding: 14px;
+}
+.split .art { width: 56px; height: 56px; }
+.split .strip {
+  border-top: 1px solid var(--outline);
+  background: #1a202b;
+  padding: 10px 14px 12px;
+}
+
+/* Variant 3: compact bar */
+.card.compact {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.compact .meta {
+  display: grid;
+  gap: 2px;
+}
+.compact .controls {
+  margin: 0;
+  grid-template-columns: auto;
+}
+.compact .btns { gap: 6px; }
+
+/* Variant 4: soft panel with inset progress */
+.card.inset {
+  background: #171c24;
+  border: 1px solid #252c3a;
+}
+.inset .progress-wrap {
+  background: #1f2632;
+  border: 1px solid #2a3140;
+  border-radius: 12px;
+  padding: 8px;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+  <h1>Media Widget Mockups (Flat Themes + Wavy Progress)</h1>
+  <div class="grid">
+    <!-- Variant 1: simple flat card -->
+    <div class="card">
+      <div class="row">
+        <div class="art"></div>
+        <div>
+          <div class="title">Awaken the Past</div>
+          <div class="subtitle">Yoshimori · Zen Mix</div>
+        </div>
+      </div>
+      <div class="wave"></div>
+      <div class="controls">
+        <div class="time">06:39</div>
+        <div class="btns">
+          <div class="btn">⏮</div>
+          <div class="btn primary">⏸</div>
+          <div class="btn">⏭</div>
+        </div>
+        <div class="time">06:33</div>
+      </div>
+    </div>
+
+    <!-- Variant 2: split surface with bottom action strip -->
+    <div class="card split">
+      <div class="split-body">
+        <div class="split-left">
+          <div class="art"></div>
+        </div>
+        <div class="split-right">
+          <div class="title">Awaken the Past</div>
+          <div class="subtitle">Yoshimori · Zen Mix</div>
+          <div class="wave"></div>
+        </div>
+      </div>
+      <div class="strip">
+        <div class="controls" style="margin-top:0;">
+          <div class="time">06:39</div>
+          <div class="btns">
+            <div class="btn">⏮</div>
+            <div class="btn primary">⏸</div>
+            <div class="btn">⏭</div>
+          </div>
+          <div class="time">06:33</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Variant 3: compact bar -->
+    <div class="card compact">
+      <div class="art"></div>
+      <div class="meta">
+        <div class="title">Awaken the Past</div>
+        <div class="subtitle">Yoshimori · Zen Mix</div>
+        <div class="wave"></div>
+      </div>
+      <div class="btns">
+        <div class="btn">⏮</div>
+        <div class="btn primary">⏸</div>
+        <div class="btn">⏭</div>
+      </div>
+    </div>
+
+    <!-- Variant 4: inset progress panel -->
+    <div class="card inset">
+      <div class="row">
+        <div class="art"></div>
+        <div>
+          <div class="title">Awaken the Past</div>
+          <div class="subtitle">Yoshimori · Zen Mix</div>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="wave"></div>
+        <div class="controls" style="margin-top:8px;">
+          <div class="time">06:39</div>
+          <div class="btns">
+            <div class="btn">⏮</div>
+            <div class="btn primary">⏸</div>
+            <div class="btn">⏭</div>
+          </div>
+          <div class="time">06:33</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

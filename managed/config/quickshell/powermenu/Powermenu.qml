@@ -7,30 +7,31 @@ import Quickshell.Wayland
 PanelWindow {
     id: window
 
-    property var colors: ColorPalette.palette
-    required property var targetScreen
-    property string selection: ""
-    property string hoverAction: ""
-    property bool hoverEnabled: true
-    property bool suppressNextHover: false
-    property alias bunnyHeadpatting: rightPane.bunnyHeadpatting
-    property int headpatResetDelay: 200
-    // Drives the staged button reveal animation.
-    property bool revealButtons: false
     readonly property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     readonly property int borderRadius: 27
+    property alias bunnyHeadpatting: rightPane.bunnyHeadpatting
+    property var colors: ColorPalette.palette
+    property int headpatResetDelay: 200
+    property string hoverAction: ""
+    property bool hoverEnabled: true
+    // Drives the staged button reveal animation.
+    property bool revealButtons: false
+    property string selection: ""
+    property bool suppressNextHover: false
+    required property var targetScreen
 
-    signal requestClose
     signal actionInvoked(string actionName)
     signal hoverUpdated(string actionName)
+    signal requestClose
 
-    screen: targetScreen
-    color: "transparent"
-    visible: false
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.exclusiveZone: -1
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "powermenu"
+    color: "transparent"
+    screen: targetScreen
+    visible: false
+
     onVisibleChanged: {
         if (visible) {
             hoverEnabled = false;
@@ -48,10 +49,10 @@ PanelWindow {
     }
 
     anchors {
+        bottom: true
         left: true
         right: true
         top: true
-        bottom: true
     }
     // focus handling is done via a global Shortcut in shell.qml
 
@@ -59,47 +60,46 @@ PanelWindow {
         anchors.fill: parent
         color: "transparent"
     }
-
     MouseArea {
         anchors.fill: parent
         z: 0
+
         onClicked: requestClose()
     }
-
     Shortcut {
-        sequences: ["Escape", "Q", "A"]
-        enabled: window.visible
         context: Qt.ApplicationShortcut
+        enabled: window.visible
+        sequences: ["Escape", "Q", "A"]
+
         onActivated: requestClose()
     }
-
     Timer {
         id: revealTimer
 
         interval: 30
         repeat: false
+
         onTriggered: revealButtons = true
     }
-
     Timer {
         id: hoverEnableTimer
 
         interval: 450
         repeat: false
+
         onTriggered: hoverEnabled = true
     }
-
     Item {
         id: content
 
-        z: 1
         anchors.centerIn: parent
+        z: 1
 
         Row {
             id: row
 
-            property real panelWidth: Math.max(leftPane.implicitWidth, rightPane.implicitWidth)
             property real panelHeight: Math.max(leftPane.implicitHeight, rightPane.implicitHeight)
+            property real panelWidth: Math.max(leftPane.implicitWidth, rightPane.implicitWidth)
 
             anchors.centerIn: parent
             spacing: -27
@@ -107,30 +107,30 @@ PanelWindow {
             GreetingPane {
                 id: leftPane
 
-                colors: window.colors
+                anchors.verticalCenter: parent.verticalCenter
                 borderColor: window.borderColor
                 borderRadius: window.borderRadius
+                colors: window.colors
                 headpatting: window.bunnyHeadpatting
-                width: row.panelWidth
                 height: row.panelHeight
-                anchors.verticalCenter: parent.verticalCenter
+                width: row.panelWidth
             }
-
             ActionPanel {
                 id: rightPane
 
-                colors: window.colors
+                anchors.verticalCenter: parent.verticalCenter
                 borderColor: window.borderColor
                 borderRadius: window.borderRadius
+                colors: window.colors
                 headpatResetDelay: window.headpatResetDelay
-                selection: window.selection
+                height: row.panelHeight
                 hoverAction: window.hoverAction
                 hoverEnabled: window.hoverEnabled
-                suppressNextHover: window.suppressNextHover
                 reveal: window.revealButtons
+                selection: window.selection
+                suppressNextHover: window.suppressNextHover
                 width: row.panelWidth
-                height: row.panelHeight
-                anchors.verticalCenter: parent.verticalCenter
+
                 onActionInvoked: actionName => {
                     return window.actionInvoked(actionName);
                 }

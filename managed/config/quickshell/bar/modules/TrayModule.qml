@@ -7,9 +7,9 @@ import Quickshell.Services.SystemTray
 Item {
     id: root
 
+    readonly property var knownIconExtensions: ["png", "svg", "xpm", "jpg", "jpeg"]
     property var parentWindow
     readonly property var tray: SystemTray
-    readonly property var knownIconExtensions: ["png", "svg", "xpm", "jpg", "jpeg"]
 
     function iconSource(iconName) {
         if (!iconName)
@@ -37,8 +37,8 @@ Item {
         return path + "/" + base + ".png";
     }
 
-    implicitWidth: trayRow.implicitWidth
     implicitHeight: trayRow.implicitHeight
+    implicitWidth: trayRow.implicitWidth
 
     RowLayout {
         id: trayRow
@@ -59,38 +59,32 @@ Item {
                     modelData.display(root.parentWindow, rect.x, rect.y + rect.height);
                 }
 
-                implicitWidth: icon.width
-                implicitHeight: icon.height
-                width: implicitWidth
-                height: implicitHeight
-                Layout.preferredWidth: implicitWidth
                 Layout.preferredHeight: implicitHeight
+                Layout.preferredWidth: implicitWidth
+                height: implicitHeight
+                implicitHeight: icon.height
+                implicitWidth: icon.width
+                width: implicitWidth
 
                 Image {
                     id: icon
 
-                    source: root.iconSource(modelData.icon)
                     fillMode: Image.PreserveAspectFit
-                    width: Config.iconSize + Config.space.xs
                     height: Config.iconSize + Config.space.xs
-                    sourceSize.width: width
-                    sourceSize.height: height
-                    smooth: true
                     mipmap: true
+                    smooth: true
+                    source: root.iconSource(modelData.icon)
+                    sourceSize.height: height
+                    sourceSize.width: width
+                    width: Config.iconSize + Config.space.xs
                 }
-
                 MouseArea {
                     id: toolTipArea
 
+                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
                     anchors.fill: parent
                     hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                    onPressed: {
-                        if (mouse.button === Qt.RightButton) {
-                            trayItem.openTrayMenu();
-                            mouse.accepted = true;
-                        }
-                    }
+
                     onClicked: {
                         if (mouse.button === Qt.MiddleButton) {
                             modelData.secondaryActivate();
@@ -103,22 +97,27 @@ Item {
                                 modelData.activate();
                         }
                     }
+                    onPressed: {
+                        if (mouse.button === Qt.RightButton) {
+                            trayItem.openTrayMenu();
+                            mouse.accepted = true;
+                        }
+                    }
                     onWheel: {
                         modelData.scroll(wheel.angleDelta.y, false);
                     }
                 }
-
                 TooltipPopup {
-                    targetItem: trayItem
-                    open: toolTipArea.containsMouse
                     enabled: (modelData.tooltipTitle || modelData.tooltipDescription || "") !== ""
+                    open: toolTipArea.containsMouse
+                    targetItem: trayItem
 
                     contentComponent: Component {
                         Text {
-                            text: modelData.tooltipTitle || modelData.tooltipDescription || ""
                             color: Config.textColor
                             font.family: Config.fontFamily
                             font.pixelSize: Config.fontSize
+                            text: modelData.tooltipTitle || modelData.tooltipDescription || ""
                             wrapMode: Text.WordWrap
                         }
                     }

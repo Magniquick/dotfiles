@@ -6,25 +6,27 @@ ModuleContainer {
 
     property var parentWindow
 
+    backgroundColor: Config.moduleBackground
+    contentSpacing: 0
+    marginRight: Config.groupEdgeMargin
+    marginTop: Config.moduleMarginTop
+    paddingBottom: 0
     paddingLeft: Config.groupPaddingX
     paddingRight: Config.groupPaddingX
     paddingTop: 0
-    paddingBottom: 0
-    marginTop: Config.moduleMarginTop
-    marginRight: Config.groupEdgeMargin
-    backgroundColor: Config.moduleBackground
-    contentSpacing: 0
+
     content: [
         DrawerGroup {
-            duration: Config.motion.duration.medium
             drawerLeft: true
+            duration: Config.motion.duration.medium
+
             alwaysContent: [
                 NotificationModule {
                     backgroundColor: "transparent"
+                    marginBottom: 0
                     marginLeft: 0
                     marginRight: 0
                     marginTop: 0
-                    marginBottom: 0
                 }
             ]
             drawerContent: [

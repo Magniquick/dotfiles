@@ -4,31 +4,30 @@ import QtQuick
 Item {
     id: root
 
-    property real value: 0
-    property color trackColor: Config.surfaceVariant
-    property color fillColor: Config.primary
     property int barHeight: 6
+    property color fillColor: Config.primary
+    property color trackColor: Config.surfaceVariant
+    property real value: 0
 
-    implicitWidth: 180
     implicitHeight: root.barHeight
+    implicitWidth: 180
 
     Rectangle {
         id: track
 
         anchors.fill: parent
-        radius: root.barHeight / 2
         color: root.trackColor
         opacity: 0.9
+        radius: root.barHeight / 2
     }
-
     Rectangle {
         id: fill
 
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(0, Math.min(1, root.value)) * parent.width
+        color: root.fillColor
         height: parent.height
         radius: track.radius
-        color: root.fillColor
+        width: Math.max(0, Math.min(1, root.value)) * parent.width
     }
 }

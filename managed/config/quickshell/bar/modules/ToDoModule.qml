@@ -9,37 +9,28 @@ ModuleContainer {
 
     property bool dropdownPinned: false
 
-    tooltipTitle: "Tasks"
-    tooltipHoverable: true
-    tooltipShowRefreshIcon: true
-    tooltipShowBrowserIcon: true
     tooltipBrowserLink: "runapp ~/.local/bin/custom/todoist.sh"
-    tooltipRefreshing: false
+    tooltipHoverable: true
     tooltipPinned: dropdownPinned
+    tooltipRefreshing: false
+    tooltipShowBrowserIcon: true
+    tooltipShowRefreshIcon: true
     tooltipSubtitle: ""
+    tooltipTitle: "Tasks"
+
     content: [
         Text {
-            text: "󰄭"
             color: Config.lavender
             font.family: Config.iconFontFamily
             font.pixelSize: Config.iconSize
+            text: "󰄭"
             verticalAlignment: Text.AlignVCenter
         }
     ]
-
-    MouseArea {
-        // ModuleContainer uses HoverHandler for tooltip,
-        // but if we want it to stay open or toggle on click,
-        // we might need more logic.
-        // Based on other modules, they mostly use HoverHandler.
-
-        anchors.fill: parent
-        onClicked: {}
-    }
-
     tooltipContent: Component {
         ToDoModule {
             width: 320
+
             Component.onCompleted: {
                 root.tooltipRefreshing = Qt.binding(() => {
                     return loading;
@@ -56,5 +47,16 @@ ModuleContainer {
                 root.tooltipRefreshRequested.connect(refresh);
             }
         }
+    }
+
+    MouseArea {
+        // ModuleContainer uses HoverHandler for tooltip,
+        // but if we want it to stay open or toggle on click,
+        // we might need more logic.
+        // Based on other modules, they mostly use HoverHandler.
+
+        anchors.fill: parent
+
+        onClicked: {}
     }
 }

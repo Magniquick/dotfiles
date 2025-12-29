@@ -4,36 +4,36 @@ import QtQuick.Layouts
 Rectangle {
     id: left
 
-    property var colors: ColorPalette.palette
     property color borderColor
     property int borderRadius: 27
+    property var colors: ColorPalette.palette
+    property bool headpatting: false
+    property int padBottom: 54
     property int padLeft: 47
     property int padRight: 74
     property int padTop: 27
-    property int padBottom: 54
     property real subtitleOffsetX: -59
     property real subtitleOffsetY: -10
-    property int swatchSize: 37
     property int swatchBorder: 4
-    property bool headpatting: false
+    property int swatchSize: 37
 
-    radius: borderRadius
-    color: "transparent"
-    border.width: 6
     border.color: Qt.rgba(borderColor.r, borderColor.g, borderColor.b, 0.4)
-    topRightRadius: 0
+    border.width: 6
     bottomRightRadius: 0
-    implicitWidth: leftContent.implicitWidth + padLeft + padRight + border.width * 2
+    color: "transparent"
     implicitHeight: leftContent.implicitHeight + padTop + padBottom + border.width * 2
+    implicitWidth: leftContent.implicitWidth + padLeft + padRight + border.width * 2
+    radius: borderRadius
+    topRightRadius: 0
 
     Column {
         id: leftContent
 
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: padBottom
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         anchors.topMargin: padTop
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: padBottom
         spacing: 26
 
         Column {
@@ -45,87 +45,83 @@ Rectangle {
                 property real heartOffsetX: headline.paintedWidth - 7
                 property real heartOffsetY: headline.paintedHeight * 0.38
 
-                width: headline.paintedWidth
                 height: headline.paintedHeight
-                implicitWidth: width
                 implicitHeight: height
+                implicitWidth: width
+                width: headline.paintedWidth
 
                 Text {
                     id: headline
 
-                    text: "Hello"
-                    font.pointSize: 80
-                    font.family: "Battle Andy"
                     color: colors.blue
+                    font.family: "Battle Andy"
+                    font.pointSize: 80
+                    text: "Hello"
                 }
-
                 Text {
                     id: heart
 
-                    text: ""
+                    color: colors.red
                     font.family: "JetBrainsMono NFP"
                     font.pointSize: 12
-                    color: colors.red
+                    text: ""
                     x: headlineWrap.heartOffsetX
                     y: headlineWrap.heartOffsetY
                 }
             }
-
             Item {
                 id: subtitleWrap
 
-                width: subtitle.paintedWidth
                 height: subtitle.paintedHeight
-                implicitWidth: width
                 implicitHeight: height
+                implicitWidth: width
+                width: subtitle.paintedWidth
                 x: headlineWrap.width + subtitleOffsetX
                 y: headlineWrap.height + subtitleOffsetY
 
                 Text {
                     id: subtitle
 
-                    text: "(again)"
+                    color: colors.subtext0
                     font.family: "Kyok Medium"
                     font.pointSize: 17
-                    color: colors.subtext0
+                    text: "(again)"
                     x: -20
                     y: -30
                 }
             }
         }
-
         Column {
             spacing: 6
             width: leftContent.width
 
             Text {
-                text: "❝"
-                font.pointSize: 27
-                font.italic: true
                 color: colors.yellow
-                width: parent.width
+                font.italic: true
+                font.pointSize: 27
                 horizontalAlignment: Text.AlignHCenter
                 renderType: Text.NativeRendering
+                text: "❝"
+                width: parent.width
             }
-
             Item {
                 id: quoteSwap
 
-                width: parent.width
                 implicitHeight: Math.max(quoteBnuuy.implicitHeight, quoteBubbi.implicitHeight)
+                width: parent.width
 
                 Text {
                     id: quoteBnuuy
 
-                    text: "“bnuuy art life”"
-                    font.pointSize: 14
-                    font.italic: true
-                    font.family: "Kyok Medium"
                     color: colors.text
-                    width: parent.width
+                    font.family: "Kyok Medium"
+                    font.italic: true
+                    font.pointSize: 14
                     horizontalAlignment: Text.AlignHCenter
-                    renderType: Text.NativeRendering
                     opacity: headpatting ? 0 : 1
+                    renderType: Text.NativeRendering
+                    text: "“bnuuy art life”"
+                    width: parent.width
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -133,19 +129,18 @@ Rectangle {
                         }
                     }
                 }
-
                 Text {
                     id: quoteBubbi
 
-                    text: "“bubbi art life”"
-                    font.pointSize: 14
-                    font.italic: true
-                    font.family: "Kyok Medium"
                     color: colors.text
-                    width: parent.width
+                    font.family: "Kyok Medium"
+                    font.italic: true
+                    font.pointSize: 14
                     horizontalAlignment: Text.AlignHCenter
-                    renderType: Text.NativeRendering
                     opacity: headpatting ? 1 : 0
+                    renderType: Text.NativeRendering
+                    text: "“bubbi art life”"
+                    width: parent.width
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -154,25 +149,24 @@ Rectangle {
                     }
                 }
             }
-
             Item {
                 id: authorSwap
 
-                width: parent.width
                 implicitHeight: Math.max(authorMarx.implicitHeight, authorMagni.implicitHeight)
+                width: parent.width
 
                 Text {
                     id: authorMarx
 
-                    text: "–Karl Marx"
-                    font.pointSize: 14
-                    font.italic: true
-                    font.family: "Kyok Medium"
                     color: colors.subtext0
+                    font.family: "Kyok Medium"
+                    font.italic: true
+                    font.pointSize: 14
                     horizontalAlignment: Text.AlignRight
-                    width: parent.width
-                    renderType: Text.NativeRendering
                     opacity: headpatting ? 0 : 1
+                    renderType: Text.NativeRendering
+                    text: "–Karl Marx"
+                    width: parent.width
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -180,19 +174,18 @@ Rectangle {
                         }
                     }
                 }
-
                 Text {
                     id: authorMagni
 
-                    text: "–Magniquick"
-                    font.pointSize: 14
-                    font.italic: true
-                    font.family: "Kyok Medium"
                     color: colors.subtext0
+                    font.family: "Kyok Medium"
+                    font.italic: true
+                    font.pointSize: 14
                     horizontalAlignment: Text.AlignRight
-                    width: parent.width
-                    renderType: Text.NativeRendering
                     opacity: headpatting ? 1 : 0
+                    renderType: Text.NativeRendering
+                    text: "–Magniquick"
+                    width: parent.width
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -202,7 +195,6 @@ Rectangle {
                 }
             }
         }
-
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: -12
@@ -211,19 +203,19 @@ Rectangle {
                 model: [colors.red, colors.yellow, colors.green, colors.teal, colors.blue, colors.pink]
 
                 delegate: Rectangle {
-                    width: swatchSize
+                    border.color: colors.base
+                    border.width: swatchBorder
+                    color: "transparent"
                     height: swatchSize
                     radius: 999
-                    border.width: swatchBorder
-                    border.color: colors.base
-                    color: "transparent"
+                    width: swatchSize
 
                     Rectangle {
                         anchors.centerIn: parent
-                        width: swatchSize - swatchBorder * 2
+                        color: modelData
                         height: swatchSize - swatchBorder * 2
                         radius: 999
-                        color: modelData
+                        width: swatchSize - swatchBorder * 2
                     }
                 }
             }

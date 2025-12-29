@@ -1,0 +1,597 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import QtQuick.Effects
+import Quickshell
+import ".."
+import "../components"
+import "../components/JsonUtils.js" as JsonUtils
+
+ColumnLayout {
+    id: root
+
+    readonly property string cacheDir: {
+        const homeDir = Quickshell.env("HOME");
+        return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/todoist" : "/tmp/quickshell-todoist";
+    }
+    readonly property string cachePath: root.cacheDir + "/tasks.json"
+    property string currentProject: "Today"
+    readonly property bool dropdownActive: projectSelector.popup.visible
+    readonly property int iconSlot: Config.space.xxl * 2
+    property string lastUpdated: ""
+    property bool loading: false
+    readonly property int minorSpace: Config.spaceHalfXs
+    property bool parseError: false
+    property var rawData: ({})
+    readonly property var taskColors: [Config.lavender, Config.pink, Config.flamingo, Config.primary, Config.yellow, Config.green]
+    property var tasks: []
+    readonly property string todoistBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/todoist-api")
+    readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
+    property bool usingCache: false
+
+    function applyTodoistData(data, fromCache) {
+        if (!data || typeof data !== "object")
+            return;
+
+        root.rawData = data;
+        root.usingCache = !!fromCache;
+
+        let projects = ["Today"];
+        if (data.projects) {
+            projects = projects.concat(Object.keys(data.projects));
+        }
+        projectSelector.model = projects;
+
+        // Keep selection stable across refreshes
+        let idx = projects.indexOf(root.currentProject);
+        if (idx !== -1) {
+            projectSelector.currentIndex = idx;
+        } else {
+            root.currentProject = "Today";
+            projectSelector.currentIndex = 0;
+        }
+
+        root.updateTasks();
+    }
+    function cancelProjectSelectorClose() {
+        projectSelectorCloseTimer.stop();
+    }
+    function getTaskColor(index) {
+        return taskColors[index % taskColors.length];
+    }
+    function refresh() {
+        root.loading = true;
+        root.parseError = false;
+        listRunner.trigger();
+    }
+    function scheduleProjectSelectorClose() {
+        if (projectSelector.popup.visible)
+            projectSelectorCloseTimer.restart();
+    }
+    function shSingleQuote(value) {
+        // Wrap for POSIX shell single-quoted string: ' -> '\''.
+        return String(value).replace(/'/g, "'\\''");
+    }
+    function taskCountLabel(count) {
+        return count === 1 ? "1 Task" : count + " Tasks";
+    }
+    function todoistCommand(args) {
+        return root.todoistBinary + " --env-file '" + root.shSingleQuote(root.todoistEnvFile) + "' " + args;
+    }
+    function updateTasks() {
+        if (!root.rawData)
+            return;
+        if (root.currentProject === "Today") {
+            root.tasks = root.rawData.today || [];
+        } else if (root.rawData.projects && root.rawData.projects[root.currentProject]) {
+            root.tasks = root.rawData.projects[root.currentProject];
+        } else {
+            root.tasks = [];
+        }
+    }
+
+    Layout.fillWidth: true
+    spacing: Config.space.sm
+
+    Component.onCompleted: cacheReader.trigger()
+    onVisibleChanged: {
+        if (!visible && projectSelector.popup.visible)
+            projectSelector.popup.close();
+    }
+
+    Timer {
+        id: projectSelectorCloseTimer
+
+        interval: 200
+        repeat: false
+
+        onTriggered: {
+            if (!rootHover.hovered && !projectSelectorPopupHover.hovered && projectSelector.popup.visible)
+                projectSelector.popup.close();
+        }
+    }
+    HoverHandler {
+        id: rootHover
+
+        target: root
+
+        onHoveredChanged: {
+            if (hovered)
+                root.cancelProjectSelectorClose();
+            else
+                root.scheduleProjectSelectorClose();
+        }
+    }
+    CommandRunner {
+        id: listRunner
+
+        command: root.todoistCommand("list")
+        intervalMs: 300000 // 5 minutes
+
+        onRan: function (output) {
+            const data = JsonUtils.parseObject(output);
+            if (data) {
+                root.applyTodoistData(data, false);
+                root.lastUpdated = Qt.formatDateTime(new Date(), "hh:mm ap");
+                root.parseError = false;
+
+                const cachePayload = JSON.stringify({
+                    cachedAt: new Date().toISOString(),
+                    payload: data
+                });
+                cacheWriter.command = "mkdir -p \"" + root.cacheDir + "\" && printf %s '" + root.shSingleQuote(cachePayload) + "' > \"" + root.cachePath + "\"";
+                cacheWriter.trigger();
+            } else {
+                root.parseError = true;
+                cacheReader.trigger();
+            }
+            root.loading = false;
+        }
+    }
+    CommandRunner {
+        id: cacheReader
+
+        command: root.cachePath !== "" ? ("cat \"" + root.cachePath + "\"") : ""
+        enabled: root.cachePath !== ""
+        intervalMs: 0
+
+        onRan: function (output) {
+            const wrapper = JsonUtils.parseObject(output);
+            const cached = wrapper && wrapper.payload ? wrapper.payload : null;
+            if (cached && typeof cached === "object") {
+                root.applyTodoistData(cached, true);
+                const cachedAt = wrapper.cachedAt ? new Date(wrapper.cachedAt) : null;
+                if (cachedAt && !isNaN(cachedAt.getTime()))
+                    root.lastUpdated = Qt.formatDateTime(cachedAt, "hh:mm ap");
+            } else {
+                root.usingCache = false;
+                if (root.parseError && (!root.rawData || Object.keys(root.rawData).length === 0))
+                    root.tasks = [];
+            }
+        }
+    }
+    CommandRunner {
+        id: cacheWriter
+
+        command: ""
+        enabled: true
+        intervalMs: 0
+    }
+    CommandRunner {
+        id: addRunner
+
+        onRan: function (output) {
+            root.refresh();
+        }
+    }
+    CommandRunner {
+        id: actionRunner
+
+        onRan: function (output) {
+            root.refresh();
+        }
+    }
+
+    // Hero Section (Battery Style)
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Config.space.md
+
+        Item {
+            height: root.iconSlot
+            width: root.iconSlot
+
+            Text {
+                anchors.centerIn: parent
+                color: Config.lavender
+                font.pixelSize: Config.type.headlineLarge.size
+                text: "󰄭"
+            }
+        }
+        ColumnLayout {
+            spacing: Config.space.none
+
+            Text {
+                color: Config.textColor
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.headlineMedium.size
+                font.weight: Font.Bold
+                text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
+            }
+            Text {
+                color: Config.textMuted
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.labelMedium.size
+                text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
+            }
+        }
+        Item {
+            Layout.fillWidth: true
+        }
+    }
+
+    // Branding Header & Project Selector
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Config.space.md
+
+        ComboBox {
+            id: projectSelector
+
+            Layout.preferredWidth: 140
+            leftPadding: Config.space.none
+            rightPadding: Config.space.none
+
+            background: Item {
+                implicitHeight: Config.type.bodySmall.line + root.minorSpace
+                implicitWidth: 140
+            }
+            contentItem: Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Config.space.xs
+
+                Text {
+                    id: selectorLabel
+
+                    color: Config.lavender
+                    elide: Text.ElideRight
+                    font.family: Config.fontFamily
+                    font.letterSpacing: root.minorSpace
+                    font.pixelSize: Config.type.labelSmall.size
+                    font.weight: Font.Black
+                    text: projectSelector.displayText.toUpperCase()
+                    verticalAlignment: Text.AlignVCenter
+                    width: Math.min(implicitWidth, Math.max(0, projectSelector.width - dropdownIndicator.implicitWidth - (Config.space.xs + root.minorSpace)))
+                }
+                Text {
+                    id: dropdownIndicator
+
+                    color: Config.lavender
+                    font.family: Config.iconFontFamily
+                    font.pixelSize: Config.type.labelMedium.size
+                    rotation: projectSelector.popup.visible ? 90 : 0
+                    text: "󰄼"
+
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: Config.motion.duration.shortMs
+                            easing.type: Config.motion.easing.standard
+                        }
+                    }
+                }
+            }
+            delegate: ItemDelegate {
+                id: delegateRoot
+
+                required property int index
+                required property var modelData
+
+                height: Config.barHeight
+                highlighted: projectSelector.highlightedIndex === index
+                width: ListView.view.width
+
+                background: Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: root.minorSpace
+                    color: delegateRoot.highlighted ? Config.primary : (delegateRoot.hovered ? Config.surfaceContainerHigh : "transparent")
+                    radius: Config.shape.corner.xs
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: Config.motion.duration.shortMs
+                        }
+                    }
+                }
+                contentItem: Text {
+                    color: delegateRoot.highlighted ? Config.onPrimary : Config.textColor
+                    elide: Text.ElideRight
+                    font: projectSelector.font
+                    leftPadding: Config.space.sm
+                    text: delegateRoot.modelData
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+            indicator: Item {
+                implicitHeight: 0
+                implicitWidth: 0
+            }
+            popup: Popup {
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost
+                focus: true
+                implicitHeight: contentItem.implicitHeight
+                padding: Config.space.xs
+                width: projectSelector.width
+                y: projectSelector.height + Config.space.xs
+
+                background: Rectangle {
+                    border.color: Config.outline
+                    border.width: 1
+                    color: Config.surface
+                    layer.enabled: true
+                    radius: Config.shape.corner.md
+
+                    layer.effect: MultiEffect {
+                        shadowBlur: 0.4
+                        shadowColor: Qt.rgba(0, 0, 0, 0.2)
+                        shadowEnabled: true
+                        shadowVerticalOffset: 2
+                    }
+                }
+                contentItem: ListView {
+                    clip: true
+                    currentIndex: projectSelector.highlightedIndex
+                    implicitHeight: contentHeight
+                    interactive: false
+                    model: projectSelector.popup.visible ? projectSelector.delegateModel : null
+
+                    ScrollIndicator.vertical: ScrollIndicator {
+                    }
+                }
+                enter: Transition {
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        from: 0
+                        property: "opacity"
+                        to: 1
+                    }
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        easing.type: Easing.OutBack
+                        from: 0.95
+                        property: "scale"
+                        to: 1
+                    }
+                }
+                exit: Transition {
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        property: "opacity"
+                        to: 0
+                    }
+                }
+
+                Component.onCompleted: {
+                    if (projectSelector.popup) {
+                        projectSelector.popup.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost;
+                    }
+                }
+                onActiveFocusChanged: if (!activeFocus)
+                    close()
+                onOpened: {
+                    root.cancelProjectSelectorClose();
+                    forceActiveFocus();
+                }
+
+                Connections {
+                    function onActiveChanged() {
+                        if (!Qt.application.active) {
+                            projectSelector.popup.close();
+                        }
+                    }
+
+                    target: Qt.application
+                }
+                TapHandler {
+                    gesturePolicy: TapHandler.ReleaseWithinBounds
+
+                    onTapped: {
+                        // This helps catch taps that might not be handled by the ComboBox itself
+                        // to ensure focus is maintained or closed as expected.
+                    }
+                }
+                HoverHandler {
+                    id: projectSelectorPopupHover
+
+                    onHoveredChanged: {
+                        if (hovered)
+                            root.cancelProjectSelectorClose();
+                        else
+                            root.scheduleProjectSelectorClose();
+                    }
+                }
+            }
+
+            onActivated: index => {
+                root.currentProject = model[index];
+                root.updateTasks();
+            }
+        }
+        Item {
+            Layout.fillWidth: true
+        }
+    }
+    // Task List
+    ColumnLayout {
+        id: taskListLayout
+
+        Layout.fillWidth: true
+        spacing: Config.space.sm
+
+        Repeater {
+            model: root.tasks
+
+            delegate: RowLayout {
+                id: taskItem
+
+                property bool completing: false
+                property bool deleting: false
+                required property int index
+                required property var modelData
+                readonly property int stripeWidth: root.minorSpace + Math.round(root.minorSpace / 2)
+
+                Layout.fillWidth: true
+                spacing: Config.space.md
+
+                Rectangle {
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: Config.type.bodySmall.line + root.minorSpace
+                    Layout.preferredWidth: stripeWidth
+                    color: root.getTaskColor(taskItem.index)
+                    opacity: 0.8
+                    radius: Config.shape.corner.xs
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    opacity: taskItem.completing || taskItem.deleting ? 0.3 : 1.0
+                    spacing: Config.space.none
+
+                    Text {
+                        Layout.fillWidth: true
+                        color: root.getTaskColor(taskItem.index)
+                        elide: Text.ElideRight
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.bodyMedium.size
+                        font.weight: Font.Medium
+                        text: taskItem.modelData.title
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        color: Config.textMuted
+                        elide: Text.ElideRight
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.labelSmall.size
+                        maximumLineCount: 2
+                        text: taskItem.modelData.notes || ""
+                        visible: text !== ""
+                        wrapMode: Text.WordWrap
+                    }
+                }
+                Text {
+                    color: root.getTaskColor(taskItem.index)
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.labelSmall.size
+                    font.weight: Font.Bold
+                    opacity: 0.7
+                    text: taskItem.modelData.due_human || ""
+                    visible: text !== ""
+                }
+
+                // Complete Button
+                Text {
+                    color: Config.green
+                    font.family: Config.iconFontFamily
+                    font.pixelSize: Config.type.titleSmall.size
+                    font.weight: Font.Black
+                    opacity: taskItem.completing ? 0.2 : 0.7
+                    text: "󰄬"
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+
+                        onClicked: {
+                            taskItem.completing = true;
+                            actionRunner.command = root.todoistCommand("complete " + root.shSingleQuote(taskItem.modelData.id));
+                            actionRunner.trigger();
+                        }
+                        onEntered: if (!taskItem.completing)
+                            parent.opacity = 1.0
+                        onExited: if (!taskItem.completing)
+                            parent.opacity = 0.7
+                    }
+                }
+            }
+        }
+        Text {
+            color: Config.textMuted
+            font.family: Config.fontFamily
+            font.italic: true
+            font.pixelSize: Config.type.bodySmall.size
+            text: "All caught up! 🎉"
+            visible: root.tasks.length === 0 && !root.loading
+        }
+    }
+
+    // Add Task Input & Footer
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: Config.space.sm
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Config.space.sm
+
+            TextField {
+                id: taskInput
+
+                Layout.fillWidth: true
+                bottomPadding: Math.round(Config.space.md / 2)
+                color: Config.textColor
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.bodySmall.size
+                leftPadding: Config.space.sm
+                placeholderText: "Start something new..."
+                placeholderTextColor: Config.textMuted
+                rightPadding: Config.space.sm
+                topPadding: Math.round(Config.space.md / 2)
+
+                background: Rectangle {
+                    border.color: taskInput.activeFocus ? Config.lavender : "transparent"
+                    border.width: 1
+                    color: Config.surfaceVariant
+                    opacity: 0.4
+                    radius: Config.shape.corner.sm
+                }
+
+                onAccepted: {
+                    if (taskInput.text.trim() !== "") {
+                        addRunner.command = root.todoistCommand("add " + root.shSingleQuote(taskInput.text));
+                        addRunner.trigger();
+                        taskInput.text = "";
+                    }
+                }
+            }
+            Button {
+                id: addButton
+
+                flat: true
+
+                background: Rectangle {
+                    color: addButton.hovered ? Config.surfaceContainerHigh : "transparent"
+                    opacity: 0.6
+                    radius: Config.shape.corner.xs
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: Config.motion.duration.shortMs
+                        }
+                    }
+                }
+                contentItem: Text {
+                    color: Config.lavender
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.labelSmall.size
+                    font.weight: Font.Black
+                    horizontalAlignment: Text.AlignHCenter
+                    opacity: addButton.hovered ? 1.0 : 0.7
+                    text: "ADD"
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: taskInput.accepted()
+            }
+        }
+    }
+}

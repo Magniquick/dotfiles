@@ -7,48 +7,47 @@ import Quickshell.Hyprland
 Rectangle {
     id: root
 
-    property var workspace
-    property var hyprland
-    property string label: ""
-    property string dispatchName: ""
     property bool active: false
-    property bool urgent: false
-    property bool hovered: false
-    property int paddingX: Config.workspacePaddingX
+    property string dispatchName: ""
     property string fontFamily: Config.fontFamily
     property int fontSize: Config.fontSize
-    property bool uniformWidth: true
+    property bool hovered: false
+    property var hyprland
+    property string label: ""
+    property int paddingX: Config.workspacePaddingX
     readonly property int uniformTextWidth: metrics.advanceWidth("10")
+    property bool uniformWidth: true
+    property bool urgent: false
+    property var workspace
 
-    color: root.active ? Config.moduleBackgroundMuted : (root.hovered ? Config.moduleBackgroundHover : "transparent")
-    radius: height / 2
+    Layout.alignment: Qt.AlignVCenter
     antialiasing: true
+    color: root.active ? Config.moduleBackgroundMuted : (root.hovered ? Config.moduleBackgroundHover : "transparent")
     implicitHeight: Config.workspaceHeight
     implicitWidth: (root.uniformWidth ? Math.max(labelText.implicitWidth, root.uniformTextWidth) : labelText.implicitWidth) + root.paddingX * 2
-    Layout.alignment: Qt.AlignVCenter
+    radius: height / 2
 
     Text {
         id: labelText
 
         anchors.centerIn: parent
-        text: root.label
         color: root.urgent ? Config.warn : (root.active ? Config.accent : Config.textMuted)
-        horizontalAlignment: Text.AlignHCenter
+        font.bold: root.active
         font.family: root.fontFamily
         font.pixelSize: root.fontSize
-        font.bold: root.active
+        horizontalAlignment: Text.AlignHCenter
+        text: root.label
     }
-
     FontMetrics {
         id: metrics
 
         font.family: root.fontFamily
         font.pixelSize: root.fontSize
     }
-
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
+
         onClicked: {
             if (root.workspace && root.workspace.activate)
                 root.workspace.activate();

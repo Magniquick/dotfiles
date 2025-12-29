@@ -9,67 +9,28 @@ import "./JsonUtils.js" as JsonUtils
 
 ColumnLayout {
     id: root
-    spacing: Config.space.sm
-    Layout.fillWidth: true
 
-    property var tasks: []
-    property var rawData: ({})
-    property string currentProject: "Today"
-    property bool loading: false
-    property bool parseError: false
-    property bool usingCache: false
-    property string lastUpdated: ""
-    readonly property bool dropdownActive: projectSelector.popup.visible
     readonly property string apiPath: "/home/magni/Projects/todoist-api/main.py"
-    readonly property int iconSlot: Config.space.xxl * 2
-    readonly property int minorSpace: Config.spaceHalfXs
-
     readonly property string cacheDir: {
         const homeDir = Quickshell.env("HOME");
         return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/todoist" : "/tmp/quickshell-todoist";
     }
-
     readonly property string cachePath: root.cacheDir + "/tasks.json"
-
-    function scheduleProjectSelectorClose() {
-        if (projectSelector.popup.visible)
-            projectSelectorCloseTimer.restart();
-    }
-
-    function cancelProjectSelectorClose() {
-        projectSelectorCloseTimer.stop();
-    }
-
-    Timer {
-        id: projectSelectorCloseTimer
-        interval: 200
-        repeat: false
-        onTriggered: {
-            if (!rootHover.hovered && !projectSelectorPopupHover.hovered && projectSelector.popup.visible)
-                projectSelector.popup.close();
-        }
-    }
-
-    HoverHandler {
-        id: rootHover
-        target: root
-        onHoveredChanged: {
-            if (hovered)
-                root.cancelProjectSelectorClose();
-            else
-                root.scheduleProjectSelectorClose();
-        }
-    }
-
-    onVisibleChanged: {
-        if (!visible && projectSelector.popup.visible)
-            projectSelector.popup.close();
-    }
-
+    property string currentProject: "Today"
+    readonly property bool dropdownActive: projectSelector.popup.visible
+    readonly property int iconSlot: Config.space.xxl * 2
+    property string lastUpdated: ""
+    property bool loading: false
     readonly property string loginShell: {
         const shellValue = Quickshell.env("SHELL");
         return shellValue && shellValue !== "" ? shellValue : "sh";
     }
+    readonly property int minorSpace: Config.spaceHalfXs
+    property bool parseError: false
+    property var rawData: ({})
+    readonly property var taskColors: [Config.lavender, Config.pink, Config.flamingo, Config.primary, Config.yellow, Config.green]
+    property var tasks: []
+    property bool usingCache: false
 
     function applyTodoistData(data, fromCache) {
         if (!data || typeof data !== "object")
@@ -95,17 +56,78 @@ ColumnLayout {
 
         root.updateTasks();
     }
-
+    function cancelProjectSelectorClose() {
+        projectSelectorCloseTimer.stop();
+    }
+    function getTaskColor(index) {
+        return taskColors[index % taskColors.length];
+    }
     function refresh() {
         root.loading = true;
         root.parseError = false;
         listRunner.trigger();
     }
+    function scheduleProjectSelectorClose() {
+        if (projectSelector.popup.visible)
+            projectSelectorCloseTimer.restart();
+    }
+    function shSingleQuote(value) {
+        // Wrap for POSIX shell single-quoted string: ' -> '\''.
+        return String(value).replace(/'/g, "'\\''");
+    }
+    function taskCountLabel(count) {
+        return count === 1 ? "1 Task" : count + " Tasks";
+    }
+    function updateTasks() {
+        if (!root.rawData)
+            return;
+        if (root.currentProject === "Today") {
+            root.tasks = root.rawData.today || [];
+        } else if (root.rawData.projects && root.rawData.projects[root.currentProject]) {
+            root.tasks = root.rawData.projects[root.currentProject];
+        } else {
+            root.tasks = [];
+        }
+    }
 
+    Layout.fillWidth: true
+    spacing: Config.space.sm
+
+    Component.onCompleted: cacheReader.trigger()
+    onVisibleChanged: {
+        if (!visible && projectSelector.popup.visible)
+            projectSelector.popup.close();
+    }
+
+    Timer {
+        id: projectSelectorCloseTimer
+
+        interval: 200
+        repeat: false
+
+        onTriggered: {
+            if (!rootHover.hovered && !projectSelectorPopupHover.hovered && projectSelector.popup.visible)
+                projectSelector.popup.close();
+        }
+    }
+    HoverHandler {
+        id: rootHover
+
+        target: root
+
+        onHoveredChanged: {
+            if (hovered)
+                root.cancelProjectSelectorClose();
+            else
+                root.scheduleProjectSelectorClose();
+        }
+    }
     CommandRunner {
         id: listRunner
+
         command: "uv run " + root.apiPath + " list"
         intervalMs: 300000 // 5 minutes
+
         onRan: function (output) {
             const data = JsonUtils.parseObject(output);
             if (data) {
@@ -126,24 +148,13 @@ ColumnLayout {
             root.loading = false;
         }
     }
-
-    function updateTasks() {
-        if (!root.rawData)
-            return;
-        if (root.currentProject === "Today") {
-            root.tasks = root.rawData.today || [];
-        } else if (root.rawData.projects && root.rawData.projects[root.currentProject]) {
-            root.tasks = root.rawData.projects[root.currentProject];
-        } else {
-            root.tasks = [];
-        }
-    }
-
     CommandRunner {
         id: cacheReader
-        intervalMs: 0
-        enabled: root.cachePath !== ""
+
         command: root.cachePath !== "" ? ("cat \"" + root.cachePath + "\"") : ""
+        enabled: root.cachePath !== ""
+        intervalMs: 0
+
         onRan: function (output) {
             const wrapper = JsonUtils.parseObject(output);
             const cached = wrapper && wrapper.payload ? wrapper.payload : null;
@@ -159,36 +170,26 @@ ColumnLayout {
             }
         }
     }
-
     CommandRunner {
         id: cacheWriter
-        intervalMs: 0
-        enabled: true
-        command: ""
-    }
 
+        command: ""
+        enabled: true
+        intervalMs: 0
+    }
     CommandRunner {
         id: addRunner
+
         onRan: function (output) {
             root.refresh();
         }
     }
-
     CommandRunner {
         id: actionRunner
+
         onRan: function (output) {
             root.refresh();
         }
-    }
-
-    readonly property var taskColors: [Config.lavender, Config.pink, Config.flamingo, Config.primary, Config.yellow, Config.green]
-
-    function getTaskColor(index) {
-        return taskColors[index % taskColors.length];
-    }
-
-    function taskCountLabel(count) {
-        return count === 1 ? "1 Task" : count + " Tasks";
     }
 
     // Hero Section (Battery Style)
@@ -197,35 +198,33 @@ ColumnLayout {
         spacing: Config.space.md
 
         Item {
-            width: root.iconSlot
             height: root.iconSlot
+            width: root.iconSlot
 
             Text {
                 anchors.centerIn: parent
-                text: "󰄭"
-                font.pixelSize: Config.type.headlineLarge.size
                 color: Config.lavender
+                font.pixelSize: Config.type.headlineLarge.size
+                text: "󰄭"
             }
         }
-
         ColumnLayout {
             spacing: Config.space.none
 
             Text {
-                text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
                 color: Config.textColor
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
                 font.weight: Font.Bold
+                text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
             }
             Text {
-                text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
                 color: Config.textMuted
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
+                text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
             }
         }
-
         Item {
             Layout.fillWidth: true
         }
@@ -238,45 +237,41 @@ ColumnLayout {
 
         ComboBox {
             id: projectSelector
+
             Layout.preferredWidth: 140
             leftPadding: Config.space.none
             rightPadding: Config.space.none
 
-            onActivated: index => {
-                root.currentProject = model[index];
-                root.updateTasks();
-            }
-
             background: Item {
-                implicitWidth: 140
                 implicitHeight: Config.type.bodySmall.line + root.minorSpace
+                implicitWidth: 140
             }
-
             contentItem: Row {
-                spacing: Config.space.xs
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
+                spacing: Config.space.xs
 
                 Text {
                     id: selectorLabel
-                    text: projectSelector.displayText.toUpperCase()
+
                     color: Config.lavender
+                    elide: Text.ElideRight
                     font.family: Config.fontFamily
+                    font.letterSpacing: root.minorSpace
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black
-                    font.letterSpacing: root.minorSpace
+                    text: projectSelector.displayText.toUpperCase()
                     verticalAlignment: Text.AlignVCenter
                     width: Math.min(implicitWidth, Math.max(0, projectSelector.width - dropdownIndicator.implicitWidth - (Config.space.xs + root.minorSpace)))
-                    elide: Text.ElideRight
                 }
-
                 Text {
                     id: dropdownIndicator
-                    text: "󰄼"
+
+                    color: Config.lavender
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.labelMedium.size
-                    color: Config.lavender
                     rotation: projectSelector.popup.visible ? 90 : 0
+                    text: "󰄼"
 
                     Behavior on rotation {
                         NumberAnimation {
@@ -286,34 +281,21 @@ ColumnLayout {
                     }
                 }
             }
-
-            indicator: Item {
-                implicitWidth: 0
-                implicitHeight: 0
-            }
-
             delegate: ItemDelegate {
                 id: delegateRoot
-                width: ListView.view.width
-                height: Config.barHeight
-                required property var modelData
-                required property int index
-                highlighted: projectSelector.highlightedIndex === index
 
-                contentItem: Text {
-                    text: delegateRoot.modelData
-                    color: delegateRoot.highlighted ? Config.onPrimary : Config.textColor
-                    font: projectSelector.font
-                    elide: Text.ElideRight
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: Config.space.sm
-                }
+                required property int index
+                required property var modelData
+
+                height: Config.barHeight
+                highlighted: projectSelector.highlightedIndex === index
+                width: ListView.view.width
 
                 background: Rectangle {
                     anchors.fill: parent
                     anchors.margins: root.minorSpace
-                    radius: Config.shape.corner.xs
                     color: delegateRoot.highlighted ? Config.primary : (delegateRoot.hovered ? Config.surfaceContainerHigh : "transparent")
+                    radius: Config.shape.corner.xs
 
                     Behavior on color {
                         ColorAnimation {
@@ -321,47 +303,71 @@ ColumnLayout {
                         }
                     }
                 }
+                contentItem: Text {
+                    color: delegateRoot.highlighted ? Config.onPrimary : Config.textColor
+                    elide: Text.ElideRight
+                    font: projectSelector.font
+                    leftPadding: Config.space.sm
+                    text: delegateRoot.modelData
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
-
+            indicator: Item {
+                implicitHeight: 0
+                implicitWidth: 0
+            }
             popup: Popup {
-                y: projectSelector.height + Config.space.xs
-                width: projectSelector.width
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost
+                focus: true
                 implicitHeight: contentItem.implicitHeight
                 padding: Config.space.xs
-                focus: true
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost
+                width: projectSelector.width
+                y: projectSelector.height + Config.space.xs
 
-                onOpened: {
-                    root.cancelProjectSelectorClose();
-                    forceActiveFocus();
-                }
-                onActiveFocusChanged: if (!activeFocus)
-                    close()
+                background: Rectangle {
+                    border.color: Config.outline
+                    border.width: 1
+                    color: Config.surface
+                    layer.enabled: true
+                    radius: Config.shape.corner.md
 
-                Connections {
-                    target: Qt.application
-                    function onActiveChanged() {
-                        if (!Qt.application.active) {
-                            projectSelector.popup.close();
-                        }
+                    layer.effect: MultiEffect {
+                        shadowBlur: 0.4
+                        shadowColor: Qt.rgba(0, 0, 0, 0.2)
+                        shadowEnabled: true
+                        shadowVerticalOffset: 2
                     }
                 }
+                contentItem: ListView {
+                    clip: true
+                    currentIndex: projectSelector.highlightedIndex
+                    implicitHeight: contentHeight
+                    interactive: false
+                    model: projectSelector.popup.visible ? projectSelector.delegateModel : null
 
-                TapHandler {
-                    gesturePolicy: TapHandler.ReleaseWithinBounds
-                    onTapped: {
-                        // This helps catch taps that might not be handled by the ComboBox itself
-                        // to ensure focus is maintained or closed as expected.
+                    ScrollIndicator.vertical: ScrollIndicator {
                     }
                 }
-
-                HoverHandler {
-                    id: projectSelectorPopupHover
-                    onHoveredChanged: {
-                        if (hovered)
-                            root.cancelProjectSelectorClose();
-                        else
-                            root.scheduleProjectSelectorClose();
+                enter: Transition {
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        from: 0
+                        property: "opacity"
+                        to: 1
+                    }
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        easing.type: Easing.OutBack
+                        from: 0.95
+                        property: "scale"
+                        to: 1
+                    }
+                }
+                exit: Transition {
+                    NumberAnimation {
+                        duration: Config.motion.duration.shortMs
+                        property: "opacity"
+                        to: 0
                     }
                 }
 
@@ -370,58 +376,47 @@ ColumnLayout {
                         projectSelector.popup.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost;
                     }
                 }
-
-                enter: Transition {
-                    NumberAnimation {
-                        property: "opacity"
-                        from: 0
-                        to: 1
-                        duration: Config.motion.duration.shortMs
-                    }
-                    NumberAnimation {
-                        property: "scale"
-                        from: 0.95
-                        to: 1
-                        duration: Config.motion.duration.shortMs
-                        easing.type: Easing.OutBack
-                    }
+                onActiveFocusChanged: if (!activeFocus)
+                    close()
+                onOpened: {
+                    root.cancelProjectSelectorClose();
+                    forceActiveFocus();
                 }
 
-                exit: Transition {
-                    NumberAnimation {
-                        property: "opacity"
-                        to: 0
-                        duration: Config.motion.duration.shortMs
+                Connections {
+                    function onActiveChanged() {
+                        if (!Qt.application.active) {
+                            projectSelector.popup.close();
+                        }
+                    }
+
+                    target: Qt.application
+                }
+                TapHandler {
+                    gesturePolicy: TapHandler.ReleaseWithinBounds
+
+                    onTapped: {
+                        // This helps catch taps that might not be handled by the ComboBox itself
+                        // to ensure focus is maintained or closed as expected.
                     }
                 }
+                HoverHandler {
+                    id: projectSelectorPopupHover
 
-                contentItem: ListView {
-                    clip: true
-                    interactive: false
-                    implicitHeight: contentHeight
-                    model: projectSelector.popup.visible ? projectSelector.delegateModel : null
-                    currentIndex: projectSelector.highlightedIndex
-
-                    ScrollIndicator.vertical: ScrollIndicator {}
-                }
-
-                background: Rectangle {
-                    color: Config.surface
-                    radius: Config.shape.corner.md
-                    border.color: Config.outline
-                    border.width: 1
-
-                    layer.enabled: true
-                    layer.effect: MultiEffect {
-                        shadowEnabled: true
-                        shadowColor: Qt.rgba(0, 0, 0, 0.2)
-                        shadowBlur: 0.4
-                        shadowVerticalOffset: 2
+                    onHoveredChanged: {
+                        if (hovered)
+                            root.cancelProjectSelectorClose();
+                        else
+                            root.scheduleProjectSelectorClose();
                     }
                 }
             }
-        }
 
+            onActivated: index => {
+                root.currentProject = model[index];
+                root.updateTasks();
+            }
+        }
         Item {
             Layout.fillWidth: true
         }
@@ -429,100 +424,101 @@ ColumnLayout {
     // Task List
     ColumnLayout {
         id: taskListLayout
+
         Layout.fillWidth: true
         spacing: Config.space.sm
 
         Repeater {
             model: root.tasks
+
             delegate: RowLayout {
                 id: taskItem
-                required property var modelData
-                required property int index
-                spacing: Config.space.md
-                Layout.fillWidth: true
 
                 property bool completing: false
                 property bool deleting: false
+                required property int index
+                required property var modelData
                 readonly property int stripeWidth: root.minorSpace + Math.round(root.minorSpace / 2)
 
+                Layout.fillWidth: true
+                spacing: Config.space.md
+
                 Rectangle {
-                    Layout.preferredWidth: stripeWidth
                     Layout.fillHeight: true
                     Layout.preferredHeight: Config.type.bodySmall.line + root.minorSpace
-                    radius: Config.shape.corner.xs
+                    Layout.preferredWidth: stripeWidth
                     color: root.getTaskColor(taskItem.index)
                     opacity: 0.8
+                    radius: Config.shape.corner.xs
                 }
-
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: Config.space.none
                     opacity: taskItem.completing || taskItem.deleting ? 0.3 : 1.0
+                    spacing: Config.space.none
 
                     Text {
-                        text: taskItem.modelData.title
+                        Layout.fillWidth: true
                         color: root.getTaskColor(taskItem.index)
+                        elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodyMedium.size
                         font.weight: Font.Medium
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
+                        text: taskItem.modelData.title
                     }
-
                     Text {
-                        text: taskItem.modelData.notes || ""
+                        Layout.fillWidth: true
                         color: Config.textMuted
+                        elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelSmall.size
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        visible: text !== ""
                         maximumLineCount: 2
-                        elide: Text.ElideRight
+                        text: taskItem.modelData.notes || ""
+                        visible: text !== ""
+                        wrapMode: Text.WordWrap
                     }
                 }
-
                 Text {
-                    text: taskItem.modelData.due_human || ""
                     color: root.getTaskColor(taskItem.index)
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Bold
-                    visible: text !== ""
                     opacity: 0.7
+                    text: taskItem.modelData.due_human || ""
+                    visible: text !== ""
                 }
 
                 // Complete Button
                 Text {
-                    text: "󰄬"
                     color: Config.green
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.titleSmall.size
                     font.weight: Font.Black
                     opacity: taskItem.completing ? 0.2 : 0.7
+                    text: "󰄬"
+
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: if (!taskItem.completing)
-                            parent.opacity = 1.0
-                        onExited: if (!taskItem.completing)
-                            parent.opacity = 0.7
+
                         onClicked: {
                             taskItem.completing = true;
                             actionRunner.command = "uv run " + root.apiPath + " complete " + taskItem.modelData.id;
                             actionRunner.trigger();
                         }
+                        onEntered: if (!taskItem.completing)
+                            parent.opacity = 1.0
+                        onExited: if (!taskItem.completing)
+                            parent.opacity = 0.7
                     }
                 }
             }
         }
-
         Text {
-            text: "All caught up! 🎉"
             color: Config.textMuted
             font.family: Config.fontFamily
-            font.pixelSize: Config.type.bodySmall.size
             font.italic: true
+            font.pixelSize: Config.type.bodySmall.size
+            text: "All caught up! 🎉"
             visible: root.tasks.length === 0 && !root.loading
         }
     }
@@ -538,23 +534,24 @@ ColumnLayout {
 
             TextField {
                 id: taskInput
+
                 Layout.fillWidth: true
-                placeholderText: "Start something new..."
+                bottomPadding: Math.round(Config.space.md / 2)
+                color: Config.textColor
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size
-                color: Config.textColor
-                placeholderTextColor: Config.textMuted
                 leftPadding: Config.space.sm
+                placeholderText: "Start something new..."
+                placeholderTextColor: Config.textMuted
                 rightPadding: Config.space.sm
                 topPadding: Math.round(Config.space.md / 2)
-                bottomPadding: Math.round(Config.space.md / 2)
 
                 background: Rectangle {
-                    color: Config.surfaceVariant
-                    radius: Config.shape.corner.sm
-                    opacity: 0.4
-                    border.width: 1
                     border.color: taskInput.activeFocus ? Config.lavender : "transparent"
+                    border.width: 1
+                    color: Config.surfaceVariant
+                    opacity: 0.4
+                    radius: Config.shape.corner.sm
                 }
 
                 onAccepted: {
@@ -565,16 +562,15 @@ ColumnLayout {
                     }
                 }
             }
-
             Button {
                 id: addButton
+
                 flat: true
-                onClicked: taskInput.accepted()
 
                 background: Rectangle {
                     color: addButton.hovered ? Config.surfaceContainerHigh : "transparent"
-                    radius: Config.shape.corner.xs
                     opacity: 0.6
+                    radius: Config.shape.corner.xs
 
                     Behavior on color {
                         ColorAnimation {
@@ -582,25 +578,19 @@ ColumnLayout {
                         }
                     }
                 }
-
                 contentItem: Text {
-                    text: "ADD"
+                    color: Config.lavender
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black
-                    color: Config.lavender
                     horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
                     opacity: addButton.hovered ? 1.0 : 0.7
+                    text: "ADD"
+                    verticalAlignment: Text.AlignVCenter
                 }
+
+                onClicked: taskInput.accepted()
             }
         }
     }
-
-    function shSingleQuote(value) {
-        // Wrap for POSIX shell single-quoted string: ' -> '\''.
-        return String(value).replace(/'/g, "'\\''");
-    }
-
-    Component.onCompleted: cacheReader.trigger()
 }

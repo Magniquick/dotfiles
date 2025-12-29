@@ -21,7 +21,24 @@ ModuleContainer {
 
         return "";
     }
+    function indexForProfile(profile) {
+        if (profile === PowerProfile.PowerSaver)
+            return 0;
 
+        if (profile === PowerProfile.Balanced)
+            return 1;
+
+        return 2;
+    }
+    function profileForIndex(index) {
+        if (index <= 0)
+            return PowerProfile.PowerSaver;
+
+        if (index === 1)
+            return PowerProfile.Balanced;
+
+        return PowerProfile.Performance;
+    }
     function profileLabel(profile) {
         if (profile === PowerProfile.Performance)
             return "performance";
@@ -34,7 +51,6 @@ ModuleContainer {
 
         return "unknown";
     }
-
     function profileTitle(profile) {
         if (profile === PowerProfile.Performance)
             return "Performance";
@@ -47,83 +63,63 @@ ModuleContainer {
 
         return "Power profile";
     }
-
-    function indexForProfile(profile) {
-        if (profile === PowerProfile.PowerSaver)
-            return 0;
-
-        if (profile === PowerProfile.Balanced)
-            return 1;
-
-        return 2;
-    }
-
-    function profileForIndex(index) {
-        if (index <= 0)
-            return PowerProfile.PowerSaver;
-
-        if (index === 1)
-            return PowerProfile.Balanced;
-
-        return PowerProfile.Performance;
-    }
-
     function setProfile(profile) {
         if (PowerProfiles.profile !== profile)
             PowerProfiles.profile = profile;
 
         root.profileIndex = root.indexForProfile(profile);
     }
-
     function syncProfile() {
         root.profileIndex = root.indexForProfile(PowerProfiles.profile);
     }
 
-    tooltipTitle: "Power profile"
-    tooltipText: ""
     tooltipHoverable: true
-    onTooltipActiveChanged: {
-        if (root.tooltipActive)
-            root.syncProfile();
-    }
+    tooltipText: ""
+    tooltipTitle: "Power profile"
+
     content: [
         IconLabel {
             text: root.iconForProfile(PowerProfiles.profile)
         }
     ]
-
-    Connections {
-        function onProfileChanged() {
-            root.syncProfile();
-        }
-
-        target: PowerProfiles
-        enabled: root.tooltipActive
-    }
-
     tooltipContent: Component {
         ColumnLayout {
             spacing: Config.space.sm
 
             TooltipActionsRow {
                 ActionChip {
-                    text: "󰾆"
                     active: PowerProfiles.profile === PowerProfile.PowerSaver
+                    text: "󰾆"
+
                     onClicked: root.setProfile(PowerProfile.PowerSaver)
                 }
-
                 ActionChip {
-                    text: "󰾅"
                     active: PowerProfiles.profile === PowerProfile.Balanced
+                    text: "󰾅"
+
                     onClicked: root.setProfile(PowerProfile.Balanced)
                 }
-
                 ActionChip {
-                    text: ""
                     active: PowerProfiles.profile === PowerProfile.Performance
+                    text: ""
+
                     onClicked: root.setProfile(PowerProfile.Performance)
                 }
             }
         }
+    }
+
+    onTooltipActiveChanged: {
+        if (root.tooltipActive)
+            root.syncProfile();
+    }
+
+    Connections {
+        function onProfileChanged() {
+            root.syncProfile();
+        }
+
+        enabled: root.tooltipActive
+        target: PowerProfiles
     }
 }

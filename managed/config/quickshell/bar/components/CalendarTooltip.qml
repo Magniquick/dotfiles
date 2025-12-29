@@ -7,81 +7,25 @@ import "./JsonUtils.js" as JsonUtils
 
 Item {
     id: calendar
-    property date currentDate: new Date()
+
     property bool active: false
     property string cacheDir: ""
-    property string refreshCommand: ""
-    readonly property string eventsPath: calendar.cacheDir !== "" ? calendar.cacheDir + "/events.json" : ""
-    property var eventsByDay: ({})
-    property var dayEvents: []
-    property date selectedDate: new Date()
-    property string calendarStatus: ""
     property string calendarGeneratedAt: ""
-    signal dataLoaded
-
-    // Fixed size to avoid jumping during scroll
-    implicitWidth: 240
-    implicitHeight: layout.implicitHeight
-
+    property string calendarStatus: ""
+    property date currentDate: new Date()
+    readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
+    property var dayEvents: []
+    property var eventsByDay: ({})
+    readonly property string eventsPath: calendar.cacheDir !== "" ? calendar.cacheDir + "/events.json" : ""
+    property string refreshCommand: ""
+    property date selectedDate: new Date()
     readonly property date today: new Date()
     readonly property int todayDay: today.getDate()
     readonly property int todayMonth: today.getMonth()
     readonly property int todayYear: today.getFullYear()
-
     readonly property var weekDays: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
-    readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
 
-    function dayKey(date) {
-        if (!date)
-            return "";
-        const year = date.getFullYear();
-        const monthValue = date.getMonth() + 1;
-        const dayNumber = date.getDate();
-        const monthText = monthValue < 10 ? "0" + monthValue : String(monthValue);
-        const dayText = dayNumber < 10 ? "0" + dayNumber : String(dayNumber);
-        return year + "-" + monthText + "-" + dayText;
-    }
-
-    function updateDayEvents() {
-        const key = calendar.dayKey(calendar.selectedDate);
-        const list = (key && calendar.eventsByDay && calendar.eventsByDay[key]) ? calendar.eventsByDay[key] : [];
-        calendar.dayEvents = list;
-    }
-
-    function markerCount(date) {
-        const key = calendar.dayKey(date);
-        if (!key || !calendar.eventsByDay || !calendar.eventsByDay[key])
-            return 0;
-        return Math.min(3, calendar.eventsByDay[key].length);
-    }
-
-    function formatEventTime(event) {
-        if (!event || event.all_day)
-            return "All day";
-        const startValue = event.start ? new Date(event.start) : null;
-        if (!startValue || isNaN(startValue.getTime()))
-            return "";
-        return Qt.formatDateTime(startValue, "hh:mm ap");
-    }
-
-    function formatEventLabel(event) {
-        if (!event)
-            return "";
-        const candidates = [event.title, event.summary, event.name];
-        let title = "Untitled";
-        for (let i = 0; i < candidates.length; i++) {
-            const value = candidates[i];
-            if (value === undefined || value === null)
-                continue;
-            const trimmed = String(value).trim();
-            if (trimmed !== "") {
-                title = trimmed;
-                break;
-            }
-        }
-        const timeLabel = calendar.formatEventTime(event);
-        return timeLabel !== "" ? timeLabel + " · " + title : title;
-    }
+    signal dataLoaded
 
     function applyCalendarData(payload) {
         if (!payload || typeof payload !== "object") {
@@ -104,31 +48,70 @@ Item {
 
         calendar.updateDayEvents();
     }
-
-    CommandRunner {
-        id: refreshRunner
-        intervalMs: 3600000
-        enabled: calendar.refreshCommand !== ""
-        command: calendar.refreshCommand
-        onRan: function () {
-            if (calendar.active)
-                eventsRunner.trigger();
+    function dayKey(date) {
+        if (!date)
+            return "";
+        const year = date.getFullYear();
+        const monthValue = date.getMonth() + 1;
+        const dayNumber = date.getDate();
+        const monthText = monthValue < 10 ? "0" + monthValue : String(monthValue);
+        const dayText = dayNumber < 10 ? "0" + dayNumber : String(dayNumber);
+        return year + "-" + monthText + "-" + dayText;
+    }
+    function formatEventLabel(event) {
+        if (!event)
+            return "";
+        const candidates = [event.title, event.summary, event.name];
+        let title = "Untitled";
+        for (let i = 0; i < candidates.length; i++) {
+            const value = candidates[i];
+            if (value === undefined || value === null)
+                continue;
+            const trimmed = String(value).trim();
+            if (trimmed !== "") {
+                title = trimmed;
+                break;
+            }
         }
+        const timeLabel = calendar.formatEventTime(event);
+        return timeLabel !== "" ? timeLabel + " · " + title : title;
+    }
+    function formatEventTime(event) {
+        if (!event || event.all_day)
+            return "All day";
+        const startValue = event.start ? new Date(event.start) : null;
+        if (!startValue || isNaN(startValue.getTime()))
+            return "";
+        return Qt.formatDateTime(startValue, "hh:mm ap");
+    }
+    function markerCount(date) {
+        const key = calendar.dayKey(date);
+        if (!key || !calendar.eventsByDay || !calendar.eventsByDay[key])
+            return 0;
+        return Math.min(3, calendar.eventsByDay[key].length);
+    }
+    function refreshRequested() {
+        if (calendar.refreshCommand !== "")
+            refreshRunner.trigger();
+        else
+            eventsRunner.trigger();
+    }
+    function updateDayEvents() {
+        const key = calendar.dayKey(calendar.selectedDate);
+        const list = (key && calendar.eventsByDay && calendar.eventsByDay[key]) ? calendar.eventsByDay[key] : [];
+        calendar.dayEvents = list;
     }
 
-    CommandRunner {
-        id: eventsRunner
-        intervalMs: 0
-        enabled: true
-        command: calendar.eventsPath !== "" ? "cat " + calendar.eventsPath : ""
-        onRan: function (output) {
-            calendar.applyCalendarData(JsonUtils.parseObject(output));
-            calendar.dataLoaded();
-        }
-    }
+    implicitHeight: layout.implicitHeight
 
-    onSelectedDateChanged: calendar.updateDayEvents()
-    onEventsByDayChanged: calendar.updateDayEvents()
+    // Fixed size to avoid jumping during scroll
+    implicitWidth: 240
+
+    Component.onCompleted: {
+        if (calendar.refreshCommand !== "")
+            refreshRunner.trigger();
+        calendar.updateDayEvents();
+    }
     onActiveChanged: {
         if (!calendar.active)
             return;
@@ -137,47 +120,200 @@ Item {
         else
             eventsRunner.trigger();
     }
-
-    function refreshRequested() {
-        if (calendar.refreshCommand !== "")
-            refreshRunner.trigger();
-        else
-            eventsRunner.trigger();
-    }
-
     onCurrentDateChanged: {
         calendar.selectedDate = new Date(calendar.currentDate.getTime());
         calendar.updateDayEvents();
     }
+    onEventsByDayChanged: calendar.updateDayEvents()
+    onSelectedDateChanged: calendar.updateDayEvents()
 
-    Component.onCompleted: {
-        if (calendar.refreshCommand !== "")
-            refreshRunner.trigger();
-        calendar.updateDayEvents();
+    CommandRunner {
+        id: refreshRunner
+
+        command: calendar.refreshCommand
+        enabled: calendar.refreshCommand !== ""
+        intervalMs: 3600000
+
+        onRan: function () {
+            if (calendar.active)
+                eventsRunner.trigger();
+        }
     }
+    CommandRunner {
+        id: eventsRunner
 
+        command: calendar.eventsPath !== "" ? "cat " + calendar.eventsPath : ""
+        enabled: true
+        intervalMs: 0
+
+        onRan: function (output) {
+            calendar.applyCalendarData(JsonUtils.parseObject(output));
+            calendar.dataLoaded();
+        }
+    }
     ColumnLayout {
         id: layout
+
         anchors.fill: parent
         spacing: Config.space.sm
 
         ListView {
             id: monthListView
+
             Layout.fillWidth: true
             Layout.preferredHeight: 230 // Title + Header + Grid
-            orientation: ListView.Horizontal
-            snapMode: ListView.SnapOneItem
+            clip: true
+            currentIndex: 1200 // start in the middle
             highlightRangeMode: ListView.StrictlyEnforceRange
             model: 2400 // covering 200 years for "infinite" feel
-            currentIndex: 1200 // start in the middle
-            clip: true
+            orientation: ListView.Horizontal
+            snapMode: ListView.SnapOneItem
+
+            delegate: Item {
+                id: monthDelegate
+
+                readonly property int daysInMonth: new Date(viewYear, viewMonth + 1, 0).getDate()
+                required property int index
+                readonly property int monthOffset: index - 1200
+                readonly property int startOffset: new Date(viewYear, viewMonth, 1).getDay()
+                readonly property date viewDate: new Date(calendar.todayYear, calendar.todayMonth + monthOffset, 1)
+                readonly property int viewMonth: viewDate.getMonth()
+                readonly property int viewYear: viewDate.getFullYear()
+
+                height: monthListView.height
+                width: monthListView.width
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: Config.space.sm
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.bottomMargin: Config.space.sm
+                        Layout.topMargin: Config.space.none
+                        spacing: Config.space.xs
+
+                        Text {
+                            color: Config.textColor
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.headlineSmall.size
+                            font.weight: Font.Bold
+                            text: Qt.formatDateTime(monthDelegate.viewDate, "MMMM")
+                        }
+                        Text {
+                            color: Config.textMuted
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.headlineSmall.size
+                            font.weight: Font.ExtraLight
+                            text: Qt.formatDateTime(monthDelegate.viewDate, "yyyy")
+                        }
+                    }
+                    GridLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        columnSpacing: Config.space.sm
+                        columns: 7
+                        rowSpacing: 0
+
+                        Repeater {
+                            model: calendar.weekDays
+
+                            delegate: Item {
+                                required property int index
+                                required property string modelData
+
+                                implicitHeight: Config.type.labelSmall.size + Config.space.xs
+                                implicitWidth: calendar.dayCellSize
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    color: Config.textMuted
+                                    font.family: Config.fontFamily
+                                    font.pixelSize: Config.type.labelSmall.size
+                                    font.weight: Config.type.labelSmall.weight
+                                    text: modelData
+                                }
+                            }
+                        }
+                    }
+                    GridLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        columnSpacing: Config.space.sm
+                        columns: 7
+                        rowSpacing: Config.space.xs
+
+                        Repeater {
+                            model: 42 // 6 rows for consistent height
+
+                            delegate: Item {
+                                id: dayDelegate
+
+                                readonly property var dateObj: inMonth ? new Date(monthDelegate.viewYear, monthDelegate.viewMonth, dayNumber) : undefined
+                                readonly property int dayNumber: index - monthDelegate.startOffset + 1
+                                readonly property bool inMonth: dayNumber > 0 && dayNumber <= monthDelegate.daysInMonth
+                                required property int index
+                                readonly property bool isSelection: inMonth && dayNumber === calendar.selectedDate.getDate() && monthDelegate.viewMonth === calendar.selectedDate.getMonth() && monthDelegate.viewYear === calendar.selectedDate.getFullYear()
+                                readonly property bool isToday: inMonth && dayNumber === calendar.todayDay && monthDelegate.viewMonth === calendar.todayMonth && monthDelegate.viewYear === calendar.todayYear
+
+                                implicitHeight: calendar.dayCellSize
+                                implicitWidth: calendar.dayCellSize
+
+                                // Event Filled Circle
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    color: Config.green
+                                    height: parent.implicitHeight - Config.space.xs
+                                    radius: width / 2
+                                    visible: dayDelegate.inMonth && !dayDelegate.isToday && calendar.markerCount(dayDelegate.dateObj) > 0
+                                    width: parent.implicitWidth - Config.space.xs
+                                }
+
+                                // Today Filled Circle
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    color: Config.primary
+                                    height: parent.implicitHeight - Config.space.xs
+                                    radius: width / 2
+                                    visible: dayDelegate.isToday
+                                    width: parent.implicitWidth - Config.space.xs
+                                }
+
+                                // Selection Outline
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    border.color: Config.primary
+                                    border.width: 2
+                                    color: "transparent"
+                                    height: parent.implicitHeight
+                                    radius: width / 2
+                                    visible: dayDelegate.isSelection
+                                    width: parent.implicitWidth
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    color: dayDelegate.isToday ? Config.onPrimary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.m3.onSuccess : Config.textColor)
+                                    font.family: Config.fontFamily
+                                    font.pixelSize: Config.type.bodyMedium.size
+                                    font.weight: Config.type.bodyMedium.weight
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: dayDelegate.inMonth ? dayDelegate.dayNumber : ""
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: dayDelegate.inMonth
+
+                                    onClicked: calendar.selectedDate = dayDelegate.dateObj
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             // Allow wheel to scroll months
             MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.NoButton
-                property real wheelAccumulator: 0
                 property real lastWheelStepAtMs: 0
+                property real wheelAccumulator: 0
                 property int wheelCooldownMs: 180
 
                 function wheelDelta(wheel) {
@@ -205,6 +341,9 @@ Item {
 
                     return null;
                 }
+
+                acceptedButtons: Qt.NoButton
+                anchors.fill: parent
 
                 onWheel: function (wheel) {
                     const delta = wheelDelta(wheel);
@@ -245,209 +384,65 @@ Item {
                     wheel.accepted = true;
                 }
             }
-
-            delegate: Item {
-                id: monthDelegate
-                required property int index
-                width: monthListView.width
-                height: monthListView.height
-
-                readonly property int monthOffset: index - 1200
-                readonly property date viewDate: new Date(calendar.todayYear, calendar.todayMonth + monthOffset, 1)
-                readonly property int viewYear: viewDate.getFullYear()
-                readonly property int viewMonth: viewDate.getMonth()
-                readonly property int daysInMonth: new Date(viewYear, viewMonth + 1, 0).getDate()
-                readonly property int startOffset: new Date(viewYear, viewMonth, 1).getDay()
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: Config.space.sm
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: Config.space.none
-                        Layout.bottomMargin: Config.space.sm
-                        spacing: Config.space.xs
-
-                        Text {
-                            text: Qt.formatDateTime(monthDelegate.viewDate, "MMMM")
-                            color: Config.textColor
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.headlineSmall.size
-                            font.weight: Font.Bold
-                        }
-
-                        Text {
-                            text: Qt.formatDateTime(monthDelegate.viewDate, "yyyy")
-                            color: Config.textMuted
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.headlineSmall.size
-                            font.weight: Font.ExtraLight
-                        }
-                    }
-
-                    GridLayout {
-                        columns: 7
-                        columnSpacing: Config.space.sm
-                        rowSpacing: 0
-                        Layout.alignment: Qt.AlignHCenter
-
-                        Repeater {
-                            model: calendar.weekDays
-                            delegate: Item {
-                                required property int index
-                                required property string modelData
-                                implicitWidth: calendar.dayCellSize
-                                implicitHeight: Config.type.labelSmall.size + Config.space.xs
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData
-                                    color: Config.textMuted
-                                    font.family: Config.fontFamily
-                                    font.pixelSize: Config.type.labelSmall.size
-                                    font.weight: Config.type.labelSmall.weight
-                                }
-                            }
-                        }
-                    }
-
-                    GridLayout {
-                        columns: 7
-                        rowSpacing: Config.space.xs
-                        columnSpacing: Config.space.sm
-                        Layout.alignment: Qt.AlignHCenter
-
-                        Repeater {
-                            model: 42 // 6 rows for consistent height
-                            delegate: Item {
-                                id: dayDelegate
-                                required property int index
-                                readonly property int dayNumber: index - monthDelegate.startOffset + 1
-                                readonly property bool inMonth: dayNumber > 0 && dayNumber <= monthDelegate.daysInMonth
-                                readonly property var dateObj: inMonth ? new Date(monthDelegate.viewYear, monthDelegate.viewMonth, dayNumber) : undefined
-
-                                readonly property bool isToday: inMonth && dayNumber === calendar.todayDay && monthDelegate.viewMonth === calendar.todayMonth && monthDelegate.viewYear === calendar.todayYear
-
-                                readonly property bool isSelection: inMonth && dayNumber === calendar.selectedDate.getDate() && monthDelegate.viewMonth === calendar.selectedDate.getMonth() && monthDelegate.viewYear === calendar.selectedDate.getFullYear()
-
-                                implicitWidth: calendar.dayCellSize
-                                implicitHeight: calendar.dayCellSize
-
-                                // Event Filled Circle
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: parent.implicitWidth - Config.space.xs
-                                    height: parent.implicitHeight - Config.space.xs
-                                    radius: width / 2
-                                    color: Config.green
-                                    visible: dayDelegate.inMonth && !dayDelegate.isToday && calendar.markerCount(dayDelegate.dateObj) > 0
-                                }
-
-                                // Today Filled Circle
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: parent.implicitWidth - Config.space.xs
-                                    height: parent.implicitHeight - Config.space.xs
-                                    radius: width / 2
-                                    color: Config.primary
-                                    visible: dayDelegate.isToday
-                                }
-
-                                // Selection Outline
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: parent.implicitWidth
-                                    height: parent.implicitHeight
-                                    radius: width / 2
-                                    color: "transparent"
-                                    border.width: 2
-                                    border.color: Config.primary
-                                    visible: dayDelegate.isSelection
-                                }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: dayDelegate.inMonth ? dayDelegate.dayNumber : ""
-                                    color: dayDelegate.isToday ? Config.onPrimary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.m3.onSuccess : Config.textColor)
-                                    font.family: Config.fontFamily
-                                    font.pixelSize: Config.type.bodyMedium.size
-                                    font.weight: Config.type.bodyMedium.weight
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    enabled: dayDelegate.inMonth
-                                    onClicked: calendar.selectedDate = dayDelegate.dateObj
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
-
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Config.outline
             opacity: 0.18
         }
-
         ColumnLayout {
             id: eventListLayout
-            spacing: Config.space.sm
-            Layout.fillWidth: true
-            Layout.topMargin: Config.space.sm
 
             readonly property bool isToday: calendar.selectedDate.getDate() === calendar.todayDay && calendar.selectedDate.getMonth() === calendar.todayMonth && calendar.selectedDate.getFullYear() === calendar.todayYear
 
+            Layout.fillWidth: true
+            Layout.topMargin: Config.space.sm
+            spacing: Config.space.sm
+
             Text {
-                text: "TODAY'S EVENTS"
+                Layout.bottomMargin: Config.space.none
                 color: Config.primary
                 font.family: Config.fontFamily
+                font.letterSpacing: 1.5
                 font.pixelSize: Config.type.labelSmall.size
                 font.weight: Font.Black
-                font.letterSpacing: 1.5
+                text: "TODAY'S EVENTS"
                 visible: eventListLayout.isToday && calendar.dayEvents.length > 0
-                Layout.bottomMargin: Config.space.none
             }
-
             Repeater {
                 model: calendar.dayEvents && calendar.dayEvents.length > 0 ? calendar.dayEvents.slice(0, 4) : []
+
                 delegate: RowLayout {
                     required property var modelData
-                    spacing: Config.space.sm
+
                     Layout.fillWidth: true
+                    spacing: Config.space.sm
 
                     Rectangle {
-                        width: 2
-                        height: 12
-                        radius: 1
-                        color: eventListLayout.isToday ? Config.primary : Config.outline
-                        opacity: eventListLayout.isToday ? 1.0 : 0.3
                         Layout.alignment: Qt.AlignVCenter
+                        color: eventListLayout.isToday ? Config.primary : Config.outline
+                        height: 12
+                        opacity: eventListLayout.isToday ? 1.0 : 0.3
+                        radius: 1
+                        width: 2
                     }
-
                     Text {
-                        text: calendar.formatEventLabel(modelData)
+                        Layout.fillWidth: true
                         color: Config.textColor
+                        elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodySmall.size
                         font.weight: eventListLayout.isToday ? Font.DemiBold : Config.type.bodySmall.weight
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
+                        text: calendar.formatEventLabel(modelData)
                     }
                 }
             }
-
             Text {
-                text: "No events"
                 color: Config.textMuted
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size
+                text: "No events"
                 visible: !calendar.dayEvents || calendar.dayEvents.length === 0
             }
         }

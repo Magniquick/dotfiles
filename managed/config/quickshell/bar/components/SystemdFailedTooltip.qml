@@ -6,17 +6,14 @@ import ".."
 
 ColumnLayout {
     id: root
-    spacing: Config.space.md
-    Layout.fillWidth: true
 
-    property var systemUnits: []
-    property var userUnits: []
-
-    readonly property int systemCount: Array.isArray(root.systemUnits) ? root.systemUnits.length : 0
-    readonly property int userCount: Array.isArray(root.userUnits) ? root.userUnits.length : 0
-    readonly property int totalCount: root.systemCount + root.userCount
     readonly property bool showSystem: root.systemCount > 0
     readonly property bool showUser: root.userCount > 0
+    readonly property int systemCount: Array.isArray(root.systemUnits) ? root.systemUnits.length : 0
+    property var systemUnits: []
+    readonly property int totalCount: root.systemCount + root.userCount
+    readonly property int userCount: Array.isArray(root.userUnits) ? root.userUnits.length : 0
+    property var userUnits: []
 
     function formatStatus(unitObj) {
         const active = unitObj && unitObj.active ? String(unitObj.active) : "";
@@ -26,226 +23,221 @@ ColumnLayout {
         return active !== "" ? active : sub;
     }
 
+    Layout.fillWidth: true
+    spacing: Config.space.md
+
     RowLayout {
         Layout.fillWidth: true
         spacing: Config.space.md
 
         Item {
-            width: Config.space.xxl * 2
             height: Config.space.xxl * 2
+            width: Config.space.xxl * 2
 
             Text {
                 anchors.centerIn: parent
-                text: ""
+                color: Config.red
                 font.family: Config.iconFontFamily
                 font.pixelSize: Config.type.headlineLarge.size
-                color: Config.red
+                text: ""
             }
         }
-
         ColumnLayout {
             spacing: Config.space.none
 
             Text {
-                text: root.totalCount + (root.totalCount === 1 ? " Failed unit" : " Failed units")
+                Layout.fillWidth: true
                 color: Config.textColor
+                elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
                 font.weight: Font.Bold
-                elide: Text.ElideRight
-                Layout.fillWidth: true
+                text: root.totalCount + (root.totalCount === 1 ? " Failed unit" : " Failed units")
             }
-
             Text {
-                text: "system: " + root.systemCount + " • user: " + root.userCount
+                Layout.fillWidth: true
                 color: Config.textMuted
+                elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
-                elide: Text.ElideRight
-                Layout.fillWidth: true
+                text: "system: " + root.systemCount + " • user: " + root.userCount
             }
         }
-
         Item {
             Layout.fillWidth: true
         }
     }
-
     TooltipCard {
         content: [
             ColumnLayout {
-                spacing: Config.space.sm
                 Layout.fillWidth: true
+                spacing: Config.space.sm
 
                 Flickable {
                     id: listFlick
-                    clip: true
+
                     Layout.fillWidth: true
-                    implicitHeight: Math.min(contentHeight, 260)
-                    contentWidth: width
+                    clip: true
                     contentHeight: listColumn.implicitHeight
+                    contentWidth: width
+                    implicitHeight: Math.min(contentHeight, 260)
                     interactive: contentHeight > height
 
-                    ScrollIndicator.vertical: ScrollIndicator {}
+                    ScrollIndicator.vertical: ScrollIndicator {
+                    }
 
                     Column {
                         id: listColumn
-                        width: listFlick.width
+
                         spacing: Config.space.sm
+                        width: listFlick.width
 
                         Text {
-                            text: "No failed units."
                             color: Config.textMuted
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.bodySmall.size
+                            text: "No failed units."
                             visible: root.totalCount === 0
                         }
-
                         Column {
-                            width: listColumn.width
                             spacing: Config.space.sm
                             visible: root.showSystem
+                            width: listColumn.width
 
                             Text {
-                                text: "SYSTEM"
                                 color: Config.primary
                                 font.family: Config.fontFamily
+                                font.letterSpacing: 1.5
                                 font.pixelSize: Config.type.labelSmall.size
                                 font.weight: Font.Black
-                                font.letterSpacing: 1.5
+                                text: "SYSTEM"
                             }
-
                             Repeater {
                                 model: root.systemUnits
+
                                 delegate: RowLayout {
                                     required property var modelData
-                                    spacing: Config.space.md
-                                    width: listColumn.width
                                     readonly property int stripeWidth: Config.spaceHalfXs
 
+                                    spacing: Config.space.md
+                                    width: listColumn.width
+
                                     Rectangle {
-                                        width: stripeWidth
-                                        radius: Config.shape.corner.xs
-                                        color: Config.red
-                                        opacity: 0.8
                                         Layout.fillHeight: true
                                         Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
+                                        color: Config.red
+                                        opacity: 0.8
+                                        radius: Config.shape.corner.xs
+                                        width: stripeWidth
                                     }
-
                                     ColumnLayout {
-                                        spacing: Config.space.none
                                         Layout.fillWidth: true
+                                        spacing: Config.space.none
 
                                         Text {
-                                            text: modelData.unit || ""
+                                            Layout.fillWidth: true
                                             color: Config.red
+                                            elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
                                             font.weight: Font.Medium
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
+                                            text: modelData.unit || ""
                                         }
-
                                         Text {
-                                            text: modelData.description || ""
+                                            Layout.fillWidth: true
                                             color: Config.textMuted
+                                            elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
+                                            maximumLineCount: 2
+                                            text: modelData.description || ""
                                             visible: text !== ""
                                             wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
                                         }
                                     }
-
                                     Text {
-                                        text: root.formatStatus(modelData)
                                         color: Config.textMuted
+                                        elide: Text.ElideRight
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size
                                         opacity: 0.8
+                                        text: root.formatStatus(modelData)
                                         visible: text !== ""
-                                        elide: Text.ElideRight
                                     }
                                 }
                             }
                         }
-
                         Rectangle {
-                            width: listColumn.width
-                            height: 1
                             color: Config.outline
+                            height: 1
                             opacity: 0.18
                             visible: root.showSystem && root.showUser
-                        }
-
-                        Column {
                             width: listColumn.width
+                        }
+                        Column {
                             spacing: Config.space.sm
                             visible: root.showUser
+                            width: listColumn.width
 
                             Text {
-                                text: "USER"
                                 color: Config.primary
                                 font.family: Config.fontFamily
+                                font.letterSpacing: 1.5
                                 font.pixelSize: Config.type.labelSmall.size
                                 font.weight: Font.Black
-                                font.letterSpacing: 1.5
+                                text: "USER"
                             }
-
                             Repeater {
                                 model: root.userUnits
+
                                 delegate: RowLayout {
                                     required property var modelData
-                                    spacing: Config.space.md
-                                    width: listColumn.width
                                     readonly property int stripeWidth: Config.spaceHalfXs
 
+                                    spacing: Config.space.md
+                                    width: listColumn.width
+
                                     Rectangle {
-                                        width: stripeWidth
-                                        radius: Config.shape.corner.xs
-                                        color: Config.red
-                                        opacity: 0.8
                                         Layout.fillHeight: true
                                         Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
+                                        color: Config.red
+                                        opacity: 0.8
+                                        radius: Config.shape.corner.xs
+                                        width: stripeWidth
                                     }
-
                                     ColumnLayout {
-                                        spacing: Config.space.none
                                         Layout.fillWidth: true
+                                        spacing: Config.space.none
 
                                         Text {
-                                            text: modelData.unit || ""
+                                            Layout.fillWidth: true
                                             color: Config.red
+                                            elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
                                             font.weight: Font.Medium
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
+                                            text: modelData.unit || ""
                                         }
-
                                         Text {
-                                            text: modelData.description || ""
+                                            Layout.fillWidth: true
                                             color: Config.textMuted
+                                            elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
+                                            maximumLineCount: 2
+                                            text: modelData.description || ""
                                             visible: text !== ""
                                             wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
                                         }
                                     }
-
                                     Text {
-                                        text: root.formatStatus(modelData)
                                         color: Config.textMuted
+                                        elide: Text.ElideRight
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size
                                         opacity: 0.8
+                                        text: root.formatStatus(modelData)
                                         visible: text !== ""
-                                        elide: Text.ElideRight
                                     }
                                 }
                             }

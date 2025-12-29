@@ -6,26 +6,24 @@ import QtQuick.Controls
 ShellRoot {
     id: root
 
-    property bool powermenuVisible: false
-    property string powermenuSelection: ""
-    property string powermenuHover: ""
-
     readonly property var palette: ColorPalette.palette
+    property string powermenuHover: ""
+    property string powermenuSelection: ""
+    property bool powermenuVisible: false
 
+    function onButton(action) {
+        if (powermenuSelection === action) {
+            powermenuVisible = false;
+            runAction(action);
+            resetState();
+        } else {
+            powermenuSelection = action;
+        }
+    }
     function resetState() {
         powermenuSelection = "";
         powermenuHover = "";
     }
-
-    function togglePowermenu() {
-        const next = !powermenuVisible;
-        if (next)
-            resetState(); // clear stale hover/selection before showing
-        powermenuVisible = next;
-        if (!next)
-            resetState();
-    }
-
     function runAction(action) {
         var cmd = [];
         if (action === "Poweroff")
@@ -46,49 +44,49 @@ ShellRoot {
         actionProcess.command = cmd;
         actionProcess.running = true;
     }
-
-    function onButton(action) {
-        if (powermenuSelection === action) {
-            powermenuVisible = false;
-            runAction(action);
+    function togglePowermenu() {
+        const next = !powermenuVisible;
+        if (next)
+            resetState(); // clear stale hover/selection before showing
+        powermenuVisible = next;
+        if (!next)
             resetState();
-        } else {
-            powermenuSelection = action;
-        }
     }
 
     Process {
         id: actionProcess
+
         running: false
     }
-
     IpcHandler {
-        target: "powermenu"
-        function toggle(): void {
-            root.togglePowermenu();
+        function hide(): void {
+            root.powermenuVisible = false;
+            root.resetState();
         }
         function show(): void {
             root.powermenuVisible = true;
             root.resetState();
         }
-        function hide(): void {
-            root.powermenuVisible = false;
-            root.resetState();
+        function toggle(): void {
+            root.togglePowermenu();
         }
-    }
 
+        target: "powermenu"
+    }
     Powermenu {
         id: powermenu
-        visible: powermenuVisible
-        targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+
         colors: palette
-        selection: powermenuSelection
         hoverAction: powermenuHover
+        selection: powermenuSelection
+        targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+        visible: powermenuVisible
+
+        onActionInvoked: actionName => onButton(actionName)
+        onHoverUpdated: actionName => powermenuHover = actionName
         onRequestClose: {
             powermenuVisible = false;
             resetState();
         }
-        onActionInvoked: actionName => onButton(actionName)
-        onHoverUpdated: actionName => powermenuHover = actionName
     }
 }

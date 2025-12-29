@@ -3,27 +3,28 @@ import "./modules"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Wayland
 
 PanelWindow {
     id: root
 
+    property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginTop + Config.moduleMarginBottom
     property var modelData
     property var targetScreen: modelData
-    property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginTop + Config.moduleMarginBottom
 
-    screen: root.targetScreen
-    anchors.top: true
+    WlrLayershell.layer: WlrLayer.Background
     anchors.left: true
     anchors.right: true
-    implicitHeight: Math.max(Config.barHeight, root.contentHeight)
-    exclusiveZone: implicitHeight
+    anchors.top: true
     color: "transparent"
+    exclusiveZone: implicitHeight
+    implicitHeight: Math.max(Config.barHeight, root.contentHeight)
+    screen: root.targetScreen
 
     Rectangle {
         anchors.fill: parent
         color: Config.barBackground
     }
-
     Item {
         id: content
 
@@ -38,13 +39,12 @@ PanelWindow {
             anchors.top: parent.top
             spacing: Config.moduleSpacing
 
-            StartMenuGroup {}
-
+            StartMenuGroup {
+            }
             WorkspaceGroup {
                 screen: root.targetScreen
             }
         }
-
         RowLayout {
             id: centerRow
 
@@ -52,9 +52,9 @@ PanelWindow {
             anchors.top: parent.top
             spacing: Config.moduleSpacing
 
-            MprisModule {}
+            MprisModule {
+            }
         }
-
         RowLayout {
             id: rightRow
 
@@ -62,16 +62,16 @@ PanelWindow {
             anchors.top: parent.top
             spacing: Config.moduleSpacing
 
-            ControlsGroup {}
-
-            WirelessGroup {}
-
-            BatteryModule {}
-
-            ToDoModule {}
-
-            ClockModule {}
-
+            ControlsGroup {
+            }
+            WirelessGroup {
+            }
+            BatteryModule {
+            }
+            ToDoModule {
+            }
+            ClockModule {
+            }
             PanelGroup {
                 parentWindow: root
             }

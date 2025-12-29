@@ -5,13 +5,9 @@ import Quickshell
 
 ShellRoot {
     LoggingCategory {
-        name: "quickshell.dbus.properties"
         defaultLogLevel: LoggingCategory.Critical
+        name: "quickshell.dbus.properties"
     }
 
-    Variants {
-        model: Quickshell.screens
-
-        delegate: BarWindow {}
-    }
+    // Temporarily disable the bar; no windows will be created.
 }
