@@ -9,7 +9,7 @@ import Quickshell.Io
 ModuleContainer {
     id: root
 
-    property color iconColor: Config.accent
+    property color iconColor: Config.m3.primary
     property var iconMap: ({
             "notification": "󱅫",
             "none": "",
@@ -64,7 +64,7 @@ ModuleContainer {
                     Text {
                         Layout.maximumWidth: 320
                         Layout.preferredWidth: 260
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         font.family: Config.fontFamily
                         font.pixelSize: Config.fontSize
                         text: root.statusTooltip

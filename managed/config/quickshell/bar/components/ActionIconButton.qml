@@ -13,7 +13,7 @@ ActionButtonBase {
 
     Text {
         anchors.centerIn: parent
-        color: root.active ? Config.textColor : Config.textMuted
+        color: root.active ? Config.m3.onSurface : Config.m3.onSurfaceVariant
         font.family: Config.iconFontFamily
         font.pixelSize: Config.type.titleMedium.size
         text: root.icon

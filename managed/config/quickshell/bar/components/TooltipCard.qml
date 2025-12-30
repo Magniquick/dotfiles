@@ -6,7 +6,7 @@ Rectangle {
     id: root
 
     property color backgroundColor: Config.moduleBackgroundMuted
-    property color borderColor: Config.outline
+    property color borderColor: Config.m3.outline
     property alias content: contentColumn.data
     property bool outlined: false
     property int padding: Config.space.md

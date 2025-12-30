@@ -5,15 +5,15 @@ Rectangle {
     id: root
 
     property bool active: false
-    property color activeColor: Config.primary
-    property color borderColor: Config.outline
+    property color activeColor: Config.m3.primary
+    property color borderColor: Config.m3.outline
     default property alias content: contentItem.data
     property real disabledOpacity: Config.state.disabledOpacity
-    property color hoverColor: Config.surfaceContainerHigh
+    property color hoverColor: Config.m3.surfaceContainerHigh
     property real hoverScale: 1.02
     property bool hoverScaleEnabled: false
     property bool hovered: false
-    property color inactiveColor: Config.surfaceVariant
+    property color inactiveColor: Config.m3.surfaceVariant
     property bool pressed: false
 
     signal clicked
@@ -52,7 +52,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         antialiasing: true
-        color: Config.onSurface
+        color: Config.m3.onSurface
         opacity: root.pressed ? Config.state.pressedOpacity : (root.hovered ? Config.state.hoverOpacity : 0)
         radius: parent.radius
         visible: root.enabled

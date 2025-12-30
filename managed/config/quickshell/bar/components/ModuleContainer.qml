@@ -72,7 +72,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 0
         antialiasing: true
-        border.color: Config.outline
+        border.color: Config.m3.outline
         border.width: 0
         color: "transparent"
         radius: Math.min(width, height) / 2
@@ -99,7 +99,7 @@ Rectangle {
         id: defaultTooltipContent
 
         Text {
-            color: Config.textColor
+            color: Config.m3.onSurface
             font.family: Config.fontFamily
             font.pixelSize: Config.type.bodyMedium.size
             font.weight: Config.type.bodyMedium.weight

@@ -13,15 +13,15 @@ ModuleContainer {
 
     function batteryColor(device) {
         if (!device || !device.ready)
-            return Config.textColor;
+            return Config.m3.onSurface;
 
         if (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
-            return Config.green;
+            return Config.m3.success;
 
         if (device.state === UPowerDeviceState.Discharging || device.state === UPowerDeviceState.PendingDischarge)
-            return Config.red;
+            return Config.m3.error;
 
-        return Config.textColor;
+        return Config.m3.onSurface;
     }
     function batteryIcon(device) {
         if (!device || !device.ready)
@@ -206,14 +206,14 @@ ModuleContainer {
                     spacing: Config.space.none
 
                     Text {
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineMedium.size
                         font.weight: Font.Bold
                         text: root.percentLabel(UPower.displayDevice)
                     }
                     Text {
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.stateLabel(UPower.displayDevice)
@@ -238,7 +238,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black

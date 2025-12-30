@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=WhatsApp Web
 Comment=Open WhatsApp Web in Brave as a standalone app
-Exec=/home/magni/.local/bin/custom/whatsapp.sh
+Exec=/home/magni/.local/bin/whatsapp.sh
 Icon=whatsapp
 Terminal=false
 Type=Application

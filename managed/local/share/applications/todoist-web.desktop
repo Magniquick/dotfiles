@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Todoist
 Comment=Open Todoist in Brave as a standalone app
-Exec=/home/magni/.local/bin/custom/todoist.sh
+Exec=/home/magni/.local/bin/todoist.sh
 Icon=todoist
 Terminal=false
 Type=Application

@@ -2,8 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import ".."
-import "./JsonUtils.js" as JsonUtils
 
 Item {
     id: calendar
@@ -27,6 +27,20 @@ Item {
 
     signal dataLoaded
 
+    function applyCalendarFromAdapter() {
+        calendar.applyCalendarData({
+            "status": calendarAdapter.status,
+            "generatedAt": calendarAdapter.generatedAt,
+            "eventsByDay": calendarAdapter.eventsByDay
+        });
+        calendar.dataLoaded();
+    }
+    function reloadEventsFile() {
+        if (calendar.eventsPath === "")
+            return;
+        eventsFile.reload();
+        calendar.applyCalendarFromAdapter();
+    }
     function applyCalendarData(payload) {
         if (!payload || typeof payload !== "object") {
             calendar.eventsByDay = ({});
@@ -94,7 +108,7 @@ Item {
         if (calendar.refreshCommand !== "")
             refreshRunner.trigger();
         else
-            eventsRunner.trigger();
+            calendar.reloadEventsFile();
     }
     function updateDayEvents() {
         const key = calendar.dayKey(calendar.selectedDate);
@@ -111,6 +125,7 @@ Item {
         if (calendar.refreshCommand !== "")
             refreshRunner.trigger();
         calendar.updateDayEvents();
+        calendar.reloadEventsFile();
     }
     onActiveChanged: {
         if (!calendar.active)
@@ -118,7 +133,7 @@ Item {
         if (calendar.refreshCommand !== "")
             refreshRunner.trigger();
         else
-            eventsRunner.trigger();
+            calendar.reloadEventsFile();
     }
     onCurrentDateChanged: {
         calendar.selectedDate = new Date(calendar.currentDate.getTime());
@@ -136,19 +151,27 @@ Item {
 
         onRan: function () {
             if (calendar.active)
-                eventsRunner.trigger();
+                calendar.reloadEventsFile();
         }
     }
-    CommandRunner {
-        id: eventsRunner
+    FileView {
+        id: eventsFile
 
-        command: calendar.eventsPath !== "" ? "cat " + calendar.eventsPath : ""
-        enabled: true
-        intervalMs: 0
+        path: calendar.eventsPath
+        watchChanges: true
+        blockLoading: true
 
-        onRan: function (output) {
-            calendar.applyCalendarData(JsonUtils.parseObject(output));
-            calendar.dataLoaded();
+        onFileChanged: {
+            reload();
+            calendar.applyCalendarFromAdapter();
+        }
+
+        JsonAdapter {
+            id: calendarAdapter
+
+            property string status: ""
+            property string generatedAt: ""
+            property var eventsByDay: ({})
         }
     }
     ColumnLayout {
@@ -194,14 +217,14 @@ Item {
                         spacing: Config.space.xs
 
                         Text {
-                            color: Config.textColor
+                            color: Config.m3.onSurface
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.headlineSmall.size
                             font.weight: Font.Bold
                             text: Qt.formatDateTime(monthDelegate.viewDate, "MMMM")
                         }
                         Text {
-                            color: Config.textMuted
+                            color: Config.m3.onSurfaceVariant
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.headlineSmall.size
                             font.weight: Font.ExtraLight
@@ -226,7 +249,7 @@ Item {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    color: Config.textMuted
+                                    color: Config.m3.onSurfaceVariant
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.labelSmall.size
                                     font.weight: Config.type.labelSmall.weight
@@ -260,7 +283,7 @@ Item {
                                 // Event Filled Circle
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    color: Config.green
+                                    color: Config.m3.success
                                     height: parent.implicitHeight - Config.space.xs
                                     radius: width / 2
                                     visible: dayDelegate.inMonth && !dayDelegate.isToday && calendar.markerCount(dayDelegate.dateObj) > 0
@@ -270,7 +293,7 @@ Item {
                                 // Today Filled Circle
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    color: Config.primary
+                                    color: Config.m3.primary
                                     height: parent.implicitHeight - Config.space.xs
                                     radius: width / 2
                                     visible: dayDelegate.isToday
@@ -280,7 +303,7 @@ Item {
                                 // Selection Outline
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    border.color: Config.primary
+                                    border.color: Config.m3.primary
                                     border.width: 2
                                     color: "transparent"
                                     height: parent.implicitHeight
@@ -290,7 +313,7 @@ Item {
                                 }
                                 Text {
                                     anchors.centerIn: parent
-                                    color: dayDelegate.isToday ? Config.onPrimary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.m3.onSuccess : Config.textColor)
+                                    color: dayDelegate.isToday ? Config.m3.onPrimary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.m3.onSuccess : Config.m3.onSurface)
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodyMedium.size
                                     font.weight: Config.type.bodyMedium.weight
@@ -388,7 +411,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: Config.outline
+            color: Config.m3.outline
             opacity: 0.18
         }
         ColumnLayout {
@@ -402,7 +425,7 @@ Item {
 
             Text {
                 Layout.bottomMargin: Config.space.none
-                color: Config.primary
+                color: Config.m3.primary
                 font.family: Config.fontFamily
                 font.letterSpacing: 1.5
                 font.pixelSize: Config.type.labelSmall.size
@@ -421,7 +444,7 @@ Item {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
-                        color: eventListLayout.isToday ? Config.primary : Config.outline
+                        color: eventListLayout.isToday ? Config.m3.primary : Config.m3.outline
                         height: 12
                         opacity: eventListLayout.isToday ? 1.0 : 0.3
                         radius: 1
@@ -429,7 +452,7 @@ Item {
                     }
                     Text {
                         Layout.fillWidth: true
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodySmall.size
@@ -439,7 +462,7 @@ Item {
                 }
             }
             Text {
-                color: Config.textMuted
+                color: Config.m3.onSurfaceVariant
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size
                 text: "No events"

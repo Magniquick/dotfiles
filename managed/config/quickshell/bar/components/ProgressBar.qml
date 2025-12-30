@@ -5,8 +5,8 @@ Item {
     id: root
 
     property int barHeight: 6
-    property color fillColor: Config.primary
-    property color trackColor: Config.surfaceVariant
+    property color fillColor: Config.m3.primary
+    property color trackColor: Config.m3.surfaceVariant
     property real value: 0
 
     implicitHeight: root.barHeight

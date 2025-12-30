@@ -1,7 +1,0 @@
-; >>> Variables and constants
-; ---------------------------
-(include "colors.yuck")
-
-
-; >> Toggleable windows
-(include "windows/powermenu.yuck")

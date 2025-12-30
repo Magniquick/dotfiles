@@ -31,7 +31,7 @@ Rectangle {
         id: labelText
 
         anchors.centerIn: parent
-        color: root.urgent ? Config.warn : (root.active ? Config.accent : Config.textMuted)
+        color: root.urgent ? Config.m3.warning : (root.active ? Config.m3.primary : Config.m3.onSurfaceVariant)
         font.bold: root.active
         font.family: root.fontFamily
         font.pixelSize: root.fontSize

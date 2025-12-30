@@ -36,7 +36,7 @@ ColumnLayout {
 
             Text {
                 anchors.centerIn: parent
-                color: Config.red
+                color: Config.m3.error
                 font.family: Config.iconFontFamily
                 font.pixelSize: Config.type.headlineLarge.size
                 text: ""
@@ -47,7 +47,7 @@ ColumnLayout {
 
             Text {
                 Layout.fillWidth: true
-                color: Config.textColor
+                color: Config.m3.onSurface
                 elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
@@ -56,7 +56,7 @@ ColumnLayout {
             }
             Text {
                 Layout.fillWidth: true
-                color: Config.textMuted
+                color: Config.m3.onSurfaceVariant
                 elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
@@ -93,7 +93,7 @@ ColumnLayout {
                         width: listFlick.width
 
                         Text {
-                            color: Config.textMuted
+                            color: Config.m3.onSurfaceVariant
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.bodySmall.size
                             text: "No failed units."
@@ -105,7 +105,7 @@ ColumnLayout {
                             width: listColumn.width
 
                             Text {
-                                color: Config.primary
+                                color: Config.m3.primary
                                 font.family: Config.fontFamily
                                 font.letterSpacing: 1.5
                                 font.pixelSize: Config.type.labelSmall.size
@@ -125,7 +125,7 @@ ColumnLayout {
                                     Rectangle {
                                         Layout.fillHeight: true
                                         Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
-                                        color: Config.red
+                                        color: Config.m3.error
                                         opacity: 0.8
                                         radius: Config.shape.corner.xs
                                         width: stripeWidth
@@ -136,7 +136,7 @@ ColumnLayout {
 
                                         Text {
                                             Layout.fillWidth: true
-                                            color: Config.red
+                                            color: Config.m3.error
                                             elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
@@ -145,7 +145,7 @@ ColumnLayout {
                                         }
                                         Text {
                                             Layout.fillWidth: true
-                                            color: Config.textMuted
+                                            color: Config.m3.onSurfaceVariant
                                             elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
@@ -156,7 +156,7 @@ ColumnLayout {
                                         }
                                     }
                                     Text {
-                                        color: Config.textMuted
+                                        color: Config.m3.onSurfaceVariant
                                         elide: Text.ElideRight
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size
@@ -168,7 +168,7 @@ ColumnLayout {
                             }
                         }
                         Rectangle {
-                            color: Config.outline
+                            color: Config.m3.outline
                             height: 1
                             opacity: 0.18
                             visible: root.showSystem && root.showUser
@@ -180,7 +180,7 @@ ColumnLayout {
                             width: listColumn.width
 
                             Text {
-                                color: Config.primary
+                                color: Config.m3.primary
                                 font.family: Config.fontFamily
                                 font.letterSpacing: 1.5
                                 font.pixelSize: Config.type.labelSmall.size
@@ -200,7 +200,7 @@ ColumnLayout {
                                     Rectangle {
                                         Layout.fillHeight: true
                                         Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
-                                        color: Config.red
+                                        color: Config.m3.error
                                         opacity: 0.8
                                         radius: Config.shape.corner.xs
                                         width: stripeWidth
@@ -211,7 +211,7 @@ ColumnLayout {
 
                                         Text {
                                             Layout.fillWidth: true
-                                            color: Config.red
+                                            color: Config.m3.error
                                             elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
@@ -220,7 +220,7 @@ ColumnLayout {
                                         }
                                         Text {
                                             Layout.fillWidth: true
-                                            color: Config.textMuted
+                                            color: Config.m3.onSurfaceVariant
                                             elide: Text.ElideRight
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
@@ -231,7 +231,7 @@ ColumnLayout {
                                         }
                                     }
                                     Text {
-                                        color: Config.textMuted
+                                        color: Config.m3.onSurfaceVariant
                                         elide: Text.ElideRight
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size

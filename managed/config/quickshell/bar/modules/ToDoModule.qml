@@ -20,7 +20,7 @@ ModuleContainer {
 
     content: [
         Text {
-            color: Config.lavender
+            color: Config.m3.tertiary
             font.family: Config.iconFontFamily
             font.pixelSize: Config.iconSize
             text: "󰄭"

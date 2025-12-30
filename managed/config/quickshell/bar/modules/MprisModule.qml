@@ -212,7 +212,7 @@ ModuleContainer {
                     }
                     Text {
                         anchors.centerIn: parent
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.iconFontFamily
                         font.pixelSize: Config.type.headlineLarge.size
                         text: ""
@@ -234,7 +234,7 @@ ModuleContainer {
                         Text {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            color: Config.textColor
+                            color: Config.m3.onSurface
                             elide: Text.ElideRight
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.titleLarge.size
@@ -244,7 +244,7 @@ ModuleContainer {
                         Text {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            color: Config.textMuted
+                            color: Config.m3.onSurfaceVariant
                             elide: Text.ElideRight
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.labelMedium.size
@@ -254,7 +254,7 @@ ModuleContainer {
                     LevelSlider {
                         Layout.fillWidth: true
                         enabled: root.activePlayer && root.activePlayer.canSeek && root.lengthSeconds(root.activePlayer) > 0
-                        fillColor: Config.primary
+                        fillColor: Config.m3.primary
                         maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
                         minimum: 0
                         value: root.positionSeconds(root.activePlayer)
@@ -269,7 +269,7 @@ ModuleContainer {
                         }
                     }
                     Text {
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelSmall.size
                         text: {

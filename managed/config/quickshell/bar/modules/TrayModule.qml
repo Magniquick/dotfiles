@@ -114,7 +114,7 @@ Item {
 
                     contentComponent: Component {
                         Text {
-                            color: Config.textColor
+                            color: Config.m3.onSurface
                             font.family: Config.fontFamily
                             font.pixelSize: Config.fontSize
                             text: modelData.tooltipTitle || modelData.tooltipDescription || ""

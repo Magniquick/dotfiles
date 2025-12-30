@@ -28,7 +28,10 @@ PanelWindow {
     Item {
         id: content
 
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.top: undefined
         anchors.margins: Config.barPadding
         implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
 

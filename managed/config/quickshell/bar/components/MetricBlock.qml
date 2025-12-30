@@ -5,25 +5,25 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    property color accentColor: Config.accent
+    property color accentColor: Config.m3.primary
     property color backgroundColor: Config.moduleBackgroundHover
     property int barHeight: Math.max(1, Config.space.xs)
     property color borderColor: Config.tooltipBorder
     property int borderWidth: Config.tooltipBorderWidth
     property color chipColor: Config.moduleBackgroundMuted
     property string chipText: ""
-    property color chipTextColor: Config.textColor
+    property color chipTextColor: Config.m3.onSurface
     property real fillRatio: 0
     readonly property int gutter: Config.spaceHalfXs
     property string icon: ""
     property string label: ""
-    property color labelColor: Config.textMuted
+    property color labelColor: Config.m3.onSurfaceVariant
     property int padding: Config.space.sm
     property string secondaryValue: ""
     property bool showFill: true
     property string tertiaryValue: ""
     property string value: ""
-    property color valueColor: Config.textColor
+    property color valueColor: Config.m3.onSurface
 
     antialiasing: true
     border.color: root.borderColor
@@ -71,7 +71,7 @@ Rectangle {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.preferredHeight: Math.max(Config.type.labelSmall.line, chipTextMetrics.implicitHeight + Config.spaceHalfXs)
                 Layout.preferredWidth: chipTextMetrics.implicitWidth + Config.space.sm
-                border.color: Qt.rgba(root.chipColor.r, root.chipColor.g, root.chipColor.b, 0.24)
+                border.color: Qt.alpha(root.chipColor, 0.24)
                 border.width: 1
                 color: root.chipColor
                 radius: Config.shape.corner.xs

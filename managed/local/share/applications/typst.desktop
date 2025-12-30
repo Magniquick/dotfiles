@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Typst
 Comment=Open Typst webapp
-Exec=/home/magni/.local/bin/custom/typst.sh
+Exec=/home/magni/.local/bin/typst.sh
 Icon=typst
 Terminal=false
 Type=Application

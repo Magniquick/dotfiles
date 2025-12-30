@@ -15,7 +15,7 @@ ActionButtonBase {
         id: label
 
         anchors.centerIn: parent
-        color: root.active ? Config.textColor : Config.textMuted
+        color: root.active ? Config.m3.onSurface : Config.m3.onSurfaceVariant
         font.family: Config.fontFamily
         font.pixelSize: Config.type.labelMedium.size
         font.weight: Config.type.labelMedium.weight

@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import Quickshell
+import Quickshell.Io
 import ".."
 import "./JsonUtils.js" as JsonUtils
 
@@ -28,7 +29,7 @@ ColumnLayout {
     readonly property int minorSpace: Config.spaceHalfXs
     property bool parseError: false
     property var rawData: ({})
-    readonly property var taskColors: [Config.lavender, Config.pink, Config.flamingo, Config.primary, Config.yellow, Config.green]
+    readonly property var taskColors: [Config.m3.tertiary, Config.m3.secondary, Config.m3.flamingo, Config.m3.primary, Config.m3.warning, Config.m3.success]
     property var tasks: []
     property bool usingCache: false
 
@@ -71,6 +72,23 @@ ColumnLayout {
         if (projectSelector.popup.visible)
             projectSelectorCloseTimer.restart();
     }
+    function loadCache() {
+        if (root.cachePath === "")
+            return;
+        cacheFile.reload();
+        const wrapper = JsonUtils.parseObject(cacheFile.text());
+        const cached = wrapper && wrapper.payload ? wrapper.payload : null;
+        if (cached && typeof cached === "object") {
+            root.applyTodoistData(cached, true);
+            const cachedAt = wrapper.cachedAt ? new Date(wrapper.cachedAt) : null;
+            if (cachedAt && !isNaN(cachedAt.getTime()))
+                root.lastUpdated = Qt.formatDateTime(cachedAt, "hh:mm ap");
+        } else {
+            root.usingCache = false;
+            if (root.parseError && (!root.rawData || Object.keys(root.rawData).length === 0))
+                root.tasks = [];
+        }
+    }
     function shSingleQuote(value) {
         // Wrap for POSIX shell single-quoted string: ' -> '\''.
         return String(value).replace(/'/g, "'\\''");
@@ -93,7 +111,7 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Config.space.sm
 
-    Component.onCompleted: cacheReader.trigger()
+    Component.onCompleted: root.loadCache()
     onVisibleChanged: {
         if (!visible && projectSelector.popup.visible)
             projectSelector.popup.close();
@@ -143,32 +161,19 @@ ColumnLayout {
                 cacheWriter.trigger();
             } else {
                 root.parseError = true;
-                cacheReader.trigger();
+                root.loadCache();
             }
             root.loading = false;
         }
     }
-    CommandRunner {
-        id: cacheReader
+    FileView {
+        id: cacheFile
 
-        command: root.cachePath !== "" ? ("cat \"" + root.cachePath + "\"") : ""
-        enabled: root.cachePath !== ""
-        intervalMs: 0
+        path: root.cachePath
+        watchChanges: true
+        blockLoading: true
 
-        onRan: function (output) {
-            const wrapper = JsonUtils.parseObject(output);
-            const cached = wrapper && wrapper.payload ? wrapper.payload : null;
-            if (cached && typeof cached === "object") {
-                root.applyTodoistData(cached, true);
-                const cachedAt = wrapper.cachedAt ? new Date(wrapper.cachedAt) : null;
-                if (cachedAt && !isNaN(cachedAt.getTime()))
-                    root.lastUpdated = Qt.formatDateTime(cachedAt, "hh:mm ap");
-            } else {
-                root.usingCache = false;
-                if (root.parseError && (!root.rawData || Object.keys(root.rawData).length === 0))
-                    root.tasks = [];
-            }
-        }
+        onFileChanged: root.loadCache()
     }
     CommandRunner {
         id: cacheWriter
@@ -203,7 +208,7 @@ ColumnLayout {
 
             Text {
                 anchors.centerIn: parent
-                color: Config.lavender
+                color: Config.m3.tertiary
                 font.pixelSize: Config.type.headlineLarge.size
                 text: "󰄭"
             }
@@ -212,14 +217,14 @@ ColumnLayout {
             spacing: Config.space.none
 
             Text {
-                color: Config.textColor
+                color: Config.m3.onSurface
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
                 font.weight: Font.Bold
                 text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
             }
             Text {
-                color: Config.textMuted
+                color: Config.m3.onSurfaceVariant
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
                 text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
@@ -254,7 +259,7 @@ ColumnLayout {
                 Text {
                     id: selectorLabel
 
-                    color: Config.lavender
+                    color: Config.m3.tertiary
                     elide: Text.ElideRight
                     font.family: Config.fontFamily
                     font.letterSpacing: root.minorSpace
@@ -267,7 +272,7 @@ ColumnLayout {
                 Text {
                     id: dropdownIndicator
 
-                    color: Config.lavender
+                    color: Config.m3.tertiary
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.labelMedium.size
                     rotation: projectSelector.popup.visible ? 90 : 0
@@ -294,7 +299,7 @@ ColumnLayout {
                 background: Rectangle {
                     anchors.fill: parent
                     anchors.margins: root.minorSpace
-                    color: delegateRoot.highlighted ? Config.primary : (delegateRoot.hovered ? Config.surfaceContainerHigh : "transparent")
+                    color: delegateRoot.highlighted ? Config.m3.primary : (delegateRoot.hovered ? Config.m3.surfaceContainerHigh : "transparent")
                     radius: Config.shape.corner.xs
 
                     Behavior on color {
@@ -304,7 +309,7 @@ ColumnLayout {
                     }
                 }
                 contentItem: Text {
-                    color: delegateRoot.highlighted ? Config.onPrimary : Config.textColor
+                    color: delegateRoot.highlighted ? Config.m3.onPrimary : Config.m3.onSurface
                     elide: Text.ElideRight
                     font: projectSelector.font
                     leftPadding: Config.space.sm
@@ -325,15 +330,15 @@ ColumnLayout {
                 y: projectSelector.height + Config.space.xs
 
                 background: Rectangle {
-                    border.color: Config.outline
+                    border.color: Config.m3.outline
                     border.width: 1
-                    color: Config.surface
+                    color: Config.m3.surface
                     layer.enabled: true
                     radius: Config.shape.corner.md
 
                     layer.effect: MultiEffect {
                         shadowBlur: 0.4
-                        shadowColor: Qt.rgba(0, 0, 0, 0.2)
+                        shadowColor: Qt.alpha(Config.m3.shadow, 0.2)
                         shadowEnabled: true
                         shadowVerticalOffset: 2
                     }
@@ -467,7 +472,7 @@ ColumnLayout {
                     }
                     Text {
                         Layout.fillWidth: true
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelSmall.size
@@ -489,7 +494,7 @@ ColumnLayout {
 
                 // Complete Button
                 Text {
-                    color: Config.green
+                    color: Config.m3.success
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.titleSmall.size
                     font.weight: Font.Black
@@ -514,7 +519,7 @@ ColumnLayout {
             }
         }
         Text {
-            color: Config.textMuted
+            color: Config.m3.onSurfaceVariant
             font.family: Config.fontFamily
             font.italic: true
             font.pixelSize: Config.type.bodySmall.size
@@ -537,19 +542,19 @@ ColumnLayout {
 
                 Layout.fillWidth: true
                 bottomPadding: Math.round(Config.space.md / 2)
-                color: Config.textColor
+                color: Config.m3.onSurface
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size
                 leftPadding: Config.space.sm
                 placeholderText: "Start something new..."
-                placeholderTextColor: Config.textMuted
+                placeholderTextColor: Config.m3.onSurfaceVariant
                 rightPadding: Config.space.sm
                 topPadding: Math.round(Config.space.md / 2)
 
                 background: Rectangle {
-                    border.color: taskInput.activeFocus ? Config.lavender : "transparent"
+                    border.color: taskInput.activeFocus ? Config.m3.tertiary : "transparent"
                     border.width: 1
-                    color: Config.surfaceVariant
+                    color: Config.m3.surfaceVariant
                     opacity: 0.4
                     radius: Config.shape.corner.sm
                 }
@@ -568,7 +573,7 @@ ColumnLayout {
                 flat: true
 
                 background: Rectangle {
-                    color: addButton.hovered ? Config.surfaceContainerHigh : "transparent"
+                    color: addButton.hovered ? Config.m3.surfaceContainerHigh : "transparent"
                     opacity: 0.6
                     radius: Config.shape.corner.xs
 
@@ -579,7 +584,7 @@ ColumnLayout {
                     }
                 }
                 contentItem: Text {
-                    color: Config.lavender
+                    color: Config.m3.tertiary
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black

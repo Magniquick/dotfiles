@@ -103,7 +103,7 @@ ModuleContainer {
             if (!wasWifiConnected)
                 root.resetTraffic();
             ipRunner.trigger();
-            trafficRunner.trigger();
+            root.readTrafficSample();
             root.iconText = root.iconForSignal();
             return true;
         }
@@ -246,7 +246,7 @@ ModuleContainer {
         statusRunner.trigger();
         wifiRunner.trigger();
         ipRunner.trigger();
-        trafficRunner.trigger();
+        root.readTrafficSample();
         if (root.connectionType === "ethernet" && root.connectionState === "connected") {
             root.subsystemCheckRequested = true;
             ethernetSubsystemRunner.trigger();
@@ -319,6 +319,17 @@ ModuleContainer {
             return;
         root.updateTrafficRates(parsed.rxBytes, parsed.txBytes, Date.now());
     }
+    function readTrafficSample() {
+        if (!root.deviceName)
+            return;
+        rxBytesFile.reload();
+        txBytesFile.reload();
+        const rx = rxBytesFile.text().trim();
+        const tx = txBytesFile.text().trim();
+        if (!rx || !tx)
+            return;
+        root.updateTraffic(rx + "\n" + tx);
+    }
     function updateTrafficRates(rxBytes, txBytes, now) {
         if (root.lastTrafficSampleMs > 0 && now > root.lastTrafficSampleMs) {
             const deltaSeconds = (now - root.lastTrafficSampleMs) / 1000;
@@ -343,7 +354,7 @@ ModuleContainer {
 
     content: [
         IconLabel {
-            color: root.connectionState === "connected" ? Config.flamingo : Config.textMuted
+            color: root.connectionState === "connected" ? Config.m3.flamingo : Config.m3.onSurfaceVariant
             text: root.iconText
         }
     ]
@@ -372,7 +383,7 @@ ModuleContainer {
 
                     Text {
                         anchors.centerIn: parent
-                        color: root.connectionState === "connected" ? Config.flamingo : Config.textMuted
+                        color: root.connectionState === "connected" ? Config.m3.flamingo : Config.m3.onSurfaceVariant
                         font.pixelSize: Config.type.headlineLarge.size
                         text: root.iconText
                     }
@@ -384,7 +395,7 @@ ModuleContainer {
                         id: connectionTitleText
 
                         Layout.fillWidth: true
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -394,7 +405,7 @@ ModuleContainer {
                     Text {
                         id: connectionSubtitleText
 
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.connectionLabel()
@@ -407,7 +418,7 @@ ModuleContainer {
             ProgressBar {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Config.space.xs
-                fillColor: Config.flamingo
+                fillColor: Config.m3.flamingo
                 trackColor: Config.moduleBackgroundMuted
                 value: root.signalPercent / 100
                 visible: root.connectionType === "wifi" && root.connectionState === "connected"
@@ -420,7 +431,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -461,7 +472,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -475,7 +486,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.pink
+                        accentColor: Config.m3.secondary
                         borderWidth: 0
                         icon: "󰕒"
                         label: "Up"
@@ -485,7 +496,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.green
+                        accentColor: Config.m3.success
                         borderWidth: 0
                         icon: "󰇚"
                         label: "Down"
@@ -548,14 +559,26 @@ ModuleContainer {
 
         onOutputChanged: root.updateIpDetails(output)
     }
-    CommandRunner {
-        id: trafficRunner
+    FileView {
+        id: rxBytesFile
 
-        command: root.deviceName ? "cat /sys/class/net/" + root.deviceName + "/statistics/rx_bytes /sys/class/net/" + root.deviceName + "/statistics/tx_bytes" : ""
-        enabled: root.tooltipActive && root.connectionType === "wifi" && root.connectionState === "connected" && root.deviceName !== ""
-        intervalMs: 1000
+        path: root.deviceName ? "/sys/class/net/" + root.deviceName + "/statistics/rx_bytes" : ""
+        blockLoading: true
+    }
+    FileView {
+        id: txBytesFile
 
-        onOutputChanged: root.updateTraffic(output)
+        path: root.deviceName ? "/sys/class/net/" + root.deviceName + "/statistics/tx_bytes" : ""
+        blockLoading: true
+    }
+    Timer {
+        id: trafficPoller
+
+        interval: 1000
+        repeat: true
+        running: root.tooltipActive && root.connectionType === "wifi" && root.connectionState === "connected" && root.deviceName !== ""
+
+        onTriggered: root.readTrafficSample()
     }
     CommandRunner {
         id: ethernetSubsystemRunner

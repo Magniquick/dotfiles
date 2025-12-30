@@ -10,19 +10,19 @@ ModuleContainer {
 
     property bool cameraActive: false
     property string cameraApps: ""
-    property color cameraColor: Config.yellow
+    property color cameraColor: Config.m3.warning
     property string cameraIcon: ""
     property bool locationActive: false
     property string locationApps: ""
-    property color locationColor: Config.lavender
+    property color locationColor: Config.m3.tertiary
     property string locationIcon: ""
     property bool micActive: false
     property string micApps: ""
-    property color micColor: Config.green
+    property color micColor: Config.m3.success
     property string micIcon: ""
     property bool screenActive: false
     property string screenApps: ""
-    property color screenColor: Config.accent
+    property color screenColor: Config.m3.primary
     property string screenIcon: "󰍹"
     readonly property string scriptPath: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "modules/privacy/privacy_dots.sh")
     property string statusTooltip: "Privacy: idle"
@@ -114,22 +114,22 @@ ModuleContainer {
                     InfoRow {
                         label: "Mic"
                         value: root.appLabel(root.micApps)
-                        valueColor: root.micActive ? root.micColor : Config.textMuted
+                        valueColor: root.micActive ? root.micColor : Config.m3.onSurfaceVariant
                     },
                     InfoRow {
                         label: "Camera"
                         value: root.appLabel(root.cameraApps)
-                        valueColor: root.cameraActive ? root.cameraColor : Config.textMuted
+                        valueColor: root.cameraActive ? root.cameraColor : Config.m3.onSurfaceVariant
                     },
                     InfoRow {
                         label: "Location"
                         value: root.appLabel(root.locationApps)
-                        valueColor: root.locationActive ? root.locationColor : Config.textMuted
+                        valueColor: root.locationActive ? root.locationColor : Config.m3.onSurfaceVariant
                     },
                     InfoRow {
                         label: "Screen"
                         value: root.appLabel(root.screenApps)
-                        valueColor: root.screenActive ? root.screenColor : Config.textMuted
+                        valueColor: root.screenActive ? root.screenColor : Config.m3.onSurfaceVariant
                     }
                 ]
             }

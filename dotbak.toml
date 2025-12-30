@@ -1,52 +1,20 @@
 [groups.config]
 base = "~/.config"
-entries = [
-    "atuin",
-    "brave-flags.conf",
-    "captive-browser.toml",
-    "dconf",
-    "dunst",
-    "environment.d",
-    "hypr",
-    "kitty",
-    "metapac",
-    "micro/colorschemes",
-    "micro/settings.json",
-    "nautilus",
-    "quickshell",
-    "rofi",
-    "swaync",
-    "sys64",
-    "systemd",
-    "user-dirs.dirs",
-    "user-dirs.locale",
-    "uwsm",
-    "vicinae",
-    "waybar",
-]
-
-[groups.local]
-base = "~/.local"
-entries = [
-    "bin/custom",
-    "share/applications",
-    "share/icons/hicolor/48x48/apps/typst.png",
-    "share/icons/hicolor/48x48/apps/whatsapp.png",
-]
-
-[groups.home]
-base = "~"
-entries = [
-    "Templates",
-]
+entries = ["atuin", "brave-flags.conf", "captive-browser.toml", "dconf", "dunst", "environment.d", "hypr", "kitty", "metapac", "micro/colorschemes", "micro/settings.json", "nautilus", "quickshell", "rofi", "swaync", "sys64", "systemd", "user-dirs.dirs", "user-dirs.locale", "uwsm", "vicinae", "waybar"]
 
 [groups.etc]
 base = "/etc"
-entries = [
-    "brave/policies/managed",
-]
+entries = ["brave/policies/managed"]
+
+[groups.home]
+base = "~"
+entries = ["Templates"]
+
+[groups.local]
+base = "~/.local"
+entries = ["bin", "share/applications", "share/icons/Adwaita"]
 
 [settings]
+dot_prefix_style = "underscore"
 managed_root = "./managed"
 manifest_path = "./managed/manifest.toml"
-dot_prefix_style = "underscore"

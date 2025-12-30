@@ -32,7 +32,6 @@
 
 ## Build, Test, and Development Commands
 - Run bar locally: `quickshell -c bar` (or `qs` here). Powermenu: `quickshell` (or `qs`) from repo root to load `powermenu/shell.qml`.
-- IPC controls: `quickshell ipc call powermenu toggle|show|hide`.
 - Manual reload: restart `quickshell` after QML changes. No automated tests.
 
 ## Coding Style & Naming Conventions
@@ -44,7 +43,7 @@
 
 ## Testing Guidelines
 - Manual checks:
-  - `Esc`/`q` close powermenu; IPC toggle works.
+  - `Esc`/`q` close powermenu and it quits on dismiss.
   - Buttons trigger expected system actions.
   - Overlay animation/focus are correct; tray right-click menus open.
   - Tooltips anchor above targets, stay unclipped; bar reload keeps module layout.

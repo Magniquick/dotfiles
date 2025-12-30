@@ -1,9 +1,9 @@
 import ".."
 import "../components"
-import "../components/JsonUtils.js" as JsonUtils
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 
 ModuleContainer {
     id: root
@@ -29,6 +29,19 @@ ModuleContainer {
     function timeText() {
         return Qt.formatDateTime(clock.date, "hh:mm ap");
     }
+    Component.onCompleted: {
+        calendarFile.reload();
+        root.updateCalendarRefreshTime();
+    }
+    function updateCalendarRefreshTime() {
+        const generatedAt = calendarAdapter.generatedAt;
+        if (generatedAt && String(generatedAt).trim() !== "") {
+            const dt = new Date(generatedAt);
+            root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
+            return;
+        }
+        root.calendarRefreshTime = "";
+    }
 
     tooltipHoverable: true
     tooltipRefreshing: root.refreshing
@@ -37,7 +50,7 @@ ModuleContainer {
 
     content: [
         BarLabel {
-            color: Config.lavender
+            color: Config.m3.tertiary
             text: root.showDate ? root.dateText() : root.timeText()
         }
     ]
@@ -60,7 +73,6 @@ ModuleContainer {
 
                         onDataLoaded: function () {
                             root.refreshing = false;
-                            eventsReader.trigger();
                         }
 
                         // Handle refresh signal from parent
@@ -79,23 +91,31 @@ ModuleContainer {
     }
 
     onTooltipActiveChanged: {
-        if (tooltipActive)
-            eventsReader.trigger();
+        if (tooltipActive) {
+            calendarFile.reload();
+            root.updateCalendarRefreshTime();
+        }
     }
+    FileView {
+        id: calendarFile
 
-    CommandRunner {
-        id: eventsReader
+        path: root.calendarCacheDir + "/events.json"
+        watchChanges: true
+        blockLoading: true
 
-        command: "cat " + root.calendarCacheDir + "/events.json"
+        onFileChanged: {
+            reload();
+            root.updateCalendarRefreshTime();
+        }
 
-        onRan: function (output) {
-            const data = JsonUtils.parseObject(output);
-            if (data && data.generatedAt) {
-                const dt = new Date(data.generatedAt);
-                root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
-            } else {
-                root.calendarRefreshTime = "";
-            }
+        JsonAdapter {
+            id: calendarAdapter
+
+            property string status: ""
+            property string generatedAt: ""
+            property var eventsByDay: ({})
+
+            onGeneratedAtChanged: root.updateCalendarRefreshTime()
         }
     }
     SystemClock {

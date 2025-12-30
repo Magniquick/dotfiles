@@ -150,7 +150,7 @@ Item {
                         id: pulse
 
                         Layout.alignment: Qt.AlignVCenter
-                        color: Config.primary
+                        color: Config.m3.primary
                         height: Config.space.sm
                         opacity: 0.9
                         radius: Config.shape.corner.xs
@@ -174,7 +174,7 @@ Item {
                         }
                     }
                     Text {
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.titleSmall.size
@@ -196,7 +196,7 @@ Item {
                         Text {
                             id: browserIconText
 
-                            color: Config.textMuted
+                            color: Config.m3.onSurfaceVariant
                             font.family: Config.iconFontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             opacity: browserIconHover.hovered ? 0.9 : 0.6
@@ -227,7 +227,7 @@ Item {
                         Text {
                             id: refreshIconText
 
-                            color: Config.textMuted
+                            color: Config.m3.onSurfaceVariant
                             font.family: Config.iconFontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             opacity: refreshIconHover.hovered ? 0.9 : 0.6
@@ -247,9 +247,9 @@ Item {
                             anchors.right: parent.left
                             anchors.rightMargin: Config.space.xs
                             anchors.verticalCenter: parent.verticalCenter
-                            border.color: Config.outline
+                            border.color: Config.m3.outline
                             border.width: 1
-                            color: Config.surfaceContainerHigh
+                            color: Config.m3.surfaceContainerHigh
                             implicitHeight: refreshTimeText.implicitHeight + Config.space.xs * 2
                             implicitWidth: refreshTimeText.implicitWidth + Config.space.sm * 2
                             radius: Config.shape.corner.xs
@@ -260,7 +260,7 @@ Item {
                                 id: refreshTimeText
 
                                 anchors.centerIn: parent
-                                color: Config.textColor
+                                color: Config.m3.onSurface
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.labelSmall.size
                                 font.weight: Config.type.labelSmall.weight
@@ -281,7 +281,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    color: Config.outline
+                    color: Config.m3.outline
                     opacity: 0.18
                     visible: headerRow.visible
                 }

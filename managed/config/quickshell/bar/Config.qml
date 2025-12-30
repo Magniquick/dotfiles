@@ -31,6 +31,7 @@ QtObject {
             "onSecondary": ColorPalette.palette.base,
             "tertiary": ColorPalette.palette.lavender,
             "onTertiary": ColorPalette.palette.base,
+            "flamingo": ColorPalette.palette.flamingo,
             "surface": ColorPalette.palette.base,
             "surfaceVariant": ColorPalette.palette.surface1,
             "surfaceContainer": ColorPalette.palette.base,
@@ -40,7 +41,7 @@ QtObject {
             "onSurfaceVariant": ColorPalette.palette.subtext0,
             "outline": ColorPalette.palette.surface2,
             "outlineStrong": ColorPalette.palette.pink,
-            "shadow": Qt.rgba(ColorPalette.palette.crust.r, ColorPalette.palette.crust.g, ColorPalette.palette.crust.b, 0.28),
+            "shadow": Qt.alpha(ColorPalette.palette.crust, 0.28),
             "error": ColorPalette.palette.red,
             "onError": ColorPalette.palette.base,
             "warning": ColorPalette.palette.yellow,
@@ -54,8 +55,11 @@ QtObject {
     readonly property color moduleBackground: m3.surfaceContainer
     readonly property color moduleBackgroundHover: m3.surfaceContainerHigh
     readonly property color moduleBackgroundMuted: m3.surfaceVariant
+    readonly property real devicePixelRatio: (Qt.application && Qt.application.screens && Qt.application.screens.length > 0)
+        ? Qt.application.screens[0].devicePixelRatio
+        : 1
     readonly property int moduleMarginBottom: space.none
-    readonly property int moduleMarginTop: space.xs
+    readonly property int moduleMarginTop: 4 / root.devicePixelRatio
     readonly property int moduleMarginX: space.none
     readonly property int modulePaddingX: space.sm
     readonly property int modulePaddingY: space.none

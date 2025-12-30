@@ -9,13 +9,14 @@ ShellRoot {
     readonly property var palette: ColorPalette.palette
     property string powermenuHover: ""
     property string powermenuSelection: ""
-    property bool powermenuVisible: false
+    property bool powermenuVisible: true
 
     function onButton(action) {
         if (powermenuSelection === action) {
             powermenuVisible = false;
             runAction(action);
             resetState();
+            Qt.quit();
         } else {
             powermenuSelection = action;
         }
@@ -41,37 +42,7 @@ ShellRoot {
 
         if (cmd.length === 0)
             return;
-        actionProcess.command = cmd;
-        actionProcess.running = true;
-    }
-    function togglePowermenu() {
-        const next = !powermenuVisible;
-        if (next)
-            resetState(); // clear stale hover/selection before showing
-        powermenuVisible = next;
-        if (!next)
-            resetState();
-    }
-
-    Process {
-        id: actionProcess
-
-        running: false
-    }
-    IpcHandler {
-        function hide(): void {
-            root.powermenuVisible = false;
-            root.resetState();
-        }
-        function show(): void {
-            root.powermenuVisible = true;
-            root.resetState();
-        }
-        function toggle(): void {
-            root.togglePowermenu();
-        }
-
-        target: "powermenu"
+        Quickshell.execDetached(cmd);
     }
     Powermenu {
         id: powermenu
@@ -87,6 +58,7 @@ ShellRoot {
         onRequestClose: {
             powermenuVisible = false;
             resetState();
+            Qt.quit();
         }
     }
 }

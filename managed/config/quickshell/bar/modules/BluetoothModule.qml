@@ -70,12 +70,12 @@ ModuleContainer {
     }
     function stateColor() {
         if (!adapter)
-            return Config.textMuted;
+            return Config.m3.onSurfaceVariant;
         if (!adapter.enabled)
-            return Config.textMuted;
+            return Config.m3.onSurfaceVariant;
         if (connectedCount > 0)
-            return Config.lavender;
-        return Config.textColor;
+            return Config.m3.tertiary;
+        return Config.m3.onSurface;
     }
     function statusLabel() {
         if (!adapter)
@@ -121,7 +121,7 @@ ModuleContainer {
 
                     Text {
                         Layout.fillWidth: true
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -129,7 +129,7 @@ ModuleContainer {
                         text: root.connectedNames !== "" ? root.connectedNames : (root.adapterName !== "" ? root.adapterName : "Bluetooth")
                     }
                     Text {
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.statusLabel()
@@ -142,7 +142,7 @@ ModuleContainer {
             ProgressBar {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Config.space.xs
-                fillColor: Config.green
+                fillColor: Config.m3.success
                 trackColor: Config.moduleBackgroundMuted
                 value: root.connectedBattery / 100
                 visible: root.connectedBattery >= 0
@@ -155,7 +155,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -187,7 +187,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -201,7 +201,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.green
+                        accentColor: Config.m3.success
                         borderWidth: 0
                         icon: root.iconConnected
                         label: "Connected"
@@ -211,7 +211,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.lavender
+                        accentColor: Config.m3.tertiary
                         borderWidth: 0
                         icon: root.iconOn
                         label: "Total"

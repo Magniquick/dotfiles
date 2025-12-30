@@ -62,7 +62,7 @@ ModuleContainer {
 
     content: [
         IconLabel {
-            color: Config.yellow
+            color: Config.m3.warning
             text: root.iconText
         }
     ]
@@ -82,7 +82,7 @@ ModuleContainer {
 
                     Text {
                         anchors.centerIn: parent
-                        color: Config.yellow
+                        color: Config.m3.warning
                         font.pixelSize: Config.type.headlineLarge.size
                         text: root.iconText
                     }
@@ -92,7 +92,7 @@ ModuleContainer {
 
                     Text {
                         Layout.fillWidth: true
-                        color: Config.textColor
+                        color: Config.m3.onSurface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -100,7 +100,7 @@ ModuleContainer {
                         text: "Brightness"
                     }
                     Text {
-                        color: Config.textMuted
+                        color: Config.m3.onSurfaceVariant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.brightnessPercent >= 0 ? root.brightnessPercent + "%" : "Unavailable"
@@ -118,7 +118,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.primary
+                    color: Config.m3.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -128,7 +128,7 @@ ModuleContainer {
                 LevelSlider {
                     Layout.fillWidth: true
                     enabled: root.brightnessPercent >= 0
-                    fillColor: Config.yellow
+                    fillColor: Config.m3.warning
                     maximum: 100
                     minimum: 1
                     value: root.sliderValue

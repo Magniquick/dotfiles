@@ -2,7 +2,7 @@ import ".."
 import QtQuick
 
 Text {
-    color: Config.textColor
+    color: Config.m3.onSurface
     elide: Text.ElideRight
     font.family: Config.fontFamily
     font.pixelSize: Config.type.bodyMedium.size

@@ -9,7 +9,7 @@ import "../components/JsonUtils.js" as JsonUtils
 ModuleContainer {
     id: root
 
-    readonly property color diskHealthBadgeColor: Qt.rgba(root.diskHealthColor.r, root.diskHealthColor.g, root.diskHealthColor.b, 0.12)
+    readonly property color diskHealthBadgeColor: Qt.alpha(root.diskHealthColor, 0.12)
     readonly property string diskHealthBadgeText: root.sysInfo.disk_health || "Unknown"
     readonly property color diskHealthBadgeTextColor: root.diskHealthColor
     readonly property color diskHealthColor: {
@@ -17,15 +17,15 @@ ModuleContainer {
         const status = (root.sysInfo.disk_health || "").toLowerCase();
         if (!isNaN(wearPct)) {
             if (wearPct >= 90)
-                return Config.red;
+                return Config.m3.error;
             if (wearPct >= 75)
-                return Config.yellow;
+                return Config.m3.warning;
         }
         if (status.startsWith("healthy") || status.startsWith("passed"))
-            return Config.green;
+            return Config.m3.success;
         if (status === "" || status.indexOf("unknown") !== -1)
-            return Config.yellow;
-        return Config.red;
+            return Config.m3.warning;
+        return Config.m3.error;
     }
     readonly property string diskLifeLabel: {
         const wearPct = root.diskWearPct;
@@ -52,7 +52,7 @@ ModuleContainer {
             uptime: ""
         })
     readonly property string sysInfoCommand: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/sys_info.sh")
-    readonly property color tempColor: tempValue >= 85 ? Config.red : (tempValue >= 75 ? Config.yellow : Config.green)
+    readonly property color tempColor: tempValue >= 85 ? Config.m3.error : (tempValue >= 75 ? Config.m3.warning : Config.m3.success)
     readonly property string tempRisk: tempValue >= 85 ? "Throttle risk high" : (tempValue >= 75 ? "Watch temps" : "Stable")
     readonly property string tempStatus: tempValue >= 85 ? "Critical" : (tempValue >= 75 ? "Hot" : (tempValue >= 60 ? "Warm" : "Cool"))
     readonly property real tempValue: Number(root.sysInfo.temp || 0)
@@ -66,7 +66,7 @@ ModuleContainer {
     content: [
         IconLabel {
             antialiasing: true
-            color: Config.lavender
+            color: Config.m3.tertiary
             renderType: Text.NativeRendering
             text: root.iconText
         }
@@ -94,7 +94,7 @@ ModuleContainer {
                             Text {
                                 anchors.centerIn: parent
                                 antialiasing: true
-                                color: Config.lavender
+                                color: Config.m3.tertiary
                                 font.family: Config.iconFontFamily
                                 font.pixelSize: Config.type.headlineLarge.size
                                 renderType: Text.NativeRendering
@@ -107,7 +107,7 @@ ModuleContainer {
 
                             Text {
                                 Layout.fillWidth: true
-                                color: Config.textColor
+                                color: Config.m3.onSurface
                                 elide: Text.ElideRight
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.titleSmall.size
@@ -116,7 +116,7 @@ ModuleContainer {
                             }
                             Text {
                                 Layout.fillWidth: true
-                                color: Config.textMuted
+                                color: Config.m3.onSurfaceVariant
                                 elide: Text.ElideRight
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.bodySmall.size
@@ -130,15 +130,15 @@ ModuleContainer {
                 ]
             }
             TooltipCard {
-                backgroundColor: Config.surfaceContainerHigh
-                borderColor: Qt.rgba(1, 1, 1, 0.08)
+                backgroundColor: Config.m3.surfaceContainerHigh
+                borderColor: Qt.alpha(Config.m3.onSurface, 0.08)
                 outlined: true
                 padding: Config.space.md
                 spacing: Config.space.sm
 
                 content: [
                     Text {
-                        color: Config.lavender
+                        color: Config.m3.tertiary
                         font.family: Config.fontFamily
                         font.letterSpacing: 1.5
                         font.pixelSize: Config.type.labelSmall.size
@@ -157,7 +157,7 @@ ModuleContainer {
                                 Layout.fillWidth: true
 
                                 Text {
-                                    color: Config.textColor
+                                    color: Config.m3.onSurface
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodySmall.size
                                     text: "CPU"
@@ -166,7 +166,7 @@ ModuleContainer {
                                     Layout.fillWidth: true
                                 }
                                 Text {
-                                    color: Config.info
+                                    color: Config.m3.info
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodySmall.size
                                     font.weight: Font.DemiBold
@@ -175,7 +175,7 @@ ModuleContainer {
                             }
                             ProgressBar {
                                 Layout.fillWidth: true
-                                fillColor: Config.info
+                                fillColor: Config.m3.info
                                 height: Config.space.xs + Config.spaceHalfXs
                                 value: root.sysInfo.cpu / 100
                             }
@@ -188,7 +188,7 @@ ModuleContainer {
                                 Layout.fillWidth: true
 
                                 Text {
-                                    color: Config.textColor
+                                    color: Config.m3.onSurface
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodySmall.size
                                     text: "Memory"
@@ -197,7 +197,7 @@ ModuleContainer {
                                     Layout.fillWidth: true
                                 }
                                 Text {
-                                    color: Config.lavender
+                                    color: Config.m3.tertiary
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodySmall.size
                                     font.weight: Font.DemiBold
@@ -206,7 +206,7 @@ ModuleContainer {
                             }
                             ProgressBar {
                                 Layout.fillWidth: true
-                                fillColor: Config.lavender
+                                fillColor: Config.m3.tertiary
                                 height: Config.space.xs + Config.spaceHalfXs
                                 value: root.sysInfo.mem / 100
                             }
@@ -224,35 +224,35 @@ ModuleContainer {
                     Layout.fillHeight: true
                     Layout.fillWidth: true
                     accentColor: root.diskHealthColor
-                    backgroundColor: Config.surfaceContainerHigh
-                    borderColor: Qt.rgba(1, 1, 1, 0.12)
+                    backgroundColor: Config.m3.surfaceContainerHigh
+                    borderColor: Qt.alpha(Config.m3.onSurface, 0.12)
                     borderWidth: 1
-                    chipColor: Qt.rgba(root.diskHealthColor.r, root.diskHealthColor.g, root.diskHealthColor.b, 0.22)
+                    chipColor: Qt.alpha(root.diskHealthColor, 0.22)
                     chipText: root.diskHealthBadgeText
-                    chipTextColor: Config.textMuted
+                    chipTextColor: Config.m3.onSurfaceVariant
                     fillRatio: root.sysInfo.disk / 100
                     icon: "󰋊"
                     label: "DISK"
-                    labelColor: Config.lavender
+                    labelColor: Config.m3.tertiary
                     padding: Config.space.md - Config.spaceHalfXs
                     secondaryValue: root.diskRemainingLabel
                     value: root.diskUsedLabel
-                    valueColor: Config.textColor
+                    valueColor: Config.m3.onSurface
                 }
                 MetricBlock {
                     Layout.fillHeight: true
                     Layout.fillWidth: true
                     accentColor: root.tempColor
-                    backgroundColor: Config.surfaceContainerHigh
-                    borderColor: Qt.rgba(1, 1, 1, 0.12)
+                    backgroundColor: Config.m3.surfaceContainerHigh
+                    borderColor: Qt.alpha(Config.m3.onSurface, 0.12)
                     borderWidth: 1
-                    chipColor: Qt.rgba(root.tempColor.r, root.tempColor.g, root.tempColor.b, 0.22)
+                    chipColor: Qt.alpha(root.tempColor, 0.22)
                     chipText: root.tempStatus
-                    chipTextColor: Config.textMuted
+                    chipTextColor: Config.m3.onSurfaceVariant
                     fillRatio: Math.min(1, root.tempValue / 100)
                     icon: "󰔄"
                     label: "TEMP"
-                    labelColor: Config.lavender
+                    labelColor: Config.m3.tertiary
                     padding: Config.space.md - Config.spaceHalfXs
                     secondaryValue: root.tempRisk
                     value: root.sysInfo.temp + "°C"
@@ -290,6 +290,9 @@ ModuleContainer {
     MouseArea {
         anchors.fill: parent
 
-        onClicked: Quickshell.execDetached(["quickshell", "ipc", "call", "powermenu", "toggle"])
+        onClicked: {
+            const powermenuPath = Quickshell.shellDir + "/../powermenu";
+            Quickshell.execDetached(["sh", "-c", `echo quickshell -p "${powermenuPath}"; quickshell -p "${powermenuPath}"`]);
+        }
     }
 }

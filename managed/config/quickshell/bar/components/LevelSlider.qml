@@ -8,13 +8,13 @@ Item {
     readonly property real displayValue: (root.dragging && !isNaN(root.dragValue)) ? root.dragValue : root.value
     property real dragValue: NaN
     property bool dragging: false
-    property color fillColor: Config.primary
-    property color knobColor: Config.primary
+    property color fillColor: Config.m3.primary
+    property color knobColor: Config.m3.primary
     property int knobSize: 14
     property real maximum: 1
     property real minimum: 0
     property int snapSteps: 0
-    property color trackColor: Config.surfaceVariant
+    property color trackColor: Config.m3.surfaceVariant
     property real value: 0
 
     signal userChanged(real value)
@@ -76,7 +76,7 @@ Item {
         id: knob
 
         antialiasing: true
-        border.color: Config.outline
+        border.color: Config.m3.outline
         border.width: 1
         color: root.knobColor
         height: root.knobSize
