@@ -1,5 +1,6 @@
 import ".."
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 
@@ -8,10 +9,12 @@ Item {
 
     readonly property bool active: root.enabled && (root.open || root.pinned || (root.hoverable && root.popupHovered))
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
+    property bool autoScroll: true
     property string browserLink: ""
     property Component contentComponent: null
     property bool enabled: true
     property bool hoverable: false
+    property int maximumHeight: 0
     property bool open: false
     property bool pinnable: false
     property bool pinned: false
@@ -19,6 +22,7 @@ Item {
     property bool refreshing: false
     property bool showBrowserIcon: false
     property bool showRefreshIcon: false
+    property bool showScrollIndicator: true
     property string subtitle: ""
     property Item targetItem: null
     property string title: ""
@@ -96,7 +100,13 @@ Item {
         Item {
             id: body
 
-            implicitHeight: layout.implicitHeight + Config.tooltipPadding * 2
+            implicitHeight: {
+                const naturalHeight = layout.implicitHeight + Config.tooltipPadding * 2;
+                if (root.maximumHeight > 0) {
+                    return Math.min(naturalHeight, root.maximumHeight);
+                }
+                return naturalHeight;
+            }
             implicitWidth: layout.implicitWidth + Config.tooltipPadding * 2
             opacity: popup.reveal
             scale: 0.96 + (0.04 * popup.reveal)
@@ -158,6 +168,7 @@ Item {
                         width: Config.space.sm
 
                         SequentialAnimation on scale {
+                            alwaysRunToEnd: false
                             loops: Animation.Infinite
                             running: pulse.visible && Config.tooltipPulseAnimationEnabled && popup.reveal > 0.01
 
@@ -285,11 +296,77 @@ Item {
                     opacity: 0.18
                     visible: headerRow.visible
                 }
-                Loader {
-                    id: contentLoader
+                Item {
+                    implicitHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
+                    implicitWidth: contentLoader.item ? contentLoader.item.width : 0
 
-                    active: true
-                    sourceComponent: root.contentComponent
+                    Flickable {
+                        id: flickable
+
+                        anchors.fill: parent
+                        boundsBehavior: Flickable.StopAtBounds
+                        clip: true
+                        contentHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
+                        contentWidth: contentLoader.item ? contentLoader.item.width : 0
+                        interactive: contentHeight > height
+
+                        onContentHeightChanged: {
+                            if (root.autoScroll && contentHeight > height) {
+                                Qt.callLater(() => {
+                                    flickable.contentY = Math.max(0, contentHeight - height);
+                                });
+                            }
+                        }
+
+                        Loader {
+                            id: contentLoader
+
+                            active: true
+                            sourceComponent: root.contentComponent
+                        }
+
+                        ScrollIndicator.vertical: ScrollIndicator {
+                            id: scrollIndicator
+
+                            active: flickable.interactive
+                            visible: root.showScrollIndicator && flickable.interactive
+
+                            contentItem: Rectangle {
+                                color: Config.m3.onSurfaceVariant
+                                implicitWidth: 3
+                                opacity: scrollIndicator.active ? 0.6 : 0.3
+                                radius: width / 2
+
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: Config.motion.duration.shortMs
+                                        easing.type: Config.motion.easing.standard
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        id: fadeOverlay
+
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: Config.space.lg
+                        visible: flickable.interactive && flickable.contentY < (flickable.contentHeight - flickable.height - 1)
+
+                        gradient: Gradient {
+                            GradientStop {
+                                color: "transparent"
+                                position: 0
+                            }
+                            GradientStop {
+                                color: Config.tooltipBackground
+                                position: 1
+                            }
+                        }
+                    }
                 }
             }
             HoverHandler {

@@ -1,4 +1,5 @@
 pragma Singleton
+import ".."
 import QtQml
 import QtQuick
 

@@ -1,3 +1,13 @@
+/**
+ * @module WorkspaceGroup
+ * @description Grouped container for workspace modules
+ *
+ * Contains:
+ * - WorkspacesModule (numbered workspaces, always visible)
+ * - SpecialWorkspacesModule (special workspaces, in drawer)
+ *
+ * Uses DrawerGroup for expandable special workspaces.
+ */
 import ".."
 import "../components"
 

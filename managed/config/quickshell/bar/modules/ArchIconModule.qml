@@ -1,3 +1,21 @@
+/**
+ * @module ArchIconModule
+ * @description System information module with Arch Linux branding
+ *
+ * Features:
+ * - Displays Arch Linux icon in bar
+ * - Tooltip shows live system vitals (CPU, memory, disk, temperature)
+ * - Disk health monitoring with wear level tracking
+ * - Temperature monitoring with throttle risk indicators
+ * - Click opens powermenu
+ *
+ * Dependencies:
+ * - bar/scripts/sys_info.sh: Shell script providing system metrics as JSON
+ *
+ * Configuration:
+ * - iconText: Custom icon (default: Arch logo)
+ * - Polling: 2s interval while tooltip is open
+ */
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -287,12 +305,8 @@ ModuleContainer {
 
         target: root
     }
-    MouseArea {
-        anchors.fill: parent
 
-        onClicked: {
-            const powermenuPath = Quickshell.shellDir + "/../powermenu";
-            Quickshell.execDetached(["sh", "-c", `echo quickshell -p "${powermenuPath}"; quickshell -p "${powermenuPath}"`]);
-        }
+    onClicked: {
+        Quickshell.execDetached(["quickshell", "--path", Quickshell.env("HOME") + "/.config/quickshell/powermenu/"]);
     }
 }

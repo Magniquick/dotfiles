@@ -27,8 +27,6 @@ enum Command {
     /// List projects
     #[command(name = "list-tasklists")]
     ListTasklists,
-    /// Add a new task
-    Add { title: String },
     /// Mark a task as completed
     Complete { id: String },
     /// Delete a task
@@ -73,13 +71,6 @@ struct ListOutput {
 }
 
 #[derive(Serialize)]
-struct AddOutput {
-    id: String,
-    title: String,
-    status: &'static str,
-}
-
-#[derive(Serialize)]
 struct StatusOutput {
     id: String,
     status: &'static str,
@@ -113,10 +104,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::ListTasklists => {
             let projects = list_projects(&client)?;
             println!("{}", serde_json::to_string(&projects)?);
-        }
-        Command::Add { title } => {
-            let task = add_task(&client, &title)?;
-            println!("{}", serde_json::to_string(&task)?);
         }
         Command::Complete { id } => {
             let result = complete_task(&client, &id)?;
@@ -218,28 +205,6 @@ fn list_projects(client: &Client) -> Result<Vec<Project>, Box<dyn std::error::Er
         .error_for_status()?
         .json()?;
     Ok(projects)
-}
-
-fn add_task(client: &Client, title: &str) -> Result<AddOutput, Box<dyn std::error::Error>> {
-    #[derive(Deserialize)]
-    struct AddedTask {
-        id: String,
-        content: String,
-    }
-
-    let body = serde_json::json!({ "content": title });
-    let task: AddedTask = client
-        .post("https://api.todoist.com/rest/v2/tasks")
-        .json(&body)
-        .send()?
-        .error_for_status()?
-        .json()?;
-
-    Ok(AddOutput {
-        id: task.id,
-        title: task.content,
-        status: "needsAction",
-    })
 }
 
 fn complete_task(client: &Client, id: &str) -> Result<StatusOutput, Box<dyn std::error::Error>> {

@@ -1,3 +1,16 @@
+/**
+ * @module WorkspaceButton
+ * @description Individual workspace button for WorkspacesModule
+ *
+ * Features:
+ * - Active/inactive/urgent state styling
+ * - Hover highlight
+ * - Click to switch workspace
+ * - Uniform width option for consistent layout
+ *
+ * Dependencies:
+ * - Quickshell.Hyprland: Workspace dispatch
+ */
 import ".."
 import "../components"
 import QtQuick

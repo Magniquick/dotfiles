@@ -4,20 +4,24 @@ import QtQuick
 Item {
     id: root
 
-    property int barHeight: 6
+    property int barHeight: Config.slider.barHeight
     readonly property real displayValue: (root.dragging && !isNaN(root.dragValue)) ? root.dragValue : root.value
     property real dragValue: NaN
     property bool dragging: false
     property color fillColor: Config.m3.primary
     property color knobColor: Config.m3.primary
-    property int knobSize: 14
+    property int knobSize: Config.slider.knobSize
+    property int knobWidth: Config.slider.knobWidth
     property real maximum: 1
     property real minimum: 0
     property int snapSteps: 0
     property color trackColor: Config.m3.surfaceVariant
     property real value: 0
+    property bool hovered: false
+    property real hoverRatio: 0  // 0-1 ratio of hover position along track
 
     signal userChanged(real value)
+    signal dragEnded(real value)  // Fires when drag completes with final value
 
     function clampedRatio() {
         if (root.maximum <= root.minimum)
@@ -76,14 +80,20 @@ Item {
         id: knob
 
         antialiasing: true
-        border.color: Config.m3.outline
-        border.width: 1
         color: root.knobColor
         height: root.knobSize
         radius: root.knobSize / 2
-        width: root.knobSize
-        x: (track.width * root.clampedRatio()) - (root.knobSize / 2)
+        width: root.knobWidth
+        x: (track.width * root.clampedRatio()) - (root.knobWidth / 2)
         y: (height - root.knobSize) / 2
+        opacity: 1
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutQuad
+            }
+        }
     }
     MouseArea {
         anchors.fill: parent
@@ -91,17 +101,25 @@ Item {
         enabled: root.enabled
         hoverEnabled: true
 
-        onPositionChanged: {
+        onPositionChanged: mouse => {
+            root.hoverRatio = Math.max(0, Math.min(1, mouse.x / width));
             if (root.dragging)
                 root.updateFromPosition(mouse.x);
         }
-        onPressed: {
+        onPressed: mouse => {
             root.dragging = true;
             root.updateFromPosition(mouse.x);
         }
         onReleased: {
+            if (!isNaN(root.dragValue))
+                root.dragEnded(root.dragValue);
             root.dragging = false;
             root.dragValue = NaN;
+        }
+        onEntered: root.hovered = true
+        onExited: {
+            root.hovered = false;
+            root.hoverRatio = 0;
         }
     }
 }

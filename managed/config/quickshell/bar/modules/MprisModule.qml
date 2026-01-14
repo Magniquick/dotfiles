@@ -1,7 +1,70 @@
+/**
+ * @module MprisModule
+ * @description Media player control module using MPRIS (Media Player Remote Interfacing Specification)
+ *
+ * Features:
+ * - Auto-detection of active media players
+ * - Playback controls (play/pause, previous, next)
+ * - Seekbar with position indicator (when supported by player)
+ * - Album art display with blur effects
+ * - Track title and artist information
+ * - Scrolling marquee for long track titles
+ * - Support for multiple concurrent players (automatically selects active/playing)
+ * - Real-time position updates with smooth progress animation
+ *
+ * Supported Players:
+ * - Any player implementing MPRIS D-Bus interface
+ * - Common examples: Spotify, VLC, Firefox, Chrome, mpv, Rhythmbox, etc.
+ *
+ * Dependencies:
+ * - Quickshell.Services.Mpris: Built-in MPRIS service provider
+ * - Qt5Compat.GraphicalEffects: Album art blur effects
+ *
+ * Configuration:
+ * - maxLength: Maximum text length before truncation (default: 45 characters)
+ * - debugLogging: Enable console debug output (default: false)
+ *
+ * Player Selection Logic:
+ * 1. Prefer players with playbackState = Playing
+ * 2. Fall back to Paused players if no Playing players
+ * 3. Fall back to Stopped players if none Playing/Paused
+ * 4. When multiple players in same state, prefer last active
+ *
+ * Performance Optimizations:
+ * - Marquee animation gated by window visibility (prevents idle CPU usage)
+ * - Position updates only when player is playing
+ * - Album art loaded asynchronously
+ * - Animations disabled when tooltip is hidden
+ *
+ * Seekbar Support:
+ * - Only shown for players with canSeek capability
+ * - Smooth scrubbing with visual feedback
+ * - Position tracking synced with player state
+ * - Automatic adjustment when track changes
+ *
+ * Error Handling:
+ * - Safe handling of missing track metadata
+ * - Fallback text for unknown players
+ * - Bounds checking for position values
+ * - Graceful degradation when player disconnects
+ *
+ * @example
+ * // Basic usage with defaults
+ * MprisModule {}
+ *
+ * @example
+ * // Custom text length and debug logging
+ * MprisModule {
+ *     maxLength: 60
+ *     debugLogging: true
+ * }
+ */
 import ".."
 import "../components"
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
 
@@ -152,6 +215,11 @@ ModuleContainer {
     tooltipText: root.trackFullText
     tooltipTitle: root.playerTitle
 
+    onClicked: {
+        if (root.activePlayer && root.activePlayer.canTogglePlaying)
+            root.activePlayer.togglePlaying();
+    }
+
     content: [
         IconTextRow {
             iconText: root.statusText
@@ -193,8 +261,8 @@ ModuleContainer {
                             mipmap: true
                             smooth: true
                             source: root.trackArtUrl
-                            sourceSize.height: 256
-                            sourceSize.width: 256
+                            sourceSize.height: height * Screen.devicePixelRatio
+                            sourceSize.width: width * Screen.devicePixelRatio
                             visible: false
                         }
                         Rectangle {
@@ -224,6 +292,7 @@ ModuleContainer {
 
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
+                    Layout.preferredWidth: 280
                     spacing: Config.space.sm
 
                     ColumnLayout {
@@ -231,15 +300,66 @@ ModuleContainer {
                         Layout.minimumWidth: 0
                         spacing: Config.space.xs
 
-                        Text {
+                        Flickable {
+                            id: titleClip
+
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            color: Config.m3.onSurface
-                            elide: Text.ElideRight
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.titleLarge.size
-                            font.weight: Config.type.titleLarge.weight
-                            text: root.displayTitle
+                            boundsBehavior: Flickable.StopAtBounds
+                            clip: true
+                            contentHeight: titleText.implicitHeight
+                            contentWidth: titleText.implicitWidth
+                            implicitHeight: titleText.implicitHeight
+                            interactive: false
+                            property real scrollDistance: Math.max(0, contentWidth - width)
+                            readonly property bool hovered: titleHover.hovered
+
+                            Text {
+                                id: titleText
+
+                                color: Config.m3.onSurface
+                                elide: titleClip.hovered ? Text.ElideNone : Text.ElideRight
+                                font.family: Config.fontFamily
+                                font.pixelSize: Config.type.titleLarge.size
+                                font.weight: Config.type.titleLarge.weight
+                                text: root.displayTitle
+                                width: titleClip.hovered ? implicitWidth : titleClip.width
+                            }
+                            HoverHandler {
+                                id: titleHover
+
+                                onHoveredChanged: {
+                                    if (!hovered)
+                                        titleClip.contentX = 0;
+                                }
+                            }
+                            SequentialAnimation {
+                                id: titleMarquee
+
+                                loops: Animation.Infinite
+                                running: titleClip.hovered && titleClip.scrollDistance > 0 && root.QsWindow.window && root.QsWindow.window.visible
+
+                                PauseAnimation {
+                                    duration: 350
+                                }
+                                NumberAnimation {
+                                    duration: Math.max(1200, titleClip.scrollDistance * 15)
+                                    easing.type: Easing.InOutQuad
+                                    property: "contentX"
+                                    target: titleClip
+                                    to: titleClip.scrollDistance
+                                }
+                                PauseAnimation {
+                                    duration: 350
+                                }
+                                NumberAnimation {
+                                    duration: 500
+                                    easing.type: Easing.OutQuad
+                                    property: "contentX"
+                                    target: titleClip
+                                    to: 0
+                                }
+                            }
                         }
                         Text {
                             Layout.fillWidth: true
@@ -251,34 +371,84 @@ ModuleContainer {
                             text: root.displaySubtitle
                         }
                     }
-                    LevelSlider {
+                    Item {
                         Layout.fillWidth: true
-                        enabled: root.activePlayer && root.activePlayer.canSeek && root.lengthSeconds(root.activePlayer) > 0
-                        fillColor: Config.m3.primary
-                        maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
-                        minimum: 0
-                        value: root.positionSeconds(root.activePlayer)
+                        implicitHeight: progressSlider.implicitHeight
 
-                        onUserChanged: {
-                            if (!root.activePlayer || !root.activePlayer.canSeek)
-                                return;
-                            const deltaSeconds = value - root.positionSeconds(root.activePlayer);
-                            if (!isFinite(deltaSeconds) || deltaSeconds === 0)
-                                return;
-                            root.activePlayer.seek(Math.round(deltaSeconds));
+                        LevelSlider {
+                            id: progressSlider
+
+                            anchors.fill: parent
+                            enabled: root.activePlayer && root.activePlayer.canSeek && root.lengthSeconds(root.activePlayer) > 0
+                            fillColor: Config.m3.primary
+                            maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
+                            minimum: 0
+                            value: root.positionSeconds(root.activePlayer)
+
+                            // Only seek on drag release, not during drag (prevents multiple in-flight commands)
+                            onDragEnded: value => {
+                                if (!root.activePlayer || !root.activePlayer.canSeek)
+                                    return;
+                                // MPRIS seek() uses delta (relative offset), not absolute position
+                                const deltaSeconds = value - root.positionSeconds(root.activePlayer);
+                                if (!isFinite(deltaSeconds) || deltaSeconds === 0)
+                                    return;
+                                root.activePlayer.seek(Math.round(deltaSeconds));
+                            }
+                        }
+                        // Seek position preview tooltip
+                        Rectangle {
+                            id: seekPreview
+                            visible: progressSlider.hovered && progressSlider.enabled && !progressSlider.dragging
+                            color: Config.m3.surfaceContainerHighest
+                            border.color: Config.m3.outline
+                            border.width: 1
+                            radius: Config.shape.corner.xs
+                            width: seekPreviewText.implicitWidth + Config.space.sm
+                            height: seekPreviewText.implicitHeight + Config.space.xs
+                            x: Math.max(0, Math.min(parent.width - width, progressSlider.hoverRatio * parent.width - width / 2))
+                            y: -height - Config.space.xs
+
+                            Text {
+                                id: seekPreviewText
+                                anchors.centerIn: parent
+                                color: Config.m3.onSurface
+                                font.family: Config.fontFamily
+                                font.pixelSize: Config.type.labelSmall.size
+                                text: root.formatTime(progressSlider.hoverRatio * root.lengthSeconds(root.activePlayer))
+                            }
                         }
                     }
-                    Text {
-                        color: Config.m3.onSurfaceVariant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelSmall.size
-                        text: {
-                            const total = root.lengthSeconds(root.activePlayer);
-                            const elapsed = total > 0 ? root.formatTime(root.positionSeconds(root.activePlayer)) : "--:--";
-                            if (total <= 0)
-                                return elapsed;
-                            const remaining = root.clampNumber(total - root.positionSeconds(root.activePlayer), 0, total);
-                            return elapsed + " / " + root.formatTime(remaining);
+                    RowLayout {
+                        spacing: Config.space.xs
+
+                        Text {
+                            color: Config.m3.onSurfaceVariant
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            text: {
+                                const total = root.lengthSeconds(root.activePlayer);
+                                const elapsed = total > 0 ? root.formatTime(root.positionSeconds(root.activePlayer)) : "--:--";
+                                if (total <= 0)
+                                    return elapsed;
+                                return elapsed + " / " + root.formatTime(total);
+                            }
+                        }
+                        // Seek unavailable indicator
+                        Text {
+                            visible: root.activePlayer && !root.activePlayer.canSeek
+                            color: Config.m3.onSurfaceVariant
+                            font.family: Config.iconFontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            text: ""
+                            opacity: 0.6
+
+                            ToolTip.visible: seekUnavailableHover.hovered
+                            ToolTip.text: "Seek not supported by this player"
+
+                            HoverHandler {
+                                id: seekUnavailableHover
+                            }
                         }
                     }
                 }

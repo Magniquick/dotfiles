@@ -6,12 +6,12 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import ".."
-import "./JsonUtils.js" as JsonUtils
+import "../components"
+import "../components/JsonUtils.js" as JsonUtils
 
 ColumnLayout {
     id: root
 
-    readonly property string apiPath: "/home/magni/Projects/todoist-api/main.py"
     readonly property string cacheDir: {
         const homeDir = Quickshell.env("HOME");
         return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/todoist" : "/tmp/quickshell-todoist";
@@ -22,15 +22,13 @@ ColumnLayout {
     readonly property int iconSlot: Config.space.xxl * 2
     property string lastUpdated: ""
     property bool loading: false
-    readonly property string loginShell: {
-        const shellValue = Quickshell.env("SHELL");
-        return shellValue && shellValue !== "" ? shellValue : "sh";
-    }
     readonly property int minorSpace: Config.spaceHalfXs
     property bool parseError: false
     property var rawData: ({})
     readonly property var taskColors: [Config.m3.tertiary, Config.m3.secondary, Config.m3.flamingo, Config.m3.primary, Config.m3.warning, Config.m3.success]
     property var tasks: []
+    readonly property string todoistBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/todoist-api")
+    readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
     property bool usingCache: false
 
     function applyTodoistData(data, fromCache) {
@@ -96,6 +94,9 @@ ColumnLayout {
     function taskCountLabel(count) {
         return count === 1 ? "1 Task" : count + " Tasks";
     }
+    function todoistCommand(args) {
+        return root.todoistBinary + " --env-file '" + root.shSingleQuote(root.todoistEnvFile) + "' " + args;
+    }
     function updateTasks() {
         if (!root.rawData)
             return;
@@ -143,7 +144,7 @@ ColumnLayout {
     CommandRunner {
         id: listRunner
 
-        command: "uv run " + root.apiPath + " list"
+        command: root.todoistCommand("list")
         intervalMs: 300000 // 5 minutes
 
         onRan: function (output) {
@@ -181,13 +182,6 @@ ColumnLayout {
         command: ""
         enabled: true
         intervalMs: 0
-    }
-    CommandRunner {
-        id: addRunner
-
-        onRan: function (output) {
-            root.refresh();
-        }
     }
     CommandRunner {
         id: actionRunner
@@ -507,7 +501,7 @@ ColumnLayout {
 
                         onClicked: {
                             taskItem.completing = true;
-                            actionRunner.command = "uv run " + root.apiPath + " complete " + taskItem.modelData.id;
+                            actionRunner.command = root.todoistCommand("complete " + root.shSingleQuote(taskItem.modelData.id));
                             actionRunner.trigger();
                         }
                         onEntered: if (!taskItem.completing)
@@ -525,77 +519,6 @@ ColumnLayout {
             font.pixelSize: Config.type.bodySmall.size
             text: "All caught up! 🎉"
             visible: root.tasks.length === 0 && !root.loading
-        }
-    }
-
-    // Add Task Input & Footer
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: Config.space.sm
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Config.space.sm
-
-            TextField {
-                id: taskInput
-
-                Layout.fillWidth: true
-                bottomPadding: Math.round(Config.space.md / 2)
-                color: Config.m3.onSurface
-                font.family: Config.fontFamily
-                font.pixelSize: Config.type.bodySmall.size
-                leftPadding: Config.space.sm
-                placeholderText: "Start something new..."
-                placeholderTextColor: Config.m3.onSurfaceVariant
-                rightPadding: Config.space.sm
-                topPadding: Math.round(Config.space.md / 2)
-
-                background: Rectangle {
-                    border.color: taskInput.activeFocus ? Config.m3.tertiary : "transparent"
-                    border.width: 1
-                    color: Config.m3.surfaceVariant
-                    opacity: 0.4
-                    radius: Config.shape.corner.sm
-                }
-
-                onAccepted: {
-                    if (taskInput.text.trim() !== "") {
-                        addRunner.command = "uv run " + root.apiPath + " add \"" + taskInput.text.replace(/"/g, '\\"') + "\"";
-                        addRunner.trigger();
-                        taskInput.text = "";
-                    }
-                }
-            }
-            Button {
-                id: addButton
-
-                flat: true
-
-                background: Rectangle {
-                    color: addButton.hovered ? Config.m3.surfaceContainerHigh : "transparent"
-                    opacity: 0.6
-                    radius: Config.shape.corner.xs
-
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: Config.motion.duration.shortMs
-                        }
-                    }
-                }
-                contentItem: Text {
-                    color: Config.m3.tertiary
-                    font.family: Config.fontFamily
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
-                    horizontalAlignment: Text.AlignHCenter
-                    opacity: addButton.hovered ? 1.0 : 0.7
-                    text: "ADD"
-                    verticalAlignment: Text.AlignVCenter
-                }
-
-                onClicked: taskInput.accepted()
-            }
         }
     }
 }

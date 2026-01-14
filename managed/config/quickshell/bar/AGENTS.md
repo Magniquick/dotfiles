@@ -3,14 +3,17 @@
 ## Project Structure & Module Organization
 - Entry point: `shell.qml` loads `BarWindow.qml` per screen; powermenu lives under `powermenu/` with `shell.qml` → `Powermenu.qml`.
 - Core UI pieces:
-  - `components/` (shared building blocks like `ModuleContainer.qml`, `TooltipPopup.qml`, `IconTextRow.qml`, `JsonUtils.js`).
+  - `components/` (shared building blocks like `ModuleContainer.qml`, `TooltipPopup.qml`, `CommandRunner.qml`, `ActionChip.qml`, `JsonUtils.js`).
   - `modules/` (bar modules such as `ClockModule.qml`, `WorkspaceGroup.qml`, `NetworkModule.qml`).
   - Powermenu pieces: `powermenu/Powermenu.qml` plus `ActionPanel.qml`, `GreetingPane.qml`, `FooterStatus.qml`, `BunnyBlock.qml`, `ActionGrid.qml`, `PowermenuButton.qml`.
 - Basic file layout (top-level):
-  - `shell.qml`, `BarWindow.qml`, `Config.qml`, `Colors.js`, `ColorPalette.qml`
+  - `shell.qml`, `BarWindow.qml`, `Config.qml`, `ColorPalette.qml`, `DependencyCheck.qml`
   - `components/`, `modules/`, `powermenu/`
   - `waybar/config.jsonc`, `waybar/style.css`
-- Styling/config: `Config.qml`, `Colors.js`, `ColorPalette.qml` (Catppuccin palette). Waybar reference: `waybar/config.jsonc`, `waybar/style.css`.
+- Singletons (registered in `qmldir`):
+  - `Config.qml`: Design tokens (fonts, spacing, colors, slider constants)
+  - `ColorPalette.qml`: Catppuccin color palette
+  - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
 - Runtime data sources/services:
   - Backlight: `/sys/class/backlight/<device>/actual_brightness` + `udevadm monitor`.
   - MPRIS via `Quickshell.Services.Mpris` (ignore `playerctld`).
@@ -40,6 +43,15 @@
 - Keep powermenu names explicit (e.g., `powermenuVisible`); prefer small, focused components.
 - Shared colors live in `Colors.js`; use `Quickshell.shellDir`/`Quickshell.shellPath()` (not deprecated `configDir`/`configPath`).
 - Avoid deprecated parameter injection in signal handlers; use `function(args)` handlers.
+
+## Error Handling Patterns
+- **Dependency checking**: Use `DependencyCheck.require(cmd, module, callback)` for PATH commands, `DependencyCheck.requireExecutable(path, module, callback)` for scripts. Sends `notify-send` alert if missing.
+- **CommandRunner**: Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()` signals. Stderr captured in `errorOutput` property.
+- **Process crash recovery**: Long-running monitors use exponential backoff restart:
+  - Properties: `monitorRestartAttempts`, `monitorDegraded`
+  - Timers: `monitorRestartTimer` (backoff), `monitorBackoffResetTimer` (60s stability reset)
+  - Backoff: 1s → 2s → 4s → ... → 30s max
+  - Modules with crash recovery: NetworkModule, NotificationModule, BacklightModule, SystemdFailedModule
 
 ## Testing Guidelines
 - Manual checks:

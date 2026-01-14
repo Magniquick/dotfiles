@@ -1,3 +1,17 @@
+/**
+ * @module ToDoModule
+ * @description Task management module with Todoist integration
+ *
+ * Features:
+ * - Task icon in bar
+ * - Tooltip shows task list from Todoist API
+ * - Click opens Todoist app
+ * - Refresh button to sync tasks
+ *
+ * Dependencies:
+ * - bar/scripts/src/todoist-api: Rust binary for Todoist API
+ * - ~/.local/bin/custom/todoist.sh: Todoist launcher script
+ */
 import ".."
 import "../components"
 import QtQuick

@@ -1,3 +1,12 @@
+/**
+ * @module ControlsGroup
+ * @description Grouped container for system control modules
+ *
+ * Contains:
+ * - WireplumberModule (audio volume)
+ * - BacklightModule (screen brightness)
+ * - PrivacyModule (optional, via Config.enablePrivacyModule)
+ */
 import ".."
 import "../components"
 import QtQuick

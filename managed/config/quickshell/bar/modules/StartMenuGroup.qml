@@ -1,3 +1,15 @@
+/**
+ * @module StartMenuGroup
+ * @description Left-side group with system info and status modules
+ *
+ * Contains:
+ * - ArchIconModule (always visible, opens powermenu)
+ * - SystemdFailedModule (always visible, shows failed units)
+ * - UpdatesModule (in drawer, shows pending updates)
+ * - ToDoModule (in drawer, shows tasks)
+ *
+ * Uses DrawerGroup for expandable updates/tasks section.
+ */
 import ".."
 import "../components"
 

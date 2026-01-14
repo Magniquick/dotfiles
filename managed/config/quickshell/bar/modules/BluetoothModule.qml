@@ -1,3 +1,17 @@
+/**
+ * @module BluetoothModule
+ * @description Bluetooth status and device management module
+ *
+ * Features:
+ * - Adapter status display (on/off/connected)
+ * - Connected device battery level
+ * - Paired and connected device counts
+ * - Click opens bluetui settings
+ *
+ * Dependencies:
+ * - Quickshell.Bluetooth: Bluetooth adapter and device info
+ * - bluetui: Terminal Bluetooth manager (optional, for settings)
+ */
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -252,9 +266,5 @@ ModuleContainer {
             root.refreshBluetooth();
     }
 
-    MouseArea {
-        anchors.fill: parent
-
-        onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
-    }
+    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
 }

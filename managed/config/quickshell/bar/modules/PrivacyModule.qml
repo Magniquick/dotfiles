@@ -1,3 +1,67 @@
+/**
+ * @module PrivacyModule
+ * @description Privacy indicator module showing active sensors (mic, camera, location, screen sharing)
+ *
+ * Features:
+ * - Real-time monitoring of privacy-sensitive sensors
+ * - Microphone usage detection via PipeWire (pw-dump)
+ * - Camera usage detection via /dev/video* file locks (fuser)
+ * - Location service monitoring via geoclue process detection
+ * - Screen sharing detection via PipeWire stream analysis
+ * - Application name extraction for each active sensor
+ * - Color-coded indicators (mic: green, camera: yellow, location: purple, screen: blue)
+ * - Automatic script availability check
+ *
+ * Dependencies:
+ * - privacy_dots.sh: Bash script that monitors all sensors
+ *   - pw-dump (PipeWire): Audio and screen share detection
+ *   - jq: JSON parsing
+ *   - fuser: Camera device lock detection
+ *   - geoclue: Location service process
+ *   - ps: Process name extraction
+ *
+ * Script Output Format:
+ * {
+ *   "mic": 0|1,           // Microphone active
+ *   "cam": 0|1,           // Camera active
+ *   "loc": 0|1,           // Location active
+ *   "scr": 0|1,           // Screen sharing active
+ *   "mic_app": "app, ...", // Apps using microphone
+ *   "cam_app": "app, ...", // Apps using camera
+ *   "loc_app": "app, ...", // Apps using location
+ *   "scr_app": "app, ..."  // Apps screen sharing
+ * }
+ *
+ * Configuration:
+ * - privacyRefreshMs: Polling interval (default: 1000ms / 1s)
+ * - Color customization via properties:
+ *   - micColor: Config.m3.success (green)
+ *   - cameraColor: Config.m3.warning (yellow)
+ *   - locationColor: Config.m3.tertiary (purple)
+ *   - screenColor: Config.m3.primary (blue)
+ *
+ * Error Handling:
+ * - Script availability check on startup
+ * - JSON validation with fallback parsing (JsonUtils.safeParse)
+ * - Graceful degradation when script unavailable or fails
+ * - Error output handling from script
+ * - Console warnings for missing dependencies
+ *
+ * Privacy Considerations:
+ * - Monitors system-wide sensor usage (not per-application by default)
+ * - Application names extracted when available via process inspection
+ * - No data logged or transmitted - purely local monitoring
+ *
+ * @example
+ * // Basic usage with defaults
+ * PrivacyModule {}
+ *
+ * @example
+ * // Custom refresh interval
+ * PrivacyModule {
+ *     privacyRefreshMs: 2000  // Check every 2 seconds
+ * }
+ */
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
@@ -26,6 +90,7 @@ ModuleContainer {
     property string screenIcon: "󰍹"
     readonly property string scriptPath: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "modules/privacy/privacy_dots.sh")
     property string statusTooltip: "Privacy: idle"
+    property bool scriptAvailable: false
 
     function appLabel(apps) {
         if (!apps || apps.trim() === "")
@@ -54,6 +119,12 @@ ModuleContainer {
             root.locationApps = "";
             root.updateTooltip();
             return;
+        }
+        // Check for error in payload
+        if (payload.error) {
+            console.warn("PrivacyModule: Script error:", payload.error);
+            root.statusTooltip = "Privacy: Error - " + payload.error;
+            // Continue with default values from error payload
         }
         root.micActive = payload.mic === 1 || payload.mic === true;
         root.cameraActive = payload.cam === 1 || payload.cam === true;
@@ -143,14 +214,31 @@ ModuleContainer {
         }
     }
 
+    Component.onCompleted: {
+        DependencyCheck.requireExecutable(root.scriptPath, "PrivacyModule", function(available) {
+            root.scriptAvailable = available;
+            if (!available) {
+                root.statusTooltip = "Privacy: Script not available";
+            }
+        });
+    }
     CommandRunner {
         id: privacyRunner
 
         command: root.scriptPath
+        enabled: root.scriptAvailable
         intervalMs: 3000
+        logErrors: true
 
         onRan: function (output) {
             root.updateFromPayload(JsonUtils.parseObject(output));
+        }
+
+        onError: function (errorOutput, exitCode) {
+            console.warn(`PrivacyModule: Script failed with exit code ${exitCode}`);
+            if (errorOutput)
+                console.warn(`PrivacyModule: stderr: ${errorOutput}`);
+            root.statusTooltip = "Privacy: Script error (exit code " + exitCode + ")";
         }
     }
 }

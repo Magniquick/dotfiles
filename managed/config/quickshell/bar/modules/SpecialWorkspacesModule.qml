@@ -1,3 +1,15 @@
+/**
+ * @module SpecialWorkspacesModule
+ * @description Hyprland special workspace buttons (scratchpads)
+ *
+ * Features:
+ * - Displays special workspaces (special:name)
+ * - Custom icon mapping per workspace name
+ * - Click to toggle special workspace
+ *
+ * Dependencies:
+ * - Quickshell.Hyprland: Special workspace list
+ */
 import ".."
 import "../components"
 import QtQuick

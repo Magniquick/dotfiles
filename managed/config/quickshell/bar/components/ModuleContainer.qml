@@ -37,6 +37,7 @@ Rectangle {
     property string tooltipTitle: ""
 
     signal tooltipRefreshRequested
+    signal clicked
 
     Layout.bottomMargin: root.marginBottom
     Layout.leftMargin: root.marginLeft
@@ -93,7 +94,9 @@ Rectangle {
     }
     HoverHandler {
         id: hoverHandler
-
+    }
+    TapHandler {
+        onTapped: root.clicked()
     }
     Component {
         id: defaultTooltipContent

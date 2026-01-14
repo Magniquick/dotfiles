@@ -1,3 +1,17 @@
+/**
+ * @module WireplumberModule
+ * @description Audio volume control via PipeWire/WirePlumber
+ *
+ * Features:
+ * - Volume percentage display with tiered icons
+ * - Mute toggle on click
+ * - Scroll wheel volume adjustment
+ * - Volume slider in tooltip (up to 200%)
+ *
+ * Dependencies:
+ * - Quickshell.Services.Pipewire: Audio sink control
+ * - wpctl: Volume adjustment commands
+ */
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts

@@ -1,5 +1,5 @@
 [Unit]
-Description=Quickshell bar, screenshot etc.
+Description=Quickshell bar, mostly.
 Documentation=https://quickshell.org/docs/
 PartOf=graphical-session.target
 After=graphical-session.target

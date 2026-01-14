@@ -5,6 +5,25 @@ set -euo pipefail
 JQ_BIN="${JQ:-jq}"
 PW_DUMP_CMD="${PW_DUMP:-pw-dump}"
 
+# Check critical dependencies upfront
+missing_deps=""
+if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+  missing_deps="jq"
+fi
+if ! command -v "$PW_DUMP_CMD" >/dev/null 2>&1; then
+  if [[ -n "$missing_deps" ]]; then
+    missing_deps="$missing_deps, pw-dump"
+  else
+    missing_deps="pw-dump"
+  fi
+fi
+
+if [[ -n "$missing_deps" ]]; then
+  # Return error JSON for missing critical deps (use printf to avoid jq dependency)
+  printf '{"error":"Missing: %s","mic":0,"cam":0,"loc":0,"scr":0,"mic_app":"","cam_app":"","loc_app":"","scr_app":""}\n' "$missing_deps"
+  exit 0
+fi
+
 mic=0
 cam=0
 loc=0
@@ -131,7 +150,8 @@ if [[ "$scr" -eq 1 ]]; then
     )"
 fi
 
-$JQ_BIN -c -n \
+# Generate output JSON with error handling
+output=$($JQ_BIN -c -n \
   --argjson mic "$mic" \
   --argjson cam "$cam" \
   --argjson loc "$loc" \
@@ -140,4 +160,16 @@ $JQ_BIN -c -n \
   --arg cam_app "$cam_app" \
   --arg loc_app "$loc_app" \
   --arg scr_app "$scr_app" \
-  '{mic:$mic, cam:$cam, loc:$loc, scr:$scr, mic_app:$mic_app, cam_app:$cam_app, loc_app:$loc_app, scr_app:$scr_app}'
+  '{mic:$mic, cam:$cam, loc:$loc, scr:$scr, mic_app:$mic_app, cam_app:$cam_app, loc_app:$loc_app, scr_app:$scr_app}' 2>/dev/null) || {
+  # Fallback error output if jq fails
+  echo '{"error":"Failed to generate privacy status","mic":0,"cam":0,"loc":0,"scr":0,"mic_app":"","cam_app":"","loc_app":"","scr_app":""}'
+  exit 0
+}
+
+# Validate that output is valid JSON
+if ! printf '%s' "$output" | $JQ_BIN -e . >/dev/null 2>&1; then
+  echo '{"error":"Invalid JSON output","mic":0,"cam":0,"loc":0,"scr":0,"mic_app":"","cam_app":"","loc_app":"","scr_app":""}'
+  exit 0
+fi
+
+echo "$output"

@@ -24,11 +24,11 @@ PanelWindow {
             Text {
                 id: day
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.pixelSize: 160
-                color: "#cdd6f4"  // default color for the rest of the text
+                font.pixelSize: Math.round(Config.type.displayLarge.size * 2.8)
+                color: Config.textColor // default color for the rest of the text
                 font.family: "Electroharmonix"
                 style: Text.Raised
-                styleColor: "#1e1e2b"
+                styleColor: Config.surface
                 textFormat: Text.RichText
                 renderType: Text.CurveRendering
 
@@ -37,20 +37,19 @@ PanelWindow {
                     let fullDay = SysClock.format("dddd");
                     let firstLetter = fullDay.charAt(0);
                     let rest = fullDay.slice(1);
-                    return "<span style='color:#f38ba8;'>" + firstLetter + "</span>" + rest;
+                    return "<span style='color:" + Config.red.toString() + ";'>" + firstLetter + "</span>" + rest;
                 }
             }
             Text {
                 id: date
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.pixelSize: 30
-                color: "#cdd6f4"
-                // font.family: "Electroharmonix"
+                font.pixelSize: Math.round(Config.type.headlineSmall.size * 1.25)
+                color: Config.textColor
                 font.family: "The Last Shuriken"
                 // text: Qt.formatDateTime(clock.date, "dd MMM yyyy")
                 text: SysClock.format("dd MMM yyyy")
                 style: Text.Raised
-                styleColor: "#1e1e2b"
+                styleColor: Config.surface
             }
         }
     }

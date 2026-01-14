@@ -1,3 +1,17 @@
+/**
+ * @module BatteryModule
+ * @description Battery status module with UPower integration
+ *
+ * Features:
+ * - Battery percentage and charging state display
+ * - Time remaining estimates (charging/discharging)
+ * - Battery health percentage tracking
+ * - Power profile quick switcher (PowerSaver/Balanced/Performance)
+ * - Click toggles time/percentage display
+ *
+ * Dependencies:
+ * - Quickshell.Services.UPower: Battery state and power profiles
+ */
 import ".."
 import "../components"
 import QtQuick
@@ -306,9 +320,6 @@ ModuleContainer {
         ignoreUnknownSignals: true
         target: UPower.displayDevice
     }
-    MouseArea {
-        anchors.fill: parent
 
-        onClicked: root.showTime = !root.showTime
-    }
+    onClicked: root.showTime = !root.showTime
 }

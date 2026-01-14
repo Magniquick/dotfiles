@@ -1,3 +1,16 @@
+/**
+ * @module WorkspacesModule
+ * @description Hyprland workspace switcher (numbered workspaces)
+ *
+ * Features:
+ * - Displays numbered workspaces (1-10)
+ * - Shows active workspace highlight
+ * - Click to switch workspace
+ * - Per-monitor workspace filtering
+ *
+ * Dependencies:
+ * - Quickshell.Hyprland: Workspace list and monitor info
+ */
 import ".."
 import "../components"
 import QtQuick

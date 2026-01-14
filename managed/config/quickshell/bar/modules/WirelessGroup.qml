@@ -1,3 +1,11 @@
+/**
+ * @module WirelessGroup
+ * @description Grouped container for wireless connectivity modules
+ *
+ * Contains:
+ * - NetworkModule (WiFi/Ethernet status)
+ * - BluetoothModule (Bluetooth status)
+ */
 import ".."
 import "../components"
 

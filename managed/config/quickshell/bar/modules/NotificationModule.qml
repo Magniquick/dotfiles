@@ -1,3 +1,67 @@
+/**
+ * @module NotificationModule
+ * @description Notification status indicator with Do Not Disturb support via SwayNC
+ *
+ * Features:
+ * - Real-time notification status monitoring via swaync-client
+ * - Do Not Disturb (DND) status indicator
+ * - Notification count display
+ * - Interactive controls (toggle panel, toggle DND)
+ * - Dynamic icons for different states (normal, DND, inhibited)
+ * - Automatic crash recovery for watch process (exponential backoff)
+ *
+ * SwayNC Integration:
+ * - swaync-client -swb: Subscribe to status updates (watch mode)
+ * - swaync-client -t -sw: Toggle notification panel
+ * - swaync-client -d -sw: Toggle Do Not Disturb mode
+ *
+ * Status States:
+ * - "notification": Has unread notifications
+ * - "none": No notifications
+ * - "dnd-notification": DND enabled with notifications
+ * - "dnd-none": DND enabled, no notifications
+ * - "inhibited-notification": Notifications inhibited with unread
+ * - "inhibited-none": Notifications inhibited, no unread
+ *
+ * Icon Mapping:
+ * - Normal with notifications: 󱅫
+ * - Normal without notifications: (empty)
+ * - DND with notifications: 󰂠
+ * - DND without notifications: 󰪓
+ * - Inhibited with notifications: 󰂛
+ * - Inhibited without notifications: 󰪑
+ *
+ * Dependencies:
+ * - swaync (SwayNC): Notification daemon for Wayland
+ * - swaync-client: Command-line client for SwayNC control
+ *
+ * Configuration:
+ * - onClickCommand: Command for left click (default: toggle panel)
+ * - onRightClickCommand: Command for right click (default: toggle DND)
+ * - iconColor: Icon color (default: Config.m3.primary)
+ *
+ * Performance:
+ * - Event-driven updates via watch mode (no polling)
+ * - Lightweight JSON parsing with fallback handling
+ * - Automatic crash recovery with exponential backoff
+ *
+ * Error Handling:
+ * - Automatic restart of watch process on crash (1s, 2s, 4s, 8s, up to 30s)
+ * - JSON parsing with JsonUtils.safeParse fallback
+ * - Console warnings on first crash only
+ * - Graceful degradation when swaync unavailable
+ *
+ * @example
+ * // Basic usage with defaults
+ * NotificationModule {}
+ *
+ * @example
+ * // Custom click commands
+ * NotificationModule {
+ *     onClickCommand: "swaync-client -t"
+ *     onRightClickCommand: "swaync-client -d"
+ * }
+ */
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
@@ -25,6 +89,8 @@ ModuleContainer {
     property string onRightClickCommand: "swaync-client -d -sw"
     property string statusAlt: "notification"
     property string statusTooltip: "Notifications"
+    property int watchRestartAttempts: 0
+    property bool watchDegraded: false
 
     function isDndActive() {
         return root.statusAlt.indexOf("dnd") >= 0 || root.statusAlt.indexOf("inhibited") >= 0;
@@ -88,6 +154,31 @@ ModuleContainer {
         }
     }
 
+    Timer {
+        id: watchRestartTimer
+
+        interval: Math.min(30000, 1000 * Math.pow(2, root.watchRestartAttempts))
+        running: false
+
+        onTriggered: {
+            root.watchDegraded = false;
+            watchProcess.running = true;
+        }
+    }
+    Timer {
+        id: watchBackoffResetTimer
+
+        interval: 60000
+        running: watchProcess.running
+        repeat: false
+
+        onTriggered: {
+            if (root.watchRestartAttempts > 0) {
+                console.log("NotificationModule: swaync-client stable for 60s, resetting backoff");
+            }
+            root.watchRestartAttempts = 0;
+        }
+    }
     Process {
         id: watchProcess
 
@@ -104,6 +195,19 @@ ModuleContainer {
                 if (payload)
                     root.updateFromPayload(payload);
             }
+        }
+
+        onExited: code => {
+            if (root.watchRestartAttempts === 0) {
+                console.warn(`NotificationModule: swaync-client exited with code ${code}, attempting restart`);
+            } else {
+                const backoff = Math.min(30000, 1000 * Math.pow(2, root.watchRestartAttempts));
+                console.warn(`NotificationModule: swaync-client crashed again (attempt ${root.watchRestartAttempts + 1}), next restart in ${backoff}ms`);
+            }
+            root.watchDegraded = true;
+            root.watchRestartAttempts++;
+            watchBackoffResetTimer.stop();
+            watchRestartTimer.restart();
         }
     }
     MouseArea {

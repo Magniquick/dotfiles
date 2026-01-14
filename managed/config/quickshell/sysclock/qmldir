@@ -1,0 +1,3 @@
+module sysclock
+singleton Config 1.0 Config.qml
+singleton SysClock 1.0 SysClock.qml

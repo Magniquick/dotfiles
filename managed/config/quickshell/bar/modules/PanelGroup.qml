@@ -1,3 +1,13 @@
+/**
+ * @module PanelGroup
+ * @description Right-side panel group with notifications and system tray
+ *
+ * Contains:
+ * - NotificationModule (always visible)
+ * - TrayModule (in drawer, expands on hover)
+ *
+ * Uses DrawerGroup for expandable tray section.
+ */
 import ".."
 import "../components"
 

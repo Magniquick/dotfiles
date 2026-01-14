@@ -1,3 +1,15 @@
+/**
+ * @module PowerProfilesModule
+ * @description Power profile switcher (PowerSaver/Balanced/Performance)
+ *
+ * Features:
+ * - Current profile icon display
+ * - Slider to switch between profiles
+ * - Tooltip showing profile label
+ *
+ * Dependencies:
+ * - Quickshell.Services.UPower: PowerProfiles API
+ */
 import ".."
 import "../components"
 import QtQuick

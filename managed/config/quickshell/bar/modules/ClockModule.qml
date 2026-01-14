@@ -1,3 +1,18 @@
+/**
+ * @module ClockModule
+ * @description Time and calendar module with iCal integration
+ *
+ * Features:
+ * - Time display (hh:mm ap format)
+ * - Date display toggle on click
+ * - Calendar tooltip with event integration
+ * - iCal cache for calendar events
+ *
+ * Dependencies:
+ * - bar/scripts/ical-cache: Rust binary for iCal fetching/caching
+ * - bar/.env: Environment file with calendar URLs
+ * - Quickshell.Io: FileView for cache watching
+ */
 import ".."
 import "../components"
 import QtQuick
@@ -123,9 +138,6 @@ ModuleContainer {
 
         precision: SystemClock.Minutes
     }
-    MouseArea {
-        anchors.fill: parent
 
-        onClicked: root.showDate = !root.showDate
-    }
+    onClicked: root.showDate = !root.showDate
 }

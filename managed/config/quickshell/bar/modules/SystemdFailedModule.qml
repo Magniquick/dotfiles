@@ -1,3 +1,76 @@
+/**
+ * @module SystemdFailedModule
+ * @description Systemd failed units monitor with real-time D-Bus event detection
+ *
+ * Features:
+ * - Monitors both system and user systemd instances
+ * - Real-time failed unit detection via D-Bus monitoring (4 parallel monitors)
+ * - Automatic refresh on systemd state changes (750ms debounced)
+ * - Displays count of failed units with error indicator
+ * - Interactive tooltip listing all failed units
+ * - Per-unit controls (restart, stop) via systemctl
+ * - Automatic crash recovery for D-Bus monitors (exponential backoff)
+ *
+ * Monitoring Architecture:
+ * - 4 D-Bus monitors running in parallel:
+ *   1. System manager state changes (busctl monitor org.freedesktop.systemd1 --system)
+ *   2. User manager state changes (busctl monitor org.freedesktop.systemd1 --user)
+ *   3. System unit properties (busctl monitor org.freedesktop.systemd1 --system --match)
+ *   4. User unit properties (busctl monitor org.freedesktop.systemd1 --user --match)
+ * - Unified crash handler for all monitors
+ * - Shared restart timer with exponential backoff (1s, 2s, 4s, 8s, up to 30s)
+ *
+ * Dependencies:
+ * - systemctl: List and control systemd units
+ * - busctl: D-Bus monitoring for real-time event detection
+ * - systemd: System and service manager
+ *
+ * Configuration:
+ * - enableEventRefresh: Enable D-Bus event monitoring (default: true)
+ * - eventDebounceMs: Event debounce interval (default: 750ms)
+ * - debugLogging: Enable console debug output (default: false)
+ *
+ * Performance:
+ * - Debounced refresh reduces redundant systemctl calls during rapid state changes
+ * - Separate system/user monitoring prevents cross-contamination
+ * - Property signal batching reduces unnecessary refreshes
+ * - Event-driven updates only when state actually changes
+ *
+ * Failed Unit Detection:
+ * - System units: systemctl --failed --no-legend (system-wide services)
+ * - User units: systemctl --user --failed --no-legend (user session services)
+ * - Combined count displayed in bar
+ * - Detailed unit list in tooltip with status and controls
+ *
+ * Error Handling:
+ * - Unified crash handler for all 4 D-Bus monitors
+ * - Exponential backoff prevents rapid restart loops
+ * - Graceful degradation when busctl unavailable (falls back to polling)
+ * - Safe parsing of systemctl output
+ * - Console warnings on first crash only
+ *
+ * Unit Controls:
+ * - Restart button: systemctl restart <unit> / systemctl --user restart <unit>
+ * - Stop button: systemctl stop <unit> / systemctl --user stop <unit>
+ * - Automatic refresh after control action
+ *
+ * @example
+ * // Basic usage with defaults
+ * SystemdFailedModule {}
+ *
+ * @example
+ * // Custom debounce and debug logging
+ * SystemdFailedModule {
+ *     eventDebounceMs: 1000
+ *     debugLogging: true
+ * }
+ *
+ * @example
+ * // Disable event monitoring (polling only)
+ * SystemdFailedModule {
+ *     enableEventRefresh: false
+ * }
+ */
 import ".."
 import "../components"
 import QtQuick
@@ -18,6 +91,21 @@ ModuleContainer {
     property int userFailedCount: 0
     property var userFailedUnits: []
     property bool userPropsSignalPending: false
+    property int monitorRestartAttempts: 0
+    property bool monitorDegraded: false
+
+    function handleMonitorCrash(monitorName, code) {
+        if (root.monitorRestartAttempts === 0) {
+            console.warn(`SystemdFailedModule: ${monitorName} exited with code ${code}, attempting restart`);
+        } else {
+            const backoff = Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts));
+            console.warn(`SystemdFailedModule: ${monitorName} crashed again (attempt ${root.monitorRestartAttempts + 1}), next restart in ${backoff}ms`);
+        }
+        root.monitorDegraded = true;
+        root.monitorRestartAttempts++;
+        monitorBackoffResetTimer.stop();
+        monitorRestartTimer.restart();
+    }
 
     function handleMonitorLine(source, data) {
         const trimmed = data.trim();
@@ -167,6 +255,34 @@ ModuleContainer {
             root.logEvent("userRunner output=" + root.userFailedCount);
         }
     }
+    Timer {
+        id: monitorRestartTimer
+
+        interval: Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts))
+        running: false
+
+        onTriggered: {
+            root.monitorDegraded = false;
+            systemMonitor.running = root.enableEventRefresh;
+            systemPropsMonitor.running = root.enableEventRefresh;
+            userMonitor.running = root.enableEventRefresh;
+            userPropsMonitor.running = root.enableEventRefresh;
+        }
+    }
+    Timer {
+        id: monitorBackoffResetTimer
+
+        interval: 60000
+        running: systemMonitor.running || systemPropsMonitor.running || userMonitor.running || userPropsMonitor.running
+        repeat: false
+
+        onTriggered: {
+            if (root.monitorRestartAttempts > 0) {
+                console.log("SystemdFailedModule: D-Bus monitors stable for 60s, resetting backoff");
+            }
+            root.monitorRestartAttempts = 0;
+        }
+    }
     Process {
         id: systemMonitor
 
@@ -178,6 +294,8 @@ ModuleContainer {
                 root.handleMonitorLine("system", data);
             }
         }
+
+        onExited: code => root.handleMonitorCrash("systemMonitor", code)
     }
     Process {
         id: systemPropsMonitor
@@ -190,6 +308,8 @@ ModuleContainer {
                 root.handlePropsMonitorLine("system", data);
             }
         }
+
+        onExited: code => root.handleMonitorCrash("systemPropsMonitor", code)
     }
     Process {
         id: userMonitor
@@ -202,6 +322,8 @@ ModuleContainer {
                 root.handleMonitorLine("user", data);
             }
         }
+
+        onExited: code => root.handleMonitorCrash("userMonitor", code)
     }
     Process {
         id: userPropsMonitor
@@ -214,6 +336,8 @@ ModuleContainer {
                 root.handlePropsMonitorLine("user", data);
             }
         }
+
+        onExited: code => root.handleMonitorCrash("userPropsMonitor", code)
     }
     Timer {
         id: eventDebounce

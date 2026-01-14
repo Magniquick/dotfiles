@@ -1,3 +1,17 @@
+/**
+ * @module UpdatesModule
+ * @description Package update checker for Arch Linux
+ *
+ * Features:
+ * - Shows pending update count
+ * - Tooltip lists available updates
+ * - Click opens yay for system upgrade
+ * - Auto-refresh via streaming JSON
+ *
+ * Dependencies:
+ * - waybar-module-pacman-updates: JSON stream of pending updates
+ * - yay: AUR helper for updates (click action)
+ */
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
@@ -214,9 +228,6 @@ ModuleContainer {
 
         onTriggered: root.processEnabled = true
     }
-    MouseArea {
-        anchors.fill: parent
 
-        onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
-    }
+    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
 }

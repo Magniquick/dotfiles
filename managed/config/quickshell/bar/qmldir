@@ -2,3 +2,4 @@ module qs.bar
 BarWindow 1.0 BarWindow.qml
 singleton ColorPalette 1.0 ColorPalette.qml
 singleton Config 1.0 Config.qml
+singleton DependencyCheck 1.0 DependencyCheck.qml
