@@ -1,0 +1,3 @@
+module common
+singleton Config 1.0 Config.qml
+singleton ColorPalette 1.0 ColorPalette.qml

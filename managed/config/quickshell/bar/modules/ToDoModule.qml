@@ -63,14 +63,4 @@ ModuleContainer {
         }
     }
 
-    MouseArea {
-        // ModuleContainer uses HoverHandler for tooltip,
-        // but if we want it to stay open or toggle on click,
-        // we might need more logic.
-        // Based on other modules, they mostly use HoverHandler.
-
-        anchors.fill: parent
-
-        onClicked: {}
-    }
 }

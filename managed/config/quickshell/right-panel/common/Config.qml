@@ -1,7 +1,7 @@
 pragma Singleton
+import ".."
 import QtQml
 import QtQuick
-import "."
 
 QtObject {
     id: root
@@ -34,8 +34,6 @@ QtObject {
             "onTertiary": ColorPalette.palette.base,
             "flamingo": ColorPalette.palette.flamingo,
             "surface": ColorPalette.palette.base,
-            "surfaceDim": ColorPalette.palette.mantle,
-            "surfaceBright": ColorPalette.palette.surface2,
             "surfaceVariant": ColorPalette.palette.surface1,
             "surfaceContainer": ColorPalette.palette.base,
             "surfaceContainerHigh": ColorPalette.palette.surface1,
@@ -93,9 +91,6 @@ QtObject {
     readonly property color onSurfaceVariant: m3.onSurfaceVariant
     readonly property color outline: m3.outline
     readonly property color outlineStrong: m3.outlineStrong
-    readonly property color overlay1: ColorPalette.palette.overlay1
-    readonly property color subtext1: ColorPalette.palette.subtext1
-    readonly property color surface2: ColorPalette.palette.surface2
     readonly property color pink: m3.secondary
     readonly property color primary: m3.primary
     readonly property color red: m3.error

@@ -6,7 +6,7 @@ cpu_usage=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk
 # Memory Usage
 mem_total=$(free -m | awk '/Mem:/ {print $2}')
 mem_used=$(free -m | awk '/Mem:/ {print $3}')
-mem_pct=$(( 100 * mem_used / mem_total ))
+mem_pct=$((100 * mem_used / mem_total))
 mem_used_label=$(awk -v used="$mem_used" 'BEGIN { printf "%.1fGB", used/1024 }')
 mem_total_label=$(awk -v total="$mem_total" 'BEGIN { printf "%.1fGB", total/1024 }')
 
@@ -18,11 +18,11 @@ cache_file="$cache_dir/disk_health.cache"
 mkdir -p "$cache_dir"
 
 if [ -f "$cache_file" ]; then
-  read -r cached_health cached_wear < "$cache_file"
+	read -r cached_health cached_wear <"$cache_file"
 else
-  cached_health=$("$script_dir/disk_health.sh" 2>/dev/null | tr -d '\\n')
-  cached_wear=$("$script_dir/disk_health.sh" --wear 2>/dev/null | tr -d '\\n')
-  printf "%s %s" "$cached_health" "$cached_wear" > "$cache_file"
+	cached_health=$("$script_dir/disk_health.sh" 2>/dev/null | tr -d '\\n')
+	cached_wear=$("$script_dir/disk_health.sh" --wear 2>/dev/null | tr -d '\\n')
+	printf "%s %s" "$cached_health" "$cached_wear" >"$cache_file"
 fi
 
 disk_health="$cached_health"
@@ -35,4 +35,18 @@ if [ -z "$temp" ]; then temp=0; fi
 # Uptime
 uptime_str=$(uptime -p | sed 's/up //')
 
-echo "{\"cpu\": $cpu_usage, \"mem\": $mem_pct, \"mem_used\": \"${mem_used_label}\", \"mem_total\": \"${mem_total_label}\", \"disk\": $disk_pct, \"disk_health\": \"${disk_health}\", \"disk_wear\": \"${disk_wear}\", \"temp\": $temp, \"uptime\": \"$uptime_str\"}"
+# PSI (Pressure Stall Information) - avg10 values (10-second averages)
+psi_cpu=0
+psi_mem=0
+psi_io=0
+if [ -f /proc/pressure/cpu ]; then
+	psi_cpu=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/cpu)
+fi
+if [ -f /proc/pressure/memory ]; then
+	psi_mem=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/memory)
+fi
+if [ -f /proc/pressure/io ]; then
+	psi_io=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/io)
+fi
+
+echo "{\"cpu\": $cpu_usage, \"mem\": $mem_pct, \"mem_used\": \"${mem_used_label}\", \"mem_total\": \"${mem_total_label}\", \"disk\": $disk_pct, \"disk_health\": \"${disk_health}\", \"disk_wear\": \"${disk_wear}\", \"temp\": $temp, \"uptime\": \"$uptime_str\", \"psi_cpu\": $psi_cpu, \"psi_mem\": $psi_mem, \"psi_io\": $psi_io}"

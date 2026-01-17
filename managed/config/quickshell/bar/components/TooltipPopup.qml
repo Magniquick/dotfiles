@@ -42,7 +42,6 @@ Item {
             popup.anchor.updateAnchor();
     }
 
-    onEnabledChanged: {}
     onOpenChanged: root.updateAnchor()
     onTargetItemChanged: root.updateAnchor()
 

@@ -393,11 +393,6 @@ ColumnLayout {
                 }
                 TapHandler {
                     gesturePolicy: TapHandler.ReleaseWithinBounds
-
-                    onTapped: {
-                        // This helps catch taps that might not be handled by the ComboBox itself
-                        // to ensure focus is maintained or closed as expected.
-                    }
                 }
                 HoverHandler {
                     id: projectSelectorPopupHover

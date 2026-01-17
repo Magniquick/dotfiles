@@ -48,6 +48,5 @@ function formatTooltip(text) {
   const trimmed = String(text).trim();
   if (trimmed === "")
     return "";
-  const normalized = trimmed.replace(/\\r\\n/g, "\\n").replace(/\\n/g, "\\n");
-  return normalized.replace(/\\r\\n/g, "\\n").replace(/\\n/g, "<br/>");
+  return trimmed.replace(/\r\n/g, "\n").replace(/\n/g, "<br/>");
 }
