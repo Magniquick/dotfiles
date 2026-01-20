@@ -27,7 +27,7 @@ Item {
         Text {
             id: bunnyLine1
 
-            color: colors.text
+            color: bunnyBlock.colors.text
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
@@ -36,31 +36,31 @@ Item {
         Text {
             id: bunnyLine2
 
-            color: colors.text
+            color: bunnyBlock.colors.text
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            text: bunnyHead
+            text: bunnyBlock.bunnyHead
         }
         Text {
             id: bunnyLine3
 
-            color: colors.text
+            color: bunnyBlock.colors.text
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            text: qsTr("c(<font color='%1'>\"</font>)(<font color='%1'>\"</font>)").arg(colors.red)
+            text: qsTr("c(<font color='%1'>\"</font>)(<font color='%1'>\"</font>)").arg(bunnyBlock.colors.red)
             textFormat: Text.RichText
         }
     }
     Timer {
         id: headpatResetTimer
 
-        interval: headpatResetDelay
+        interval: bunnyBlock.headpatResetDelay
         repeat: false
         running: false
 
-        onTriggered: bunnyHead = bunnyHeads.default
+        onTriggered: bunnyBlock.bunnyHead = bunnyBlock.bunnyHeads.default
     }
     MouseArea {
         anchors.fill: parent
@@ -69,7 +69,7 @@ Item {
 
         onEntered: {
             headpatResetTimer.stop();
-            bunnyHead = bunnyHeads.headpat;
+            bunnyBlock.bunnyHead = bunnyBlock.bunnyHeads.headpat;
         }
         onExited: {
             headpatResetTimer.stop();

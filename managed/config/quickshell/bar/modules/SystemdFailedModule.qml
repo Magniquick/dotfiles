@@ -71,10 +71,10 @@
  *     enableEventRefresh: false
  * }
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import QtQuick.Layouts
 import Quickshell.Io
 
 ModuleContainer {
@@ -294,7 +294,6 @@ ModuleContainer {
                 root.handleMonitorLine("system", data);
             }
         }
-
         onExited: code => root.handleMonitorCrash("systemMonitor", code)
     }
     Process {
@@ -308,7 +307,6 @@ ModuleContainer {
                 root.handlePropsMonitorLine("system", data);
             }
         }
-
         onExited: code => root.handleMonitorCrash("systemPropsMonitor", code)
     }
     Process {
@@ -322,7 +320,6 @@ ModuleContainer {
                 root.handleMonitorLine("user", data);
             }
         }
-
         onExited: code => root.handleMonitorCrash("userMonitor", code)
     }
     Process {
@@ -336,7 +333,6 @@ ModuleContainer {
                 root.handlePropsMonitorLine("user", data);
             }
         }
-
         onExited: code => root.handleMonitorCrash("userPropsMonitor", code)
     }
     Timer {

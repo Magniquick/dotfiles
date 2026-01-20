@@ -1,7 +1,6 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
-import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -36,9 +35,9 @@ ShellRoot {
     ScreenshotsPill {
         id: screenshotsPill
 
-        colors: palette
-        targetScreen: screenshotsScreen
-        visible: screenshotsVisible && screenshotsScreen
+        colors: root.palette
+        targetScreen: root.screenshotsScreen
+        visible: root.screenshotsVisible && root.screenshotsScreen
 
         onRequestClose: root.hideScreenshots()
     }

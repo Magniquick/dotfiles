@@ -1,7 +1,5 @@
 import Quickshell
-import Quickshell.Io
 import QtQuick
-import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -12,18 +10,18 @@ ShellRoot {
     property bool powermenuVisible: true
 
     function onButton(action) {
-        if (powermenuSelection === action) {
-            powermenuVisible = false;
+        if (root.powermenuSelection === action) {
+            root.powermenuVisible = false;
             runAction(action);
             resetState();
             Qt.quit();
         } else {
-            powermenuSelection = action;
+            root.powermenuSelection = action;
         }
     }
     function resetState() {
-        powermenuSelection = "";
-        powermenuHover = "";
+        root.powermenuSelection = "";
+        root.powermenuHover = "";
     }
     function runAction(action) {
         var cmd = [];
@@ -47,17 +45,17 @@ ShellRoot {
     Powermenu {
         id: powermenu
 
-        colors: palette
-        hoverAction: powermenuHover
-        selection: powermenuSelection
+        colors: root.palette
+        hoverAction: root.powermenuHover
+        selection: root.powermenuSelection
         targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
-        visible: powermenuVisible
+        visible: root.powermenuVisible
 
-        onActionInvoked: actionName => onButton(actionName)
-        onHoverUpdated: actionName => powermenuHover = actionName
+        onActionInvoked: actionName => root.onButton(actionName)
+        onHoverUpdated: actionName => root.powermenuHover = actionName
         onRequestClose: {
-            powermenuVisible = false;
-            resetState();
+            root.powermenuVisible = false;
+            root.resetState();
             Qt.quit();
         }
     }

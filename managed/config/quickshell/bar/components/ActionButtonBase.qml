@@ -8,7 +8,7 @@ Rectangle {
     property color activeColor: Config.m3.primary
     property color borderColor: Config.m3.outline
     default property alias content: contentItem.data
-    property real disabledOpacity: Config.state.disabledOpacity
+    property real disabledOpacity: Config.disabledOpacity
     property color hoverColor: Config.m3.surfaceContainerHigh
     property real hoverScale: 1.02
     property bool hoverScaleEnabled: false
@@ -53,8 +53,8 @@ Rectangle {
         anchors.fill: parent
         antialiasing: true
         color: Config.m3.onSurface
-        opacity: root.pressed ? Config.state.pressedOpacity : (root.hovered ? Config.state.hoverOpacity : 0)
-        radius: parent.radius
+        opacity: root.pressed ? Config.pressedOpacity : (root.hovered ? Config.hoverOpacity : 0)
+        radius: root.radius
         visible: root.enabled
     }
     MouseArea {

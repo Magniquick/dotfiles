@@ -194,7 +194,8 @@ ModuleContainer {
                             ProgressBar {
                                 Layout.fillWidth: true
                                 fillColor: Config.m3.info
-                                height: Config.space.xs + Config.spaceHalfXs
+                                Layout.preferredHeight: Config.space.xs + Config.spaceHalfXs
+                                implicitHeight: Config.space.xs + Config.spaceHalfXs
                                 value: root.sysInfo.cpu / 100
                             }
                         }
@@ -225,7 +226,8 @@ ModuleContainer {
                             ProgressBar {
                                 Layout.fillWidth: true
                                 fillColor: Config.m3.tertiary
-                                height: Config.space.xs + Config.spaceHalfXs
+                                Layout.preferredHeight: Config.space.xs + Config.spaceHalfXs
+                                implicitHeight: Config.space.xs + Config.spaceHalfXs
                                 value: root.sysInfo.mem / 100
                             }
                         }

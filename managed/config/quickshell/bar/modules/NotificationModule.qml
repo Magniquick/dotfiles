@@ -62,6 +62,7 @@
  *     onRightClickCommand: "swaync-client -d"
  * }
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
@@ -196,7 +197,6 @@ ModuleContainer {
                     root.updateFromPayload(payload);
             }
         }
-
         onExited: code => {
             if (root.watchRestartAttempts === 0) {
                 console.warn(`NotificationModule: swaync-client exited with code ${code}, attempting restart`);

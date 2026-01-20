@@ -1,5 +1,5 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "../common" as Common
 
@@ -50,8 +50,10 @@ Rectangle {
       Item { Layout.fillWidth: true }
 
       Rectangle {
-        width: 24
-        height: 24
+        Layout.preferredWidth: 24
+        Layout.preferredHeight: 24
+        implicitWidth: 24
+        implicitHeight: 24
         radius: 12
         color: closeArea.containsMouse ? Qt.alpha(Common.Config.m3.error, 0.2) : "transparent"
 
@@ -83,17 +85,18 @@ Rectangle {
       model: root.options
 
       delegate: Rectangle {
+        id: optionItem
         required property int index
         required property var modelData
 
-        readonly property color itemAccent: modelData.accent || Common.Config.primary
+        readonly property color itemAccent: optionItem.modelData.accent || Common.Config.primary
 
         width: optionsList.width
         height: 56
         radius: Common.Config.shape.corner.md
-        color: optionArea.containsMouse ? itemAccent : Common.Config.surface
+        color: optionArea.containsMouse ? optionItem.itemAccent : Common.Config.surface
         border.width: 1
-        border.color: optionArea.containsMouse ? itemAccent : Qt.alpha(itemAccent, 0.3)
+        border.color: optionArea.containsMouse ? optionItem.itemAccent : Qt.alpha(optionItem.itemAccent, 0.3)
 
         Behavior on color { ColorAnimation { duration: 150 } }
         Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -108,18 +111,18 @@ Rectangle {
             width: 18
             height: 18
             sourceSize: Qt.size(36, 36)
-            source: modelData.iconImage ? Qt.resolvedUrl("../" + modelData.iconImage) : ""
-            visible: !!modelData.iconImage
+            source: optionItem.modelData.iconImage ? Qt.resolvedUrl("../" + optionItem.modelData.iconImage) : ""
+            visible: !!optionItem.modelData.iconImage
             fillMode: Image.PreserveAspectFit
           }
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: modelData.icon || "\uf101"
-            color: optionArea.containsMouse ? Common.Config.onPrimary : itemAccent
+            text: optionItem.modelData.icon || "\uf101"
+            color: optionArea.containsMouse ? Common.Config.onPrimary : optionItem.itemAccent
             font.family: Common.Config.iconFontFamily
             font.pixelSize: 18
-            visible: !modelData.iconImage
+            visible: !optionItem.modelData.iconImage
 
             Behavior on color { ColorAnimation { duration: 150 } }
           }
@@ -129,8 +132,8 @@ Rectangle {
             spacing: 2
 
             Text {
-              text: modelData.label || ""
-              color: optionArea.containsMouse ? Common.Config.onPrimary : itemAccent
+              text: optionItem.modelData.label || ""
+              color: optionArea.containsMouse ? Common.Config.onPrimary : optionItem.itemAccent
               font.family: Common.Config.fontFamily
               font.pixelSize: Common.Config.type.bodyMedium.size
               font.weight: Font.Medium
@@ -139,11 +142,11 @@ Rectangle {
             }
 
             Text {
-              text: modelData.description || ""
+              text: optionItem.modelData.description || ""
               color: optionArea.containsMouse ? Qt.alpha(Common.Config.onPrimary, 0.7) : Common.Config.textMuted
               font.family: Common.Config.fontFamily
               font.pixelSize: Common.Config.type.bodySmall.size
-              visible: (modelData.description || "").length > 0
+              visible: (optionItem.modelData.description || "").length > 0
 
               Behavior on color { ColorAnimation { duration: 150 } }
             }
@@ -155,7 +158,7 @@ Rectangle {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.optionSelected(modelData.value)
+          onClicked: root.optionSelected(optionItem.modelData.value)
         }
       }
     }

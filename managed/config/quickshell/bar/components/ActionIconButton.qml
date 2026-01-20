@@ -6,7 +6,7 @@ ActionButtonBase {
 
     property string icon: ""
 
-    disabledOpacity: Config.state.disabledOpacity
+    disabledOpacity: Config.disabledOpacity
     height: Config.space.xl + Config.space.sm
     radius: width / 2
     width: Config.space.xl + Config.space.sm

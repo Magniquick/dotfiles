@@ -1,7 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Io
 import "./common" as Common
 import "./components" as Components
@@ -259,8 +258,8 @@ Item {
                     id: chatView
                     anchors.fill: parent
                     messages: messageModel
-                    busy: aiBusy
-                    modelId: modelId
+                    busy: root.aiBusy
+                    modelId: root.modelId
                     moodIcon: root.currentMoodIcon
                     moodName: root.currentMoodName
                     connectionOnline: root.connectionStatus === "online"
@@ -299,7 +298,7 @@ Item {
                                 messageModel.append({ sender: "assistant", body: `Mood: ${value}` });
                             }
                             root.showCommandPicker = false;
-                            scrollToLatestMessage();
+                            root.scrollToLatestMessage();
                         }
 
                         onDismissed: root.showCommandPicker = false
@@ -345,7 +344,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
 
                         SequentialAnimation on opacity {
-                            running: root.hasApiKey && root.currentTabIndex === 0 && (root.QsWindow.window?.visible ?? false)
+                            running: root.hasApiKey && root.currentTabIndex === 0 && root.visible
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.4; duration: 1000 }
                             NumberAnimation { to: 1.0; duration: 1000 }
@@ -461,9 +460,9 @@ Item {
         property string requestProvider: ""
 
         function startRequest(history) {
-            requestProvider = currentProvider;
+            requestProvider = root.currentProvider;
 
-            if (currentProvider === "gemini") {
+            if (root.currentProvider === "gemini") {
                 const systemMsg = history.find(m => m.role === "system");
                 const chatMsgs = history.filter(m => m.role !== "system");
                 const contents = chatMsgs.map(m => ({
@@ -474,7 +473,7 @@ Item {
                     contents: contents,
                     systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined
                 });
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiApiKey}`;
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${root.modelId}:generateContent?key=${root.geminiApiKey}`;
                 command = [
                     "curl", "-sS", endpoint,
                     "-H", "Content-Type: application/json",
@@ -482,14 +481,14 @@ Item {
                 ];
             } else {
                 const payload = JSON.stringify({
-                    model: modelId,
+                    model: root.modelId,
                     messages: history
                 });
                 command = [
                     "curl", "-sS",
                     "https://api.openai.com/v1/chat/completions",
                     "-H", "Content-Type: application/json",
-                    "-H", "Authorization: Bearer " + openaiApiKey,
+                    "-H", "Authorization: Bearer " + root.openaiApiKey,
                     "-d", payload
                 ];
             }
@@ -498,8 +497,8 @@ Item {
 
         stdout: StdioCollector {
             onStreamFinished: {
-                aiBusy = false;
-                backendStatus = "Ready";
+                root.aiBusy = false;
+                root.backendStatus = "Ready";
                 if (!text || text.trim().length === 0) {
                     messageModel.append({
                         sender: "assistant",
@@ -529,30 +528,30 @@ Item {
                     });
                     return;
                 }
-                chatHistory.push({ role: "assistant", content: reply });
+                root.chatHistory.push({ role: "assistant", content: reply });
                 messageModel.append({ sender: "assistant", body: reply });
-                scrollToLatestMessage();
+                root.scrollToLatestMessage();
             }
         }
 
         stderr: StdioCollector {
             onStreamFinished: {
                 if (text && text.trim().length > 0) {
-                    lastError = text.trim();
+                    aiProc.lastError = text.trim();
                 }
             }
         }
 
         onRunningChanged: {
             if (!running && lastError.length > 0) {
-                aiBusy = false;
-                backendStatus = "Error";
+                root.aiBusy = false;
+                root.backendStatus = "Error";
                 messageModel.append({
                     sender: "assistant",
                     body: "Backend error: " + lastError
                 });
-                lastError = "";
-                scrollToLatestMessage();
+                aiProc.lastError = "";
+                root.scrollToLatestMessage();
             }
         }
     }

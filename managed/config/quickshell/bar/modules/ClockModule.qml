@@ -13,6 +13,7 @@
  * - bar/.env: Environment file with calendar URLs
  * - Quickshell.Io: FileView for cache watching
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
@@ -22,6 +23,8 @@ import Quickshell.Io
 
 ModuleContainer {
     id: root
+
+    property alias calendarAdapter: calendarAdapter
 
     readonly property string calendarBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/ical-cache")
     readonly property string calendarCacheDir: {
@@ -49,7 +52,7 @@ ModuleContainer {
         root.updateCalendarRefreshTime();
     }
     function updateCalendarRefreshTime() {
-        const generatedAt = calendarAdapter.generatedAt;
+        const generatedAt = root.calendarAdapter.generatedAt;
         if (generatedAt && String(generatedAt).trim() !== "") {
             const dt = new Date(generatedAt);
             root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
@@ -122,15 +125,19 @@ ModuleContainer {
             reload();
             root.updateCalendarRefreshTime();
         }
-
         JsonAdapter {
             id: calendarAdapter
 
             property string status: ""
             property string generatedAt: ""
             property var eventsByDay: ({})
+        }
+    }
+    Connections {
+        target: root.calendarAdapter
 
-            onGeneratedAtChanged: root.updateCalendarRefreshTime()
+        function onGeneratedAtChanged() {
+            root.updateCalendarRefreshTime();
         }
     }
     SystemClock {

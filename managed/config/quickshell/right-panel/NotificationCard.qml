@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "./common" as Common
 
@@ -84,8 +83,8 @@ Item {
 
                 Rectangle {
                     visible: iconImage.visible
-                    width: 28
-                    height: 28
+                    implicitWidth: 28
+                    implicitHeight: 28
                     radius: Common.Config.shape.corner.sm
                     color: Common.Config.surfaceVariant
 
@@ -95,8 +94,8 @@ Item {
                         width: 20
                         height: 20
                         fillMode: Image.PreserveAspectFit
-                        source: entry && entry.iconSource ? entry.iconSource : ""
-                        visible: source.length > 0
+                        source: root.entry && root.entry.iconSource ? root.entry.iconSource : ""
+                        visible: source.toString().length > 0
                     }
                 }
 
@@ -105,7 +104,7 @@ Item {
                     spacing: 2
 
                     Text {
-                        text: entry && entry.appName ? entry.appName : "Notification"
+                        text: root.entry && root.entry.appName ? root.entry.appName : "Notification"
                         color: Common.Config.textMuted
                         font.family: Common.Config.fontFamily
                         font.pixelSize: Common.Config.type.labelMedium.size
@@ -114,7 +113,7 @@ Item {
                     }
 
                     Text {
-                        text: entry && entry.summary ? entry.summary : ""
+                        text: root.entry && root.entry.summary ? root.entry.summary : ""
                         color: Common.Config.textColor
                         font.family: Common.Config.fontFamily
                         font.pixelSize: Common.Config.type.titleSmall.size
@@ -125,8 +124,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: 24
-                    height: 24
+                    implicitWidth: 24
+                    implicitHeight: 24
                     radius: 12
                     color: closeArea.containsMouse
                         ? Qt.alpha(Common.ColorPalette.palette.overlay2, 0.25)
@@ -151,7 +150,7 @@ Item {
             }
 
             Text {
-                text: entry && entry.body ? entry.body : ""
+                text: root.entry && root.entry.body ? root.entry.body : ""
                 color: Common.Config.textColor
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.bodySmall.size

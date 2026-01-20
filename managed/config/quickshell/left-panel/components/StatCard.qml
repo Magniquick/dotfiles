@@ -29,8 +29,10 @@ Item {
       // Icon
       Rectangle {
         Layout.alignment: Qt.AlignVCenter
-        width: 36
-        height: 36
+        Layout.preferredWidth: 36
+        Layout.preferredHeight: 36
+        implicitWidth: 36
+        implicitHeight: 36
         radius: Common.Config.shape.corner.sm
         color: Qt.alpha(Common.Config.textColor, 0.05)
 

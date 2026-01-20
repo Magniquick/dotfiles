@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQml
 import QtQuick
+import Quickshell
 import "."
 
 QtObject {
@@ -58,8 +59,8 @@ QtObject {
     readonly property color moduleBackground: m3.surfaceContainer
     readonly property color moduleBackgroundHover: m3.surfaceContainerHigh
     readonly property color moduleBackgroundMuted: m3.surfaceVariant
-    readonly property real devicePixelRatio: (Qt.application && Qt.application.screens && Qt.application.screens.length > 0)
-        ? Qt.application.screens[0].devicePixelRatio
+    readonly property real devicePixelRatio: (Quickshell.screens && Quickshell.screens.length > 0)
+        ? Quickshell.screens[0].devicePixelRatio
         : 1
     readonly property int moduleMarginBottom: space.none
     readonly property int moduleMarginTop: 4 / root.devicePixelRatio
@@ -67,23 +68,8 @@ QtObject {
     readonly property int modulePaddingX: space.sm
     readonly property int modulePaddingY: space.none
     readonly property int moduleSpacing: space.xs
-    readonly property QtObject motion: QtObject {
-        readonly property QtObject distance: QtObject {
-            readonly property int large: 12
-            readonly property int medium: 8
-            readonly property int small: 4
-        }
-        readonly property QtObject duration: QtObject {
-            readonly property int extraLong: Math.round(360 * root.motionScale)
-            readonly property int longMs: Math.round(240 * root.motionScale)
-            readonly property int medium: Math.round(180 * root.motionScale)
-            readonly property int pulse: Math.round(900 * root.motionScale)
-            readonly property int shortMs: Math.round(140 * root.motionScale)
-        }
-        readonly property QtObject easing: QtObject {
-            readonly property int emphasized: Easing.InOutCubic
-            readonly property int standard: Easing.OutCubic
-        }
+    readonly property Motion motion: Motion {
+        motionScale: root.motionScale
     }
     readonly property real motionScale: reducedMotion ? 0.6 : 1
     readonly property color onError: m3.onError
@@ -101,29 +87,9 @@ QtObject {
     readonly property color red: m3.error
     readonly property bool reducedMotion: false
     readonly property int sectionSpacing: space.xs
-    readonly property QtObject shape: QtObject {
-        readonly property QtObject corner: QtObject {
-            readonly property int lg: 16
-            readonly property int md: 12
-            readonly property int sm: 8
-            readonly property int xl: 28
-            readonly property int xs: 4
-        }
-    }
-    readonly property QtObject slider: QtObject {
-        readonly property int barHeight: 5
-        readonly property int knobSize: 12
-        readonly property int knobWidth: 18
-    }
-    readonly property QtObject space: QtObject {
-        readonly property int lg: 16
-        readonly property int md: 12
-        readonly property int none: 0
-        readonly property int sm: 8
-        readonly property int xl: 20
-        readonly property int xs: 4
-        readonly property int xxl: 24
-    }
+    readonly property Shape shape: Shape {}
+    readonly property Slider slider: Slider {}
+    readonly property Space space: Space {}
     readonly property int spaceHalfXs: Math.max(1, Math.round(space.xs / 2))
     readonly property QtObject state: QtObject {
         readonly property real disabledOpacity: 0.5
@@ -144,92 +110,7 @@ QtObject {
     readonly property int tooltipPadding: space.md
     readonly property bool tooltipPulseAnimationEnabled: false
     readonly property int tooltipRadius: shape.corner.md
-    readonly property QtObject type: QtObject {
-
-        // Body - Long passages
-        readonly property QtObject bodyLarge: QtObject {
-            readonly property int line: 24
-            readonly property int size: 16
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject bodyMedium: QtObject {
-            readonly property int line: 20
-            readonly property int size: 14
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject bodySmall: QtObject {
-            readonly property int line: 16
-            readonly property int size: 12
-            readonly property int weight: Font.Normal
-        }
-        // Display - Largest text, expressive
-        readonly property QtObject displayLarge: QtObject {
-            readonly property int line: 64
-            readonly property int size: 57
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject displayMedium: QtObject {
-            readonly property int line: 52
-            readonly property int size: 45
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject displaySmall: QtObject {
-            readonly property int line: 44
-            readonly property int size: 36
-            readonly property int weight: Font.Normal
-        }
-
-        // Headline - Short, high-emphasis text
-        readonly property QtObject headlineLarge: QtObject {
-            readonly property int line: 40
-            readonly property int size: 32
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject headlineMedium: QtObject {
-            readonly property int line: 36
-            readonly property int size: 28
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject headlineSmall: QtObject {
-            readonly property int line: 32
-            readonly property int size: 24
-            readonly property int weight: Font.Normal
-        }
-
-        // Label - Small, utilitarian text
-        readonly property QtObject labelLarge: QtObject {
-            readonly property int line: 20
-            readonly property int size: 14
-            readonly property int weight: Font.Medium
-        }
-        readonly property QtObject labelMedium: QtObject {
-            readonly property int line: 16
-            readonly property int size: 12
-            readonly property int weight: Font.Medium
-        }
-        readonly property QtObject labelSmall: QtObject {
-            readonly property int line: 16
-            readonly property int size: 11
-            readonly property int weight: Font.Medium
-        }
-
-        // Title - Medium-emphasis, shorter text
-        readonly property QtObject titleLarge: QtObject {
-            readonly property int line: 28
-            readonly property int size: 22
-            readonly property int weight: Font.Normal
-        }
-        readonly property QtObject titleMedium: QtObject {
-            readonly property int line: 24
-            readonly property int size: 16
-            readonly property int weight: Font.Medium
-        }
-        readonly property QtObject titleSmall: QtObject {
-            readonly property int line: 20
-            readonly property int size: 14
-            readonly property int weight: Font.Medium
-        }
-    }
+    readonly property TypeScale type: TypeScale {}
     readonly property color warn: m3.error
     readonly property int workspaceHeight: barHeight
     readonly property int workspacePaddingX: space.sm

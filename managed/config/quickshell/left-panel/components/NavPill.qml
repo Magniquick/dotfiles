@@ -1,5 +1,5 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "../common" as Common
 
@@ -22,7 +22,7 @@ Item {
     anchors.centerIn: parent
     spacing: 48
 
-      Repeater {
+    Repeater {
         model: root.tabs
 
         Item {
@@ -30,7 +30,7 @@ Item {
           required property int index
           required property var modelData
 
-          readonly property bool isActive: root.currentIndex === index
+          readonly property bool isActive: root.currentIndex === tabItem.index
           property bool isHovered: false
 
           Layout.preferredHeight: 48
@@ -45,11 +45,11 @@ Item {
               spacing: Common.Config.space.sm
 
               Text {
-                text: modelData.icon || ""
-                color: tabItem.isActive ? modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
+                text: tabItem.modelData.icon || ""
+                color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
                 font.family: Common.Config.iconFontFamily
                 font.pixelSize: 16
-                visible: (modelData.icon || "").length > 0
+                visible: (tabItem.modelData.icon || "").length > 0
                 opacity: tabItem.isActive ? 1.0 : (tabItem.isHovered ? 0.8 : 0.5)
 
                 Behavior on color { ColorAnimation { duration: 200 } }
@@ -57,8 +57,8 @@ Item {
               }
 
               Text {
-                text: modelData.label || ""
-                color: tabItem.isActive ? modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
+                text: tabItem.modelData.label || ""
+                color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
                 font.family: Common.Config.fontFamily
                 font.pixelSize: 11
                 font.weight: Font.Black
@@ -76,7 +76,7 @@ Item {
               width: tabContent.width
               height: 4
               radius: 2
-              color: tabItem.isActive ? modelData.accent : "transparent"
+              color: tabItem.isActive ? tabItem.modelData.accent : "transparent"
               anchors.horizontalCenter: parent.horizontalCenter
 
               Behavior on color { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }

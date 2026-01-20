@@ -12,11 +12,10 @@
  * - waybar-module-pacman-updates: JSON stream of pending updates
  * - yay: AUR helper for updates (click action)
  */
-import ".."
+pragma ComponentBehavior: Bound
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 

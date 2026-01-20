@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 
@@ -65,6 +66,9 @@ Item {
             model: gridHolder.actions
 
             delegate: PowermenuButton {
+                required property var modelData
+                required property int index
+
                 accent: modelData.accent
                 actionName: modelData.name
                 hoverAction: gridHolder.hoverAction

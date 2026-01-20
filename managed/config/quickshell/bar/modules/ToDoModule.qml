@@ -12,11 +12,10 @@
  * - bar/scripts/src/todoist-api: Rust binary for Todoist API
  * - ~/.local/bin/custom/todoist.sh: Todoist launcher script
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import QtQuick.Layouts
-import Quickshell
 
 ModuleContainer {
     id: root

@@ -11,8 +11,8 @@
  * Dependencies:
  * - Quickshell.Hyprland: Workspace list and monitor info
  */
+pragma ComponentBehavior: Bound
 import ".."
-import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Hyprland
@@ -33,18 +33,21 @@ Item {
         spacing: Config.groupModuleSpacing
 
         Repeater {
-            model: hyprland.workspaces
+            model: root.hyprland.workspaces
 
             delegate: WorkspaceButton {
-                active: modelData.active
-                dispatchName: (modelData.name && modelData.name !== "") ? modelData.name : modelData.id
+                id: workspaceButton
+                required property var modelData
+
+                active: workspaceButton.modelData.active
+                dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
                 fontFamily: Config.fontFamily
                 fontSize: Config.fontSize
-                hyprland: hyprland
-                label: (modelData.name && modelData.name !== "") ? modelData.name : modelData.id
-                urgent: modelData.urgent
-                visible: modelData.id >= 0 && (!root.monitor || !modelData.monitor || modelData.monitor.name === root.monitor.name)
-                workspace: modelData
+                hyprland: root.hyprland
+                label: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
+                urgent: workspaceButton.modelData.urgent
+                visible: workspaceButton.modelData.id >= 0 && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
+                workspace: workspaceButton.modelData
             }
         }
     }

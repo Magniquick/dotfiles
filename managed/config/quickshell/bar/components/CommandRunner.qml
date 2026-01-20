@@ -82,7 +82,6 @@ Item {
 
             waitForEnd: true
         }
-
         onExited: code => {
             timeoutTimer.stop();
             root.errorOutput = stderrCollector.text.trim();

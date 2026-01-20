@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
+import QtQml
 import Quickshell
 import Quickshell.Io
 import ".."
@@ -197,8 +198,10 @@ ColumnLayout {
         spacing: Config.space.md
 
         Item {
-            height: root.iconSlot
-            width: root.iconSlot
+            Layout.preferredHeight: root.iconSlot
+            Layout.preferredWidth: root.iconSlot
+            implicitHeight: root.iconSlot
+            implicitWidth: root.iconSlot
 
             Text {
                 anchors.centerIn: parent
@@ -316,7 +319,7 @@ ColumnLayout {
                 implicitWidth: 0
             }
             popup: Popup {
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent
                 focus: true
                 implicitHeight: contentItem.implicitHeight
                 padding: Config.space.xs
@@ -372,7 +375,7 @@ ColumnLayout {
 
                 Component.onCompleted: {
                     if (projectSelector.popup) {
-                        projectSelector.popup.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent | Popup.CloseOnFocusLost;
+                        projectSelector.popup.closePolicy = Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent;
                     }
                 }
                 onActiveFocusChanged: if (!activeFocus)
@@ -384,7 +387,7 @@ ColumnLayout {
 
                 Connections {
                     function onActiveChanged() {
-                        if (!Qt.application.active) {
+                        if (Qt.application && Qt.application.state !== Qt.ApplicationActive) {
                             projectSelector.popup.close();
                         }
                     }
@@ -440,7 +443,8 @@ ColumnLayout {
                 Rectangle {
                     Layout.fillHeight: true
                     Layout.preferredHeight: Config.type.bodySmall.line + root.minorSpace
-                    Layout.preferredWidth: stripeWidth
+                    Layout.preferredWidth: taskItem.stripeWidth
+                    implicitWidth: taskItem.stripeWidth
                     color: root.getTaskColor(taskItem.index)
                     opacity: 0.8
                     radius: Config.shape.corner.xs

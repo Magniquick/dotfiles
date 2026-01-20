@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -55,7 +56,7 @@ Item {
 
   Timer {
     interval: 2000; repeat: true; triggeredOnStart: true
-    running: root.QsWindow.window?.visible ?? false
+    running: root.visible
     onTriggered: if (!proc.running) proc.running = true
   }
 
@@ -104,10 +105,11 @@ Item {
 
           ColumnLayout {
             id: psiDelegate
+            required property string modelData
             Layout.fillWidth: true
             spacing: 2
 
-            readonly property string key: modelData
+            readonly property string key: psiDelegate.modelData
             readonly property string label: key === "cpu" ? "CPU" : (key === "mem" ? "MEM" : "I/O")
             readonly property real someVal: root.sysInfo["psi_" + key + "_some"] || 0
             readonly property real fullVal: root.sysInfo["psi_" + key + "_full"] || 0
@@ -147,7 +149,8 @@ Item {
             // Stacked bars
             Rectangle {
               Layout.fillWidth: true
-              height: 10
+              Layout.preferredHeight: 10
+              implicitHeight: 10
               radius: 5
               color: Qt.alpha(Common.Config.textColor, 0.05)
               border.width: 1
@@ -201,8 +204,10 @@ Item {
           // Status icon with pulse
           Rectangle {
             Layout.alignment: Qt.AlignHCenter
-            width: 40
-            height: 40
+            Layout.preferredWidth: 40
+            Layout.preferredHeight: 40
+            implicitWidth: 40
+            implicitHeight: 40
             radius: 20
             color: Qt.alpha(root.isHealthy ? Common.Config.m3.success : Common.Config.m3.error, 0.1)
 
@@ -215,7 +220,7 @@ Item {
             }
 
             SequentialAnimation on opacity {
-              running: root.QsWindow.window?.visible ?? false
+              running: root.visible
               loops: Animation.Infinite
               NumberAnimation { to: 0.6; duration: 1200; easing.type: Easing.InOutQuad }
               NumberAnimation { to: 1; duration: 1200; easing.type: Easing.InOutQuad }

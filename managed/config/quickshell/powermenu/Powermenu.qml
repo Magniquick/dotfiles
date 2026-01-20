@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 
@@ -64,14 +63,14 @@ PanelWindow {
         anchors.fill: parent
         z: 0
 
-        onClicked: requestClose()
+        onClicked: window.requestClose()
     }
     Shortcut {
         context: Qt.ApplicationShortcut
         enabled: window.visible
         sequences: ["Escape", "Q", "A"]
 
-        onActivated: requestClose()
+        onActivated: window.requestClose()
     }
     Timer {
         id: revealTimer
@@ -79,7 +78,7 @@ PanelWindow {
         interval: 30
         repeat: false
 
-        onTriggered: revealButtons = true
+        onTriggered: window.revealButtons = true
     }
     Timer {
         id: hoverEnableTimer
@@ -87,7 +86,7 @@ PanelWindow {
         interval: 450
         repeat: false
 
-        onTriggered: hoverEnabled = true
+        onTriggered: window.hoverEnabled = true
     }
     Item {
         id: content

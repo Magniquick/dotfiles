@@ -10,7 +10,7 @@ ShellRoot {
         id: panelWindow
         color: "transparent"
         visible: true
-        implicitWidth: panelWidth
+        implicitWidth: root.panelWidth
 
         anchors {
             top: true

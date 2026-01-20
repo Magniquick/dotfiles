@@ -1,7 +1,6 @@
 import "./config.js" as ScreenshotsConfig
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 
@@ -50,10 +49,10 @@ PanelWindow {
         id: pillContainer
 
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: padding
+        anchors.bottomMargin: pillWindow.padding
         anchors.horizontalCenter: parent.horizontalCenter
-        implicitHeight: pill.implicitHeight + padding * 2
-        implicitWidth: pill.implicitWidth + padding * 2
+        implicitHeight: pill.implicitHeight + pillWindow.padding * 2
+        implicitWidth: pill.implicitWidth + pillWindow.padding * 2
 
         FocusScope {
             anchors.fill: parent
@@ -64,7 +63,7 @@ PanelWindow {
             enabled: pillWindow.visible
             sequences: ["Escape", "q", "Q"]
 
-            onActivated: requestClose()
+            onActivated: pillWindow.requestClose()
         }
         Rectangle {
             anchors.fill: parent
@@ -75,16 +74,16 @@ PanelWindow {
 
             anchors.centerIn: parent
             antialiasing: true
-            border.color: hovered ? colors.overlay1 : colors.overlay0
+            border.color: pillWindow.hovered ? pillWindow.colors.overlay1 : pillWindow.colors.overlay0
             border.width: 2
-            color: hovered ? colors.surface1 : colors.surface0
+            color: pillWindow.hovered ? pillWindow.colors.surface1 : pillWindow.colors.surface0
             implicitHeight: 56
             implicitWidth: 260
             layer.enabled: true
             layer.smooth: true
             opacity: ScreenshotsConfig.pillOpacity
             radius: height / 2
-            scale: hovered ? 1.04 : 1
+            scale: pillWindow.hovered ? 1.04 : 1
 
             Behavior on border.color {
                 ColorAnimation {
@@ -114,9 +113,9 @@ PanelWindow {
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    border.color: colors.overlay1
+                    border.color: pillWindow.colors.overlay1
                     border.width: 2
-                    color: colors.sapphire
+                    color: pillWindow.colors.sapphire
                     height: 16
                     radius: width / 2
                     width: 16
@@ -126,7 +125,7 @@ PanelWindow {
                     spacing: 2
 
                     Text {
-                        color: colors.text
+                        color: pillWindow.colors.text
                         font.bold: true
                         font.pixelSize: 16
                         horizontalAlignment: Text.AlignLeft
@@ -134,7 +133,7 @@ PanelWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                     Text {
-                        color: colors.subtext0
+                        color: pillWindow.colors.subtext0
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignLeft
                         text: "Floating anchor for captures"

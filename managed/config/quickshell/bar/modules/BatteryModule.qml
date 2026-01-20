@@ -12,11 +12,11 @@
  * Dependencies:
  * - Quickshell.Services.UPower: Battery state and power profiles
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Services.UPower
 
 ModuleContainer {
@@ -206,8 +206,10 @@ ModuleContainer {
                 spacing: Config.space.md
 
                 Item {
-                    height: Config.space.xxl * 2
-                    width: Config.space.xxl * 2
+                    Layout.preferredHeight: Config.space.xxl * 2
+                    Layout.preferredWidth: Config.space.xxl * 2
+                    implicitHeight: Config.space.xxl * 2
+                    implicitWidth: Config.space.xxl * 2
 
                     Text {
                         anchors.centerIn: parent
@@ -240,7 +242,8 @@ ModuleContainer {
             ProgressBar {
                 Layout.fillWidth: true
                 fillColor: root.batteryColor(UPower.displayDevice)
-                height: Config.space.xs
+                Layout.preferredHeight: Config.space.xs
+                implicitHeight: Config.space.xs
                 trackColor: Config.moduleBackgroundMuted
                 value: root.batteryPercentValue(UPower.displayDevice) / 100
             }

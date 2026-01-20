@@ -59,6 +59,7 @@
  *     debugLogging: true
  * }
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
@@ -240,11 +241,11 @@ ModuleContainer {
                     border.width: 0
                     clip: true
                     color: "transparent"
-                    height: Math.max(detailsColumn.implicitHeight, Config.space.xxl * 2 + Config.space.sm)
-                    implicitHeight: height
-                    implicitWidth: width
+                    Layout.preferredHeight: Math.max(detailsColumn.implicitHeight, Config.space.xxl * 2 + Config.space.sm)
+                    Layout.preferredWidth: Layout.preferredHeight
+                    implicitHeight: Layout.preferredHeight
+                    implicitWidth: Layout.preferredWidth
                     radius: Config.shape.corner.md
-                    width: height
 
                     Item {
                         id: artFrame
@@ -337,7 +338,7 @@ ModuleContainer {
                                 id: titleMarquee
 
                                 loops: Animation.Infinite
-                                running: titleClip.hovered && titleClip.scrollDistance > 0 && root.QsWindow.window && root.QsWindow.window.visible
+                                running: titleClip.hovered && titleClip.scrollDistance > 0 && root.visible
 
                                 PauseAnimation {
                                     duration: 350
@@ -507,6 +508,10 @@ ModuleContainer {
         model: Mpris.players
 
         delegate: Item {
+            id: playerConnection
+
+            required property var modelData
+
             height: 0
             visible: false
             width: 0
@@ -522,7 +527,7 @@ ModuleContainer {
                     root.refreshActivePlayer();
                 }
 
-                target: modelData
+                target: playerConnection.modelData
             }
         }
     }

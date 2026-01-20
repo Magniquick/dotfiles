@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Io
 import ".."
 
@@ -156,7 +155,7 @@ Item {
     }
     FileView {
         id: eventsFile
-
+        adapter: calendarAdapter
         path: calendar.eventsPath
         watchChanges: true
         blockLoading: true
@@ -166,13 +165,13 @@ Item {
             calendar.applyCalendarFromAdapter();
         }
 
-        JsonAdapter {
-            id: calendarAdapter
+    }
+    JsonAdapter {
+        id: calendarAdapter
 
-            property string status: ""
-            property string generatedAt: ""
-            property var eventsByDay: ({})
-        }
+        property string status: ""
+        property string generatedAt: ""
+        property var eventsByDay: ({})
     }
     ColumnLayout {
         id: layout
@@ -241,6 +240,7 @@ Item {
                             model: calendar.weekDays
 
                             delegate: Item {
+                                id: weekdayItem
                                 required property int index
                                 required property string modelData
 
@@ -253,8 +253,8 @@ Item {
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.labelSmall.size
                                     font.weight: Config.type.labelSmall.weight
-                                    text: modelData
-                                }
+                                    text: weekdayItem.modelData
+                            }
                             }
                         }
                     }
@@ -437,6 +437,7 @@ Item {
                 model: calendar.dayEvents && calendar.dayEvents.length > 0 ? calendar.dayEvents.slice(0, 4) : []
 
                 delegate: RowLayout {
+                    id: eventRow
                     required property var modelData
 
                     Layout.fillWidth: true
@@ -445,10 +446,12 @@ Item {
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         color: eventListLayout.isToday ? Config.m3.primary : Config.m3.outline
-                        height: 12
+                        Layout.preferredHeight: 12
+                        Layout.preferredWidth: 2
+                        implicitHeight: 12
+                        implicitWidth: 2
                         opacity: eventListLayout.isToday ? 1.0 : 0.3
                         radius: 1
-                        width: 2
                     }
                     Text {
                         Layout.fillWidth: true
@@ -457,9 +460,9 @@ Item {
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodySmall.size
                         font.weight: eventListLayout.isToday ? Font.DemiBold : Config.type.bodySmall.weight
-                        text: calendar.formatEventLabel(modelData)
-                    }
+                        text: calendar.formatEventLabel(eventRow.modelData)
                 }
+            }
             }
             Text {
                 color: Config.m3.onSurfaceVariant

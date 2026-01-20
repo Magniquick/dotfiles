@@ -1,8 +1,8 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 
 Rectangle {
-    id: left
+    id: leftPane
 
     property color borderColor
     property int borderRadius: 27
@@ -30,10 +30,10 @@ Rectangle {
         id: leftContent
 
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: padBottom
+        anchors.bottomMargin: leftPane.padBottom
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        anchors.topMargin: padTop
+        anchors.topMargin: leftPane.padTop
         spacing: 26
 
         Column {
@@ -53,7 +53,7 @@ Rectangle {
                 Text {
                     id: headline
 
-                    color: colors.blue
+                    color: leftPane.colors.blue
                     font.family: "Battle Andy"
                     font.pointSize: 80
                     text: "Hello"
@@ -61,7 +61,7 @@ Rectangle {
                 Text {
                     id: heart
 
-                    color: colors.red
+                    color: leftPane.colors.red
                     font.family: "JetBrainsMono NFP"
                     font.pointSize: 12
                     text: ""
@@ -76,13 +76,13 @@ Rectangle {
                 implicitHeight: height
                 implicitWidth: width
                 width: subtitle.paintedWidth
-                x: headlineWrap.width + subtitleOffsetX
-                y: headlineWrap.height + subtitleOffsetY
+                x: headlineWrap.width + leftPane.subtitleOffsetX
+                y: headlineWrap.height + leftPane.subtitleOffsetY
 
                 Text {
                     id: subtitle
 
-                    color: colors.subtext0
+                    color: leftPane.colors.subtext0
                     font.family: "Kyok Medium"
                     font.pointSize: 17
                     text: "(again)"
@@ -96,7 +96,7 @@ Rectangle {
             width: leftContent.width
 
             Text {
-                color: colors.yellow
+                color: leftPane.colors.yellow
                 font.italic: true
                 font.pointSize: 27
                 horizontalAlignment: Text.AlignHCenter
@@ -113,12 +113,12 @@ Rectangle {
                 Text {
                     id: quoteBnuuy
 
-                    color: colors.text
+                    color: leftPane.colors.text
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
                     horizontalAlignment: Text.AlignHCenter
-                    opacity: headpatting ? 0 : 1
+                    opacity: leftPane.headpatting ? 0 : 1
                     renderType: Text.NativeRendering
                     text: "“bnuuy art life”"
                     width: parent.width
@@ -132,12 +132,12 @@ Rectangle {
                 Text {
                     id: quoteBubbi
 
-                    color: colors.text
+                    color: leftPane.colors.text
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
                     horizontalAlignment: Text.AlignHCenter
-                    opacity: headpatting ? 1 : 0
+                    opacity: leftPane.headpatting ? 1 : 0
                     renderType: Text.NativeRendering
                     text: "“bubbi art life”"
                     width: parent.width
@@ -158,12 +158,12 @@ Rectangle {
                 Text {
                     id: authorMarx
 
-                    color: colors.subtext0
+                    color: leftPane.colors.subtext0
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
                     horizontalAlignment: Text.AlignRight
-                    opacity: headpatting ? 0 : 1
+                    opacity: leftPane.headpatting ? 0 : 1
                     renderType: Text.NativeRendering
                     text: "–Karl Marx"
                     width: parent.width
@@ -177,12 +177,12 @@ Rectangle {
                 Text {
                     id: authorMagni
 
-                    color: colors.subtext0
+                    color: leftPane.colors.subtext0
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
                     horizontalAlignment: Text.AlignRight
-                    opacity: headpatting ? 1 : 0
+                    opacity: leftPane.headpatting ? 1 : 0
                     renderType: Text.NativeRendering
                     text: "–Magniquick"
                     width: parent.width
@@ -200,22 +200,25 @@ Rectangle {
             spacing: -12
 
             Repeater {
-                model: [colors.red, colors.yellow, colors.green, colors.teal, colors.blue, colors.pink]
+                model: [leftPane.colors.red, leftPane.colors.yellow, leftPane.colors.green, leftPane.colors.teal, leftPane.colors.blue, leftPane.colors.pink]
 
                 delegate: Rectangle {
-                    border.color: colors.base
-                    border.width: swatchBorder
+                    required property color modelData
+                    id: swatch
+
+                    border.color: leftPane.colors.base
+                    border.width: leftPane.swatchBorder
                     color: "transparent"
-                    height: swatchSize
+                    height: leftPane.swatchSize
                     radius: 999
-                    width: swatchSize
+                    width: leftPane.swatchSize
 
                     Rectangle {
                         anchors.centerIn: parent
-                        color: modelData
-                        height: swatchSize - swatchBorder * 2
+                        color: swatch.modelData
+                        height: leftPane.swatchSize - leftPane.swatchBorder * 2
                         radius: 999
-                        width: swatchSize - swatchBorder * 2
+                        width: leftPane.swatchSize - leftPane.swatchBorder * 2
                     }
                 }
             }

@@ -62,6 +62,7 @@
  *     privacyRefreshMs: 2000  // Check every 2 seconds
  * }
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils

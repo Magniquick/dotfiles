@@ -1,4 +1,3 @@
-import "."
 import QtQml
 import QtQuick
 import Quickshell

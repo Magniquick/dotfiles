@@ -1,6 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
-import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import "../common" as Common
@@ -233,7 +231,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
 
               SequentialAnimation on opacity {
-                running: root.location?.is_own_report === true && (root.QsWindow.window?.visible ?? false)
+                running: root.location?.is_own_report === true && root.visible
                 loops: Animation.Infinite
                 NumberAnimation { to: 0.3; duration: 800 }
                 NumberAnimation { to: 1.0; duration: 800 }

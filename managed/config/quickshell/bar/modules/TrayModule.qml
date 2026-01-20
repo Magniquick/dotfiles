@@ -11,11 +11,13 @@
  * Dependencies:
  * - Quickshell.Services.SystemTray: Tray item provider
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell._Window
 import Quickshell.Services.SystemTray
 
 ModuleContainer {
@@ -100,10 +102,10 @@ ModuleContainer {
 
                 Layout.alignment: Qt.AlignVCenter
                 Layout.preferredHeight: trayContent.implicitHeight
-                Layout.preferredWidth: width
+                Layout.preferredWidth: trayContent.implicitWidth
+                implicitHeight: trayContent.implicitHeight
+                implicitWidth: trayContent.implicitWidth
                 clip: true
-                height: trayContent.implicitHeight
-                width: trayContent.implicitWidth
                 RowLayout {
                     id: trayContent
 
@@ -111,18 +113,19 @@ ModuleContainer {
                     spacing: Config.moduleSpacing
 
                     Repeater {
-                        model: tray.items
+                        model: root.tray.items
 
                         delegate: Item {
                             id: trayItem
 
+                            required property var modelData
                             property rect menuAnchorRect: Qt.rect(0, 0, 0, 0)
                             property var menuWindow: root.parentWindow || trayItem.QsWindow.window
 
                             QsMenuOpener {
                                 id: menuOpener
 
-                                menu: modelData.menu
+                                menu: trayItem.modelData.menu
                             }
                             HoverHandler {
                                 id: trayHover
@@ -154,7 +157,7 @@ ModuleContainer {
                                     return;
                                 }
 
-                                modelData.display(window, rect.x, rect.y + rect.height + Config.tooltipOffset);
+                                trayItem.modelData.display(window, rect.x, rect.y + rect.height + Config.tooltipOffset);
                             }
 
                             Layout.preferredHeight: implicitHeight
@@ -169,7 +172,7 @@ ModuleContainer {
 
                                 fillMode: Image.PreserveAspectFit
                                 height: Config.iconSize + Config.space.xs
-                                source: root.iconSource(modelData.icon)
+                                source: root.iconSource(trayItem.modelData.icon)
                                 sourceSize.height: Math.round(height * Config.devicePixelRatio)
                                 sourceSize.width: Math.round(width * Config.devicePixelRatio)
                                 width: Config.iconSize + Config.space.xs
@@ -185,16 +188,16 @@ ModuleContainer {
 
                                 onClicked: function(mouse) {
                                     if (mouse.button === Qt.MiddleButton) {
-                                        modelData.secondaryActivate();
+                                        trayItem.modelData.secondaryActivate();
                                         return;
                                     }
                                     if (mouse.button === Qt.LeftButton) {
-                                        const activateFn = modelData.activate;
-                                        if (modelData.onlyMenu || !activateFn) {
+                                        const activateFn = trayItem.modelData.activate;
+                                        if (trayItem.modelData.onlyMenu || !activateFn) {
                                             trayItem.openTrayMenu();
                                             return;
                                         }
-                                        modelData.activate();
+                                        trayItem.modelData.activate();
                                     }
                                 }
                                 onPressed: function(mouse) {
@@ -204,11 +207,11 @@ ModuleContainer {
                                     }
                                 }
                                 onWheel: function(wheel) {
-                                    modelData.scroll(wheel.angleDelta.y, false);
+                                    trayItem.modelData.scroll(wheel.angleDelta.y, false);
                                 }
                             }
                             TooltipPopup {
-                                enabled: (modelData.tooltipTitle || modelData.tooltipDescription || "") !== ""
+                                enabled: (trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || "") !== ""
                                 open: toolTipArea.containsMouse
                                 targetItem: trayItem
 
@@ -217,7 +220,7 @@ ModuleContainer {
                                         color: Config.m3.onSurface
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.fontSize
-                                        text: modelData.tooltipTitle || modelData.tooltipDescription || ""
+                                        text: trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || ""
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -282,8 +285,9 @@ ModuleContainer {
                                             delegate: Item {
                                                 id: menuEntry
 
-                                                readonly property bool disabled: !modelData.enabled
-                                                readonly property bool isSeparator: modelData.isSeparator
+                                                required property var modelData
+                                                readonly property bool disabled: !menuEntry.modelData.enabled
+                                                readonly property bool isSeparator: menuEntry.modelData.isSeparator
 
                                                 Layout.fillWidth: true
                                                 implicitHeight: menuEntry.isSeparator ? (Config.space.xs + 1) : menuContent.implicitHeight
@@ -293,7 +297,7 @@ ModuleContainer {
                                                 Rectangle {
                                                     anchors.fill: parent
                                                     color: menuMouseArea.containsMouse && !menuEntry.disabled
-                                                        ? Qt.alpha(Config.m3.onSurface, Config.state.hoverOpacity)
+                                                        ? Qt.alpha(Config.m3.onSurface, Config.hoverOpacity)
                                                         : "transparent"
                                                     radius: Config.shape.corner.xs
                                                     visible: !menuEntry.isSeparator
@@ -322,7 +326,7 @@ ModuleContainer {
                                                         color: menuEntry.disabled ? Config.m3.onSurfaceVariant : Config.m3.onSurface
                                                         font.family: Config.fontFamily
                                                         font.pixelSize: Config.type.bodyMedium.size
-                                                        text: modelData.text
+                                                        text: menuEntry.modelData.text
                                                         Layout.fillWidth: true
                                                         wrapMode: Text.NoWrap
                                                         elide: Text.ElideRight
@@ -332,7 +336,7 @@ ModuleContainer {
 
                                                         font.family: Config.fontFamily
                                                         font.pixelSize: Config.type.bodyMedium.size
-                                                        text: modelData.text
+                                                        text: menuEntry.modelData.text
                                                     }
                                                 }
                                                 MouseArea {
@@ -342,15 +346,15 @@ ModuleContainer {
                                                     enabled: !menuEntry.isSeparator && !menuEntry.disabled
                                                     hoverEnabled: true
 
-                                                    onClicked: {
-                                                        if (modelData.hasChildren) {
-                                                            modelData.display(trayItem.menuWindow, trayItem.menuAnchorRect.x + menuCard.width, trayItem.menuAnchorRect.y);
+                                                onClicked: {
+                                                        if (menuEntry.modelData.hasChildren) {
+                                                            menuEntry.modelData.display(trayItem.menuWindow, trayItem.menuAnchorRect.x + menuCard.width, trayItem.menuAnchorRect.y);
                                                             menuPopup.visible = false;
                                                             return;
                                                         }
 
-                                                        if (modelData.sendTriggered)
-                                                            modelData.sendTriggered();
+                                                        if (menuEntry.modelData.sendTriggered)
+                                                            menuEntry.modelData.sendTriggered();
                                                         menuPopup.visible = false;
                                                     }
                                                 }

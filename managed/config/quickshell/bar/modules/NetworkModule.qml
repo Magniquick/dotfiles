@@ -753,7 +753,6 @@ ModuleContainer {
                 root.handleNetworkManagerEvent(data);
             }
         }
-
         onExited: code => {
             if (root.monitorRestartAttempts === 0) {
                 console.warn(`NetworkModule: nmcli monitor exited with code ${code}, attempting restart`);

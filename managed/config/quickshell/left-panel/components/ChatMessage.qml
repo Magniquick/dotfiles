@@ -28,8 +28,10 @@ Item {
     // Avatar
     Rectangle {
       Layout.alignment: Qt.AlignTop
-      width: 36
-      height: 36
+      Layout.preferredWidth: 36
+      Layout.preferredHeight: 36
+      implicitWidth: 36
+      implicitHeight: 36
       radius: Common.Config.shape.corner.md
       color: root.isAssistant ? Qt.alpha(root.accentColor, 0.1) : Common.Config.surfaceContainerHighest
       border.width: 2

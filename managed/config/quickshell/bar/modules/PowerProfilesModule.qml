@@ -10,6 +10,7 @@
  * Dependencies:
  * - Quickshell.Services.UPower: PowerProfiles API
  */
+pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick

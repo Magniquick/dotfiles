@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 
 Rectangle {
@@ -58,12 +57,12 @@ Rectangle {
         id: stroke
 
         anchors.fill: parent
-        anchors.margins: strokeWidth / 2
+        anchors.margins: button.strokeWidth / 2
         antialiasing: true
-        border.color: selection === actionName ? accent : "transparent"
-        border.width: strokeWidth
+        border.color: button.selection === button.actionName ? button.accent : "transparent"
+        border.width: button.strokeWidth
         color: "transparent"
-        radius: Math.max(0, button.radius - strokeWidth / 2)
+        radius: Math.max(0, button.radius - button.strokeWidth / 2)
 
         Behavior on border.color {
             ColorAnimation {
@@ -73,17 +72,17 @@ Rectangle {
     }
     Text {
         anchors.centerIn: parent
-        color: accent
+        color: button.accent
         font.family: "JetBrainsMono NFP"
         font.pointSize: 30
         horizontalAlignment: Text.AlignHCenter
-        text: icon
+        text: button.icon
         verticalAlignment: Text.AlignVCenter
     }
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        hoverEnabled: mouseEnabled
+        hoverEnabled: button.mouseEnabled
 
         onClicked: button.activated(button.actionName)
         onEntered: button.hovered(button.actionName)
@@ -95,7 +94,7 @@ Rectangle {
         running: false
 
         PauseAnimation {
-            duration: revealDelay
+            duration: button.revealDelay
         }
         NumberAnimation {
             duration: 250

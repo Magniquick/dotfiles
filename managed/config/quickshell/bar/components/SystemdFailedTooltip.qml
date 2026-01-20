@@ -31,8 +31,10 @@ ColumnLayout {
         spacing: Config.space.md
 
         Item {
-            height: Config.space.xxl * 2
-            width: Config.space.xxl * 2
+            Layout.preferredHeight: Config.space.xxl * 2
+            Layout.preferredWidth: Config.space.xxl * 2
+            implicitHeight: Config.space.xxl * 2
+            implicitWidth: Config.space.xxl * 2
 
             Text {
                 anchors.centerIn: parent
@@ -116,6 +118,7 @@ ColumnLayout {
                                 model: root.systemUnits
 
                                 delegate: RowLayout {
+                                    id: unitRow
                                     required property var modelData
                                     readonly property int stripeWidth: Config.spaceHalfXs
 
@@ -124,11 +127,12 @@ ColumnLayout {
 
                                     Rectangle {
                                         Layout.fillHeight: true
-                                        Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
+                                        Layout.preferredHeight: Config.type.bodySmall.line + unitRow.stripeWidth
                                         color: Config.m3.error
                                         opacity: 0.8
                                         radius: Config.shape.corner.xs
-                                        width: stripeWidth
+                                        Layout.preferredWidth: unitRow.stripeWidth
+                                        implicitWidth: unitRow.stripeWidth
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -141,7 +145,7 @@ ColumnLayout {
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
                                             font.weight: Font.Medium
-                                            text: modelData.unit || ""
+                                            text: unitRow.modelData.unit || ""
                                         }
                                         Text {
                                             Layout.fillWidth: true
@@ -150,7 +154,7 @@ ColumnLayout {
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
                                             maximumLineCount: 2
-                                            text: modelData.description || ""
+                                            text: unitRow.modelData.description || ""
                                             visible: text !== ""
                                             wrapMode: Text.WordWrap
                                         }
@@ -161,7 +165,7 @@ ColumnLayout {
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size
                                         opacity: 0.8
-                                        text: root.formatStatus(modelData)
+                                        text: root.formatStatus(unitRow.modelData)
                                         visible: text !== ""
                                     }
                                 }
@@ -191,6 +195,7 @@ ColumnLayout {
                                 model: root.userUnits
 
                                 delegate: RowLayout {
+                                    id: userRow
                                     required property var modelData
                                     readonly property int stripeWidth: Config.spaceHalfXs
 
@@ -199,11 +204,12 @@ ColumnLayout {
 
                                     Rectangle {
                                         Layout.fillHeight: true
-                                        Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
+                                        Layout.preferredHeight: Config.type.bodySmall.line + userRow.stripeWidth
                                         color: Config.m3.error
                                         opacity: 0.8
                                         radius: Config.shape.corner.xs
-                                        width: stripeWidth
+                                        Layout.preferredWidth: userRow.stripeWidth
+                                        implicitWidth: userRow.stripeWidth
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -216,7 +222,7 @@ ColumnLayout {
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodyMedium.size
                                             font.weight: Font.Medium
-                                            text: modelData.unit || ""
+                                            text: userRow.modelData.unit || ""
                                         }
                                         Text {
                                             Layout.fillWidth: true
@@ -225,7 +231,7 @@ ColumnLayout {
                                             font.family: Config.fontFamily
                                             font.pixelSize: Config.type.bodySmall.size
                                             maximumLineCount: 2
-                                            text: modelData.description || ""
+                                            text: userRow.modelData.description || ""
                                             visible: text !== ""
                                             wrapMode: Text.WordWrap
                                         }
@@ -236,7 +242,7 @@ ColumnLayout {
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.labelSmall.size
                                         opacity: 0.8
-                                        text: root.formatStatus(modelData)
+                                        text: root.formatStatus(userRow.modelData)
                                         visible: text !== ""
                                     }
                                 }

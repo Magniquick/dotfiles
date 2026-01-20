@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 
 Column {
     id: footer
@@ -11,7 +10,7 @@ Column {
     spacing: 10
 
     Text {
-        color: colors.subtext0
+        color: footer.colors.subtext0
         font.bold: true
         font.family: "monospace"
         font.pointSize: 17
@@ -21,23 +20,23 @@ Column {
         spacing: 8
 
         Text {
-            color: colors.subtext0
+            color: footer.colors.subtext0
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
             text: ""
         }
         Text {
-            color: colors.subtext0
+            color: footer.colors.subtext0
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            text: selection !== "" ? selection : hoverAction
+            text: footer.selection !== "" ? footer.selection : footer.hoverAction
         }
         Text {
             id: cursor
 
-            color: colors.text
+            color: footer.colors.text
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
@@ -45,7 +44,7 @@ Column {
 
             SequentialAnimation on opacity {
                 loops: Animation.Infinite
-                running: footer.QsWindow.window && footer.QsWindow.window.visible
+                running: footer.visible
 
                 NumberAnimation {
                     duration: 500

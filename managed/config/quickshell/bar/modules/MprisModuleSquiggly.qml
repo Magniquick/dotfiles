@@ -10,10 +10,9 @@
  *
  * Original implementation saved as MprisModuleOriginal.qml
  */
+pragma ComponentBehavior: Bound
 import ".."
-import Quickshell
 import QtQuick
-import QtQuick.Layouts
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Shapes

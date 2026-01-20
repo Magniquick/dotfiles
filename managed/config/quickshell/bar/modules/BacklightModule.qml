@@ -321,7 +321,6 @@ ModuleContainer {
                 root.handleUdevEvent(data);
             }
         }
-
         onExited: code => {
             if (root.udevRestartAttempts === 0) {
                 console.warn(`BacklightModule: udevadm monitor exited with code ${code}, attempting restart`);

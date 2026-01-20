@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell._Window
 
 Item {
     id: root
@@ -26,6 +27,7 @@ Item {
     property string subtitle: ""
     property Item targetItem: null
     property string title: ""
+    readonly property var contentItem: contentLoader.item
     readonly property var window: targetItem ? targetItem.QsWindow.window : null
 
     signal refreshRequested
@@ -80,7 +82,6 @@ Item {
 
         onImplicitHeightChanged: root.updateAnchor()
         onImplicitWidthChanged: root.updateAnchor()
-
         anchor {
             adjustment: PopupAdjustment.SlideX | PopupAdjustment.ResizeX
             edges: Edges.Top
@@ -160,11 +161,13 @@ Item {
 
                         Layout.alignment: Qt.AlignVCenter
                         color: Config.m3.primary
-                        height: Config.space.sm
+                        Layout.preferredHeight: Config.space.sm
+                        Layout.preferredWidth: Config.space.sm
+                        implicitHeight: Config.space.sm
+                        implicitWidth: Config.space.sm
                         opacity: 0.9
                         radius: Config.shape.corner.xs
                         visible: true
-                        width: Config.space.sm
 
                         SequentialAnimation on scale {
                             alwaysRunToEnd: false
@@ -296,8 +299,8 @@ Item {
                     visible: headerRow.visible
                 }
                 Item {
-                    implicitHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
-                    implicitWidth: contentLoader.item ? contentLoader.item.width : 0
+                    implicitHeight: root.contentItem ? root.contentItem.implicitHeight : 0
+                    implicitWidth: root.contentItem ? root.contentItem.width : 0
 
                     Flickable {
                         id: flickable
@@ -305,8 +308,8 @@ Item {
                         anchors.fill: parent
                         boundsBehavior: Flickable.StopAtBounds
                         clip: true
-                        contentHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
-                        contentWidth: contentLoader.item ? contentLoader.item.width : 0
+                        contentHeight: root.contentItem ? root.contentItem.implicitHeight : 0
+                        contentWidth: root.contentItem ? root.contentItem.width : 0
                         interactive: contentHeight > height
 
                         onContentHeightChanged: {

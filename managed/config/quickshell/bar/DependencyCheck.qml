@@ -1,4 +1,5 @@
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -54,28 +55,31 @@ QtObject {
             property var callback: null
             property string errorSuffix: ""
 
+            function callCallback(available) {
+                const cb = proc.callback;
+                if (typeof cb === "function")
+                    cb(available);
+            }
+
             command: ["sh", "-c", shellCommand]
 
             stdout: SplitParser {
                 onRead: data => {
                     // Dependency exists
-                    if (proc.callback)
-                        proc.callback(true);
+                    proc.callCallback(true);
                     proc.destroy();
                 }
             }
-
             onExited: code => {
                 if (code !== 0) {
                     // Dependency not found
-                    if (proc.callback)
-                        proc.callback(false);
+                    proc.callCallback(false);
 
                     // Only notify once per dependency
                     if (!root.notifiedDeps[proc.depName]) {
                         root.notifiedDeps[proc.depName] = true;
                         console.warn(`${proc.moduleName}: ${proc.depName} ${proc.errorSuffix}`);
-                        Quickshell.exec(["notify-send",
+                        Quickshell.execDetached(["notify-send",
                             "-a", "Quickshell",
                             "-u", "normal",
                             "Dependency Missing",

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -69,7 +70,7 @@ Item {
             entry.popup = true;
             if (notification.expireTimeout !== 0) {
                 entry.timer = notificationTimerComponent.createObject(notificationStore, {
-                    "notificationId": entry.notificationId,
+                    "notificationId": notification.id + idOffset,
                     "interval": notification.expireTimeout < 0 ? root.popupTimeoutMs : notification.expireTimeout
                 });
             }
@@ -240,6 +241,8 @@ Item {
                 }
 
                 delegate: NotificationCard {
+                    required property var modelData
+
                     width: ListView.view.width
                     entry: modelData
                     popup: true
@@ -417,6 +420,8 @@ Item {
                 }
 
                 delegate: NotificationCard {
+                    required property var modelData
+
                     width: ListView.view.width
                     entry: modelData
                     onDismissRequested: notificationStore.dismissNotification(entry.notificationId)

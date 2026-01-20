@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 
 Rectangle {
     id: right
@@ -48,7 +47,7 @@ Rectangle {
             const dash = strokeWidth * 0.4;
             const gap = strokeWidth * 0.2;
             ctx.clearRect(0, 0, width, height);
-            ctx.strokeStyle = Qt.rgba(borderColor.r, borderColor.g, borderColor.b, 0.4);
+            ctx.strokeStyle = Qt.rgba(right.borderColor.r, right.borderColor.g, right.borderColor.b, 0.4);
             ctx.lineWidth = strokeWidth;
             ctx.setLineDash([dash, gap]);
             ctx.lineCap = "butt";
@@ -82,11 +81,11 @@ Rectangle {
     Item {
         id: rightContentArea
 
-        anchors.bottomMargin: padBottom
+        anchors.bottomMargin: right.padBottom
         anchors.fill: parent
-        anchors.leftMargin: padH
-        anchors.rightMargin: padH
-        anchors.topMargin: padTop
+        anchors.leftMargin: right.padH
+        anchors.rightMargin: right.padH
+        anchors.topMargin: right.padTop
 
         Column {
             id: rightContent

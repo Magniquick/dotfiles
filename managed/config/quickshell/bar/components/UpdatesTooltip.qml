@@ -34,8 +34,10 @@ ColumnLayout {
         spacing: Config.space.md
 
         Item {
-            height: Config.space.xxl * 2
-            width: Config.space.xxl * 2
+            Layout.preferredHeight: Config.space.xxl * 2
+            Layout.preferredWidth: Config.space.xxl * 2
+            implicitHeight: Config.space.xxl * 2
+            implicitWidth: Config.space.xxl * 2
 
             Text {
                 anchors.centerIn: parent
@@ -111,9 +113,10 @@ ColumnLayout {
                             model: root.updates
 
                             delegate: RowLayout {
+                                id: updateRow
                                 required property int index
                                 required property var modelData
-                                property color rowColor: root.getUpdateColor(index)
+                                property color rowColor: root.getUpdateColor(updateRow.index)
                                 readonly property int stripeWidth: Config.spaceHalfXs
 
                                 spacing: Config.space.md
@@ -121,11 +124,12 @@ ColumnLayout {
 
                                 Rectangle {
                                     Layout.fillHeight: true
-                                    Layout.preferredHeight: Config.type.bodySmall.line + stripeWidth
-                                    color: rowColor
+                                    Layout.preferredHeight: Config.type.bodySmall.line + updateRow.stripeWidth
+                                    color: updateRow.rowColor
                                     opacity: 0.9
                                     radius: Config.shape.corner.xs
-                                    width: stripeWidth
+                                    Layout.preferredWidth: updateRow.stripeWidth
+                                    implicitWidth: updateRow.stripeWidth
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
@@ -135,12 +139,12 @@ ColumnLayout {
                                     Text {
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        color: rowColor
+                                        color: updateRow.rowColor
                                         elide: Text.ElideRight
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.bodyMedium.size
                                         font.weight: Font.Medium
-                                        text: modelData && modelData.name ? String(modelData.name) : ""
+                                        text: updateRow.modelData && updateRow.modelData.name ? String(updateRow.modelData.name) : ""
                                     }
                                     Text {
                                         Layout.fillWidth: true
@@ -149,7 +153,7 @@ ColumnLayout {
                                         elide: Text.ElideRight
                                         font.family: Config.iconFontFamily
                                         font.pixelSize: Config.type.labelSmall.size
-                                        text: modelData && modelData.detail ? String(modelData.detail) : ""
+                                        text: updateRow.modelData && updateRow.modelData.detail ? String(updateRow.modelData.detail) : ""
                                         visible: text !== ""
                                         wrapMode: Text.NoWrap
                                     }

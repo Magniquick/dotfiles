@@ -1,6 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 import Quickshell.Io
 import "../common" as Common
 import "./" as Components
@@ -172,6 +172,7 @@ Item {
               Repeater {
                 model: 3
                 Rectangle {
+                  id: typingDot
                   required property int index
                   width: 6
                   height: 6
@@ -181,7 +182,7 @@ Item {
                   SequentialAnimation on opacity {
                     running: root.busy
                     loops: Animation.Infinite
-                    PauseAnimation { duration: index * 150 }
+                    PauseAnimation { duration: typingDot.index * 150 }
                     NumberAnimation { to: 0.3; duration: 300 }
                     NumberAnimation { to: 1.0; duration: 300 }
                   }

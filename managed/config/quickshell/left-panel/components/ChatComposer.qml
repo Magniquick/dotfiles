@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -102,8 +103,10 @@ Item {
           id: sendButton
           Layout.alignment: Qt.AlignBottom
           Layout.bottomMargin: Common.Config.space.xs
-          width: 44
-          height: 44
+          Layout.preferredWidth: 44
+          Layout.preferredHeight: 44
+          implicitWidth: 44
+          implicitHeight: 44
           radius: Common.Config.shape.corner.md
           color: root.busy ? Common.Config.surfaceContainerHighest : Common.Config.primary
 
@@ -137,6 +140,7 @@ Item {
               Repeater {
                 model: 3
                 Rectangle {
+                  id: busyDot
                   required property int index
                   width: 5
                   height: 5
@@ -146,7 +150,7 @@ Item {
                   SequentialAnimation on opacity {
                     running: root.busy
                     loops: Animation.Infinite
-                    PauseAnimation { duration: index * 120 }
+                    PauseAnimation { duration: busyDot.index * 120 }
                     NumberAnimation { to: 0.3; duration: 250 }
                     NumberAnimation { to: 1.0; duration: 250 }
                   }
