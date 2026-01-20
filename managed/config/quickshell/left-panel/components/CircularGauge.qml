@@ -7,110 +7,117 @@ Item {
   property real value: 0
   property color accent: Common.Config.primary
   property string label: ""
-  property string subValue: ""
+  property string icon: ""
 
-  implicitHeight: 120
   Layout.fillWidth: true
+  Layout.preferredHeight: width + 36
 
-  Rectangle {
+  ColumnLayout {
     anchors.fill: parent
-    color: Common.Config.m3.surfaceContainerHigh
-    radius: Common.Config.shape.corner.md
-    border.width: 1
-    border.color: Common.Config.m3.outline
-    opacity: 0.9
+    spacing: Common.Config.space.sm
 
-    ColumnLayout {
-      anchors.fill: parent
-      anchors.margins: Common.Config.space.sm
-      spacing: Common.Config.space.xs
+    Item {
+      Layout.fillWidth: true
+      Layout.fillHeight: true
 
-      Item {
-        Layout.fillWidth: true
-        Layout.fillHeight: true
+      Canvas {
+        id: gauge
+        anchors.centerIn: parent
+        width: Math.min(parent.width, parent.height)
+        height: width
 
-        Canvas {
-          id: gauge
-          anchors.centerIn: parent
-          width: Math.min(parent.width, parent.height) - 10
-          height: width
+        property real animatedValue: 0
 
-          property real animatedValue: 0
-          readonly property bool isVisible: root.QsWindow.window?.visible ?? false
-
-          Behavior on animatedValue {
-            enabled: gauge.isVisible
-            NumberAnimation {
-              duration: Common.Config.motion.duration.longMs
-              easing.type: Easing.OutCubic
-            }
-          }
-
-          onAnimatedValueChanged: requestPaint()
-
-          Connections {
-            target: root
-            function onValueChanged() {
-              if (gauge.isVisible) gauge.animatedValue = root.value
-            }
-          }
-
-          Component.onCompleted: {
-            if (gauge.isVisible) gauge.animatedValue = root.value
-          }
-
-          onPaint: {
-            const ctx = getContext("2d");
-            ctx.clearRect(0, 0, width, height);
-
-            const strokeWidth = 6;
-            const center = width / 2;
-            const radius = (width - strokeWidth) / 2;
-            const startAngle = -Math.PI / 2;
-            const endAngle = startAngle + (Math.PI * 2 * Math.min(Math.max(animatedValue, 0), 100) / 100);
-
-            // Background track
-            ctx.lineWidth = strokeWidth;
-            ctx.strokeStyle = Common.Config.m3.surfaceVariant;
-            ctx.lineCap = "round";
-            ctx.beginPath();
-            ctx.arc(center, center, radius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Value arc
-            ctx.strokeStyle = root.accent;
-            ctx.beginPath();
-            ctx.arc(center, center, radius, startAngle, endAngle);
-            ctx.stroke();
+        Behavior on animatedValue {
+          NumberAnimation {
+            duration: 800
+            easing.type: Easing.OutCubic
           }
         }
 
-        ColumnLayout {
-          anchors.centerIn: parent
-          spacing: -2
-          Text {
-            text: Math.round(root.value) + "%"
-            color: Common.Config.m3.onSurface
-            font { family: Common.Config.fontFamily; pixelSize: 14; weight: Font.Bold }
-            Layout.alignment: Qt.AlignHCenter
+        Component.onCompleted: animatedValue = root.value
+
+        onAnimatedValueChanged: requestPaint()
+
+        Connections {
+          target: root
+          function onValueChanged() {
+            gauge.animatedValue = root.value
           }
-          Text {
-            visible: root.subValue !== ""
-            text: root.subValue
-            color: Common.Config.textMuted
-            font { family: Common.Config.fontFamily; pixelSize: 8; weight: Font.Medium }
-            Layout.alignment: Qt.AlignHCenter
-          }
+        }
+
+        onPaint: {
+          if (width <= 0 || height <= 0) return;
+
+          const ctx = getContext("2d");
+          ctx.clearRect(0, 0, width, height);
+
+          const strokeWidth = Math.max(8, width * 0.08);
+          const center = width / 2;
+          const radius = Math.max(1, (width - strokeWidth * 2) / 2);
+          const startAngle = -Math.PI / 2;
+          const endAngle = startAngle + (Math.PI * 2 * animatedValue / 100);
+
+          // Background track
+          ctx.lineWidth = strokeWidth;
+          ctx.strokeStyle = Qt.alpha(Common.Config.textColor, 0.03);
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.arc(center, center, radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Value arc
+          ctx.strokeStyle = root.accent;
+          ctx.beginPath();
+          ctx.arc(center, center, radius, startAngle, endAngle);
+          ctx.stroke();
         }
       }
 
       Text {
-        Layout.fillWidth: true
-        text: root.label
-        color: Common.Config.textMuted
-        font { family: Common.Config.fontFamily; pixelSize: 9; weight: Font.Black; letterSpacing: 1.2; capitalization: Font.AllUppercase }
-        horizontalAlignment: Text.AlignHCenter
-        opacity: 0.7
+        anchors.centerIn: parent
+        text: Math.round(root.value) + "%"
+        color: Common.Config.textColor
+        font.family: Common.Config.fontFamily
+        font.pixelSize: Math.max(14, gauge.width * 0.22)
+        font.weight: Font.Black
+      }
+    }
+
+    // Pill label
+    Rectangle {
+      Layout.alignment: Qt.AlignHCenter
+      implicitWidth: labelRow.implicitWidth + Common.Config.space.md * 2
+      implicitHeight: 22
+      radius: 11
+      color: Qt.alpha(Common.Config.textColor, 0.05)
+      border.width: 1
+      border.color: Qt.alpha(Common.Config.textColor, 0.1)
+
+      Row {
+        id: labelRow
+        anchors.centerIn: parent
+        spacing: Common.Config.space.xs
+
+        Text {
+          visible: root.icon !== ""
+          text: root.icon
+          color: Common.Config.textMuted
+          font.family: Common.Config.iconFontFamily
+          font.pixelSize: 10
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Text {
+          text: root.label
+          color: Common.Config.textMuted
+          font.family: Common.Config.fontFamily
+          font.pixelSize: 9
+          font.weight: Font.Bold
+          font.letterSpacing: 1.5
+          font.capitalization: Font.AllUppercase
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }

@@ -7,89 +7,88 @@ Item {
   property string title: ""
   property string value: ""
   property string icon: ""
+  property string subtext: ""
   property color accent: Common.Config.primary
-  property bool compact: false
 
-  implicitHeight: compact ? 48 : 90
+  implicitHeight: 80
   Layout.fillWidth: true
 
   Rectangle {
-    id: card
     anchors.fill: parent
-    color: Common.Config.m3.surfaceContainerHigh
-    radius: Common.Config.shape.corner.md
+    radius: Common.Config.shape.corner.lg
+    color: "transparent"
     border.width: 1
-    border.color: cardArea.containsMouse ? root.accent : Common.Config.m3.outline
-    opacity: cardArea.containsMouse ? 1.0 : 0.8
-
-    Behavior on border.color { ColorAnimation { duration: Common.Config.motion.duration.shortMs } }
-    Behavior on opacity { NumberAnimation { duration: Common.Config.motion.duration.shortMs } }
-
-    MouseArea {
-      id: cardArea
-      anchors.fill: parent
-      hoverEnabled: true
-    }
+    border.color: Qt.alpha(Common.Config.textColor, 0.1)
+    clip: true
 
     RowLayout {
-      visible: root.compact
       anchors.fill: parent
       anchors.margins: Common.Config.space.sm
       spacing: Common.Config.space.sm
 
-      Text {
-        text: root.icon
-        color: root.accent
-        font.family: Common.Config.iconFontFamily
-        font.pixelSize: 14
+      // Icon
+      Rectangle {
         Layout.alignment: Qt.AlignVCenter
-      }
+        width: 36
+        height: 36
+        radius: Common.Config.shape.corner.sm
+        color: Qt.alpha(Common.Config.textColor, 0.05)
 
-      ColumnLayout {
-        spacing: 0
         Text {
-          text: root.title
-          color: Common.Config.textMuted
-          font { family: Common.Config.fontFamily; pixelSize: 8; weight: Font.Black; letterSpacing: 1; capitalization: Font.AllUppercase }
-        }
-        Text {
-          text: root.value
-          color: Common.Config.textColor
-          font { family: Common.Config.fontFamily; pixelSize: 12; weight: Font.Medium }
-        }
-      }
-    }
-
-    ColumnLayout {
-      visible: !root.compact
-      anchors.fill: parent
-      anchors.margins: Common.Config.space.md
-      spacing: 0
-
-      RowLayout {
-        Layout.fillWidth: true
-        Text {
+          anchors.centerIn: parent
           text: root.icon
           color: root.accent
           font.family: Common.Config.iconFontFamily
           font.pixelSize: 16
         }
-        Item { Layout.fillWidth: true }
-        Text {
-          text: root.title
-          color: Common.Config.textMuted
-          font { family: Common.Config.fontFamily; pixelSize: 9; weight: Font.Black; letterSpacing: 1.2; capitalization: Font.AllUppercase }
-          opacity: 0.6
-        }
       }
 
-      Item { Layout.fillHeight: true }
+      // Text content
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: 0
 
-      Text {
-        text: root.value
-        color: Common.Config.textColor
-        font { family: Common.Config.fontFamily; pixelSize: Common.Config.type.titleLarge.size; weight: Font.Medium }
-        Layout.alignment: Qt.AlignLeft
+        Item { Layout.fillHeight: true }
+
+        // Value
+        Text {
+          Layout.fillWidth: true
+          text: root.value
+          color: Common.Config.textColor
+          font.family: Common.Config.fontFamily
+          font.pixelSize: 16
+          font.weight: Font.Bold
+          elide: Text.ElideRight
+        }
+
+        // Label
+        Text {
+          Layout.fillWidth: true
+          text: root.title
+          color: Common.Config.textMuted
+          font.family: Common.Config.fontFamily
+          font.pixelSize: 9
+          font.weight: Font.Bold
+          font.letterSpacing: 1.5
+          font.capitalization: Font.AllUppercase
+          opacity: 0.5
+          elide: Text.ElideRight
+        }
+
+        // Subtext
+        Text {
+          Layout.fillWidth: true
+          visible: root.subtext !== ""
+          text: root.subtext
+          color: Common.Config.textMuted
+          font.family: Common.Config.fontFamily
+          font.pixelSize: 8
+          opacity: 0.3
+          elide: Text.ElideRight
+        }
+
+        Item { Layout.fillHeight: true }
       }
     }
   }

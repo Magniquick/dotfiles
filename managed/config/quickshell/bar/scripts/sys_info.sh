@@ -36,17 +36,24 @@ if [ -z "$temp" ]; then temp=0; fi
 uptime_str=$(uptime -p | sed 's/up //')
 
 # PSI (Pressure Stall Information) - avg10 values (10-second averages)
-psi_cpu=0
-psi_mem=0
-psi_io=0
+# "some" = at least one task stalled, "full" = all tasks stalled
+psi_cpu_some=0
+psi_cpu_full=0
+psi_mem_some=0
+psi_mem_full=0
+psi_io_some=0
+psi_io_full=0
 if [ -f /proc/pressure/cpu ]; then
-	psi_cpu=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/cpu)
+	psi_cpu_some=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/cpu)
+	psi_cpu_full=$(awk '/^full/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/cpu)
 fi
 if [ -f /proc/pressure/memory ]; then
-	psi_mem=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/memory)
+	psi_mem_some=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/memory)
+	psi_mem_full=$(awk '/^full/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/memory)
 fi
 if [ -f /proc/pressure/io ]; then
-	psi_io=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/io)
+	psi_io_some=$(awk '/^some/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/io)
+	psi_io_full=$(awk '/^full/ {gsub(/.*avg10=/,""); gsub(/ .*/,""); print}' /proc/pressure/io)
 fi
 
-echo "{\"cpu\": $cpu_usage, \"mem\": $mem_pct, \"mem_used\": \"${mem_used_label}\", \"mem_total\": \"${mem_total_label}\", \"disk\": $disk_pct, \"disk_health\": \"${disk_health}\", \"disk_wear\": \"${disk_wear}\", \"temp\": $temp, \"uptime\": \"$uptime_str\", \"psi_cpu\": $psi_cpu, \"psi_mem\": $psi_mem, \"psi_io\": $psi_io}"
+echo "{\"cpu\": $cpu_usage, \"mem\": $mem_pct, \"mem_used\": \"${mem_used_label}\", \"mem_total\": \"${mem_total_label}\", \"disk\": $disk_pct, \"disk_health\": \"${disk_health}\", \"disk_wear\": \"${disk_wear}\", \"temp\": $temp, \"uptime\": \"$uptime_str\", \"psi_cpu_some\": $psi_cpu_some, \"psi_cpu_full\": $psi_cpu_full, \"psi_mem_some\": $psi_mem_some, \"psi_mem_full\": $psi_mem_full, \"psi_io_some\": $psi_io_some, \"psi_io_full\": $psi_io_full}"

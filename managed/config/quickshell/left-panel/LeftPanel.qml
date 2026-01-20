@@ -54,7 +54,7 @@ Item {
     property string activeCommand: ""
 
     readonly property var tabs: [
-        { label: "Link", icon: "\uf4e8", accent: Common.Config.primary },
+        { label: "Models", icon: "\udb85\udc0c", accent: Common.Config.primary },
         { label: "Metrics", icon: "\udb80\ude03", accent: Common.Config.m3.info },
         { label: "FindMy", icon: "\udb82\udd15", accent: Common.Config.m3.success }
     ]
@@ -308,6 +308,7 @@ Item {
             }
 
             Components.MetricsView {
+                id: metricsView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }
@@ -321,15 +322,19 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 36
-            color: Common.Config.surface
+            color: "transparent"
             radius: Common.Config.shape.corner.md
+            border.width: 1
+            border.color: Qt.alpha(Common.Config.textColor, 0.1)
 
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Common.Config.space.md
                 anchors.rightMargin: Common.Config.space.md
 
+                // Chat tab footer
                 Row {
+                    visible: root.currentTabIndex === 0
                     spacing: Common.Config.space.sm
 
                     Rectangle {
@@ -340,7 +345,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
 
                         SequentialAnimation on opacity {
-                            running: root.hasApiKey && (root.QsWindow.window?.visible ?? false)
+                            running: root.hasApiKey && root.currentTabIndex === 0 && (root.QsWindow.window?.visible ?? false)
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.4; duration: 1000 }
                             NumberAnimation { to: 1.0; duration: 1000 }
@@ -352,23 +357,100 @@ Item {
                         color: Common.Config.textMuted
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
-                        font.weight: Font.Black
-                        font.letterSpacing: 2
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.5
                         anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.7
+                    }
+                }
+
+                // Metrics tab footer
+                Row {
+                    visible: root.currentTabIndex === 1
+                    spacing: Common.Config.space.sm
+
+                    Text {
+                        text: "\uf46e"
+                        color: Common.Config.m3.info
+                        font.family: Common.Config.iconFontFamily
+                        font.pixelSize: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        text: "UPTIME: " + metricsView.uptime.toUpperCase()
+                        color: Common.Config.textMuted
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.5
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.7
+                    }
+                }
+
+                // FindMy tab footer
+                Row {
+                    visible: root.currentTabIndex === 2
+                    spacing: Common.Config.space.sm
+
+                    Text {
+                        text: "\udb82\udd15"
+                        color: Common.Config.m3.success
+                        font.family: Common.Config.iconFontFamily
+                        font.pixelSize: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        text: "DEVICE TRACKER"
+                        color: Common.Config.textMuted
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.5
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.7
                     }
                 }
 
                 Item { Layout.fillWidth: true }
 
+                // Chat tab right side
                 Text {
+                    visible: root.currentTabIndex === 0
                     text: "MOOD: " + root.currentMoodName.toUpperCase()
                     color: Common.Config.textMuted
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
-                    font.weight: Font.Black
-                    font.letterSpacing: 2
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.5
+                    opacity: 0.7
                 }
 
+                // Metrics tab right side
+                Text {
+                    visible: root.currentTabIndex === 1
+                    text: "SYSTEM ACTIVE"
+                    color: Common.Config.textMuted
+                    font.family: Common.Config.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.5
+                    opacity: 0.5
+                }
+
+                // FindMy tab right side
+                Text {
+                    visible: root.currentTabIndex === 2
+                    text: "GOOGLE FIND MY"
+                    color: Common.Config.textMuted
+                    font.family: Common.Config.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.5
+                    opacity: 0.5
+                }
             }
         }
     }

@@ -126,12 +126,16 @@ Item {
     Rectangle {
       anchors.right: parent.right
       anchors.top: parent.top
-      width: 28
-      height: 28
-      radius: Common.Config.shape.corner.sm
-      color: refreshArea.containsMouse ? Qt.alpha(Common.Config.m3.success, 0.15) : "transparent"
+      width: 32
+      height: 32
+      radius: Common.Config.shape.corner.md
+      color: "transparent"
+      border.width: 1
+      border.color: refreshArea.containsMouse ? Common.Config.m3.success : Qt.alpha(Common.Config.textColor, 0.1)
       visible: root.hasData
       z: 10
+
+      Behavior on border.color { ColorAnimation { duration: 150 } }
 
       Text {
         anchors.centerIn: parent
@@ -139,6 +143,8 @@ Item {
         color: refreshArea.containsMouse ? Common.Config.m3.success : Common.Config.textMuted
         font.family: Common.Config.iconFontFamily
         font.pixelSize: 14
+
+        Behavior on color { ColorAnimation { duration: 150 } }
       }
 
       MouseArea {
@@ -209,9 +215,9 @@ Item {
           width: liveRow.width + Common.Config.space.sm * 2
           height: 22
           radius: 11
-          color: Qt.alpha(Common.Config.m3.success, 0.15)
+          color: "transparent"
           border.width: 1
-          border.color: Qt.alpha(Common.Config.m3.success, 0.3)
+          border.color: Common.Config.m3.success
           anchors.verticalCenter: parent.verticalCenter
 
           Row {
@@ -227,7 +233,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
 
               SequentialAnimation on opacity {
-                running: root.location?.is_own_report === true
+                running: root.location?.is_own_report === true && (root.QsWindow.window?.visible ?? false)
                 loops: Animation.Infinite
                 NumberAnimation { to: 0.3; duration: 800 }
                 NumberAnimation { to: 1.0; duration: 800 }
@@ -276,19 +282,19 @@ Item {
       // Coordinates box
       Rectangle {
         width: parent.width
-        height: coordsCol.height + Common.Config.space.lg * 2
+        height: coordsCol.height + Common.Config.space.md * 2
         radius: Common.Config.shape.corner.lg
-        color: Common.Config.surfaceContainerHigh
+        color: "transparent"
         border.width: 1
-        border.color: Common.Config.outline
+        border.color: Qt.alpha(Common.Config.textColor, 0.1)
 
         Column {
           id: coordsCol
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: parent.top
-          anchors.margins: Common.Config.space.lg
-          spacing: Common.Config.space.md
+          anchors.margins: Common.Config.space.md
+          spacing: Common.Config.space.sm
 
           Row {
             width: parent.width
@@ -298,10 +304,11 @@ Item {
               text: "LAT"
               color: Common.Config.textMuted
               font.family: Common.Config.fontFamily
-              font.pixelSize: 10
+              font.pixelSize: 9
               font.weight: Font.Bold
-              font.letterSpacing: 1
-              width: 36
+              font.letterSpacing: 2
+              width: 32
+              opacity: 0.5
               anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -309,7 +316,7 @@ Item {
               text: root.location?.latitude?.toFixed(7) ?? "--"
               color: Common.Config.textColor
               font.family: "JetBrains Mono"
-              font.pixelSize: Common.Config.type.bodyLarge.size
+              font.pixelSize: Common.Config.type.bodyMedium.size
             }
           }
 
@@ -321,10 +328,11 @@ Item {
               text: "LON"
               color: Common.Config.textMuted
               font.family: Common.Config.fontFamily
-              font.pixelSize: 10
+              font.pixelSize: 9
               font.weight: Font.Bold
-              font.letterSpacing: 1
-              width: 36
+              font.letterSpacing: 2
+              width: 32
+              opacity: 0.5
               anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -332,7 +340,7 @@ Item {
               text: root.location?.longitude?.toFixed(7) ?? "--"
               color: Common.Config.textColor
               font.family: "JetBrains Mono"
-              font.pixelSize: Common.Config.type.bodyLarge.size
+              font.pixelSize: Common.Config.type.bodyMedium.size
             }
           }
 
@@ -344,10 +352,11 @@ Item {
               text: "ALT"
               color: Common.Config.textMuted
               font.family: Common.Config.fontFamily
-              font.pixelSize: 10
+              font.pixelSize: 9
               font.weight: Font.Bold
-              font.letterSpacing: 1
-              width: 36
+              font.letterSpacing: 2
+              width: 32
+              opacity: 0.5
               anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -355,7 +364,7 @@ Item {
               text: root.location?.altitude !== undefined ? `${root.location.altitude}m` : "--"
               color: Common.Config.textColor
               font.family: "JetBrains Mono"
-              font.pixelSize: Common.Config.type.bodyLarge.size
+              font.pixelSize: Common.Config.type.bodyMedium.size
             }
           }
         }
@@ -364,14 +373,13 @@ Item {
       // Open in Maps button
       Rectangle {
         width: parent.width
-        height: 48
-        radius: Common.Config.shape.corner.md
-        color: mapsArea.containsMouse ? Common.Config.m3.success : Common.Config.surfaceContainerHighest
+        height: 44
+        radius: Common.Config.shape.corner.lg
+        color: "transparent"
         border.width: 1
-        border.color: mapsArea.containsMouse ? Common.Config.m3.success : Common.Config.outline
+        border.color: mapsArea.containsMouse ? Common.Config.m3.success : Qt.alpha(Common.Config.textColor, 0.1)
         scale: mapsArea.pressed ? 0.98 : 1.0
 
-        Behavior on color { ColorAnimation { duration: 150 } }
         Behavior on border.color { ColorAnimation { duration: 150 } }
         Behavior on scale { NumberAnimation { duration: 100 } }
 
@@ -393,18 +401,24 @@ Item {
 
           Text {
             text: "\udb80\udfcc"
-            color: mapsArea.containsMouse ? Common.Config.m3.onSuccess : Common.Config.textColor
+            color: mapsArea.containsMouse ? Common.Config.m3.success : Common.Config.textMuted
             font.family: Common.Config.iconFontFamily
-            font.pixelSize: 18
+            font.pixelSize: 14
+            anchors.verticalCenter: parent.verticalCenter
+
+            Behavior on color { ColorAnimation { duration: 150 } }
           }
 
           Text {
             text: "OPEN IN BROWSER"
-            color: mapsArea.containsMouse ? Common.Config.m3.onSuccess : Common.Config.textColor
+            color: mapsArea.containsMouse ? Common.Config.m3.success : Common.Config.textMuted
             font.family: Common.Config.fontFamily
-            font.pixelSize: 11
+            font.pixelSize: 10
             font.weight: Font.Bold
-            font.letterSpacing: 1
+            font.letterSpacing: 1.5
+            anchors.verticalCenter: parent.verticalCenter
+
+            Behavior on color { ColorAnimation { duration: 150 } }
           }
         }
       }

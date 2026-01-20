@@ -8,38 +8,48 @@ import "./" as Components
 Item {
   id: root
 
+  // Expose uptime for footer
+  readonly property string uptime: sysInfo.uptime || "--"
+
   property var sysInfo: ({
     cpu: 0, mem: 0, mem_used: "0.0GB", mem_total: "0.0GB",
     disk: 0, disk_health: "", disk_wear: "", temp: 0, uptime: "",
-    psi_cpu: 0, psi_mem: 0, psi_io: 0
+    psi_cpu_some: 0, psi_cpu_full: 0,
+    psi_mem_some: 0, psi_mem_full: 0,
+    psi_io_some: 0, psi_io_full: 0
   })
 
-  readonly property color colorTeal: "#94e2d5"
-  readonly property color colorPeach: "#fab387"
-  readonly property color colorRed: "#f38ba8"
-
-  function psiColor(val) {
-    if (val >= 20) return colorRed;
-    if (val >= 5) return colorPeach;
-    return colorTeal;
+  function psiBarColor(val, isFull) {
+    const baseColor = val >= 25 ? Common.Config.m3.error :
+                      val >= 5 ? Common.Config.m3.warning :
+                      Common.Config.m3.info;
+    return isFull ? baseColor : Qt.alpha(baseColor, 0.4);
   }
+
+  readonly property bool isHealthy: sysInfo.psi_cpu_full < 25 && sysInfo.psi_mem_full < 25 && sysInfo.psi_io_full < 25 && tempValue < 85
 
   readonly property string sysInfoCommand: Quickshell.shellPath("../bar/scripts/sys_info.sh")
   readonly property real tempValue: Number(sysInfo.temp || 0)
-  readonly property color tempColor: tempValue >= 80 ? colorRed : (tempValue >= 65 ? colorPeach : colorTeal)
+  readonly property color tempColor: tempValue >= 85 ? Common.Config.m3.error : (tempValue >= 75 ? Common.Config.m3.warning : Common.Config.m3.flamingo)
   readonly property int diskWearPct: parseInt(sysInfo.disk_wear || "", 10)
   readonly property color diskHealthColor: {
     const w = diskWearPct, s = (sysInfo.disk_health || "").toLowerCase();
-    if (!isNaN(w)) { if (w >= 90) return colorRed; if (w >= 75) return colorPeach; }
+    if (!isNaN(w)) { if (w >= 90) return Common.Config.m3.error; if (w >= 75) return Common.Config.m3.warning; }
     if (s.startsWith("healthy") || s.startsWith("passed")) return Common.Config.m3.success;
-    return s === "" || s.includes("unknown") ? colorPeach : colorRed;
+    return s === "" || s.includes("unknown") ? Common.Config.m3.warning : Common.Config.m3.error;
   }
 
   Process {
     id: proc
     command: ["bash", root.sysInfoCommand]
     stdout: StdioCollector {
-      onStreamFinished: { try { root.sysInfo = JSON.parse(text); } catch(e) {} }
+      onStreamFinished: {
+        try {
+          const data = JSON.parse(text);
+          // Merge into existing object to avoid resetting values
+          root.sysInfo = Object.assign({}, root.sysInfo, data);
+        } catch(e) {}
+      }
     }
   }
 
@@ -51,137 +61,183 @@ Item {
 
   ColumnLayout {
     anchors.fill: parent
-    anchors.margins: Common.Config.space.md
-    spacing: Common.Config.space.md
+    anchors.margins: Common.Config.space.lg
+    spacing: Common.Config.space.xl
 
-    // Compact Header
+    // Gauges
+    RowLayout {
+      Layout.fillWidth: true
+      Layout.preferredHeight: 130
+      spacing: Common.Config.space.sm
+
+      Components.CircularGauge { value: root.sysInfo.cpu; accent: Common.Config.m3.info; label: "Processor"; icon: "\uf4bc" }
+      Components.CircularGauge { value: root.sysInfo.mem; accent: Common.Config.primary; label: "Memory"; icon: "\uefc5" }
+      Components.CircularGauge { value: root.sysInfo.disk; accent: root.diskHealthColor; label: "Storage"; icon: "\udb80\udeca" }
+    }
+
+    // Stats row
     RowLayout {
       Layout.fillWidth: true
       spacing: Common.Config.space.sm
 
       Components.StatCard {
-        compact: true
-        title: "Uptime"
-        value: root.sysInfo.uptime || "--"
-        icon: "\uf46e"
-        accent: Common.Config.m3.primary
-      }
-
-      Components.StatCard {
-        compact: true
-        title: "Temp"
+        title: "Thermal"
         value: root.sysInfo.temp + "°C"
-        icon: "\udb81\udcf5"
+        icon: "\uf2c8"
+        subtext: "Package Temp"
         accent: root.tempColor
       }
     }
 
-    // Main Grid
-    GridLayout {
-      columns: 3
+    // Pressure + Health grid
+    RowLayout {
       Layout.fillWidth: true
-      rowSpacing: Common.Config.space.sm
-      columnSpacing: Common.Config.space.sm
+      spacing: Common.Config.space.lg
 
-      Components.CircularGauge {
-        value: root.sysInfo.cpu
-        accent: Common.Config.m3.info
-        label: "CPU"
-        subValue: "Usage"
-      }
-
-      Components.CircularGauge {
-        value: root.sysInfo.mem
-        accent: Common.Config.m3.secondary
-        label: "Memory"
-        subValue: root.sysInfo.mem_used
-      }
-
-      Components.CircularGauge {
-        value: root.sysInfo.disk
-        accent: root.diskHealthColor
-        label: "Disk"
-        subValue: root.sysInfo.disk_wear ? root.sysInfo.disk_wear + " worn" : "Storage"
-      }
-    }
-
-    // PSI Section
-    Rectangle {
-      Layout.fillWidth: true
-      implicitHeight: psiCol.implicitHeight + Common.Config.space.md * 2
-      color: Common.Config.m3.surfaceContainerHigh
-      radius: Common.Config.shape.corner.md
-      border.width: 1
-      border.color: Common.Config.m3.outline
-      opacity: 0.9
-
+      // Pressure bars column
       ColumnLayout {
-        id: psiCol
-        anchors.fill: parent
-        anchors.margins: Common.Config.space.md
-        spacing: Common.Config.space.sm
-
-        RowLayout {
-          Layout.fillWidth: true
-          Text {
-            text: "Pressure Stall Information (PSI)"
-            color: Common.Config.textMuted
-            font { family: Common.Config.fontFamily; pixelSize: 9; weight: Font.Black; letterSpacing: 1; capitalization: Font.AllUppercase }
-          }
-          Item { Layout.fillWidth: true }
-          Text {
-            text: "10s avg"
-            color: Common.Config.textMuted
-            font { family: Common.Config.fontFamily; pixelSize: 8; weight: Font.Medium }
-            opacity: 0.6
-          }
-        }
+        Layout.fillWidth: true
+        spacing: Common.Config.space.md
 
         Repeater {
-          model: [
-            { l: "CPU", v: root.sysInfo.psi_cpu, i: "\uf2db" },
-            { l: "Memory", v: root.sysInfo.psi_mem, i: "\uf538" },
-            { l: "I/O", v: root.sysInfo.psi_io, i: "\uf0a0" }
-          ]
+          model: ["cpu", "mem", "io"]
 
           ColumnLayout {
+            id: psiDelegate
             Layout.fillWidth: true
             spacing: 2
 
+            readonly property string key: modelData
+            readonly property string label: key === "cpu" ? "CPU" : (key === "mem" ? "MEM" : "I/O")
+            readonly property real someVal: root.sysInfo["psi_" + key + "_some"] || 0
+            readonly property real fullVal: root.sysInfo["psi_" + key + "_full"] || 0
+
             RowLayout {
               Layout.fillWidth: true
+
               Text {
-                text: modelData.l
-                color: Common.Config.textColor
-                font { family: Common.Config.fontFamily; pixelSize: 10; weight: Font.Medium }
+                text: psiDelegate.label
+                color: Common.Config.textMuted
+                font { family: Common.Config.fontFamily; pixelSize: 9; weight: Font.Bold; letterSpacing: 2 }
+                opacity: 0.5
               }
+
               Item { Layout.fillWidth: true }
+
+              // Show both values
               Text {
-                text: modelData.v.toFixed(2) + "%"
-                color: root.psiColor(modelData.v)
+                text: psiDelegate.someVal.toFixed(1)
+                color: Common.Config.textMuted
+                font { family: Common.Config.fontFamily; pixelSize: 9 }
+                opacity: 0.6
+              }
+              Text {
+                text: " / "
+                color: Common.Config.textMuted
+                font { family: Common.Config.fontFamily; pixelSize: 9 }
+                opacity: 0.4
+              }
+              Text {
+                text: psiDelegate.fullVal.toFixed(1) + "%"
+                color: Common.Config.textColor
                 font { family: Common.Config.fontFamily; pixelSize: 10; weight: Font.Bold }
               }
             }
 
+            // Stacked bars
             Rectangle {
               Layout.fillWidth: true
-              height: 4
-              radius: 2
-              color: Common.Config.m3.surfaceVariant
+              height: 10
+              radius: 5
+              color: Qt.alpha(Common.Config.textColor, 0.05)
+              border.width: 1
+              border.color: Qt.alpha(Common.Config.textColor, 0.05)
+              clip: true
 
+              // "some" bar (dull, behind)
               Rectangle {
-                width: Math.min(modelData.v, 100) / 100 * parent.width
+                width: Math.min(psiDelegate.someVal, 100) / 100 * parent.width
                 height: parent.height
-                radius: 2
-                color: root.psiColor(modelData.v)
+                radius: 5
+                color: root.psiBarColor(psiDelegate.someVal, false)
 
                 Behavior on width {
-                  enabled: root.QsWindow.window?.visible ?? false
-                  NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
+                  NumberAnimation { duration: 1000; easing.type: Easing.OutCubic }
+                }
+              }
+
+              // "full" bar (bright, in front)
+              Rectangle {
+                width: Math.min(psiDelegate.fullVal, 100) / 100 * parent.width
+                height: parent.height
+                radius: 5
+                color: root.psiBarColor(psiDelegate.fullVal, true)
+
+                Behavior on width {
+                  NumberAnimation { duration: 1000; easing.type: Easing.OutCubic }
                 }
               }
             }
           }
+        }
+      }
+
+      // Health status card
+      Rectangle {
+        Layout.preferredWidth: 100
+        Layout.fillHeight: true
+        radius: Common.Config.shape.corner.lg
+        color: Qt.alpha(Common.Config.textColor, 0.02)
+        border.width: 1
+        border.color: Qt.alpha(Common.Config.textColor, 0.05)
+
+        ColumnLayout {
+          anchors.fill: parent
+          anchors.margins: Common.Config.space.md
+          spacing: Common.Config.space.xs
+
+          Item { Layout.fillHeight: true }
+
+          // Status icon with pulse
+          Rectangle {
+            Layout.alignment: Qt.AlignHCenter
+            width: 40
+            height: 40
+            radius: 20
+            color: Qt.alpha(root.isHealthy ? Common.Config.m3.success : Common.Config.m3.error, 0.1)
+
+            Text {
+              anchors.centerIn: parent
+              text: root.isHealthy ? "\udb80\udda8" : "\uf071"
+              color: root.isHealthy ? Common.Config.m3.success : Common.Config.m3.error
+              font.family: Common.Config.iconFontFamily
+              font.pixelSize: 20
+            }
+
+            SequentialAnimation on opacity {
+              running: root.QsWindow.window?.visible ?? false
+              loops: Animation.Infinite
+              NumberAnimation { to: 0.6; duration: 1200; easing.type: Easing.InOutQuad }
+              NumberAnimation { to: 1; duration: 1200; easing.type: Easing.InOutQuad }
+            }
+          }
+
+          Text {
+            Layout.alignment: Qt.AlignHCenter
+            text: root.isHealthy ? "HEALTHY" : "WARNING"
+            color: Common.Config.textColor
+            font { family: Common.Config.fontFamily; pixelSize: 10; weight: Font.Bold; letterSpacing: 2 }
+          }
+
+          Text {
+            Layout.alignment: Qt.AlignHCenter
+            text: root.isHealthy ? "All systems go" : "Check metrics"
+            color: Common.Config.textMuted
+            font { family: Common.Config.fontFamily; pixelSize: 9 }
+            opacity: 0.5
+          }
+
+          Item { Layout.fillHeight: true }
         }
       }
     }
