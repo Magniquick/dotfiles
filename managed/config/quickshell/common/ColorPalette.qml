@@ -1,8 +1,7 @@
+pragma Singleton
 import "./Colors.js" as Colors
 import QtQml
 import Quickshell
-
-pragma Singleton
 
 Singleton {
     readonly property var palette: convertPalette(Colors.palette)

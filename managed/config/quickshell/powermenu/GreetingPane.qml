@@ -203,8 +203,8 @@ Rectangle {
                 model: [leftPane.colors.red, leftPane.colors.yellow, leftPane.colors.green, leftPane.colors.teal, leftPane.colors.blue, leftPane.colors.pink]
 
                 delegate: Rectangle {
-                    required property color modelData
                     id: swatch
+                    required property color modelData
 
                     border.color: leftPane.colors.base
                     border.width: leftPane.swatchBorder

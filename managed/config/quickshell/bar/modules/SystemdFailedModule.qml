@@ -294,7 +294,9 @@ ModuleContainer {
                 root.handleMonitorLine("system", data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => root.handleMonitorCrash("systemMonitor", code)
+        // qmllint enable signal-handler-parameters
     }
     Process {
         id: systemPropsMonitor
@@ -307,7 +309,9 @@ ModuleContainer {
                 root.handlePropsMonitorLine("system", data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => root.handleMonitorCrash("systemPropsMonitor", code)
+        // qmllint enable signal-handler-parameters
     }
     Process {
         id: userMonitor
@@ -320,7 +324,9 @@ ModuleContainer {
                 root.handleMonitorLine("user", data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => root.handleMonitorCrash("userMonitor", code)
+        // qmllint enable signal-handler-parameters
     }
     Process {
         id: userPropsMonitor
@@ -333,7 +339,9 @@ ModuleContainer {
                 root.handlePropsMonitorLine("user", data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => root.handleMonitorCrash("userPropsMonitor", code)
+        // qmllint enable signal-handler-parameters
     }
     Timer {
         id: eventDebounce

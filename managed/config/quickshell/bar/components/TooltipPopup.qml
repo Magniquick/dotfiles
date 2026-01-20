@@ -40,8 +40,10 @@ Item {
     }
     function updateAnchor() {
         root.refreshAnchorRect();
+        // qmllint disable unresolved-type
         if (popup.visible)
             popup.anchor.updateAnchor();
+    // qmllint enable unresolved-type
     }
 
     onOpenChanged: root.updateAnchor()
@@ -82,6 +84,8 @@ Item {
 
         onImplicitHeightChanged: root.updateAnchor()
         onImplicitWidthChanged: root.updateAnchor()
+        // qmllint disable missing-type
+        // qmllint disable unresolved-type
         anchor {
             adjustment: PopupAdjustment.SlideX | PopupAdjustment.ResizeX
             edges: Edges.Top
@@ -97,6 +101,8 @@ Item {
                 right: Config.tooltipBorderWidth
             }
         }
+        // qmllint enable unresolved-type
+        // qmllint enable missing-type
         Item {
             id: body
 
@@ -298,52 +304,75 @@ Item {
                     opacity: 0.18
                     visible: headerRow.visible
                 }
-                Item {
-                    implicitHeight: root.contentItem ? root.contentItem.implicitHeight : 0
-                    implicitWidth: root.contentItem ? root.contentItem.width : 0
+                Flickable {
+                    id: flickable
 
-                    Flickable {
-                        id: flickable
+                    property real loadedContentHeight: 0
+                    property real loadedContentWidth: 0
 
-                        anchors.fill: parent
-                        boundsBehavior: Flickable.StopAtBounds
-                        clip: true
-                        contentHeight: root.contentItem ? root.contentItem.implicitHeight : 0
-                        contentWidth: root.contentItem ? root.contentItem.width : 0
-                        interactive: contentHeight > height
+                    // qmllint disable missing-property
+                    function updateContentSize() {
+                        if (contentLoader.status === Loader.Ready && contentLoader.item) {
+                            loadedContentHeight = contentLoader.item.implicitHeight;
+                            loadedContentWidth = contentLoader.item.width;
+                        } else {
+                            loadedContentHeight = 0;
+                            loadedContentWidth = 0;
+                        }
+                    }
+                    // qmllint enable missing-property
 
-                        onContentHeightChanged: {
-                            if (root.autoScroll && contentHeight > height) {
-                                Qt.callLater(() => {
-                                    flickable.contentY = Math.max(0, contentHeight - height);
-                                });
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: loadedContentHeight
+                    implicitWidth: loadedContentWidth
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+                    contentHeight: loadedContentHeight
+                    contentWidth: loadedContentWidth
+                    interactive: contentHeight > height
+
+                    onContentHeightChanged: {
+                        if (root.autoScroll && contentHeight > height) {
+                            Qt.callLater(() => {
+                                flickable.contentY = Math.max(0, contentHeight - height);
+                            });
+                        }
+                    }
+
+                    Loader {
+                        id: contentLoader
+
+                        active: true
+                        sourceComponent: root.contentComponent
+
+                        onStatusChanged: flickable.updateContentSize()
+                        // qmllint disable missing-property
+                        onItemChanged: {
+                            flickable.updateContentSize();
+                            if (item) {
+                                item.implicitHeightChanged.connect(flickable.updateContentSize);
+                                item.widthChanged.connect(flickable.updateContentSize);
                             }
                         }
+                        // qmllint enable missing-property
+                    }
 
-                        Loader {
-                            id: contentLoader
+                    ScrollIndicator.vertical: ScrollIndicator {
+                        id: scrollIndicator
 
-                            active: true
-                            sourceComponent: root.contentComponent
-                        }
+                        active: flickable.interactive
+                        visible: root.showScrollIndicator && flickable.interactive
 
-                        ScrollIndicator.vertical: ScrollIndicator {
-                            id: scrollIndicator
+                        contentItem: Rectangle {
+                            color: Config.m3.onSurfaceVariant
+                            implicitWidth: 3
+                            opacity: scrollIndicator.active ? 0.6 : 0.3
+                            radius: width / 2
 
-                            active: flickable.interactive
-                            visible: root.showScrollIndicator && flickable.interactive
-
-                            contentItem: Rectangle {
-                                color: Config.m3.onSurfaceVariant
-                                implicitWidth: 3
-                                opacity: scrollIndicator.active ? 0.6 : 0.3
-                                radius: width / 2
-
-                                Behavior on opacity {
-                                    NumberAnimation {
-                                        duration: Config.motion.duration.shortMs
-                                        easing.type: Config.motion.easing.standard
-                                    }
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: Config.motion.duration.shortMs
+                                    easing.type: Config.motion.easing.standard
                                 }
                             }
                         }
@@ -357,6 +386,7 @@ Item {
                         anchors.right: parent.right
                         height: Config.space.lg
                         visible: flickable.interactive && flickable.contentY < (flickable.contentHeight - flickable.height - 1)
+                        z: 1
 
                         gradient: Gradient {
                             GradientStop {

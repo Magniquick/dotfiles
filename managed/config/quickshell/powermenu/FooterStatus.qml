@@ -41,22 +41,6 @@ Column {
             font.family: "monospace"
             font.pointSize: 17
             text: "_"
-
-            SequentialAnimation on opacity {
-                loops: Animation.Infinite
-                running: footer.visible
-
-                NumberAnimation {
-                    duration: 500
-                    from: 1
-                    to: 0
-                }
-                NumberAnimation {
-                    duration: 500
-                    from: 0
-                    to: 1
-                }
-            }
         }
     }
 }

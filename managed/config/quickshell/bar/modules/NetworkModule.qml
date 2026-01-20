@@ -626,7 +626,7 @@ ModuleContainer {
     }
 
     Component.onCompleted: {
-        DependencyCheck.require("nmcli", "NetworkModule", function(available) {
+        DependencyCheck.require("nmcli", "NetworkModule", function (available) {
             root.nmcliAvailable = available;
             if (!available) {
                 root.iconText = root.disconnectedIcon;
@@ -753,6 +753,7 @@ ModuleContainer {
                 root.handleNetworkManagerEvent(data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             if (root.monitorRestartAttempts === 0) {
                 console.warn(`NetworkModule: nmcli monitor exited with code ${code}, attempting restart`);
@@ -765,6 +766,7 @@ ModuleContainer {
             monitorBackoffResetTimer.stop();
             monitorRestartTimer.restart();
         }
+        // qmllint enable signal-handler-parameters
     }
     MouseArea {
         anchors.fill: parent

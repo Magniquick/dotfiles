@@ -20,7 +20,7 @@ ModuleContainer {
     contentSpacing: 0
     marginLeft: 0
     marginRight: 0
-    marginTop: Config.moduleMarginTop
+    marginTop: Config.outerGaps
     minHeight: 0
     paddingBottom: 0
     paddingLeft: 0

@@ -13,6 +13,8 @@ Item {
     property string calendarStatus: ""
     property date currentDate: new Date()
     readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
+    readonly property int monthRangeYears: 5
+    readonly property int monthRangeCenter: monthRangeYears * 12
     property var dayEvents: []
     property var eventsByDay: ({})
     readonly property string eventsPath: calendar.cacheDir !== "" ? calendar.cacheDir + "/events.json" : ""
@@ -127,8 +129,11 @@ Item {
         calendar.reloadEventsFile();
     }
     onActiveChanged: {
-        if (!calendar.active)
+        if (!calendar.active) {
+            monthListView.positionViewAtIndex(calendar.monthRangeCenter, ListView.SnapPosition);
+            monthListView.currentIndex = calendar.monthRangeCenter;
             return;
+        }
         if (calendar.refreshCommand !== "")
             refreshRunner.trigger();
         else
@@ -155,7 +160,9 @@ Item {
     }
     FileView {
         id: eventsFile
+        // qmllint disable missing-type
         adapter: calendarAdapter
+        // qmllint enable missing-type
         path: calendar.eventsPath
         watchChanges: true
         blockLoading: true
@@ -164,7 +171,6 @@ Item {
             reload();
             calendar.applyCalendarFromAdapter();
         }
-
     }
     JsonAdapter {
         id: calendarAdapter
@@ -185,9 +191,10 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 230 // Title + Header + Grid
             clip: true
-            currentIndex: 1200 // start in the middle
+            currentIndex: calendar.monthRangeCenter
+            highlightMoveDuration: 120
             highlightRangeMode: ListView.StrictlyEnforceRange
-            model: 2400 // covering 200 years for "infinite" feel
+            model: calendar.monthRangeCenter * 2
             orientation: ListView.Horizontal
             snapMode: ListView.SnapOneItem
 
@@ -196,7 +203,7 @@ Item {
 
                 readonly property int daysInMonth: new Date(viewYear, viewMonth + 1, 0).getDate()
                 required property int index
-                readonly property int monthOffset: index - 1200
+                readonly property int monthOffset: index - calendar.monthRangeCenter
                 readonly property int startOffset: new Date(viewYear, viewMonth, 1).getDay()
                 readonly property date viewDate: new Date(calendar.todayYear, calendar.todayMonth + monthOffset, 1)
                 readonly property int viewMonth: viewDate.getMonth()
@@ -254,7 +261,7 @@ Item {
                                     font.pixelSize: Config.type.labelSmall.size
                                     font.weight: Config.type.labelSmall.weight
                                     text: weekdayItem.modelData
-                            }
+                                }
                             }
                         }
                     }
@@ -461,8 +468,8 @@ Item {
                         font.pixelSize: Config.type.bodySmall.size
                         font.weight: eventListLayout.isToday ? Font.DemiBold : Config.type.bodySmall.weight
                         text: calendar.formatEventLabel(eventRow.modelData)
+                    }
                 }
-            }
             }
             Text {
                 color: Config.m3.onSurfaceVariant

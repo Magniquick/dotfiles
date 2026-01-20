@@ -1,1 +1,8 @@
 singleton ColorPalette 1.0 ColorPalette.qml
+Powermenu 1.0 Powermenu.qml
+GreetingPane 1.0 GreetingPane.qml
+ActionPanel 1.0 ActionPanel.qml
+ActionGrid 1.0 ActionGrid.qml
+BunnyBlock 1.0 BunnyBlock.qml
+FooterStatus 1.0 FooterStatus.qml
+PowermenuButton 1.0 PowermenuButton.qml

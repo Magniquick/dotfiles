@@ -59,11 +59,9 @@ QtObject {
     readonly property color moduleBackground: m3.surfaceContainer
     readonly property color moduleBackgroundHover: m3.surfaceContainerHigh
     readonly property color moduleBackgroundMuted: m3.surfaceVariant
-    readonly property real devicePixelRatio: (Quickshell.screens && Quickshell.screens.length > 0)
-        ? Quickshell.screens[0].devicePixelRatio
-        : 1
+    readonly property real devicePixelRatio: (Quickshell.screens && Quickshell.screens.length > 0) ? Quickshell.screens[0].devicePixelRatio : 1
     readonly property int moduleMarginBottom: space.none
-    readonly property int moduleMarginTop: 4 / root.devicePixelRatio
+    readonly property int outerGaps: 4
     readonly property int moduleMarginX: space.none
     readonly property int modulePaddingX: space.sm
     readonly property int modulePaddingY: space.none
@@ -91,11 +89,7 @@ QtObject {
     readonly property Slider slider: Slider {}
     readonly property Space space: Space {}
     readonly property int spaceHalfXs: Math.max(1, Math.round(space.xs / 2))
-    readonly property QtObject state: QtObject {
-        readonly property real disabledOpacity: 0.5
-        readonly property real hoverOpacity: 0.08
-        readonly property real pressedOpacity: 0.18
-    }
+    readonly property State state: State {}
     readonly property color surface: m3.surface
     readonly property color surfaceContainer: m3.surfaceContainer
     readonly property color surfaceContainerHigh: m3.surfaceContainerHigh

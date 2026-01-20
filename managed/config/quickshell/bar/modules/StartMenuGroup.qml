@@ -18,7 +18,7 @@ ModuleContainer {
     contentSpacing: 0
     marginLeft: Config.groupEdgeMargin
     marginRight: 0
-    marginTop: Config.moduleMarginTop
+    marginTop: Config.outerGaps
     paddingBottom: 0
     paddingLeft: Config.groupPaddingX
     paddingRight: Config.groupPaddingX

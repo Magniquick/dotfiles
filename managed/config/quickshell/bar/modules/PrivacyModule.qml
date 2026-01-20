@@ -216,7 +216,7 @@ ModuleContainer {
     }
 
     Component.onCompleted: {
-        DependencyCheck.requireExecutable(root.scriptPath, "PrivacyModule", function(available) {
+        DependencyCheck.requireExecutable(root.scriptPath, "PrivacyModule", function (available) {
             root.scriptAvailable = available;
             if (!available) {
                 root.statusTooltip = "Privacy: Script not available";

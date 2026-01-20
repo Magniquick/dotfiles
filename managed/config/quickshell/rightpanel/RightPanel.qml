@@ -6,14 +6,26 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import "./common" as Common
+import "./components" as Components
 
 Item {
     id: root
 
-    readonly property int panelWidth: 420
-    readonly property int popupWidth: 360
+    readonly property int popupWidth: 320
     readonly property int popupMaxHeight: 560
-    readonly property int popupTimeoutMs: 7000
+
+    // Timeouts per urgency (matching dunst config)
+    readonly property int timeoutLowMs: 3000
+    readonly property int timeoutNormalMs: 8000
+    readonly property int timeoutCriticalMs: 0  // 0 = no timeout
+
+    function getTimeoutForUrgency(urgency) {
+        if (urgency === "critical" || urgency === "2")
+            return root.timeoutCriticalMs;
+        if (urgency === "low" || urgency === "0")
+            return root.timeoutLowMs;
+        return root.timeoutNormalMs;
+    }
     readonly property bool popupsVisible: notificationStore.popupList.length > 0
     readonly property real popupTargetOpacity: popupsVisible ? 1 : 0
 
@@ -46,17 +58,22 @@ Item {
 
     component NotificationTimeout: Timer {
         required property int notificationId
+        running: true
         onTriggered: notificationStore.timeoutNotification(notificationId)
     }
 
     QtObject {
         id: notificationStore
-        property list<NotificationEntry> list: []
-        property list<NotificationEntry> popupList: []
+        property var list: []
+        property var popupList: []
         property int idOffset: 0
 
         function refreshPopupList() {
             popupList = list.filter(entry => entry.popup);
+        }
+
+        function updateList(newList) {
+            list = newList;
         }
 
         function addNotification(notification) {
@@ -65,13 +82,19 @@ Item {
                 "notificationId": notification.id + idOffset,
                 "notification": notification
             });
-            list = [...list, entry];
+            updateList([...list, entry]);
 
             entry.popup = true;
-            if (notification.expireTimeout !== 0) {
+            // qmllint disable missing-property
+            const urgencyTimeout = root.getTimeoutForUrgency(entry.urgency);
+            // qmllint enable missing-property
+            // Use notification's timeout if set, otherwise use urgency-based default
+            // expireTimeout: 0 = never, -1 = use default, >0 = use value
+            if (notification.expireTimeout !== 0 && urgencyTimeout !== 0) {
+                const timeout = notification.expireTimeout > 0 ? notification.expireTimeout : urgencyTimeout;
                 entry.timer = notificationTimerComponent.createObject(notificationStore, {
                     "notificationId": notification.id + idOffset,
-                    "interval": notification.expireTimeout < 0 ? root.popupTimeoutMs : notification.expireTimeout
+                    "interval": timeout
                 });
             }
             refreshPopupList();
@@ -90,8 +113,9 @@ Item {
             if (entry.notification) {
                 entry.notification.dismiss();
             }
-            list.splice(index, 1);
-            list = list.slice(0);
+            const newList = [...list];
+            newList.splice(index, 1);
+            updateList(newList);
             refreshPopupList();
         }
 
@@ -105,7 +129,7 @@ Item {
                     entry.notification.dismiss();
                 }
             });
-            list = [];
+            updateList([]);
             refreshPopupList();
         }
 
@@ -119,7 +143,7 @@ Item {
             if (entry.isTransient) {
                 dismissNotification(id);
             } else {
-                list = list.slice(0);
+                updateList([...list]);
                 refreshPopupList();
             }
         }
@@ -148,6 +172,209 @@ Item {
 
         onNotification: notification => {
             notificationStore.addNotification(notification);
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        border.width: 1
+        border.color: Common.Config.m3.outline
+        radius: Common.Config.shape.corner.lg
+        gradient: Gradient {
+            GradientStop {
+                position: 0.0
+                color: Common.Config.m3.surfaceDim
+            }
+            GradientStop {
+                position: 1.0
+                color: Common.Config.surfaceContainer
+            }
+        }
+    }
+
+    ColumnLayout {
+        anchors {
+            fill: parent
+            margins: Common.Config.space.md
+        }
+        spacing: Common.Config.sectionSpacing
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Common.Config.space.xs
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Common.Config.space.sm
+
+            Text {
+                text: "\uf0f3"
+                color: Common.Config.primary
+                font.family: Common.Config.iconFontFamily
+                font.pixelSize: 16
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Notifications"
+                color: Common.Config.textColor
+                font.family: Common.Config.fontFamily
+                font.pixelSize: Common.Config.type.titleMedium.size
+                font.weight: Common.Config.type.titleMedium.weight
+            }
+
+            Text {
+                visible: notificationStore.list.length > 0
+                text: notificationStore.list.length.toString()
+                color: Common.Config.textMuted
+                font.family: Common.Config.fontFamily
+                font.pixelSize: Common.Config.type.labelMedium.size
+                font.weight: Common.Config.type.labelMedium.weight
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: -Common.Config.space.xs
+                    radius: Common.Config.shape.corner.sm
+                    color: Common.Config.surfaceVariant
+                    z: -1
+                }
+            }
+
+            Components.ActionButton {
+                visible: notificationStore.list.length > 0
+                label: "Clear"
+                icon: "\uf1f8"
+                onClicked: notificationStore.dismissAll()
+            }
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            Text {
+                anchors.centerIn: parent
+                visible: notificationStore.list.length === 0
+                text: "No notifications"
+                color: Common.Config.textMuted
+                font.family: Common.Config.fontFamily
+                font.pixelSize: Common.Config.type.bodyMedium.size
+                font.weight: Common.Config.type.bodyMedium.weight
+            }
+
+            ListView {
+                id: notificationList
+                anchors.fill: parent
+                visible: notificationStore.list.length > 0
+                spacing: Common.Config.space.sm
+                model: notificationStore.list
+                clip: true
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
+
+                add: Transition {
+                    ParallelAnimation {
+                        NumberAnimation {
+                            property: "opacity"
+                            from: 0
+                            to: 1
+                            duration: Common.Config.motion.duration.shortMs
+                            easing.type: Common.Config.motion.easing.standard
+                        }
+                        NumberAnimation {
+                            property: "y"
+                            from: 8
+                            to: 0
+                            duration: Common.Config.motion.duration.shortMs
+                            easing.type: Common.Config.motion.easing.standard
+                        }
+                    }
+                }
+
+                remove: Transition {
+                    ParallelAnimation {
+                        NumberAnimation {
+                            property: "opacity"
+                            to: 0
+                            duration: Common.Config.motion.duration.shortMs
+                            easing.type: Common.Config.motion.easing.standard
+                        }
+                        NumberAnimation {
+                            property: "y"
+                            to: 8
+                            duration: Common.Config.motion.duration.shortMs
+                            easing.type: Common.Config.motion.easing.standard
+                        }
+                    }
+                }
+
+                delegate: Components.NotificationCard {
+                    required property var modelData
+
+                    width: ListView.view.width
+                    entry: modelData
+                    onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            color: "transparent"
+            radius: Common.Config.shape.corner.md
+            border.width: 1
+            border.color: Qt.alpha(Common.Config.textColor, 0.1)
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Common.Config.space.md
+                anchors.rightMargin: Common.Config.space.md
+
+                Row {
+                    spacing: Common.Config.space.sm
+
+                    Rectangle {
+                        width: 6
+                        height: 6
+                        radius: 3
+                        // qmllint disable missing-property
+                        color: notificationServer.valid ? Common.Config.m3.success : Common.Config.m3.error
+                        // qmllint enable missing-property
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        text: "NOTIFICATION SERVER"
+                        color: Common.Config.textMuted
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.5
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: 0.7
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Text {
+                    // qmllint disable missing-property
+                    text: notificationServer.valid ? "ACTIVE" : "INACTIVE"
+                    // qmllint enable missing-property
+                    color: Common.Config.textMuted
+                    font.family: Common.Config.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.5
+                    opacity: 0.5
+                }
+            }
         }
     }
 
@@ -240,186 +467,7 @@ Item {
                     }
                 }
 
-                delegate: NotificationCard {
-                    required property var modelData
-
-                    width: ListView.view.width
-                    entry: modelData
-                    popup: true
-                    onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
-                }
-            }
-        }
-    }
-
-    PanelWindow {
-        id: panelWindow
-        visible: true
-        color: "transparent"
-        implicitWidth: root.panelWidth
-
-        anchors {
-            top: true
-            right: true
-            bottom: true
-        }
-
-        WlrLayershell.namespace: "quickshell:right-panel"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-        exclusiveZone: 0
-
-        Item {
-            id: panelContent
-            anchors.fill: parent
-            transformOrigin: Item.TopRight
-            opacity: 0
-            scale: 0.98
-
-            Rectangle {
-                anchors.fill: parent
-                color: Common.Config.surface
-                border.width: 1
-                border.color: Common.Config.outline
-                radius: Common.Config.shape.corner.lg
-            }
-
-            Component.onCompleted: panelIntro.start()
-
-            SequentialAnimation {
-                id: panelIntro
-                NumberAnimation {
-                    target: panelContent
-                    property: "opacity"
-                    from: 0
-                    to: 1
-                    duration: Common.Config.motion.duration.shortMs
-                    easing.type: Common.Config.motion.easing.standard
-                }
-                NumberAnimation {
-                    target: panelContent
-                    property: "scale"
-                    from: 0.98
-                    to: 1
-                    duration: Common.Config.motion.duration.shortMs
-                    easing.type: Common.Config.motion.easing.standard
-                }
-            }
-        }
-
-        component ActionButton: Rectangle {
-            id: actionButton
-            property string label: ""
-            signal clicked()
-            radius: Common.Config.shape.corner.sm
-            color: actionArea.pressed
-                ? Qt.alpha(Common.ColorPalette.palette.overlay2, 0.35)
-                : actionArea.containsMouse
-                    ? Qt.alpha(Common.ColorPalette.palette.overlay2, 0.25)
-                    : Common.Config.surfaceVariant
-            implicitHeight: Common.Config.space.xl
-            implicitWidth: buttonText.implicitWidth + Common.Config.space.md
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: Common.Config.motion.duration.shortMs
-                    easing.type: Common.Config.motion.easing.standard
-                }
-            }
-
-            Text {
-                id: buttonText
-                anchors.centerIn: parent
-                text: actionButton.label
-                color: Common.Config.textColor
-                font.family: Common.Config.fontFamily
-                font.pixelSize: Common.Config.type.labelMedium.size
-                font.weight: Common.Config.type.labelMedium.weight
-            }
-
-            MouseArea {
-                id: actionArea
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: actionButton.clicked()
-            }
-        }
-
-        ColumnLayout {
-            parent: panelContent
-            anchors {
-                fill: parent
-                margins: Common.Config.space.md
-            }
-            spacing: Common.Config.space.sm
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Common.Config.space.sm
-
-                Text {
-                    Layout.fillWidth: true
-                    text: "Notifications"
-                    color: Common.Config.textColor
-                    font.family: Common.Config.fontFamily
-                    font.pixelSize: Common.Config.type.titleMedium.size
-                    font.weight: Common.Config.type.titleMedium.weight
-                }
-
-                ActionButton {
-                    label: "Clear"
-                    onClicked: notificationStore.dismissAll()
-                }
-            }
-
-            ListView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: Common.Config.space.sm
-                model: notificationStore.list
-                clip: true
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
-
-                add: Transition {
-                    ParallelAnimation {
-                        NumberAnimation {
-                            property: "opacity"
-                            from: 0
-                            to: 1
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                        NumberAnimation {
-                            property: "y"
-                            from: 8
-                            to: 0
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                    }
-                }
-
-                remove: Transition {
-                    ParallelAnimation {
-                        NumberAnimation {
-                            property: "opacity"
-                            to: 0
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                        NumberAnimation {
-                            property: "y"
-                            to: 8
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                    }
-                }
-
-                delegate: NotificationCard {
+                delegate: Components.PopupNotification {
                     required property var modelData
 
                     width: ListView.view.width

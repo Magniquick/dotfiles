@@ -70,6 +70,7 @@ QtObject {
                     proc.destroy();
                 }
             }
+            // qmllint disable signal-handler-parameters
             onExited: code => {
                 if (code !== 0) {
                     // Dependency not found
@@ -79,16 +80,12 @@ QtObject {
                     if (!root.notifiedDeps[proc.depName]) {
                         root.notifiedDeps[proc.depName] = true;
                         console.warn(`${proc.moduleName}: ${proc.depName} ${proc.errorSuffix}`);
-                        Quickshell.execDetached(["notify-send",
-                            "-a", "Quickshell",
-                            "-u", "normal",
-                            "Dependency Missing",
-                            `${proc.moduleName}: '${proc.depName}' ${proc.errorSuffix}`
-                        ]);
+                        Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "normal", "Dependency Missing", `${proc.moduleName}: '${proc.depName}' ${proc.errorSuffix}`]);
                     }
                 }
                 proc.destroy();
             }
+            // qmllint enable signal-handler-parameters
         }
     }
 }

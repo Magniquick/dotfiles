@@ -150,9 +150,11 @@ ModuleContainer {
                                 const rect = window.itemRect(trayItem);
                                 trayItem.menuAnchorRect = rect;
                                 if (menuOpener.menu) {
+                                    // qmllint disable unresolved-type
                                     menuPopup.anchor.window = window;
                                     menuPopup.anchor.rect.x = rect.x;
                                     menuPopup.anchor.rect.y = rect.y + rect.height + Config.tooltipOffset;
+                                    // qmllint enable unresolved-type
                                     menuPopup.visible = true;
                                     return;
                                 }
@@ -186,7 +188,7 @@ ModuleContainer {
                                 preventStealing: true
                                 propagateComposedEvents: true
 
-                                onClicked: function(mouse) {
+                                onClicked: function (mouse) {
                                     if (mouse.button === Qt.MiddleButton) {
                                         trayItem.modelData.secondaryActivate();
                                         return;
@@ -200,13 +202,13 @@ ModuleContainer {
                                         trayItem.modelData.activate();
                                     }
                                 }
-                                onPressed: function(mouse) {
+                                onPressed: function (mouse) {
                                     if (mouse.button === Qt.RightButton) {
                                         trayItem.openTrayMenu();
                                         mouse.accepted = true;
                                     }
                                 }
-                                onWheel: function(wheel) {
+                                onWheel: function (wheel) {
                                     trayItem.modelData.scroll(wheel.angleDelta.y, false);
                                 }
                             }
@@ -235,8 +237,6 @@ ModuleContainer {
                                 visible: false
                                 implicitWidth: desiredWidth
                                 implicitHeight: desiredHeight
-                                width: implicitWidth
-                                height: implicitHeight
 
                                 onVisibleChanged: {
                                     if (visible) {
@@ -251,8 +251,6 @@ ModuleContainer {
                                     rect.width: implicitWidth
                                     rect.height: implicitHeight
                                 }
-                                Keys.onEscapePressed: menuPopup.visible = false
-
                                 Rectangle {
                                     id: menuCard
 
@@ -266,6 +264,7 @@ ModuleContainer {
                                     radius: Config.tooltipRadius
                                     implicitHeight: menuPopup.desiredHeight - Config.tooltipBorderWidth * 2
                                     implicitWidth: menuPopup.desiredWidth - Config.tooltipBorderWidth * 2
+                                    Keys.onEscapePressed: menuPopup.visible = false
                                     HoverHandler {
                                         id: menuHover
                                         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -277,8 +276,6 @@ ModuleContainer {
                                         anchors.fill: parent
                                         anchors.margins: Config.tooltipPadding
                                         spacing: Config.space.xs
-                                        implicitWidth: Math.max(width, childrenRect.width)
-
                                         Repeater {
                                             model: menuOpener.menu ? menuOpener.children : []
 
@@ -291,14 +288,12 @@ ModuleContainer {
 
                                                 Layout.fillWidth: true
                                                 implicitHeight: menuEntry.isSeparator ? (Config.space.xs + 1) : menuContent.implicitHeight
-                                                implicitWidth: menuEntry.isSeparator ? (menuLayout.implicitWidth || 0) : (menuContent.implicitWidth + Config.space.sm * 2)
+                                                implicitWidth: menuEntry.isSeparator ? 1 : (menuContent.implicitWidth + Config.space.sm * 2)
                                                 Layout.preferredWidth: implicitWidth
 
                                                 Rectangle {
                                                     anchors.fill: parent
-                                                    color: menuMouseArea.containsMouse && !menuEntry.disabled
-                                                        ? Qt.alpha(Config.m3.onSurface, Config.hoverOpacity)
-                                                        : "transparent"
+                                                    color: menuMouseArea.containsMouse && !menuEntry.disabled ? Qt.alpha(Config.m3.onSurface, Config.state.hoverOpacity) : "transparent"
                                                     radius: Config.shape.corner.xs
                                                     visible: !menuEntry.isSeparator
                                                 }
@@ -346,7 +341,7 @@ ModuleContainer {
                                                     enabled: !menuEntry.isSeparator && !menuEntry.disabled
                                                     hoverEnabled: true
 
-                                                onClicked: {
+                                                    onClicked: {
                                                         if (menuEntry.modelData.hasChildren) {
                                                             menuEntry.modelData.display(trayItem.menuWindow, trayItem.menuAnchorRect.x + menuCard.width, trayItem.menuAnchorRect.y);
                                                             menuPopup.visible = false;
@@ -376,11 +371,15 @@ ModuleContainer {
                                 }
                                 Connections {
                                     target: menuHover
-                                    function onHoveredChanged() { menuPopup.maybeClose(); }
+                                    function onHoveredChanged() {
+                                        menuPopup.maybeClose();
+                                    }
                                 }
                                 Connections {
                                     target: trayHover
-                                    function onHoveredChanged() { menuPopup.maybeClose(); }
+                                    function onHoveredChanged() {
+                                        menuPopup.maybeClose();
+                                    }
                                 }
                             }
                         }

@@ -18,17 +18,19 @@ Item {
     readonly property var envVars: {
         const vars = {};
         const text = envFile.text();
-        if (!text) return vars;
+        if (!text)
+            return vars;
         const lines = text.split("\n");
         for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith("#")) continue;
+            if (!trimmed || trimmed.startsWith("#"))
+                continue;
             const eqIdx = trimmed.indexOf("=");
-            if (eqIdx === -1) continue;
+            if (eqIdx === -1)
+                continue;
             const key = trimmed.substring(0, eqIdx).trim();
             let value = trimmed.substring(eqIdx + 1).trim();
-            if ((value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'"))) {
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
                 value = value.slice(1, -1);
             }
             vars[key] = value;
@@ -53,20 +55,75 @@ Item {
     property string activeCommand: ""
 
     readonly property var tabs: [
-        { label: "Models", icon: "\udb85\udc0c", accent: Common.Config.primary },
-        { label: "Metrics", icon: "\udb80\ude03", accent: Common.Config.m3.info },
-        { label: "FindMy", icon: "\udb82\udd15", accent: Common.Config.m3.success }
+        {
+            label: "Models",
+            icon: "\udb85\udc0c",
+            accent: Common.Config.primary
+        },
+        {
+            label: "Metrics",
+            icon: "\udb80\ude03",
+            accent: Common.Config.m3.info
+        }
     ]
 
     readonly property var availableModels: [
-        { value: "gpt-4o", label: "GPT-4o", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Most capable OpenAI", accent: Common.Config.m3.success },
-        { value: "gpt-4o-mini", label: "GPT-4o Mini", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Fast and efficient (default)", accent: Common.Config.m3.success },
-        { value: "gpt-4-turbo", label: "GPT-4 Turbo", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Previous flagship", accent: Common.Config.m3.success },
-        { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Fastest, cheapest", accent: Common.Config.m3.success },
-        { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Fast multimodal", accent: Common.Config.m3.info },
-        { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Cost-efficient", accent: Common.Config.m3.info },
-        { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Best for complex tasks", accent: Common.Config.m3.tertiary },
-        { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Fast and versatile", accent: Common.Config.m3.tertiary }
+        {
+            value: "gpt-4o",
+            label: "GPT-4o",
+            iconImage: "./assets/OpenAI-white-monoblossom.svg",
+            description: "Most capable OpenAI",
+            accent: Common.Config.m3.success
+        },
+        {
+            value: "gpt-4o-mini",
+            label: "GPT-4o Mini",
+            iconImage: "./assets/OpenAI-white-monoblossom.svg",
+            description: "Fast and efficient (default)",
+            accent: Common.Config.m3.success
+        },
+        {
+            value: "gpt-4-turbo",
+            label: "GPT-4 Turbo",
+            iconImage: "./assets/OpenAI-white-monoblossom.svg",
+            description: "Previous flagship",
+            accent: Common.Config.m3.success
+        },
+        {
+            value: "gpt-3.5-turbo",
+            label: "GPT-3.5 Turbo",
+            iconImage: "./assets/OpenAI-white-monoblossom.svg",
+            description: "Fastest, cheapest",
+            accent: Common.Config.m3.success
+        },
+        {
+            value: "gemini-2.0-flash",
+            label: "Gemini 2.0 Flash",
+            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
+            description: "Fast multimodal",
+            accent: Common.Config.m3.info
+        },
+        {
+            value: "gemini-2.0-flash-lite",
+            label: "Gemini 2.0 Flash Lite",
+            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
+            description: "Cost-efficient",
+            accent: Common.Config.m3.info
+        },
+        {
+            value: "gemini-1.5-pro",
+            label: "Gemini 1.5 Pro",
+            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
+            description: "Best for complex tasks",
+            accent: Common.Config.m3.tertiary
+        },
+        {
+            value: "gemini-1.5-flash",
+            label: "Gemini 1.5 Flash",
+            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
+            description: "Fast and versatile",
+            accent: Common.Config.m3.tertiary
+        }
     ]
 
     FileView {
@@ -84,11 +141,11 @@ Item {
     }
 
     readonly property var availableMoods: moodsData.map(m => ({
-        value: m.name.toLowerCase(),
-        label: m.name,
-        icon: m.icon || "\uf4ff",
-        description: m.subtext || ""
-    }))
+                value: m.name.toLowerCase(),
+                label: m.name,
+                icon: m.icon || "\uf4ff",
+                description: m.subtext || ""
+            }))
 
     readonly property var moodPrompts: {
         const prompts = {};
@@ -121,7 +178,10 @@ Item {
     onModelIdChanged: {
         messageModel.clear();
         chatHistory = [];
-        messageModel.append({ sender: "assistant", body: `Switched to ${modelId}. Chat history cleared.` });
+        messageModel.append({
+            sender: "assistant",
+            body: `Switched to ${modelId}. Chat history cleared.`
+        });
     }
 
     function scrollToLatestMessage() {
@@ -147,28 +207,21 @@ Item {
         case "/clear":
             messageModel.clear();
             chatHistory = [];
-            messageModel.append({ sender: "assistant", body: "Chat cleared." });
+            messageModel.append({
+                sender: "assistant",
+                body: "Chat cleared."
+            });
             return;
         case "/help":
             messageModel.append({
                 sender: "assistant",
-                body: "Available commands:\n" +
-                      "/model - Choose AI model\n" +
-                      "/mood - Set conversation mood\n" +
-                      "/clear - Clear chat history\n" +
-                      "/help - Show this help\n" +
-                      "/status - Show current settings"
+                body: "Available commands:\n" + "/model - Choose AI model\n" + "/mood - Set conversation mood\n" + "/clear - Clear chat history\n" + "/help - Show this help\n" + "/status - Show current settings"
             });
             break;
         case "/status":
             messageModel.append({
                 sender: "assistant",
-                body: `Current Settings:\n` +
-                      `Model: ${modelId}\n` +
-                      `Provider: ${currentProvider}\n` +
-                      `Mood: ${currentMood}\n` +
-                      `OpenAI Key: ${openaiApiKey.length > 0 ? "Set" : "Not set"}\n` +
-                      `Gemini Key: ${geminiApiKey.length > 0 ? "Set" : "Not set"}`
+                body: `Current Settings:\n` + `Model: ${modelId}\n` + `Provider: ${currentProvider}\n` + `Mood: ${currentMood}\n` + `OpenAI Key: ${openaiApiKey.length > 0 ? "Set" : "Not set"}\n` + `Gemini Key: ${geminiApiKey.length > 0 ? "Set" : "Not set"}`
             });
             break;
         default:
@@ -182,10 +235,17 @@ Item {
 
     function sendMessage(inputText) {
         const text = inputText.trim();
-        if (text.length === 0 || aiBusy) return;
+        if (text.length === 0 || aiBusy)
+            return;
 
-        messageModel.append({ sender: "user", body: text });
-        chatHistory.push({ role: "user", content: text });
+        messageModel.append({
+            sender: "user",
+            body: text
+        });
+        chatHistory.push({
+            role: "user",
+            content: text
+        });
         scrollToLatestMessage();
 
         if (!hasApiKey) {
@@ -201,14 +261,16 @@ Item {
         aiBusy = true;
         backendStatus = "Thinking...";
         aiProc.startRequest([
-            { role: "system", content: moodPrompts[currentMood] },
-            ...chatHistory
-        ]);
+            {
+                role: "system",
+                content: moodPrompts[currentMood]
+            },
+            ...chatHistory]);
     }
 
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Escape) {
-            Qt.quit();
+            Common.GlobalState.leftPanelVisible = false;
             event.accepted = true;
         }
     }
@@ -219,8 +281,14 @@ Item {
         border.color: Common.Config.m3.outline
         radius: Common.Config.shape.corner.lg
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Common.Config.m3.surfaceDim }
-            GradientStop { position: 1.0; color: Common.Config.surfaceContainer }
+            GradientStop {
+                position: 0.0
+                color: Common.Config.m3.surfaceDim
+            }
+            GradientStop {
+                position: 1.0
+                color: Common.Config.surfaceContainer
+            }
         }
     }
 
@@ -295,7 +363,10 @@ Item {
                                 if (newModel && newModel !== root.modelId) {
                                     root.modelId = newModel;
                                 }
-                                messageModel.append({ sender: "assistant", body: `Mood: ${value}` });
+                                messageModel.append({
+                                    sender: "assistant",
+                                    body: `Mood: ${value}`
+                                });
                             }
                             root.showCommandPicker = false;
                             root.scrollToLatestMessage();
@@ -308,11 +379,6 @@ Item {
 
             Components.MetricsView {
                 id: metricsView
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-            }
-
-            Components.FindMyView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }
@@ -342,13 +408,6 @@ Item {
                         radius: 3
                         color: root.hasApiKey ? Common.Config.m3.success : Common.Config.m3.error
                         anchors.verticalCenter: parent.verticalCenter
-
-                        SequentialAnimation on opacity {
-                            running: root.hasApiKey && root.currentTabIndex === 0 && root.visible
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.4; duration: 1000 }
-                            NumberAnimation { to: 1.0; duration: 1000 }
-                        }
                     }
 
                     Text {
@@ -388,32 +447,9 @@ Item {
                     }
                 }
 
-                // FindMy tab footer
-                Row {
-                    visible: root.currentTabIndex === 2
-                    spacing: Common.Config.space.sm
-
-                    Text {
-                        text: "\udb82\udd15"
-                        color: Common.Config.m3.success
-                        font.family: Common.Config.iconFontFamily
-                        font.pixelSize: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Text {
-                        text: "DEVICE TRACKER"
-                        color: Common.Config.textMuted
-                        font.family: Common.Config.fontFamily
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
-                        font.letterSpacing: 1.5
-                        anchors.verticalCenter: parent.verticalCenter
-                        opacity: 0.7
-                    }
+                Item {
+                    Layout.fillWidth: true
                 }
-
-                Item { Layout.fillWidth: true }
 
                 // Chat tab right side
                 Text {
@@ -438,18 +474,6 @@ Item {
                     font.letterSpacing: 1.5
                     opacity: 0.5
                 }
-
-                // FindMy tab right side
-                Text {
-                    visible: root.currentTabIndex === 2
-                    text: "GOOGLE FIND MY"
-                    color: Common.Config.textMuted
-                    font.family: Common.Config.fontFamily
-                    font.pixelSize: 9
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1.5
-                    opacity: 0.5
-                }
             }
         }
     }
@@ -466,31 +490,31 @@ Item {
                 const systemMsg = history.find(m => m.role === "system");
                 const chatMsgs = history.filter(m => m.role !== "system");
                 const contents = chatMsgs.map(m => ({
-                    role: m.role === "assistant" ? "model" : "user",
-                    parts: [{ text: m.content }]
-                }));
+                            role: m.role === "assistant" ? "model" : "user",
+                            parts: [
+                                {
+                                    text: m.content
+                                }
+                            ]
+                        }));
                 const payload = JSON.stringify({
                     contents: contents,
-                    systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined
+                    systemInstruction: systemMsg ? {
+                        parts: [
+                            {
+                                text: systemMsg.content
+                            }
+                        ]
+                    } : undefined
                 });
                 const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${root.modelId}:generateContent?key=${root.geminiApiKey}`;
-                command = [
-                    "curl", "-sS", endpoint,
-                    "-H", "Content-Type: application/json",
-                    "-d", payload
-                ];
+                command = ["curl", "-sS", endpoint, "-H", "Content-Type: application/json", "-d", payload];
             } else {
                 const payload = JSON.stringify({
                     model: root.modelId,
                     messages: history
                 });
-                command = [
-                    "curl", "-sS",
-                    "https://api.openai.com/v1/chat/completions",
-                    "-H", "Content-Type: application/json",
-                    "-H", "Authorization: Bearer " + root.openaiApiKey,
-                    "-d", payload
-                ];
+                command = ["curl", "-sS", "https://api.openai.com/v1/chat/completions", "-H", "Content-Type: application/json", "-H", "Authorization: Bearer " + root.openaiApiKey, "-d", payload];
             }
             running = true;
         }
@@ -528,8 +552,14 @@ Item {
                     });
                     return;
                 }
-                root.chatHistory.push({ role: "assistant", content: reply });
-                messageModel.append({ sender: "assistant", body: reply });
+                root.chatHistory.push({
+                    role: "assistant",
+                    content: reply
+                });
+                messageModel.append({
+                    sender: "assistant",
+                    body: reply
+                });
                 root.scrollToLatestMessage();
             }
         }
@@ -558,7 +588,13 @@ Item {
 
     ListModel {
         id: messageModel
-        ListElement { sender: "assistant"; body: "Hi! This panel is wired to OpenAI chat completions." }
-        ListElement { sender: "assistant"; body: "Set OPENAI_API_KEY to enable replies." }
+        ListElement {
+            sender: "assistant"
+            body: "Hi! This panel is wired to OpenAI chat completions."
+        }
+        ListElement {
+            sender: "assistant"
+            body: "Set OPENAI_API_KEY to enable replies."
+        }
     }
 }

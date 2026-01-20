@@ -14,10 +14,10 @@ Rectangle {
     readonly property int contentImplicitWidth: contentRow.implicitWidth + root.paddingLeft + root.paddingRight
     property int contentSpacing: Config.moduleSpacing
     readonly property bool hovered: hoverHandler.hovered
-    property int marginBottom: Config.moduleMarginBottom
+    property int marginBottom: 0
     property int marginLeft: Config.moduleMarginX
     property int marginRight: Config.moduleMarginX
-    property int marginTop: Config.moduleMarginTop
+    property int marginTop: Config.outerGaps
     property int minHeight: Config.barHeight - Config.barPadding * 2
     property int paddingBottom: Config.modulePaddingY
     property int paddingLeft: Config.modulePaddingX
@@ -61,11 +61,13 @@ Rectangle {
     RowLayout {
         id: contentRow
 
-        anchors.bottomMargin: root.paddingBottom
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.leftMargin: root.paddingLeft
         anchors.rightMargin: root.paddingRight
-        anchors.topMargin: root.paddingTop
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: (root.paddingTop - root.paddingBottom) / 2
+        height: implicitHeight
         spacing: root.contentSpacing
     }
     Rectangle {

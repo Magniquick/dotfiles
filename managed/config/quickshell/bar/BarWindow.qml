@@ -8,7 +8,7 @@ import Quickshell.Wayland
 PanelWindow {
     id: root
 
-    property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginTop + Config.moduleMarginBottom
+    property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginBottom * 2
     property var modelData
     property var targetScreen: modelData
 
@@ -28,10 +28,7 @@ PanelWindow {
     Item {
         id: content
 
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.top: undefined
+        anchors.fill: parent
         anchors.margins: Config.barPadding
         implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
 
@@ -39,11 +36,10 @@ PanelWindow {
             id: leftRow
 
             anchors.left: parent.left
-            anchors.top: parent.top
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Config.moduleSpacing
 
-            StartMenuGroup {
-            }
+            StartMenuGroup {}
             WorkspaceGroup {
                 screen: root.targetScreen
             }
@@ -52,29 +48,23 @@ PanelWindow {
             id: centerRow
 
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Config.moduleSpacing
 
-            MprisModule {
-            }
+            MprisModule {}
         }
         RowLayout {
             id: rightRow
 
             anchors.right: parent.right
-            anchors.top: parent.top
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Config.moduleSpacing
 
-            ControlsGroup {
-            }
-            WirelessGroup {
-            }
-            BatteryModule {
-            }
-            ToDoModule {
-            }
-            ClockModule {
-            }
+            ControlsGroup {}
+            WirelessGroup {}
+            BatteryModule {}
+            ToDoModule {}
+            ClockModule {}
             PanelGroup {
                 parentWindow: root
             }

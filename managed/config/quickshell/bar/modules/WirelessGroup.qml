@@ -12,7 +12,7 @@ import "../components"
 ModuleContainer {
     backgroundColor: Config.moduleBackground
     contentSpacing: 0
-    marginTop: Config.moduleMarginTop
+    marginTop: Config.outerGaps
     paddingBottom: 0
     paddingLeft: Config.groupPaddingX
     paddingRight: Config.groupPaddingX

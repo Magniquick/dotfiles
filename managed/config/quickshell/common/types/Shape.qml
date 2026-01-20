@@ -2,5 +2,5 @@ import QtQml
 import ".."
 
 QtObject {
-  readonly property ShapeCorner corner: ShapeCorner {}
+    readonly property ShapeCorner corner: ShapeCorner {}
 }

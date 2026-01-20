@@ -1,6 +1,8 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import "./common" as Common
+
 ShellRoot {
     id: root
 
@@ -26,6 +28,8 @@ ShellRoot {
         LeftPanel {
             id: panel
             anchors.fill: parent
+            anchors.topMargin: Common.Config.outerGaps
+            anchors.bottomMargin: Common.Config.outerGaps
         }
     }
 }

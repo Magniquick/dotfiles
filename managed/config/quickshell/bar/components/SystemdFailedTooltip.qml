@@ -85,8 +85,7 @@ ColumnLayout {
                     implicitHeight: Math.min(contentHeight, 260)
                     interactive: contentHeight > height
 
-                    ScrollIndicator.vertical: ScrollIndicator {
-                    }
+                    ScrollIndicator.vertical: ScrollIndicator {}
 
                     Column {
                         id: listColumn

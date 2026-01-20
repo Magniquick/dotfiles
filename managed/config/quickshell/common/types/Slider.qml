@@ -1,7 +1,7 @@
 import QtQml
 
 QtObject {
-  readonly property int barHeight: 5
-  readonly property int knobSize: 12
-  readonly property int knobWidth: 18
+    readonly property int barHeight: 5
+    readonly property int knobSize: 16
+    readonly property int knobWidth: 10
 }

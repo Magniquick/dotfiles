@@ -100,8 +100,7 @@ ColumnLayout {
                     interactive: contentHeight > height
                     visible: root.updatesCount > 0
 
-                    ScrollIndicator.vertical: ScrollIndicator {
-                    }
+                    ScrollIndicator.vertical: ScrollIndicator {}
 
                     Column {
                         id: listColumn

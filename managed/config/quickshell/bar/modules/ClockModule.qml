@@ -125,6 +125,7 @@ ModuleContainer {
             reload();
             root.updateCalendarRefreshTime();
         }
+        // qmllint disable unresolved-type
         JsonAdapter {
             id: calendarAdapter
 
@@ -132,6 +133,7 @@ ModuleContainer {
             property string generatedAt: ""
             property var eventsByDay: ({})
         }
+        // qmllint enable unresolved-type
     }
     Connections {
         target: root.calendarAdapter

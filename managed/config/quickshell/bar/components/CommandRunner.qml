@@ -82,6 +82,7 @@ Item {
 
             waitForEnd: true
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             timeoutTimer.stop();
             root.errorOutput = stderrCollector.text.trim();
@@ -95,5 +96,6 @@ Item {
                 root.error(root.errorOutput, code);
             }
         }
+        // qmllint enable signal-handler-parameters
     }
 }

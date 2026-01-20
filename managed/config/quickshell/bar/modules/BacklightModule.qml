@@ -252,10 +252,10 @@ ModuleContainer {
     }
 
     Component.onCompleted: {
-        DependencyCheck.require("brillo", "BacklightModule", function(available) {
+        DependencyCheck.require("brillo", "BacklightModule", function (available) {
             root.brilloAvailable = available;
         });
-        DependencyCheck.require("udevadm", "BacklightModule", function(available) {
+        DependencyCheck.require("udevadm", "BacklightModule", function (available) {
             root.udevadmAvailable = available;
         });
         root.refreshBrightness();
@@ -321,6 +321,7 @@ ModuleContainer {
                 root.handleUdevEvent(data);
             }
         }
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             if (root.udevRestartAttempts === 0) {
                 console.warn(`BacklightModule: udevadm monitor exited with code ${code}, attempting restart`);
@@ -333,6 +334,7 @@ ModuleContainer {
             udevBackoffResetTimer.stop();
             udevRestartTimer.restart();
         }
+        // qmllint enable signal-handler-parameters
     }
     MouseArea {
         anchors.fill: parent

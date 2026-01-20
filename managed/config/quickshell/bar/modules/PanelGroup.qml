@@ -19,7 +19,7 @@ ModuleContainer {
     backgroundColor: Config.moduleBackground
     contentSpacing: 0
     marginRight: Config.groupEdgeMargin
-    marginTop: Config.moduleMarginTop
+    marginTop: Config.outerGaps
     paddingBottom: 0
     paddingLeft: Config.groupPaddingX
     paddingRight: Config.groupPaddingX

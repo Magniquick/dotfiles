@@ -234,7 +234,7 @@ ModuleContainer {
                     minimum: 0
                     value: root.sliderValue
 
-                    onUserChanged: {
+                    onUserChanged: function (value) {
                         root.sliderValue = value;
                         root.setVolume(value);
                     }

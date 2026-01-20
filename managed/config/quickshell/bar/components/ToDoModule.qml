@@ -3,7 +3,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
-import QtQml
 import Quickshell
 import Quickshell.Io
 import ".."
@@ -347,8 +346,7 @@ ColumnLayout {
                     interactive: false
                     model: projectSelector.popup.visible ? projectSelector.delegateModel : null
 
-                    ScrollIndicator.vertical: ScrollIndicator {
-                    }
+                    ScrollIndicator.vertical: ScrollIndicator {}
                 }
                 enter: Transition {
                     NumberAnimation {
@@ -387,7 +385,7 @@ ColumnLayout {
 
                 Connections {
                     function onActiveChanged() {
-                        if (Qt.application && Qt.application.state !== Qt.ApplicationActive) {
+                        if (Application.state !== Qt.ApplicationActive) {
                             projectSelector.popup.close();
                         }
                     }
