@@ -11,6 +11,8 @@ ActionButtonBase {
     implicitHeight: Config.space.xl + Config.space.xs
     implicitWidth: label.implicitWidth + Config.space.xl + (root.loading ? spinner.width + Config.space.sm : 0)
     radius: height / 2
+    inactiveColor: Config.barPopupInnerSurface
+    hoverColor: Config.barPopupInnerSurface
 
     onClicked: {
         flashAnimation.restart();
@@ -26,7 +28,7 @@ ActionButtonBase {
 
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            color: root.active ? Config.m3.onSurface : Config.m3.onSurfaceVariant
+            color: root.active ? Config.color.on_surface : Config.color.on_surface_variant
             font.family: Config.iconFontFamily
             font.pixelSize: Config.type.labelMedium.size
             opacity: root.loading ? 1 : 0
@@ -55,7 +57,7 @@ ActionButtonBase {
             anchors.left: root.loading ? spinner.right : parent.left
             anchors.leftMargin: root.loading ? Config.space.sm : 0
             anchors.verticalCenter: parent.verticalCenter
-            color: root.active ? Config.m3.onSurface : Config.m3.onSurfaceVariant
+            color: root.active ? Config.color.on_surface : Config.color.on_surface_variant
             font.family: Config.fontFamily
             font.pixelSize: Config.type.labelMedium.size
             font.weight: Config.type.labelMedium.weight
@@ -68,7 +70,7 @@ ActionButtonBase {
 
         anchors.fill: parent
         antialiasing: true
-        color: root.active ? Config.m3.onPrimary : Config.m3.primary
+        color: root.active ? Config.color.on_primary : Config.color.primary
         opacity: 0
         radius: root.radius
 

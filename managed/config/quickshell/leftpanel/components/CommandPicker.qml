@@ -12,10 +12,10 @@ Rectangle {
     signal optionSelected(string value)
     signal dismissed
 
-    color: Common.Config.m3.surfaceDim
+    color: Common.Config.color.surface_dim
     radius: Common.Config.shape.corner.xl
     border.width: 2
-    border.color: Common.Config.primary
+    border.color: Common.Config.color.primary
 
     width: 320
     height: Math.min(500, headerRow.height + optionsList.contentHeight + Common.Config.space.lg * 3 + Common.Config.space.md)
@@ -33,14 +33,14 @@ Rectangle {
 
             Text {
                 text: "\uf120" // nf-md-console
-                color: Common.Config.primary
+                color: Common.Config.color.primary
                 font.family: Common.Config.iconFontFamily
                 font.pixelSize: 18
             }
 
             Text {
                 text: root.command.toUpperCase()
-                color: Common.Config.primary
+                color: Common.Config.color.primary
                 font.family: Common.Config.fontFamily
                 font.pixelSize: 12
                 font.weight: Font.Black
@@ -57,12 +57,12 @@ Rectangle {
                 implicitWidth: 24
                 implicitHeight: 24
                 radius: 12
-                color: closeArea.containsMouse ? Qt.alpha(Common.Config.m3.error, 0.2) : "transparent"
+                color: closeArea.containsMouse ? Qt.alpha(Common.Config.color.error, 0.2) : "transparent"
 
                 Text {
                     anchors.centerIn: parent
                     text: "\uf00d" // nf-md-close
-                    color: closeArea.containsMouse ? Common.Config.m3.error : Common.Config.textMuted
+                    color: closeArea.containsMouse ? Common.Config.color.error : Common.Config.color.on_surface_variant
                     font.family: Common.Config.iconFontFamily
                     font.pixelSize: 14
                 }
@@ -91,12 +91,12 @@ Rectangle {
                 required property int index
                 required property var modelData
 
-                readonly property color itemAccent: optionItem.modelData.accent || Common.Config.primary
+                readonly property color itemAccent: optionItem.modelData.accent || Common.Config.color.primary
 
                 width: optionsList.width
                 height: 56
                 radius: Common.Config.shape.corner.md
-                color: optionArea.containsMouse ? optionItem.itemAccent : Common.Config.surface
+                color: optionArea.containsMouse ? optionItem.itemAccent : Common.Config.color.surface
                 border.width: 1
                 border.color: optionArea.containsMouse ? optionItem.itemAccent : Qt.alpha(optionItem.itemAccent, 0.3)
 
@@ -129,7 +129,7 @@ Rectangle {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: optionItem.modelData.icon || "\uf101"
-                        color: optionArea.containsMouse ? Common.Config.onPrimary : optionItem.itemAccent
+                        color: optionArea.containsMouse ? Common.Config.color.on_primary : optionItem.itemAccent
                         font.family: Common.Config.iconFontFamily
                         font.pixelSize: 18
                         visible: !optionItem.modelData.iconImage
@@ -147,7 +147,7 @@ Rectangle {
 
                         Text {
                             text: optionItem.modelData.label || ""
-                            color: optionArea.containsMouse ? Common.Config.onPrimary : optionItem.itemAccent
+                            color: optionArea.containsMouse ? Common.Config.color.on_primary : optionItem.itemAccent
                             font.family: Common.Config.fontFamily
                             font.pixelSize: Common.Config.type.bodyMedium.size
                             font.weight: Font.Medium
@@ -161,7 +161,7 @@ Rectangle {
 
                         Text {
                             text: optionItem.modelData.description || ""
-                            color: optionArea.containsMouse ? Qt.alpha(Common.Config.onPrimary, 0.7) : Common.Config.textMuted
+                            color: optionArea.containsMouse ? Qt.alpha(Common.Config.color.on_primary, 0.7) : Common.Config.color.on_surface_variant
                             font.family: Common.Config.fontFamily
                             font.pixelSize: Common.Config.type.bodySmall.size
                             visible: (optionItem.modelData.description || "").length > 0

@@ -5,25 +5,25 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    property color accentColor: Config.m3.primary
-    property color backgroundColor: Config.moduleBackgroundHover
+    property color accentColor: Config.color.primary
+    property color backgroundColor: Config.barPopupInnerSurface
     property int barHeight: Math.max(1, Config.space.xs)
-    property color borderColor: Config.tooltipBorder
+    property color borderColor: Config.color.outline
     property int borderWidth: Config.tooltipBorderWidth
-    property color chipColor: Config.moduleBackgroundMuted
+    property color chipColor: Config.color.surface_variant
     property string chipText: ""
-    property color chipTextColor: Config.m3.onSurface
+    property color chipTextColor: Config.color.on_surface
     property real fillRatio: 0
     readonly property int gutter: Config.spaceHalfXs
     property string icon: ""
     property string label: ""
-    property color labelColor: Config.m3.onSurfaceVariant
+    property color labelColor: Config.color.on_secondary_container
     property int padding: Config.space.sm
     property string secondaryValue: ""
     property bool showFill: true
     property string tertiaryValue: ""
     property string value: ""
-    property color valueColor: Config.m3.onSurface
+    property color valueColor: Config.color.on_surface
 
     antialiasing: true
     border.color: root.borderColor

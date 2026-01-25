@@ -9,12 +9,12 @@
   - `modules/` (bar modules such as `ClockModule.qml`, `WorkspaceGroup.qml`, `NetworkModule.qml`).
   - Powermenu pieces: `powermenu/Powermenu.qml` plus `ActionPanel.qml`, `GreetingPane.qml`, `FooterStatus.qml`, `BunnyBlock.qml`, `ActionGrid.qml`, `PowermenuButton.qml`.
 - Basic file layout (top-level):
-  - `shell.qml`, `BarWindow.qml`, `Config.qml`, `ColorPalette.qml`, `DependencyCheck.qml`
+  - `shell.qml`, `BarWindow.qml`, `Config.qml`, `Colors.qml`, `DependencyCheck.qml`
   - `components/`, `modules/`, `powermenu/`
   - `waybar/config.jsonc`, `waybar/style.css`
 - Singletons (registered in `qmldir`):
   - `Config.qml`: Design tokens (fonts, spacing, colors, slider constants)
-  - `ColorPalette.qml`: Catppuccin color palette
+  - `Colors.qml`: Material palette + color roles
   - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
 - Runtime data sources/services:
   - Backlight: `/sys/class/backlight/<device>/actual_brightness` + `udevadm monitor`.
@@ -33,7 +33,7 @@
 - Keep animations meaningful (open/close reveals, tooltip fades); avoid noisy micro-motions.
 - Tooltips anchor above targets, stay unclipped; bar modules can collapse when empty.
 - Powermenu overlay should animate cleanly, retain focus when opened, and hide on `Esc`/`q`.
-- Use `Config.m3` colors where possible so modules stay aligned with the shared palette.
+- Use `Config.color` / `Config.palette` so modules stay aligned with the shared palette.
 
 ## Build, Test, and Development Commands
 - Run bar locally: `quickshell -c bar` (or `qs` here). Powermenu: `quickshell` (or `qs`) from repo root to load `powermenu/shell.qml`.
@@ -43,7 +43,7 @@
 - QML/JS: 2-space indentation, concise handlers, readable signal scopes.
 - Naming: QML types/IDs `CamelCase`; properties/functions `lowerCamelCase`; constants `UPPER_SNAKE`.
 - Keep powermenu names explicit (e.g., `powermenuVisible`); prefer small, focused components.
-- Shared colors live in `Colors.js`; use `Quickshell.shellDir`/`Quickshell.shellPath()` (not deprecated `configDir`/`configPath`).
+- Shared colors live in `Config.color` / `Config.palette`; use `Quickshell.shellDir`/`Quickshell.shellPath()` (not deprecated `configDir`/`configPath`).
 - Avoid deprecated parameter injection in signal handlers; use `function(args)` handlers.
 
 ## Error Handling Patterns

@@ -6,7 +6,7 @@ Item {
     id: gridHolder
 
     property var actions: defaultActions()
-    property var colors: ColorPalette.palette
+    property var colors
     property int columns: 3
     // Local flag so we don't break the upstream binding when consuming the first hover.
     property bool dropNextHover: suppressNextHover
@@ -25,27 +25,27 @@ Item {
         return [({
                     "name": "Poweroff",
                     "icon": "",
-                    "accent": colors.red
+                    "accent": colors.error
                 }), ({
                     "name": "Reboot",
                     "icon": "",
-                    "accent": colors.green
+                    "accent": colors.tertiary
                 }), ({
                     "name": "Exit",
                     "icon": "󰿅",
-                    "accent": colors.pink
+                    "accent": colors.secondary
                 }), ({
                     "name": "Hibernate",
                     "icon": "󰒲",
-                    "accent": colors.teal
+                    "accent": colors.tertiary
                 }), ({
                     "name": "Suspend",
                     "icon": "󰤄",
-                    "accent": colors.yellow
+                    "accent": colors.secondary
                 }), ({
                     "name": "Windows",
                     "icon": "",
-                    "accent": colors.blue
+                    "accent": colors.primary
                 })];
     }
 

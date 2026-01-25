@@ -27,7 +27,7 @@ Item {
         Text {
             id: bunnyLine1
 
-            color: bunnyBlock.colors.text
+            color: bunnyBlock.colors.on_surface
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
@@ -36,7 +36,7 @@ Item {
         Text {
             id: bunnyLine2
 
-            color: bunnyBlock.colors.text
+            color: bunnyBlock.colors.on_surface
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
@@ -45,11 +45,11 @@ Item {
         Text {
             id: bunnyLine3
 
-            color: bunnyBlock.colors.text
+            color: bunnyBlock.colors.on_surface
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
-            text: qsTr("c(<font color='%1'>\"</font>)(<font color='%1'>\"</font>)").arg(bunnyBlock.colors.red)
+            text: qsTr("c(<font color='%1'>\"</font>)(<font color='%1'>\"</font>)").arg(bunnyBlock.colors.error)
             textFormat: Text.RichText
         }
     }

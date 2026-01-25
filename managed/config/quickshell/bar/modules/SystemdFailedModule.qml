@@ -207,11 +207,11 @@ ModuleContainer {
 
     content: [
         IconTextRow {
-            iconColor: Config.m3.error
+            iconColor: Config.color.error
             iconText: ""
             spacing: root.contentSpacing
             text: root.failedCount + (root.failedCount === 1 ? " unit failed" : " units failed")
-            textColor: Config.m3.error
+            textColor: Config.color.error
         }
     ]
     tooltipContent: Component {

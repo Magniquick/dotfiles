@@ -137,7 +137,7 @@ ModuleContainer {
 
     content: [
         IconLabel {
-            color: Config.m3.warning
+            color: Config.color.secondary
             text: root.iconText
         }
     ]
@@ -157,7 +157,7 @@ ModuleContainer {
 
                     Text {
                         anchors.centerIn: parent
-                        color: Config.m3.warning
+                        color: Config.color.secondary
                         font.pixelSize: Config.type.headlineLarge.size
                         text: root.iconText
                     }
@@ -167,7 +167,7 @@ ModuleContainer {
 
                     Text {
                         Layout.fillWidth: true
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -175,7 +175,7 @@ ModuleContainer {
                         text: "Brightness"
                     }
                     Text {
-                        color: Config.m3.onSurfaceVariant
+                        color: Config.color.on_surface_variant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.brightnessPercent >= 0 ? root.brightnessPercent + "%" : "Unavailable"
@@ -193,7 +193,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.m3.primary
+                    color: Config.color.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -203,7 +203,7 @@ ModuleContainer {
                 LevelSlider {
                     Layout.fillWidth: true
                     enabled: root.brightnessPercent >= 0
-                    fillColor: Config.m3.warning
+                    fillColor: Config.color.secondary
                     maximum: 100
                     minimum: 1
                     value: root.sliderValue

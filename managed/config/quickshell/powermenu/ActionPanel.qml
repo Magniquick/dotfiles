@@ -6,7 +6,7 @@ Rectangle {
     property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     property int borderRadius: 27
     property alias bunnyHeadpatting: bunny.headpatting
-    property var colors: ColorPalette.palette
+    property var colors
     property int headpatResetDelay: 200
     property string hoverAction: ""
     property bool hoverEnabled: true
@@ -23,7 +23,7 @@ Rectangle {
 
     border.color: "transparent"
     border.width: 6
-    color: colors.base
+    color: colors.surface
     implicitHeight: rightContent.implicitHeight + padTop + padBottom + border.width * 2
     implicitWidth: rightContent.implicitWidth + padH * 2 + border.width * 2
     radius: borderRadius

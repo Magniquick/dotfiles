@@ -6,7 +6,7 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    property color backgroundColor: Config.moduleBackground
+    property color backgroundColor: Config.barModuleBackground
     readonly property bool backgroundTransparent: root.backgroundColor.a < 0.01
     property bool collapsed: false
     property alias content: contentRow.data
@@ -76,7 +76,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 0
         antialiasing: true
-        border.color: Config.m3.outline
+        border.color: Config.color.outline
         border.width: 0
         color: "transparent"
         radius: Math.min(width, height) / 2
@@ -105,7 +105,7 @@ Rectangle {
         id: defaultTooltipContent
 
         Text {
-            color: Config.m3.onSurface
+            color: Config.color.on_surface
             font.family: Config.fontFamily
             font.pixelSize: Config.type.bodyMedium.size
             font.weight: Config.type.bodyMedium.weight

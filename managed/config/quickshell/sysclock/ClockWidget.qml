@@ -26,10 +26,10 @@ PanelWindow {
                 id: day
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.pixelSize: Math.round(Common.Config.type.displayLarge.size * 2.8)
-                color: Common.Config.textColor // default color for the rest of the text
+                color: Common.Config.color.on_surface // default color for the rest of the text
                 font.family: "Electroharmonix"
                 style: Text.Raised
-                styleColor: Common.Config.surface
+                styleColor: Common.Config.color.surface
                 textFormat: Text.RichText
                 renderType: Text.CurveRendering
 
@@ -38,19 +38,19 @@ PanelWindow {
                     let fullDay = SysClock.format("dddd");
                     let firstLetter = fullDay.charAt(0);
                     let rest = fullDay.slice(1);
-                    return "<span style='color:" + Common.Config.red.toString() + ";'>" + firstLetter + "</span>" + rest;
+                    return "<span style='color:" + Common.Config.color.error.toString() + ";'>" + firstLetter + "</span>" + rest;
                 }
             }
             Text {
                 id: date
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.pixelSize: Math.round(Common.Config.type.headlineSmall.size * 1.25)
-                color: Common.Config.textColor
+                color: Common.Config.color.on_surface
                 font.family: "The Last Shuriken"
                 // text: Qt.formatDateTime(clock.date, "dd MMM yyyy")
                 text: SysClock.format("dd MMM yyyy")
                 style: Text.Raised
-                styleColor: Common.Config.surface
+                styleColor: Common.Config.color.surface
             }
         }
     }

@@ -11,6 +11,7 @@ Space 1.0 types/Space.qml
 TextStyle 1.0 types/TextStyle.qml
 TypeScale 1.0 types/TypeScale.qml
 singleton Config 1.0 Config.qml
+singleton Colors 1.0 Colors.qml
 singleton ColorPalette 1.0 ColorPalette.qml
 singleton DependencyCheck 1.0 services/DependencyCheck.qml
 singleton GlobalState 1.0 GlobalState.qml

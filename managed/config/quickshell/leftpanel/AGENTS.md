@@ -35,9 +35,8 @@ quickshell
 
 ### Configuration
 - `./common/` - Symlink to `../common/` containing shared config
-- `Common.Config` - Singleton with Material 3 design tokens, spacing, typography
-- `Common.Config.m3.*` - Material 3 color roles (use these for theming)
-- `ColorPalette` - Catppuccin Mocha color palette
+- `Common.Config` - Singleton with design tokens, spacing, typography
+- `Common.Config.color` / `Common.Config.palette` - Material color roles and palette
 
 ### Data Files
 - `./system-prompts/moods.json` - Mood configurations with optional `default_model`
@@ -48,7 +47,7 @@ quickshell
 ### Adding Models
 Add to `availableModels` in `LeftPanel.qml`:
 ```qml
-{ value: "model-id", label: "Display Name", iconImage: "./assets/icon.svg", description: "...", accent: Common.Config.m3.info }
+{ value: "model-id", label: "Display Name", iconImage: "./assets/icon.svg", description: "...", accent: Common.Config.color.primary }
 ```
 
 ### Adding Moods
@@ -67,8 +66,8 @@ Models starting with `gemini` use Gemini API, others use OpenAI. Switching model
 
 ## Styling
 
-Use Material 3 tokens from `Common.Config.m3.*`:
-- Colors: `primary`, `surface`, `surfaceDim`, `error`, `success`, `info`, `tertiary`
+Use Material tokens from `Common.Config.color`:
+- Colors: `primary`, `surface`, `surface_dim`, `error`, `secondary`, `tertiary`
 - Spacing: `Common.Config.space.{xs,sm,md,lg,xl}`
 - Typography: `Common.Config.type.{bodySmall,bodyMedium,bodyLarge}.*`
 - Corners: `Common.Config.shape.corner.{sm,md,lg,xl}`

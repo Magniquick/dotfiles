@@ -12,7 +12,7 @@ import "../components"
 import QtQuick
 
 ModuleContainer {
-    backgroundColor: Config.moduleBackground
+    backgroundColor: Config.barModuleBackground
     contentSpacing: 0
     marginTop: Config.outerGaps
     paddingBottom: 0

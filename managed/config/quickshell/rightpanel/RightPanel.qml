@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import "./common" as Common
@@ -13,6 +14,7 @@ Item {
 
     readonly property int popupWidth: 320
     readonly property int popupMaxHeight: 560
+    property bool notificationServerActive: false
 
     // Timeouts per urgency (matching dunst config)
     readonly property int timeoutLowMs: 3000
@@ -35,6 +37,7 @@ Item {
         property bool popup: false
         property bool isTransient: notification && notification.hints && notification.hints.transient ? true : false
         property string appName: notification && notification.appName ? notification.appName : ""
+        property var title: notification ? notification.title : undefined
         property string summary: notification && notification.summary ? notification.summary : ""
         property string body: notification && notification.body ? notification.body : ""
         property string iconSource: {
@@ -76,13 +79,30 @@ Item {
             list = newList;
         }
 
+        function requestDismiss(notification) {
+            if (!notification) {
+                return;
+            }
+            if (typeof notification.dismiss === "function") {
+                notification.dismiss();
+                return;
+            }
+            if (typeof notification.close === "function") {
+                notification.close();
+                return;
+            }
+            if (typeof notification.expire === "function") {
+                notification.expire();
+            }
+        }
+
         function addNotification(notification) {
             notification.tracked = true;
             const entry = notificationEntryComponent.createObject(notificationStore, {
                 "notificationId": notification.id + idOffset,
                 "notification": notification
             });
-            updateList([...list, entry]);
+            updateList([entry, ...list]);
 
             entry.popup = true;
             // qmllint disable missing-property
@@ -110,9 +130,7 @@ Item {
                 entry.timer.stop();
                 entry.timer.destroy();
             }
-            if (entry.notification) {
-                entry.notification.dismiss();
-            }
+            requestDismiss(entry.notification);
             const newList = [...list];
             newList.splice(index, 1);
             updateList(newList);
@@ -125,9 +143,7 @@ Item {
                     entry.timer.stop();
                     entry.timer.destroy();
                 }
-                if (entry.notification) {
-                    entry.notification.dismiss();
-                }
+                requestDismiss(entry.notification);
             });
             updateList([]);
             refreshPopupList();
@@ -161,13 +177,16 @@ Item {
 
     NotificationServer {
         id: notificationServer
+        actionIconsSupported: true
         actionsSupported: true
         bodyHyperlinksSupported: true
         bodyImagesSupported: true
         bodyMarkupSupported: true
         bodySupported: true
+        extraHints: []
         imageSupported: true
-        keepOnReload: false
+        inlineReplySupported: true
+        keepOnReload: true
         persistenceSupported: true
 
         onNotification: notification => {
@@ -175,19 +194,40 @@ Item {
         }
     }
 
+    Timer {
+        id: notificationStatusTimer
+        interval: 10000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (!notificationStatusProcess.running) {
+                notificationStatusProcess.running = true;
+            }
+        }
+    }
+
+    Process {
+        id: notificationStatusProcess
+        command: ["busctl", "--user", "status", "org.freedesktop.Notifications"]
+        onExited: code => {
+            root.notificationServerActive = code === 0;
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         border.width: 1
-        border.color: Common.Config.m3.outline
+        border.color: Common.Config.color.outline
         radius: Common.Config.shape.corner.lg
         gradient: Gradient {
             GradientStop {
                 position: 0.0
-                color: Common.Config.m3.surfaceDim
+                color: Common.Config.color.surface_dim
             }
             GradientStop {
                 position: 1.0
-                color: Common.Config.surfaceContainer
+                color: Common.Config.color.surface_container
             }
         }
     }
@@ -210,7 +250,7 @@ Item {
 
             Text {
                 text: "\uf0f3"
-                color: Common.Config.primary
+                color: Common.Config.color.primary
                 font.family: Common.Config.iconFontFamily
                 font.pixelSize: 16
             }
@@ -218,7 +258,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: "Notifications"
-                color: Common.Config.textColor
+                color: Common.Config.color.on_surface
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.titleMedium.size
                 font.weight: Common.Config.type.titleMedium.weight
@@ -227,7 +267,7 @@ Item {
             Text {
                 visible: notificationStore.list.length > 0
                 text: notificationStore.list.length.toString()
-                color: Common.Config.textMuted
+                color: Common.Config.color.on_surface_variant
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.labelMedium.size
                 font.weight: Common.Config.type.labelMedium.weight
@@ -236,7 +276,7 @@ Item {
                     anchors.fill: parent
                     anchors.margins: -Common.Config.space.xs
                     radius: Common.Config.shape.corner.sm
-                    color: Common.Config.surfaceVariant
+                    color: Common.Config.color.surface_variant
                     z: -1
                 }
             }
@@ -257,7 +297,7 @@ Item {
                 anchors.centerIn: parent
                 visible: notificationStore.list.length === 0
                 text: "No notifications"
-                color: Common.Config.textMuted
+                color: Common.Config.color.on_surface_variant
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.bodyMedium.size
                 font.weight: Common.Config.type.bodyMedium.weight
@@ -327,7 +367,7 @@ Item {
             color: "transparent"
             radius: Common.Config.shape.corner.md
             border.width: 1
-            border.color: Qt.alpha(Common.Config.textColor, 0.1)
+            border.color: Qt.alpha(Common.Config.color.on_surface, 0.1)
 
             RowLayout {
                 anchors.fill: parent
@@ -342,14 +382,14 @@ Item {
                         height: 6
                         radius: 3
                         // qmllint disable missing-property
-                        color: notificationServer.valid ? Common.Config.m3.success : Common.Config.m3.error
+                        color: root.notificationServerActive ? Common.Config.color.tertiary : Common.Config.color.error
                         // qmllint enable missing-property
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
                     Text {
                         text: "NOTIFICATION SERVER"
-                        color: Common.Config.textMuted
+                        color: Common.Config.color.on_surface_variant
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
                         font.weight: Font.Bold
@@ -365,9 +405,9 @@ Item {
 
                 Text {
                     // qmllint disable missing-property
-                    text: notificationServer.valid ? "ACTIVE" : "INACTIVE"
+                    text: root.notificationServerActive ? "ACTIVE" : "INACTIVE"
                     // qmllint enable missing-property
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold

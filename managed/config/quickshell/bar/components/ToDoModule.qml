@@ -25,7 +25,7 @@ ColumnLayout {
     readonly property int minorSpace: Config.spaceHalfXs
     property bool parseError: false
     property var rawData: ({})
-    readonly property var taskColors: [Config.m3.tertiary, Config.m3.secondary, Config.m3.flamingo, Config.m3.primary, Config.m3.warning, Config.m3.success]
+    readonly property var taskColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary, Config.color.secondary, Config.color.tertiary]
     property var tasks: []
     readonly property string todoistBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/todoist-api")
     readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
@@ -204,7 +204,7 @@ ColumnLayout {
 
             Text {
                 anchors.centerIn: parent
-                color: Config.m3.tertiary
+                color: Config.color.tertiary
                 font.pixelSize: Config.type.headlineLarge.size
                 text: "󰄭"
             }
@@ -213,14 +213,14 @@ ColumnLayout {
             spacing: Config.space.none
 
             Text {
-                color: Config.m3.onSurface
+                color: Config.color.on_surface
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
                 font.weight: Font.Bold
                 text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
             }
             Text {
-                color: Config.m3.onSurfaceVariant
+                color: Config.color.on_surface_variant
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
                 text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
@@ -255,7 +255,7 @@ ColumnLayout {
                 Text {
                     id: selectorLabel
 
-                    color: Config.m3.tertiary
+                    color: Config.color.tertiary
                     elide: Text.ElideRight
                     font.family: Config.fontFamily
                     font.letterSpacing: root.minorSpace
@@ -268,7 +268,7 @@ ColumnLayout {
                 Text {
                     id: dropdownIndicator
 
-                    color: Config.m3.tertiary
+                    color: Config.color.tertiary
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.labelMedium.size
                     rotation: projectSelector.popup.visible ? 90 : 0
@@ -295,7 +295,7 @@ ColumnLayout {
                 background: Rectangle {
                     anchors.fill: parent
                     anchors.margins: root.minorSpace
-                    color: delegateRoot.highlighted ? Config.m3.primary : (delegateRoot.hovered ? Config.m3.surfaceContainerHigh : "transparent")
+                    color: delegateRoot.highlighted ? Config.color.primary : (delegateRoot.hovered ? Config.color.surface_container_high : "transparent")
                     radius: Config.shape.corner.xs
 
                     Behavior on color {
@@ -305,7 +305,7 @@ ColumnLayout {
                     }
                 }
                 contentItem: Text {
-                    color: delegateRoot.highlighted ? Config.m3.onPrimary : Config.m3.onSurface
+                    color: delegateRoot.highlighted ? Config.color.on_primary : Config.color.on_surface
                     elide: Text.ElideRight
                     font: projectSelector.font
                     leftPadding: Config.space.sm
@@ -326,15 +326,15 @@ ColumnLayout {
                 y: projectSelector.height + Config.space.xs
 
                 background: Rectangle {
-                    border.color: Config.m3.outline
+                    border.color: Config.color.outline
                     border.width: 1
-                    color: Config.m3.surface
+                    color: Config.color.surface
                     layer.enabled: true
                     radius: Config.shape.corner.md
 
                     layer.effect: MultiEffect {
                         shadowBlur: 0.4
-                        shadowColor: Qt.alpha(Config.m3.shadow, 0.2)
+                        shadowColor: Qt.alpha(Config.color.shadow, 0.2)
                         shadowEnabled: true
                         shadowVerticalOffset: 2
                     }
@@ -463,7 +463,7 @@ ColumnLayout {
                     }
                     Text {
                         Layout.fillWidth: true
-                        color: Config.m3.onSurfaceVariant
+                        color: Config.color.on_surface_variant
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelSmall.size
@@ -485,7 +485,7 @@ ColumnLayout {
 
                 // Complete Button
                 Text {
-                    color: Config.m3.success
+                    color: Config.color.tertiary
                     font.family: Config.iconFontFamily
                     font.pixelSize: Config.type.titleSmall.size
                     font.weight: Font.Black
@@ -510,7 +510,7 @@ ColumnLayout {
             }
         }
         Text {
-            color: Config.m3.onSurfaceVariant
+            color: Config.color.on_surface_variant
             font.family: Config.fontFamily
             font.italic: true
             font.pixelSize: Config.type.bodySmall.size

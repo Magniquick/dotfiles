@@ -33,7 +33,7 @@ Rectangle {
 
     Layout.alignment: Qt.AlignVCenter
     antialiasing: true
-    color: root.active ? Config.moduleBackgroundMuted : (root.hovered ? Config.moduleBackgroundHover : "transparent")
+    color: root.active ? Config.color.surface_variant : (root.hovered ? Config.color.surface_container_high : "transparent")
     implicitHeight: Config.workspaceHeight
     implicitWidth: (root.uniformWidth ? Math.max(labelText.implicitWidth, root.uniformTextWidth) : labelText.implicitWidth) + root.paddingX * 2
     radius: height / 2
@@ -42,7 +42,7 @@ Rectangle {
         id: labelText
 
         anchors.centerIn: parent
-        color: root.urgent ? Config.m3.warning : (root.active ? Config.m3.primary : Config.m3.onSurfaceVariant)
+        color: root.urgent ? Config.color.secondary : (root.active ? Config.color.primary : Config.color.on_surface_variant)
         font.bold: root.active
         font.family: root.fontFamily
         font.pixelSize: root.fontSize

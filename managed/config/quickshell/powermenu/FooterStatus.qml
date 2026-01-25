@@ -10,7 +10,7 @@ Column {
     spacing: 10
 
     Text {
-        color: footer.colors.subtext0
+        color: footer.colors.on_surface_variant
         font.bold: true
         font.family: "monospace"
         font.pointSize: 17
@@ -20,14 +20,14 @@ Column {
         spacing: 8
 
         Text {
-            color: footer.colors.subtext0
+            color: footer.colors.on_surface_variant
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
             text: ""
         }
         Text {
-            color: footer.colors.subtext0
+            color: footer.colors.on_surface_variant
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17
@@ -36,7 +36,7 @@ Column {
         Text {
             id: cursor
 
-            color: footer.colors.text
+            color: footer.colors.on_surface
             font.bold: true
             font.family: "monospace"
             font.pointSize: 17

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
+import "./common" as Common
 
 PanelWindow {
     id: window
@@ -9,7 +10,7 @@ PanelWindow {
     readonly property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
     readonly property int borderRadius: 27
     property alias bunnyHeadpatting: rightPane.bunnyHeadpatting
-    property var colors: ColorPalette.palette
+    property var colors: Common.Config.color
     property int headpatResetDelay: 200
     property string hoverAction: ""
     property bool hoverEnabled: true

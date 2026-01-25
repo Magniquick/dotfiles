@@ -6,7 +6,7 @@ Rectangle {
 
     property color borderColor
     property int borderRadius: 27
-    property var colors: ColorPalette.palette
+    property var colors
     property bool headpatting: false
     property int padBottom: 54
     property int padLeft: 47
@@ -53,7 +53,7 @@ Rectangle {
                 Text {
                     id: headline
 
-                    color: leftPane.colors.blue
+                    color: leftPane.colors.primary
                     font.family: "Battle Andy"
                     font.pointSize: 80
                     text: "Hello"
@@ -61,7 +61,7 @@ Rectangle {
                 Text {
                     id: heart
 
-                    color: leftPane.colors.red
+                    color: leftPane.colors.error
                     font.family: "JetBrainsMono NFP"
                     font.pointSize: 12
                     text: ""
@@ -82,7 +82,7 @@ Rectangle {
                 Text {
                     id: subtitle
 
-                    color: leftPane.colors.subtext0
+                    color: leftPane.colors.on_surface_variant
                     font.family: "Kyok Medium"
                     font.pointSize: 17
                     text: "(again)"
@@ -96,7 +96,7 @@ Rectangle {
             width: leftContent.width
 
             Text {
-                color: leftPane.colors.yellow
+                color: leftPane.colors.secondary
                 font.italic: true
                 font.pointSize: 27
                 horizontalAlignment: Text.AlignHCenter
@@ -113,7 +113,7 @@ Rectangle {
                 Text {
                     id: quoteBnuuy
 
-                    color: leftPane.colors.text
+                    color: leftPane.colors.on_surface
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
@@ -132,7 +132,7 @@ Rectangle {
                 Text {
                     id: quoteBubbi
 
-                    color: leftPane.colors.text
+                    color: leftPane.colors.on_surface
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
@@ -158,7 +158,7 @@ Rectangle {
                 Text {
                     id: authorMarx
 
-                    color: leftPane.colors.subtext0
+                    color: leftPane.colors.on_surface_variant
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
@@ -177,7 +177,7 @@ Rectangle {
                 Text {
                     id: authorMagni
 
-                    color: leftPane.colors.subtext0
+                    color: leftPane.colors.on_surface_variant
                     font.family: "Kyok Medium"
                     font.italic: true
                     font.pointSize: 14
@@ -200,13 +200,13 @@ Rectangle {
             spacing: -12
 
             Repeater {
-                model: [leftPane.colors.red, leftPane.colors.yellow, leftPane.colors.green, leftPane.colors.teal, leftPane.colors.blue, leftPane.colors.pink]
+                model: [leftPane.colors.error, leftPane.colors.secondary, leftPane.colors.tertiary, leftPane.colors.tertiary, leftPane.colors.primary, leftPane.colors.secondary]
 
                 delegate: Rectangle {
                     id: swatch
                     required property color modelData
 
-                    border.color: leftPane.colors.base
+                    border.color: leftPane.colors.surface
                     border.width: leftPane.swatchBorder
                     color: "transparent"
                     height: leftPane.swatchSize

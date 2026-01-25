@@ -13,7 +13,7 @@ import "rightpanel" as RightPanel
 ShellRoot {
     id: shellRoot
 
-    Clock.ClockWidget {}
+    // Clock.ClockWidget {}
     LoggingCategory {
         defaultLogLevel: LoggingCategory.Critical
         name: "quickshell.dbus.properties"
@@ -53,7 +53,7 @@ ShellRoot {
             left: true
             bottom: true
         }
-        implicitWidth: panelWidth
+        implicitWidth: panelWidth + Bar.Config.outerGaps
 
         WlrLayershell.namespace: "quickshell:leftpanel"
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
@@ -73,7 +73,7 @@ ShellRoot {
             width: leftPanelWindow.panelWidth
             height: parent.height - Bar.Config.outerGaps * 2
 
-            x: Bar.GlobalState.leftPanelVisible ? Bar.Config.outerGaps : -leftPanelWindow.panelWidth
+            x: Bar.GlobalState.leftPanelVisible ? Bar.Config.outerGaps : -leftPanelWindow.panelWidth - Bar.Config.outerGaps
 
             Behavior on x {
                 NumberAnimation {

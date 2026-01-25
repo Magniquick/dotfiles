@@ -281,7 +281,7 @@ ModuleContainer {
                     }
                     Text {
                         anchors.centerIn: parent
-                        color: Config.m3.onSurfaceVariant
+                        color: Config.color.on_surface_variant
                         font.family: Config.iconFontFamily
                         font.pixelSize: Config.type.headlineLarge.size
                         text: ""
@@ -318,7 +318,7 @@ ModuleContainer {
                             Text {
                                 id: titleText
 
-                                color: Config.m3.onSurface
+                                color: Config.color.on_surface
                                 elide: titleClip.hovered ? Text.ElideNone : Text.ElideRight
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.titleLarge.size
@@ -365,7 +365,7 @@ ModuleContainer {
                         Text {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             elide: Text.ElideRight
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.labelMedium.size
@@ -381,7 +381,7 @@ ModuleContainer {
 
                             anchors.fill: parent
                             enabled: root.activePlayer && root.activePlayer.canSeek && root.lengthSeconds(root.activePlayer) > 0
-                            fillColor: Config.m3.primary
+                            fillColor: Config.color.primary
                             maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
                             minimum: 0
                             value: root.positionSeconds(root.activePlayer)
@@ -401,8 +401,8 @@ ModuleContainer {
                         Rectangle {
                             id: seekPreview
                             visible: progressSlider.hovered && progressSlider.enabled && !progressSlider.dragging
-                            color: Config.m3.surfaceContainerHighest
-                            border.color: Config.m3.outline
+                            color: Config.color.surface_container_highest
+                            border.color: Config.color.outline
                             border.width: 1
                             radius: Config.shape.corner.xs
                             width: seekPreviewText.implicitWidth + Config.space.sm
@@ -413,7 +413,7 @@ ModuleContainer {
                             Text {
                                 id: seekPreviewText
                                 anchors.centerIn: parent
-                                color: Config.m3.onSurface
+                                color: Config.color.on_surface
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.labelSmall.size
                                 text: root.formatTime(progressSlider.hoverRatio * root.lengthSeconds(root.activePlayer))
@@ -424,7 +424,7 @@ ModuleContainer {
                         spacing: Config.space.xs
 
                         Text {
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             text: {
@@ -438,7 +438,7 @@ ModuleContainer {
                         // Seek unavailable indicator
                         Text {
                             visible: root.activePlayer && !root.activePlayer.canSeek
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.iconFontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             text: ""

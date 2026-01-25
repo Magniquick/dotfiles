@@ -31,7 +31,7 @@ Item {
         })
 
     function psiBarColor(val, isFull) {
-        const baseColor = val >= 25 ? Common.Config.m3.error : val >= 5 ? Common.Config.m3.warning : Common.Config.m3.info;
+        const baseColor = val >= 25 ? Common.Config.color.error : val >= 5 ? Common.Config.color.secondary : Common.Config.color.primary;
         return isFull ? baseColor : Qt.alpha(baseColor, 0.4);
     }
 
@@ -39,19 +39,19 @@ Item {
 
     readonly property string sysInfoCommand: Quickshell.shellPath("common/scripts/sys_info.sh")
     readonly property real tempValue: Number(sysInfo.temp || 0)
-    readonly property color tempColor: tempValue >= 85 ? Common.Config.m3.error : (tempValue >= 75 ? Common.Config.m3.warning : Common.Config.m3.flamingo)
+    readonly property color tempColor: tempValue >= 85 ? Common.Config.color.error : (tempValue >= 75 ? Common.Config.color.secondary : Common.Config.color.tertiary)
     readonly property int diskWearPct: parseInt(sysInfo.disk_wear || "", 10)
     readonly property color diskHealthColor: {
         const w = diskWearPct, s = (sysInfo.disk_health || "").toLowerCase();
         if (!isNaN(w)) {
             if (w >= 90)
-                return Common.Config.m3.error;
+                return Common.Config.color.error;
             if (w >= 75)
-                return Common.Config.m3.warning;
+                return Common.Config.color.secondary;
         }
         if (s.startsWith("healthy") || s.startsWith("passed"))
-            return Common.Config.m3.success;
-        return s === "" || s.includes("unknown") ? Common.Config.m3.warning : Common.Config.m3.error;
+            return Common.Config.color.tertiary;
+        return s === "" || s.includes("unknown") ? Common.Config.color.secondary : Common.Config.color.error;
     }
 
     Process {
@@ -92,13 +92,13 @@ Item {
 
             Components.CircularGauge {
                 value: root.sysInfo.cpu
-                accent: Common.Config.m3.info
+                accent: Common.Config.color.primary
                 label: "Processor"
                 icon: "\uf4bc"
             }
             Components.CircularGauge {
                 value: root.sysInfo.mem
-                accent: Common.Config.primary
+                accent: Common.Config.color.primary
                 label: "Memory"
                 icon: "\uefc5"
             }
@@ -161,7 +161,7 @@ Item {
 
                             Text {
                                 text: psiDelegate.label
-                                color: Common.Config.textMuted
+                                color: Common.Config.color.on_surface_variant
                                 font {
                                     family: Common.Config.fontFamily
                                     pixelSize: 9
@@ -178,7 +178,7 @@ Item {
                             // Show both values
                             Text {
                                 text: psiDelegate.someVal.toFixed(1)
-                                color: Common.Config.textMuted
+                                color: Common.Config.color.on_surface_variant
                                 font {
                                     family: Common.Config.fontFamily
                                     pixelSize: 9
@@ -187,7 +187,7 @@ Item {
                             }
                             Text {
                                 text: " / "
-                                color: Common.Config.textMuted
+                                color: Common.Config.color.on_surface_variant
                                 font {
                                     family: Common.Config.fontFamily
                                     pixelSize: 9
@@ -196,7 +196,7 @@ Item {
                             }
                             Text {
                                 text: psiDelegate.fullVal.toFixed(1) + "%"
-                                color: Common.Config.textColor
+                                color: Common.Config.color.on_surface
                                 font {
                                     family: Common.Config.fontFamily
                                     pixelSize: 10
@@ -211,9 +211,9 @@ Item {
                             Layout.preferredHeight: 10
                             implicitHeight: 10
                             radius: 5
-                            color: Qt.alpha(Common.Config.textColor, 0.05)
+                            color: Qt.alpha(Common.Config.color.on_surface, 0.05)
                             border.width: 1
-                            border.color: Qt.alpha(Common.Config.textColor, 0.05)
+                            border.color: Qt.alpha(Common.Config.color.on_surface, 0.05)
                             clip: true
 
                             // "some" bar (dull, behind)
@@ -255,9 +255,9 @@ Item {
                 Layout.preferredWidth: 100
                 Layout.fillHeight: true
                 radius: Common.Config.shape.corner.lg
-                color: Qt.alpha(Common.Config.textColor, 0.02)
+                color: Qt.alpha(Common.Config.color.on_surface, 0.02)
                 border.width: 1
-                border.color: Qt.alpha(Common.Config.textColor, 0.05)
+                border.color: Qt.alpha(Common.Config.color.on_surface, 0.05)
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -276,12 +276,12 @@ Item {
                         implicitWidth: 40
                         implicitHeight: 40
                         radius: 20
-                        color: Qt.alpha(root.isHealthy ? Common.Config.m3.success : Common.Config.m3.error, 0.1)
+                        color: Qt.alpha(root.isHealthy ? Common.Config.color.tertiary : Common.Config.color.error, 0.1)
 
                         Text {
                             anchors.centerIn: parent
                             text: root.isHealthy ? "\udb80\udda8" : "\uf071"
-                            color: root.isHealthy ? Common.Config.m3.success : Common.Config.m3.error
+                            color: root.isHealthy ? Common.Config.color.tertiary : Common.Config.color.error
                             font.family: Common.Config.iconFontFamily
                             font.pixelSize: 20
                         }
@@ -290,7 +290,7 @@ Item {
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: root.isHealthy ? "HEALTHY" : "WARNING"
-                        color: Common.Config.textColor
+                        color: Common.Config.color.on_surface
                         font {
                             family: Common.Config.fontFamily
                             pixelSize: 10
@@ -302,7 +302,7 @@ Item {
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: root.isHealthy ? "All systems go" : "Check metrics"
-                        color: Common.Config.textMuted
+                        color: Common.Config.color.on_surface_variant
                         font {
                             family: Common.Config.fontFamily
                             pixelSize: 9

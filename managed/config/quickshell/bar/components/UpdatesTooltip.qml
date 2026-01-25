@@ -13,7 +13,7 @@ ColumnLayout {
     property bool hasUpdates: false
     property string iconText: ""
     property bool refreshing: false
-    readonly property var updateColors: [Config.m3.tertiary, Config.m3.secondary, Config.m3.flamingo, Config.m3.primary]
+    readonly property var updateColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary]
     property var updates: []
     readonly property int updatesCount: Array.isArray(root.updates) ? root.updates.length : 0
 
@@ -41,7 +41,7 @@ ColumnLayout {
 
             Text {
                 anchors.centerIn: parent
-                color: root.hasUpdates ? Config.m3.tertiary : Config.m3.onSurfaceVariant
+                color: root.hasUpdates ? Config.color.tertiary : Config.color.on_surface_variant
                 font.family: Config.iconFontFamily
                 font.pixelSize: Config.type.headlineLarge.size
                 text: root.iconText
@@ -55,7 +55,7 @@ ColumnLayout {
             Text {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                color: Config.m3.onSurface
+                color: Config.color.on_surface
                 elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
@@ -65,7 +65,7 @@ ColumnLayout {
             Text {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                color: Config.m3.onSurfaceVariant
+                color: Config.color.on_surface_variant
                 elide: Text.ElideRight
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
@@ -83,7 +83,7 @@ ColumnLayout {
                 spacing: Config.space.sm
 
                 Text {
-                    color: Config.m3.onSurfaceVariant
+                    color: Config.color.on_surface_variant
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.bodySmall.size
                     text: root.displayCount === 0 ? "No updates available." : "Updates available, but details unavailable."
@@ -148,7 +148,7 @@ ColumnLayout {
                                     Text {
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        color: Config.m3.onSurfaceVariant
+                                        color: Config.color.on_surface_variant
                                         elide: Text.ElideRight
                                         font.family: Config.iconFontFamily
                                         font.pixelSize: Config.type.labelSmall.size

@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Layouts
+import "./common" as Common
 
 Rectangle {
     id: button
 
-    property color accent: ColorPalette.palette.red
+    property color accent: Common.Config.color.error
     property string actionName
     property string hoverAction: ""
     property string icon

@@ -46,7 +46,7 @@ Item {
 
                         Text {
                             text: tabItem.modelData.icon || ""
-                            color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
+                            color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.color.on_surface : Common.Config.color.on_surface_variant)
                             font.family: Common.Config.iconFontFamily
                             font.pixelSize: 16
                             visible: (tabItem.modelData.icon || "").length > 0
@@ -66,7 +66,7 @@ Item {
 
                         Text {
                             text: tabItem.modelData.label || ""
-                            color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.textColor : Common.Config.textMuted)
+                            color: tabItem.isActive ? tabItem.modelData.accent : (tabItem.isHovered ? Common.Config.color.on_surface : Common.Config.color.on_surface_variant)
                             font.family: Common.Config.fontFamily
                             font.pixelSize: 11
                             font.weight: Font.Black

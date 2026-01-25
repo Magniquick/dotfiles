@@ -27,15 +27,15 @@ ModuleContainer {
 
     function batteryColor(device) {
         if (!device || !device.ready)
-            return Config.m3.onSurface;
+            return Config.color.on_surface;
 
         if (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
-            return Config.m3.success;
+            return Config.color.tertiary;
 
         if (device.state === UPowerDeviceState.Discharging || device.state === UPowerDeviceState.PendingDischarge)
-            return Config.m3.error;
+            return Config.color.error;
 
-        return Config.m3.onSurface;
+        return Config.color.on_surface;
     }
     function batteryIcon(device) {
         if (!device || !device.ready)
@@ -222,14 +222,14 @@ ModuleContainer {
                     spacing: Config.space.none
 
                     Text {
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineMedium.size
                         font.weight: Font.Bold
                         text: root.percentLabel(UPower.displayDevice)
                     }
                     Text {
-                        color: Config.m3.onSurfaceVariant
+                        color: Config.color.on_surface_variant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.stateLabel(UPower.displayDevice)
@@ -244,7 +244,7 @@ ModuleContainer {
                 fillColor: root.batteryColor(UPower.displayDevice)
                 Layout.preferredHeight: Config.space.xs
                 implicitHeight: Config.space.xs
-                trackColor: Config.moduleBackgroundMuted
+                trackColor: Config.color.surface_variant
                 value: root.batteryPercentValue(UPower.displayDevice) / 100
             }
 
@@ -255,7 +255,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.m3.primary
+                    color: Config.color.primary
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Black

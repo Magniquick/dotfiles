@@ -33,7 +33,7 @@ ModuleContainer {
 
     content: [
         Text {
-            color: Config.m3.tertiary
+            color: Config.color.tertiary
             font.family: Config.iconFontFamily
             font.pixelSize: Config.iconSize
             text: "󰄭"

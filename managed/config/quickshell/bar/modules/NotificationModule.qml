@@ -18,7 +18,7 @@ import QtQuick
 ModuleContainer {
     id: root
 
-    property color iconColor: Config.m3.primary
+    property color iconColor: Config.color.primary
 
     tooltipText: "Click to open notifications"
     tooltipTitle: "Notifications"

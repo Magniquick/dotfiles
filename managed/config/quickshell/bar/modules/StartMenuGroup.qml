@@ -14,7 +14,7 @@ import ".."
 import "../components"
 
 ModuleContainer {
-    backgroundColor: Config.moduleBackground
+    backgroundColor: Config.barModuleBackground
     contentSpacing: 0
     marginLeft: Config.groupEdgeMargin
     marginRight: 0

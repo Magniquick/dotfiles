@@ -16,7 +16,7 @@ ModuleContainer {
 
     property var screen
 
-    backgroundColor: Config.moduleBackground
+    backgroundColor: Config.barModuleBackground
     contentSpacing: 0
     marginLeft: 0
     marginRight: 0

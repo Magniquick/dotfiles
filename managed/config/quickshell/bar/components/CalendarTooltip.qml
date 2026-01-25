@@ -223,14 +223,14 @@ Item {
                         spacing: Config.space.xs
 
                         Text {
-                            color: Config.m3.onSurface
+                            color: Config.color.on_surface
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.headlineSmall.size
                             font.weight: Font.Bold
                             text: Qt.formatDateTime(monthDelegate.viewDate, "MMMM")
                         }
                         Text {
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.headlineSmall.size
                             font.weight: Font.ExtraLight
@@ -256,7 +256,7 @@ Item {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    color: Config.m3.onSurfaceVariant
+                                    color: Config.color.on_surface_variant
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.labelSmall.size
                                     font.weight: Config.type.labelSmall.weight
@@ -290,7 +290,7 @@ Item {
                                 // Event Filled Circle
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    color: Config.m3.success
+                                    color: Config.color.tertiary
                                     height: parent.implicitHeight - Config.space.xs
                                     radius: width / 2
                                     visible: dayDelegate.inMonth && !dayDelegate.isToday && calendar.markerCount(dayDelegate.dateObj) > 0
@@ -300,7 +300,7 @@ Item {
                                 // Today Filled Circle
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    color: Config.m3.primary
+                                    color: Config.color.primary
                                     height: parent.implicitHeight - Config.space.xs
                                     radius: width / 2
                                     visible: dayDelegate.isToday
@@ -310,7 +310,7 @@ Item {
                                 // Selection Outline
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    border.color: Config.m3.primary
+                                    border.color: Config.color.primary
                                     border.width: 2
                                     color: "transparent"
                                     height: parent.implicitHeight
@@ -320,7 +320,7 @@ Item {
                                 }
                                 Text {
                                     anchors.centerIn: parent
-                                    color: dayDelegate.isToday ? Config.m3.onPrimary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.m3.onSuccess : Config.m3.onSurface)
+                                    color: dayDelegate.isToday ? Config.color.on_primary : (dayDelegate.inMonth && calendar.markerCount(dayDelegate.dateObj) > 0 ? Config.color.on_tertiary : Config.color.on_surface)
                                     font.family: Config.fontFamily
                                     font.pixelSize: Config.type.bodyMedium.size
                                     font.weight: Config.type.bodyMedium.weight
@@ -418,7 +418,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: Config.m3.outline
+            color: Config.color.outline
             opacity: 0.18
         }
         ColumnLayout {
@@ -432,7 +432,7 @@ Item {
 
             Text {
                 Layout.bottomMargin: Config.space.none
-                color: Config.m3.primary
+                color: Config.color.primary
                 font.family: Config.fontFamily
                 font.letterSpacing: 1.5
                 font.pixelSize: Config.type.labelSmall.size
@@ -452,7 +452,7 @@ Item {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
-                        color: eventListLayout.isToday ? Config.m3.primary : Config.m3.outline
+                        color: eventListLayout.isToday ? Config.color.primary : Config.color.outline
                         Layout.preferredHeight: 12
                         Layout.preferredWidth: 2
                         implicitHeight: 12
@@ -462,7 +462,7 @@ Item {
                     }
                     Text {
                         Layout.fillWidth: true
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodySmall.size
@@ -472,7 +472,7 @@ Item {
                 }
             }
             Text {
-                color: Config.m3.onSurfaceVariant
+                color: Config.color.on_surface_variant
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size
                 text: "No events"

@@ -447,7 +447,7 @@ ModuleContainer {
 
     content: [
         IconLabel {
-            color: root.connectionState === "connected" ? Config.m3.flamingo : Config.m3.onSurfaceVariant
+            color: root.connectionState === "connected" ? Config.color.tertiary : Config.color.on_surface_variant
             text: root.iconText
         }
     ]
@@ -476,7 +476,7 @@ ModuleContainer {
 
                     Text {
                         anchors.centerIn: parent
-                        color: root.connectionState === "connected" ? Config.m3.flamingo : Config.m3.onSurfaceVariant
+                        color: root.connectionState === "connected" ? Config.color.tertiary : Config.color.on_surface_variant
                         font.pixelSize: Config.type.headlineLarge.size
                         text: root.iconText
                     }
@@ -488,7 +488,7 @@ ModuleContainer {
                         id: connectionTitleText
 
                         Layout.fillWidth: true
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -498,7 +498,7 @@ ModuleContainer {
                     Text {
                         id: connectionSubtitleText
 
-                        color: Config.m3.onSurfaceVariant
+                        color: Config.color.on_surface_variant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.labelMedium.size
                         text: root.connectionLabel()
@@ -511,8 +511,8 @@ ModuleContainer {
             ProgressBar {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Config.space.xs
-                fillColor: Config.m3.flamingo
-                trackColor: Config.moduleBackgroundMuted
+                fillColor: Config.color.tertiary
+                trackColor: Config.color.surface_variant
                 value: root.signalPercent / 100
                 visible: root.connectionType === "wifi" && root.connectionState === "connected"
             }
@@ -524,7 +524,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.m3.primary
+                    color: Config.color.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -565,7 +565,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.m3.primary
+                    color: Config.color.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size
@@ -579,7 +579,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.m3.secondary
+                        accentColor: Config.color.secondary
                         borderWidth: 0
                         icon: "󰕒"
                         label: "Up"
@@ -589,7 +589,7 @@ ModuleContainer {
                     MetricBlock {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 0
-                        accentColor: Config.m3.success
+                        accentColor: Config.color.tertiary
                         borderWidth: 0
                         icon: "󰇚"
                         label: "Down"

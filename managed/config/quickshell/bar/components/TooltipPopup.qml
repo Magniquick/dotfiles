@@ -125,14 +125,14 @@ Item {
                 anchors.fill: parent
                 antialiasing: true
                 clip: true
-                color: Config.tooltipBackground
+                color: Config.color.on_secondary_fixed
                 radius: Config.tooltipRadius
             }
             Rectangle {
                 id: panelBorder
 
                 antialiasing: true
-                border.color: Config.tooltipBorder
+                border.color: Config.color.outline
                 border.width: 1
                 color: "transparent"
                 height: Math.max(0, panel.height - 1)
@@ -166,7 +166,7 @@ Item {
                         id: pulse
 
                         Layout.alignment: Qt.AlignVCenter
-                        color: Config.m3.primary
+                        color: Config.color.primary
                         Layout.preferredHeight: Config.space.sm
                         Layout.preferredWidth: Config.space.sm
                         implicitHeight: Config.space.sm
@@ -193,7 +193,7 @@ Item {
                         }
                     }
                     Text {
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.titleSmall.size
@@ -215,7 +215,7 @@ Item {
                         Text {
                             id: browserIconText
 
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.iconFontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             opacity: browserIconHover.hovered ? 0.9 : 0.6
@@ -246,7 +246,7 @@ Item {
                         Text {
                             id: refreshIconText
 
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.iconFontFamily
                             font.pixelSize: Config.type.labelSmall.size
                             opacity: refreshIconHover.hovered ? 0.9 : 0.6
@@ -266,9 +266,9 @@ Item {
                             anchors.right: parent.left
                             anchors.rightMargin: Config.space.xs
                             anchors.verticalCenter: parent.verticalCenter
-                            border.color: Config.m3.outline
+                            border.color: Config.color.outline
                             border.width: 1
-                            color: Config.m3.surfaceContainerHigh
+                            color: Config.color.surface_container_high
                             implicitHeight: refreshTimeText.implicitHeight + Config.space.xs * 2
                             implicitWidth: refreshTimeText.implicitWidth + Config.space.sm * 2
                             radius: Config.shape.corner.xs
@@ -279,7 +279,7 @@ Item {
                                 id: refreshTimeText
 
                                 anchors.centerIn: parent
-                                color: Config.m3.onSurface
+                                color: Config.color.on_surface
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.labelSmall.size
                                 font.weight: Config.type.labelSmall.weight
@@ -300,8 +300,8 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    color: Config.m3.outline
-                    opacity: 0.18
+                    color: Config.color.outline
+                    opacity: 0.3
                     visible: headerRow.visible
                 }
                 Flickable {
@@ -364,7 +364,7 @@ Item {
                         visible: root.showScrollIndicator && flickable.interactive
 
                         contentItem: Rectangle {
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             implicitWidth: 3
                             opacity: scrollIndicator.active ? 0.6 : 0.3
                             radius: width / 2
@@ -394,7 +394,7 @@ Item {
                                 position: 0
                             }
                             GradientStop {
-                                color: Config.tooltipBackground
+                                color: Config.color.surface
                                 position: 1
                             }
                         }

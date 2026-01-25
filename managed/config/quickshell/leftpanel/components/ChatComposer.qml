@@ -9,9 +9,11 @@ Item {
     property bool busy: false
     property string placeholderText: "Type a message..."
     property alias text: inputField.text
+    property bool copyEnabled: false
 
     signal send(string text)
     signal commandTriggered(string command)
+    signal copyAllRequested()
 
     implicitHeight: composerContainer.implicitHeight
 
@@ -42,11 +44,11 @@ Item {
             orientation: Gradient.Horizontal
             GradientStop {
                 position: 0.0
-                color: Common.Config.primary
+                color: Common.Config.color.primary
             }
             GradientStop {
                 position: 1.0
-                color: Common.Config.m3.info
+                color: Common.Config.color.primary
             }
         }
 
@@ -77,16 +79,18 @@ Item {
         Rectangle {
             id: inputContainer
             anchors.fill: parent
-            color: Common.Config.surface
+            color: Common.Config.color.surface_container_highest
             radius: Common.Config.shape.corner.lg
             border.width: 1
-            border.color: inputField.activeFocus ? Common.Config.primary : Common.Config.outline
+            border.color: inputField.activeFocus ? Common.Config.color.primary : Common.Config.color.outline
 
             Behavior on border.color {
                 ColorAnimation {
                     duration: 200
                 }
             }
+
+            HoverHandler { id: composerHover }
 
             RowLayout {
                 anchors.fill: parent
@@ -100,10 +104,10 @@ Item {
                     Layout.minimumHeight: 48
                     placeholderText: root.placeholderText
                     wrapMode: TextArea.Wrap
-                    color: Common.Config.textColor
+                    color: Common.Config.color.on_surface
                     font.family: Common.Config.fontFamily
                     font.pixelSize: Common.Config.type.bodyMedium.size + 1
-                    placeholderTextColor: Common.Config.textMuted
+                    placeholderTextColor: Common.Config.color.on_surface_variant
                     enabled: !root.busy
                     verticalAlignment: TextArea.AlignVCenter
 
@@ -120,6 +124,41 @@ Item {
                 }
 
                 Rectangle {
+                    id: copyButton
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.bottomMargin: Common.Config.space.xs
+                    Layout.preferredWidth: 36
+                    Layout.preferredHeight: 36
+                    implicitWidth: 36
+                    implicitHeight: 36
+                    radius: Common.Config.shape.corner.md
+                    color: copyArea.containsMouse ? Qt.alpha(Common.Config.color.primary, 0.12) : "transparent"
+                    border.width: 1
+                    border.color: copyArea.containsMouse ? Qt.alpha(Common.Config.color.outline, 0.6) : "transparent"
+                    visible: root.copyEnabled && composerHover.hovered
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\udb80\udd8f"
+                        color: copyArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface_variant
+                        font.family: Common.Config.iconFontFamily
+                        font.pixelSize: 14
+                    }
+
+                    MouseArea {
+                        id: copyArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.copyAllRequested()
+                    }
+
+                    ToolTip.visible: copyArea.containsMouse
+                    ToolTip.text: "Copy Conversation"
+                    ToolTip.delay: 400
+                }
+
+                Rectangle {
                     id: sendButton
                     Layout.alignment: Qt.AlignBottom
                     Layout.bottomMargin: Common.Config.space.xs
@@ -128,7 +167,7 @@ Item {
                     implicitWidth: 44
                     implicitHeight: 44
                     radius: Common.Config.shape.corner.md
-                    color: root.busy ? Common.Config.surfaceContainerHighest : Common.Config.primary
+                    color: root.busy ? Common.Config.color.surface_container_highest : Common.Config.color.primary
 
                     scale: sendButtonArea.pressed ? 0.92 : (sendButtonArea.containsMouse ? 1.05 : 1.0)
 
@@ -151,7 +190,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "\uf1d9"
-                            color: root.busy ? Common.Config.textMuted : Common.Config.onPrimary
+                            color: root.busy ? Common.Config.color.on_surface_variant : Common.Config.color.on_primary
                             font.family: Common.Config.iconFontFamily
                             font.pixelSize: 20
                             visible: !root.busy
@@ -170,7 +209,7 @@ Item {
                                     width: 5
                                     height: 5
                                     radius: 2.5
-                                    color: Common.Config.textMuted
+                                    color: Common.Config.color.on_surface_variant
 
                                     SequentialAnimation on opacity {
                                         running: root.busy

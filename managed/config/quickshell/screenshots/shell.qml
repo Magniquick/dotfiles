@@ -1,11 +1,12 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import "./common" as Common
 
 ShellRoot {
     id: root
 
-    readonly property var palette: ColorPalette.palette
+    readonly property var colors: Common.Config.color
     readonly property var screenshotsScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
     property bool screenshotsVisible: true
 
@@ -35,7 +36,7 @@ ShellRoot {
     ScreenshotsPill {
         id: screenshotsPill
 
-        colors: root.palette
+        colors: root.colors
         targetScreen: root.screenshotsScreen
         visible: root.screenshotsVisible && root.screenshotsScreen
 

@@ -1,10 +1,11 @@
 import Quickshell
 import QtQuick
+import "./common" as Common
 
 ShellRoot {
     id: root
 
-    readonly property var palette: ColorPalette.palette
+    readonly property var colors: Common.Config.color
     property string powermenuHover: ""
     property string powermenuSelection: ""
     property bool powermenuVisible: true
@@ -45,7 +46,7 @@ ShellRoot {
     Powermenu {
         id: powermenu
 
-        colors: root.palette
+        colors: root.colors
         hoverAction: root.powermenuHover
         selection: root.powermenuSelection
         targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null

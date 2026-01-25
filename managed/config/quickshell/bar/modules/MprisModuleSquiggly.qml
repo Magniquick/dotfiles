@@ -21,7 +21,7 @@ Rectangle {
     height: root.height
     width: root.width + 20
     radius: height
-    color: Config.m3.primary
+    color: Config.color.primary
 
     ClippingRectangle {
         id: root
@@ -78,7 +78,7 @@ Rectangle {
                 id: progressBall
                 width: squigglePath.confAmplitude * 1.5
                 height: squigglePath.confAmplitude * 1.5
-                color: Config.m3.onPrimary
+                color: Config.color.on_primary
                 radius: width / 2
                 anchors.horizontalCenter: squiggleClip.right
                 anchors.verticalCenter: squiggleClip.verticalCenter
@@ -96,7 +96,7 @@ Rectangle {
 
                     ShapePath {
                         id: squigglePath
-                        strokeColor: Config.m3.onPrimary
+                        strokeColor: Config.color.on_primary
                         fillColor: "transparent"
                         strokeWidth: 2
 
@@ -167,7 +167,7 @@ Rectangle {
 
         Text {
             id: textHere
-            color: Config.m3.onPrimary
+            color: Config.color.on_primary
             text: root.activePlayer.trackTitle
             antialiasing: true
             onWidthChanged: {

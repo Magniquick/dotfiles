@@ -68,7 +68,7 @@ ModuleContainer {
 
     content: [
         BarLabel {
-            color: Config.m3.tertiary
+            color: Config.color.tertiary
             text: root.showDate ? root.dateText() : root.timeText()
         }
     ]

@@ -5,7 +5,7 @@ import "../common" as Common
 Item {
     id: root
     property real value: 0
-    property color accent: Common.Config.primary
+    property color accent: Common.Config.color.primary
     property string label: ""
     property string icon: ""
 
@@ -61,7 +61,7 @@ Item {
 
                     // Background track
                     ctx.lineWidth = strokeWidth;
-                    ctx.strokeStyle = Qt.alpha(Common.Config.textColor, 0.03);
+                    ctx.strokeStyle = Qt.alpha(Common.Config.color.on_surface, 0.03);
                     ctx.lineCap = "round";
                     ctx.beginPath();
                     ctx.arc(center, center, radius, 0, Math.PI * 2);
@@ -78,7 +78,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: Math.round(root.value) + "%"
-                color: Common.Config.textColor
+                color: Common.Config.color.on_surface
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Math.max(14, gauge.width * 0.22)
                 font.weight: Font.Black
@@ -91,9 +91,9 @@ Item {
             implicitWidth: labelRow.implicitWidth + Common.Config.space.md * 2
             implicitHeight: 22
             radius: 11
-            color: Qt.alpha(Common.Config.textColor, 0.05)
+            color: Qt.alpha(Common.Config.color.on_surface, 0.05)
             border.width: 1
-            border.color: Qt.alpha(Common.Config.textColor, 0.1)
+            border.color: Qt.alpha(Common.Config.color.on_surface, 0.1)
 
             Row {
                 id: labelRow
@@ -103,7 +103,7 @@ Item {
                 Text {
                     visible: root.icon !== ""
                     text: root.icon
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.iconFontFamily
                     font.pixelSize: 10
                     anchors.verticalCenter: parent.verticalCenter
@@ -111,7 +111,7 @@ Item {
 
                 Text {
                     text: root.label
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold

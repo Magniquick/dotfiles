@@ -3,11 +3,12 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
+import "./common" as Common
 
 PanelWindow {
     id: pillWindow
 
-    property var colors: ColorPalette.palette
+    property var colors: Common.Config.color
     property bool hovered: false
     readonly property int padding: 12
     required property var targetScreen
@@ -74,9 +75,9 @@ PanelWindow {
 
             anchors.centerIn: parent
             antialiasing: true
-            border.color: pillWindow.hovered ? pillWindow.colors.overlay1 : pillWindow.colors.overlay0
+            border.color: pillWindow.hovered ? pillWindow.colors.outline_variant : pillWindow.colors.outline
             border.width: 2
-            color: pillWindow.hovered ? pillWindow.colors.surface1 : pillWindow.colors.surface0
+            color: pillWindow.hovered ? pillWindow.colors.surface_container_high : pillWindow.colors.surface_container
             implicitHeight: 56
             implicitWidth: 260
             layer.enabled: true
@@ -113,9 +114,9 @@ PanelWindow {
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    border.color: pillWindow.colors.overlay1
+                    border.color: pillWindow.colors.outline_variant
                     border.width: 2
-                    color: pillWindow.colors.sapphire
+                    color: pillWindow.colors.primary
                     height: 16
                     radius: width / 2
                     width: 16
@@ -125,7 +126,7 @@ PanelWindow {
                     spacing: 2
 
                     Text {
-                        color: pillWindow.colors.text
+                        color: pillWindow.colors.on_surface
                         font.bold: true
                         font.pixelSize: 16
                         horizontalAlignment: Text.AlignLeft
@@ -133,7 +134,7 @@ PanelWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                     Text {
-                        color: pillWindow.colors.subtext0
+                        color: pillWindow.colors.on_surface_variant
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignLeft
                         text: "Floating anchor for captures"

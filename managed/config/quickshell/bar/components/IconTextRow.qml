@@ -4,11 +4,11 @@ import QtQuick
 Row {
     id: root
 
-    property color iconColor: Config.m3.onSurface
+    property color iconColor: Config.color.on_surface
     property int iconPixelSize: Config.iconSize
     property string iconText: ""
     property string text: ""
-    property color textColor: Config.m3.onSurface
+    property color textColor: Config.color.on_surface
     property int textPixelSize: Config.fontSize
 
     spacing: Config.moduleSpacing

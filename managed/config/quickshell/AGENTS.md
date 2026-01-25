@@ -48,7 +48,7 @@ The bar uses a **modular architecture** with key directories:
 
 2. **`bar/`** (singletons in qmldir):
    - `Config.qml`: Design tokens (fonts, spacing, colors, slider constants); sourced from `common/Config.qml`
-   - `ColorPalette.qml`: Catppuccin color palette
+   - `Colors.qml`: Material palette + color roles (from `common/colors.json`)
    - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
 
 3. **`bar/modules/`** (~24 files): Feature modules, organized into groups
@@ -70,13 +70,12 @@ Modules integrate with system services via:
 
 ### Styling System
 
-- **Theme**: Catppuccin Mocha palette in `common/Colors.js` (shared JS singleton)
-- **Config**: Material 3-inspired design tokens in `common/Config.qml` (singleton), re-exported via per-project `Config.qml`
+- **Theme**: Material palette sourced from `common/colors.json` via `common/Colors.qml`
+- **Config**: Design tokens in `common/Config.qml` (singleton), re-exported via per-project `Config.qml`
   - Fonts: `fontFamily: "Google Sans"`, `iconFontFamily: "JetBrainsMono NFP"`
   - Spacing/motion: `Config.space.*`, `Config.motion.duration.*`, `Config.shape.corner.*`
-  - Colors: `Config.m3.*` maps to Catppuccin colors (e.g., `m3.primary` = mauve, `m3.secondary` = pink)
+  - Colors: `Config.color` and `Config.palette` (from `common/Colors.qml`)
   - Typography: `Config.type.*` defines Material type scale (display/headline/title/body/label)
-- **Per-component ColorPalette.qml**: Local palette files in each module directory
 - **Layering**: Bar uses `WlrLayershell.layer: WlrLayer.Background`; powermenu uses `Overlay` + `Exclusive` keyboard focus
 
 ### File Locations
@@ -102,7 +101,7 @@ Modules integrate with system services via:
 
 **Component Design:**
 - Prefer small, focused components
-- Shared colors in `Colors.js` or `Config.m3`
+- Shared colors in `Config.color` / `Config.palette`
 - Keep modules self-contained with clear data flow
 
 ## Error Handling Patterns
@@ -134,7 +133,7 @@ Modules integrate with system services via:
 ## UI/UX Principles
 
 - **Catppuccin-inspired, intentional layouts**: No default system fonts; use explicit `Config` families
-- **Color semantics**: Use `Config.m3.*` for semantic colors (primary/secondary/error/success)
+- **Color semantics**: Use `Config.color.*` roles (primary/secondary/error/success)
 - **Animations**: Meaningful transitions only (open/close reveals, tooltip fades); avoid noisy micro-motions
   - Always gate animations with visibility checks. Hidden components with `running: true` animations burn idle CPU.
 - **Tooltips**: Anchor above targets, stay unclipped; modules can collapse when empty

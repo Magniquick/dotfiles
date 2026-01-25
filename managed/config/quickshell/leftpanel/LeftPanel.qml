@@ -40,7 +40,8 @@ Item {
 
     readonly property string openaiApiKey: envVars["OPENAI_API_KEY"] || ""
     readonly property string geminiApiKey: envVars["GEMINI_API_KEY"] || ""
-    property string modelId: envVars["OPENAI_MODEL"] || "gpt-4o-mini"
+    property string modelId: envVars["OPENAI_MODEL"] || "gemini-2.0-flash"
+
     readonly property string currentProvider: modelId.startsWith("gemini") ? "gemini" : "openai"
     readonly property string activeApiKey: currentProvider === "gemini" ? geminiApiKey : openaiApiKey
     readonly property bool hasApiKey: activeApiKey.length > 0
@@ -54,16 +55,24 @@ Item {
     property bool showCommandPicker: false
     property string activeCommand: ""
 
+    // Check if syntax highlighting is available
+    readonly property bool syntaxHighlightingAvailable: syntaxCheckLoader.status === Loader.Ready
+    Loader {
+        id: syntaxCheckLoader
+        active: true
+        source: "./components/SyntaxHighlighterWrapper.qml"
+    }
+
     readonly property var tabs: [
         {
             label: "Models",
             icon: "\udb85\udc0c",
-            accent: Common.Config.primary
+            accent: Common.Config.color.primary
         },
         {
             label: "Metrics",
             icon: "\udb80\ude03",
-            accent: Common.Config.m3.info
+            accent: Common.Config.color.primary
         }
     ]
 
@@ -73,56 +82,56 @@ Item {
             label: "GPT-4o",
             iconImage: "./assets/OpenAI-white-monoblossom.svg",
             description: "Most capable OpenAI",
-            accent: Common.Config.m3.success
+            accent: Common.Config.color.tertiary
         },
         {
             value: "gpt-4o-mini",
             label: "GPT-4o Mini",
             iconImage: "./assets/OpenAI-white-monoblossom.svg",
-            description: "Fast and efficient (default)",
-            accent: Common.Config.m3.success
+            description: "Fast and efficient",
+            accent: Common.Config.color.tertiary
         },
         {
             value: "gpt-4-turbo",
             label: "GPT-4 Turbo",
             iconImage: "./assets/OpenAI-white-monoblossom.svg",
             description: "Previous flagship",
-            accent: Common.Config.m3.success
+            accent: Common.Config.color.tertiary
         },
         {
             value: "gpt-3.5-turbo",
             label: "GPT-3.5 Turbo",
             iconImage: "./assets/OpenAI-white-monoblossom.svg",
             description: "Fastest, cheapest",
-            accent: Common.Config.m3.success
+            accent: Common.Config.color.tertiary
+        },
+        {
+            value: "gemini-3-flash-preview",
+            label: "Gemini 3 Flash",
+            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
+            description: "Next-gen Flash (default)",
+            accent: Common.Config.color.primary
         },
         {
             value: "gemini-2.0-flash",
             label: "Gemini 2.0 Flash",
             iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
             description: "Fast multimodal",
-            accent: Common.Config.m3.info
+            accent: Common.Config.color.primary
         },
         {
             value: "gemini-2.0-flash-lite",
             label: "Gemini 2.0 Flash Lite",
             iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
             description: "Cost-efficient",
-            accent: Common.Config.m3.info
+            accent: Common.Config.color.primary
         },
         {
-            value: "gemini-1.5-pro",
-            label: "Gemini 1.5 Pro",
+            value: "gemini-2.0-pro-exp-02-05",
+            label: "Gemini 2.0 Pro",
             iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
             description: "Best for complex tasks",
-            accent: Common.Config.m3.tertiary
-        },
-        {
-            value: "gemini-1.5-flash",
-            label: "Gemini 1.5 Flash",
-            iconImage: "./assets/Google_Gemini_icon_2025.svg.png",
-            description: "Fast and versatile",
-            accent: Common.Config.m3.tertiary
+            accent: Common.Config.color.primary
         }
     ]
 
@@ -166,18 +175,85 @@ Item {
     }
 
     readonly property string currentMoodIcon: {
-        const mood = moodsData.find(m => m.name.toLowerCase() === currentMood);
+        const mood = moodsData.find(m => m.name.toLowerCase() === root.currentMood);
         return mood ? mood.icon : "\uf4c4";
     }
 
     readonly property string currentMoodName: {
-        const mood = moodsData.find(m => m.name.toLowerCase() === currentMood);
+        const mood = moodsData.find(m => m.name.toLowerCase() === root.currentMood);
         return mood ? mood.name : "Assistant";
+    }
+
+    readonly property string currentModelLabel: {
+        const model = availableModels.find(m => m.value === modelId);
+        return model ? model.label : modelId;
+    }
+
+    function deleteMessage(index) {
+        if (index < 0 || index >= messageModel.count)
+            return;
+        const msg = messageModel.get(index);
+        // Remove from chat history if it's a real message
+        const historyIndex = root.chatHistory.findIndex(h => (h.role === "user" && msg.sender === "user" && h.content === msg.body) || (h.role === "assistant" && msg.sender === "assistant" && h.content === msg.body));
+        if (historyIndex >= 0) {
+            root.chatHistory.splice(historyIndex, 1);
+        }
+        messageModel.remove(index);
+    }
+
+    function editMessage(index, newContent) {
+        if (index < 0 || index >= messageModel.count)
+            return;
+        const msg = messageModel.get(index);
+        // Update in chat history
+        const historyIndex = root.chatHistory.findIndex(h => (h.role === "user" && msg.sender === "user" && h.content === msg.body) || (h.role === "assistant" && msg.sender === "assistant" && h.content === msg.body));
+        if (historyIndex >= 0) {
+            root.chatHistory[historyIndex].content = newContent;
+        }
+        messageModel.setProperty(index, "body", newContent);
+    }
+
+    function regenerateMessage(index) {
+        if (index < 0 || index >= messageModel.count || aiBusy)
+            return;
+        const msg = messageModel.get(index);
+        if (msg.sender !== "assistant")
+            return;
+
+        // Find the user message before this assistant message
+        let userMsgIndex = index - 1;
+        while (userMsgIndex >= 0 && messageModel.get(userMsgIndex).sender !== "user") {
+            userMsgIndex--;
+        }
+        if (userMsgIndex < 0)
+            return;
+
+        // Remove all messages from this assistant message onward
+        while (messageModel.count > index) {
+            messageModel.remove(messageModel.count - 1);
+        }
+
+        // Trim chat history to match
+        const userMsg = messageModel.get(userMsgIndex);
+        const historyIndex = root.chatHistory.findIndex(h => h.role === "user" && h.content === userMsg.body);
+        if (historyIndex >= 0) {
+            root.chatHistory.splice(historyIndex + 1);
+        }
+
+        // Re-send the request
+        aiBusy = true;
+        backendStatus = "Thinking...";
+        aiProc.startRequest([
+            {
+                role: "system",
+                content: moodPrompts[root.currentMood]
+            },
+            ...root.chatHistory]);
     }
 
     onModelIdChanged: {
         messageModel.clear();
-        chatHistory = [];
+        root.chatHistory = [];
         messageModel.append({
             sender: "assistant",
             body: `Switched to ${modelId}. Chat history cleared.`
@@ -206,7 +282,7 @@ Item {
             return;
         case "/clear":
             messageModel.clear();
-            chatHistory = [];
+            root.chatHistory = [];
             messageModel.append({
                 sender: "assistant",
                 body: "Chat cleared."
@@ -221,7 +297,7 @@ Item {
         case "/status":
             messageModel.append({
                 sender: "assistant",
-                body: `Current Settings:\n` + `Model: ${modelId}\n` + `Provider: ${currentProvider}\n` + `Mood: ${currentMood}\n` + `OpenAI Key: ${openaiApiKey.length > 0 ? "Set" : "Not set"}\n` + `Gemini Key: ${geminiApiKey.length > 0 ? "Set" : "Not set"}`
+                body: `**Current Settings**\n` + `- Model: \`${modelId}\`\n` + `- Provider: ${currentProvider}\n` + `- Mood: ${currentMood}\n` + `- OpenAI Key: ${openaiApiKey.length > 0 ? "Set" : "Not set"}\n` + `- Gemini Key: ${geminiApiKey.length > 0 ? "Set" : "Not set"}\n\n` + `**Features**\n` + `- Syntax Highlighting: ${syntaxHighlightingAvailable ? "Available" : "Not available (install ksyntaxhighlighting)"}`
             });
             break;
         default:
@@ -277,19 +353,10 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        color: Common.Config.color.surface_container
         border.width: 1
-        border.color: Common.Config.m3.outline
+        border.color: Common.Config.color.outline
         radius: Common.Config.shape.corner.lg
-        gradient: Gradient {
-            GradientStop {
-                position: 0.0
-                color: Common.Config.m3.surfaceDim
-            }
-            GradientStop {
-                position: 1.0
-                color: Common.Config.surfaceContainer
-            }
-        }
     }
 
     ColumnLayout {
@@ -328,17 +395,21 @@ Item {
                     messages: messageModel
                     busy: root.aiBusy
                     modelId: root.modelId
+                    modelLabel: root.currentModelLabel
                     moodIcon: root.currentMoodIcon
                     moodName: root.currentMoodName
                     connectionOnline: root.connectionStatus === "online"
                     onSendRequested: text => root.sendMessage(text)
                     onCommandTriggered: command => root.handleCommand(command)
+                    onRegenerateRequested: index => root.regenerateMessage(index)
+                    onDeleteRequested: index => root.deleteMessage(index)
+                    onEditRequested: (index, newContent) => root.editMessage(index, newContent)
                 }
 
                 // Command Picker Overlay
                 Rectangle {
                     anchors.fill: parent
-                    color: Qt.alpha(Common.Config.m3.surfaceDim, 0.92)
+                    color: Qt.alpha(Common.Config.color.surface_dim, 0.92)
                     visible: root.showCommandPicker
 
                     readonly property bool isModelPicker: root.activeCommand === "model"
@@ -387,10 +458,10 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 36
-            color: "transparent"
+            color: Common.Config.color.surface_container_low
             radius: Common.Config.shape.corner.md
             border.width: 1
-            border.color: Qt.alpha(Common.Config.textColor, 0.1)
+            border.color: Qt.alpha(Common.Config.color.on_surface, 0.1)
 
             RowLayout {
                 anchors.fill: parent
@@ -406,13 +477,13 @@ Item {
                         width: 6
                         height: 6
                         radius: 3
-                        color: root.hasApiKey ? Common.Config.m3.success : Common.Config.m3.error
+                        color: root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
                     Text {
                         text: "MODEL: " + root.modelId.toUpperCase()
-                        color: Common.Config.textMuted
+                        color: Common.Config.color.on_surface_variant
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
                         font.weight: Font.Bold
@@ -429,7 +500,7 @@ Item {
 
                     Text {
                         text: "\uf46e"
-                        color: Common.Config.m3.info
+                        color: Common.Config.color.primary
                         font.family: Common.Config.iconFontFamily
                         font.pixelSize: 12
                         anchors.verticalCenter: parent.verticalCenter
@@ -437,7 +508,7 @@ Item {
 
                     Text {
                         text: "UPTIME: " + metricsView.uptime.toUpperCase()
-                        color: Common.Config.textMuted
+                        color: Common.Config.color.on_surface_variant
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
                         font.weight: Font.Bold
@@ -455,7 +526,7 @@ Item {
                 Text {
                     visible: root.currentTabIndex === 0
                     text: "MOOD: " + root.currentMoodName.toUpperCase()
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold
@@ -467,7 +538,7 @@ Item {
                 Text {
                     visible: root.currentTabIndex === 1
                     text: "SYSTEM ACTIVE"
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold

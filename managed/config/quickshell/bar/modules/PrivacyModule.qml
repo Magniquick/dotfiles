@@ -35,10 +35,10 @@
  * Configuration:
  * - privacyRefreshMs: Polling interval (default: 1000ms / 1s)
  * - Color customization via properties:
- *   - micColor: Config.m3.success (green)
- *   - cameraColor: Config.m3.warning (yellow)
- *   - locationColor: Config.m3.tertiary (purple)
- *   - screenColor: Config.m3.primary (blue)
+ *   - micColor: Config.color.tertiary (green)
+ *   - cameraColor: Config.color.secondary (yellow)
+ *   - locationColor: Config.color.tertiary (purple)
+ *   - screenColor: Config.color.primary (blue)
  *
  * Error Handling:
  * - Script availability check on startup
@@ -75,19 +75,19 @@ ModuleContainer {
 
     property bool cameraActive: false
     property string cameraApps: ""
-    property color cameraColor: Config.m3.warning
+    property color cameraColor: Config.color.secondary
     property string cameraIcon: ""
     property bool locationActive: false
     property string locationApps: ""
-    property color locationColor: Config.m3.tertiary
+    property color locationColor: Config.color.tertiary
     property string locationIcon: ""
     property bool micActive: false
     property string micApps: ""
-    property color micColor: Config.m3.success
+    property color micColor: Config.color.tertiary
     property string micIcon: ""
     property bool screenActive: false
     property string screenApps: ""
-    property color screenColor: Config.m3.primary
+    property color screenColor: Config.color.primary
     property string screenIcon: "󰍹"
     readonly property string scriptPath: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "modules/privacy/privacy_dots.sh")
     property string statusTooltip: "Privacy: idle"
@@ -186,22 +186,22 @@ ModuleContainer {
                     InfoRow {
                         label: "Mic"
                         value: root.appLabel(root.micApps)
-                        valueColor: root.micActive ? root.micColor : Config.m3.onSurfaceVariant
+                        valueColor: root.micActive ? root.micColor : Config.color.on_surface_variant
                     },
                     InfoRow {
                         label: "Camera"
                         value: root.appLabel(root.cameraApps)
-                        valueColor: root.cameraActive ? root.cameraColor : Config.m3.onSurfaceVariant
+                        valueColor: root.cameraActive ? root.cameraColor : Config.color.on_surface_variant
                     },
                     InfoRow {
                         label: "Location"
                         value: root.appLabel(root.locationApps)
-                        valueColor: root.locationActive ? root.locationColor : Config.m3.onSurfaceVariant
+                        valueColor: root.locationActive ? root.locationColor : Config.color.on_surface_variant
                     },
                     InfoRow {
                         label: "Screen"
                         value: root.appLabel(root.screenApps)
-                        valueColor: root.screenActive ? root.screenColor : Config.m3.onSurfaceVariant
+                        valueColor: root.screenActive ? root.screenColor : Config.color.on_surface_variant
                     }
                 ]
             }

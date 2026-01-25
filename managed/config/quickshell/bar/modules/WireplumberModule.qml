@@ -39,7 +39,7 @@ ModuleContainer {
     property real volumeStep: 0.01
 
     function activeColor() {
-        return (root.muted || root.volumePercent > 100) ? Config.m3.error : Config.m3.secondary;
+        return (root.muted || root.volumePercent > 100) ? Config.color.error : Config.color.secondary;
     }
     function adjustVolume(delta) {
         if (root.sinkAudio) {
@@ -171,7 +171,7 @@ ModuleContainer {
 
                     Text {
                         Layout.fillWidth: true
-                        color: Config.m3.onSurface
+                        color: Config.color.on_surface
                         elide: Text.ElideRight
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.headlineSmall.size
@@ -182,7 +182,7 @@ ModuleContainer {
                         spacing: Config.space.xs
 
                         Text {
-                            color: Config.m3.onSurfaceVariant
+                            color: Config.color.on_surface_variant
                             font.family: Config.fontFamily
                             font.pixelSize: Config.type.labelMedium.size
                             text: root.volumeAvailable ? (root.muted ? "Muted" : root.volumePercent + "%") : "Unavailable"
@@ -190,7 +190,7 @@ ModuleContainer {
                         Rectangle {
                             Layout.preferredHeight: boostedLabel.implicitHeight + Config.spaceHalfXs
                             Layout.preferredWidth: boostedLabel.implicitWidth + Config.space.sm
-                            color: Config.m3.secondary
+                            color: Config.color.secondary
                             radius: Config.shape.corner.xs
                             visible: root.volumePercent > 100 && !root.muted
 
@@ -198,7 +198,7 @@ ModuleContainer {
                                 id: boostedLabel
 
                                 anchors.centerIn: parent
-                                color: Config.moduleBackground
+                                color: Config.color.surface_container
                                 font.family: Config.fontFamily
                                 font.pixelSize: Config.type.labelSmall.size
                                 font.weight: Font.Black
@@ -219,7 +219,7 @@ ModuleContainer {
 
                 Text {
                     Layout.bottomMargin: Config.space.xs
-                    color: Config.m3.primary
+                    color: Config.color.primary
                     font.family: Config.fontFamily
                     font.letterSpacing: 1.5
                     font.pixelSize: Config.type.labelSmall.size

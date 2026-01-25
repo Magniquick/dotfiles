@@ -1,7 +1,8 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import Quickshell.Io
+import QtQuick.Layouts
+import Quickshell
 import "../common" as Common
 import "./" as Components
 
@@ -10,12 +11,16 @@ Item {
     property ListModel messages
     property bool busy: false
     property string modelId: ""
+    property string modelLabel: ""
     property bool connectionOnline: true
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
 
     signal sendRequested(string text)
     signal commandTriggered(string command)
+    signal regenerateRequested(int index)
+    signal deleteRequested(int index)
+    signal editRequested(int index, string newContent)
 
     function positionToEnd() {
         messageList.positionViewAtEnd();
@@ -30,12 +35,7 @@ Item {
             const name = msg.sender === "user" ? "user" : root.moodName.toLowerCase();
             lines.push(`*${name}*: ${msg.body}`);
         }
-        copyAllProc.command = ["wl-copy", lines.join("\n")];
-        copyAllProc.running = true;
-    }
-
-    Process {
-        id: copyAllProc
+        Quickshell.clipboardText = lines.join("\n");
     }
 
     Item {
@@ -45,137 +45,103 @@ Item {
         anchors.right: parent.right
         anchors.bottom: composerArea.top
 
-        HoverHandler {
-            id: chatAreaHover
-        }
-
         Rectangle {
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: Common.Config.space.md
-            anchors.rightMargin: Common.Config.space.md
-            z: 10
-            width: 28
-            height: 28
-            radius: Common.Config.shape.corner.sm
-            color: copyAllArea.containsMouse ? Qt.alpha(Common.Config.textMuted, 0.2) : Qt.alpha(Common.Config.surface, 0.9)
-            border.width: 1
-            border.color: Common.Config.outline
-            visible: chatAreaHover.hovered && root.messages && root.messages.count > 0
-            opacity: chatAreaHover.hovered ? 1 : 0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 150
-                }
-            }
-
-            Text {
-                anchors.centerIn: parent
-                text: "\udb80\udd8f"
-                color: copyAllArea.containsMouse ? Common.Config.textColor : Common.Config.textMuted
-                font.family: Common.Config.iconFontFamily
-                font.pixelSize: 14
-            }
-
-            MouseArea {
-                id: copyAllArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.copyAllMessages()
-            }
+            anchors.fill: parent
+            color: Common.Config.color.surface_container_low
+            radius: Common.Config.shape.corner.md
         }
 
         ListView {
             id: messageList
             anchors.fill: parent
-            anchors.margins: Common.Config.space.md
-            spacing: Common.Config.space.sm
+            anchors.margins: 10
+            spacing: 10
             clip: true
             model: root.messages
 
             ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AlwaysOff
-                width: 6
-                background: Rectangle {
-                    color: "transparent"
-                }
+                policy: ScrollBar.AsNeeded
+                width: 4
+                background: Rectangle { color: "transparent" }
                 contentItem: Rectangle {
-                    implicitWidth: 6
-                    radius: 3
-                    color: Common.Config.outline
-                    opacity: 0.5
+                    implicitWidth: 4
+                    radius: 2
+                    color: Qt.alpha(Common.Config.color.primary, 0.3)
                 }
             }
 
             delegate: Components.ChatMessage {
+                required property int index
                 required property string sender
                 required property string body
 
-                readonly property bool isUser: sender === "user"
-
-                width: messageList.width - Common.Config.space.md
+                width: messageList.width
+                messageIndex: index
                 role: sender
                 content: body
-                bubbleColor: isUser ? Common.Config.m3.info : Common.Config.surfaceContainerHigh
-                textColor: isUser ? Common.Config.onPrimary : Common.Config.textColor
-                accentColor: Common.Config.primary
+                modelLabel: sender === "assistant" ? root.modelLabel : ""
                 moodIcon: root.moodIcon
+                moodName: root.moodName
+                done: true
+
+                onRegenerateRequested: root.regenerateRequested(index)
+                onDeleteRequested: root.deleteRequested(index)
+                onEditSaved: newContent => root.editRequested(index, newContent)
             }
 
             footer: Item {
                 width: messageList.width
-                height: root.busy ? 60 : 0
+                height: root.busy ? 48 : 0
                 visible: root.busy
 
-                Row {
-                    anchors.left: parent.left
-                    anchors.leftMargin: Common.Config.space.md
-                    anchors.verticalCenter: parent.verticalCenter
+                RowLayout {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                    }
                     spacing: Common.Config.space.sm
-                    visible: root.busy
 
+                    // Icon box (matches message style)
                     Rectangle {
-                        width: 36
-                        height: 36
-                        radius: Common.Config.shape.corner.md
-                        color: Qt.alpha(Common.Config.primary, 0.1)
-                        border.width: 2
-                        border.color: Qt.alpha(Common.Config.primary, 0.2)
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        radius: Common.Config.shape.corner.sm
+                        color: Qt.alpha(Common.Config.color.on_surface, 0.05)
 
                         Text {
                             anchors.centerIn: parent
                             text: root.moodIcon
-                            color: Common.Config.primary
+                            color: Common.Config.color.primary
                             font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 18
+                            font.pixelSize: 14
 
                             SequentialAnimation on opacity {
                                 running: root.busy
                                 loops: Animation.Infinite
-                                NumberAnimation {
-                                    to: 0.3
-                                    duration: 400
-                                }
-                                NumberAnimation {
-                                    to: 1.0
-                                    duration: 400
-                                }
+                                NumberAnimation { to: 0.4; duration: 600 }
+                                NumberAnimation { to: 1.0; duration: 600 }
                             }
                         }
                     }
 
-                    Rectangle {
-                        height: 40
-                        width: 80
-                        radius: Common.Config.shape.corner.lg
-                        color: Common.Config.surfaceContainerHigh
-                        border.width: 1
-                        border.color: Common.Config.outline
+                    // Typing indicator
+                    ColumnLayout {
+                        spacing: 2
+
+                        Text {
+                            text: "THINKING"
+                            color: Common.Config.color.on_surface_variant
+                            font {
+                                family: Common.Config.fontFamily
+                                pixelSize: 9
+                                weight: Font.Bold
+                                letterSpacing: 1.5
+                            }
+                            opacity: 0.5
+                        }
 
                         Row {
-                            anchors.centerIn: parent
                             spacing: 4
 
                             Repeater {
@@ -183,25 +149,17 @@ Item {
                                 Rectangle {
                                     id: typingDot
                                     required property int index
-                                    width: 6
-                                    height: 6
-                                    radius: 3
-                                    color: Common.Config.textMuted
+                                    width: 4
+                                    height: 4
+                                    radius: 2
+                                    color: Common.Config.color.primary
 
                                     SequentialAnimation on opacity {
                                         running: root.busy
                                         loops: Animation.Infinite
-                                        PauseAnimation {
-                                            duration: typingDot.index * 150
-                                        }
-                                        NumberAnimation {
-                                            to: 0.3
-                                            duration: 300
-                                        }
-                                        NumberAnimation {
-                                            to: 1.0
-                                            duration: 300
-                                        }
+                                        PauseAnimation { duration: typingDot.index * 200 }
+                                        NumberAnimation { to: 0.2; duration: 400 }
+                                        NumberAnimation { to: 1.0; duration: 400 }
                                     }
                                 }
                             }
@@ -217,14 +175,15 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: 90
+        height: 85
 
         Components.ChatComposer {
             id: composer
             anchors.fill: parent
             anchors.margins: Common.Config.space.md
             busy: root.busy
-            placeholderText: root.connectionOnline ? "Engage System Core..." : "Offline - use /model to switch"
+            copyEnabled: root.messages && root.messages.count > 0
+            placeholderText: root.connectionOnline ? "Message..." : "Offline - use /model to switch"
             onSend: text => {
                 root.sendRequested(text);
                 composer.text = "";
@@ -233,6 +192,7 @@ Item {
                 root.commandTriggered(command);
                 composer.text = "";
             }
+            onCopyAllRequested: root.copyAllMessages()
         }
     }
 }

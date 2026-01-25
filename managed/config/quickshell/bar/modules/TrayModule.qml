@@ -53,7 +53,7 @@ ModuleContainer {
         return path + "/" + base + ".png";
     }
 
-    backgroundColor: Config.moduleBackground
+    backgroundColor: Config.barModuleBackground
     contentSpacing: Config.moduleSpacing
     paddingLeft: Config.modulePaddingX
     paddingRight: Config.modulePaddingX
@@ -219,7 +219,7 @@ ModuleContainer {
 
                                 contentComponent: Component {
                                     Text {
-                                        color: Config.m3.onSurface
+                                        color: Config.color.on_surface
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.fontSize
                                         text: trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || ""
@@ -240,9 +240,13 @@ ModuleContainer {
 
                                 onVisibleChanged: {
                                     if (visible) {
+                                        if (menuOpener.menu && menuOpener.menu.sendOpened)
+                                            menuOpener.menu.sendOpened();
                                         menuCard.forceActiveFocus();
                                         root.setDrawerSticky(true);
                                     } else {
+                                        if (menuOpener.menu && menuOpener.menu.sendClosed)
+                                            menuOpener.menu.sendClosed();
                                         root.setDrawerSticky(false);
                                     }
                                 }
@@ -257,9 +261,9 @@ ModuleContainer {
                                     anchors.margins: Config.tooltipBorderWidth
                                     anchors.fill: parent
                                     antialiasing: true
-                                    border.color: Config.m3.outline
+                                    border.color: Config.color.outline
                                     border.width: Config.tooltipBorderWidth
-                                    color: Config.surfaceContainer
+                                    color: Config.color.surface_container
                                     focus: true
                                     radius: Config.tooltipRadius
                                     implicitHeight: menuPopup.desiredHeight - Config.tooltipBorderWidth * 2
@@ -283,7 +287,7 @@ ModuleContainer {
                                                 id: menuEntry
 
                                                 required property var modelData
-                                                readonly property bool disabled: !menuEntry.modelData.enabled
+                                                readonly property bool disabled: menuEntry.modelData.enabled === false
                                                 readonly property bool isSeparator: menuEntry.modelData.isSeparator
 
                                                 Layout.fillWidth: true
@@ -293,13 +297,13 @@ ModuleContainer {
 
                                                 Rectangle {
                                                     anchors.fill: parent
-                                                    color: menuMouseArea.containsMouse && !menuEntry.disabled ? Qt.alpha(Config.m3.onSurface, Config.state.hoverOpacity) : "transparent"
+                                                    color: menuMouseArea.containsMouse && !menuEntry.disabled ? Qt.alpha(Config.color.on_surface, Config.state.hoverOpacity) : "transparent"
                                                     radius: Config.shape.corner.xs
                                                     visible: !menuEntry.isSeparator
                                                 }
                                                 Rectangle {
                                                     anchors.horizontalCenter: parent.horizontalCenter
-                                                    color: Config.m3.outline
+                                                    color: Config.color.outline
                                                     height: 1
                                                     opacity: 0.4
                                                     visible: menuEntry.isSeparator
@@ -318,7 +322,7 @@ ModuleContainer {
                                                     implicitWidth: labelMetrics.width + Config.space.sm * 2
 
                                                     Text {
-                                                        color: menuEntry.disabled ? Config.m3.onSurfaceVariant : Config.m3.onSurface
+                                                        color: menuEntry.disabled ? Config.color.on_surface_variant : Config.color.on_surface
                                                         font.family: Config.fontFamily
                                                         font.pixelSize: Config.type.bodyMedium.size
                                                         text: menuEntry.modelData.text
@@ -348,8 +352,11 @@ ModuleContainer {
                                                             return;
                                                         }
 
-                                                        if (menuEntry.modelData.sendTriggered)
+                                                        if (menuEntry.modelData.sendTriggered) {
                                                             menuEntry.modelData.sendTriggered();
+                                                        } else if (menuEntry.modelData.triggered) {
+                                                            menuEntry.modelData.triggered();
+                                                        }
                                                         menuPopup.visible = false;
                                                     }
                                                 }

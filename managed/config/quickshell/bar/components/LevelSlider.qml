@@ -9,14 +9,14 @@ Item {
     readonly property real displayValue: (root.dragging && !isNaN(root.dragValue)) ? root.dragValue : root.value
     property real dragValue: NaN
     property bool dragging: false
-    property color fillColor: Config.m3.primary
-    property color knobColor: Config.m3.onSurface
+    property color fillColor: Config.color.primary
+    property color knobColor: Config.color.on_surface
     property int knobSize: Config.slider.knobSize
     property int knobWidth: Config.slider.knobWidth
     property real maximum: 1
     property real minimum: 0
     property int snapSteps: 0
-    property color trackColor: Config.m3.surfaceVariant
+    property color trackColor: Config.color.surface_variant
     property real value: 0
     property bool hovered: false
     property real hoverRatio: 0  // 0-1 ratio of hover position along track
@@ -166,7 +166,7 @@ Item {
         // qmllint disable unqualified
         layer.effect: MultiEffect {
             shadowBlur: root.dragging ? 0.9 : 0.35
-            shadowColor: root.dragging ? Qt.alpha(root.fillColor, 0.8) : Qt.alpha(Config.m3.shadow, 0.4)
+            shadowColor: root.dragging ? Qt.alpha(root.fillColor, 0.8) : Qt.alpha(Config.color.shadow, 0.4)
             shadowEnabled: true
             shadowHorizontalOffset: 0
             shadowVerticalOffset: root.dragging ? 0 : 2

@@ -8,7 +8,7 @@ Item {
     property string value: ""
     property string icon: ""
     property string subtext: ""
-    property color accent: Common.Config.primary
+    property color accent: Common.Config.color.primary
 
     implicitHeight: 80
     Layout.fillWidth: true
@@ -18,7 +18,7 @@ Item {
         radius: Common.Config.shape.corner.lg
         color: "transparent"
         border.width: 1
-        border.color: Qt.alpha(Common.Config.textColor, 0.1)
+        border.color: Qt.alpha(Common.Config.color.on_surface, 0.1)
         clip: true
 
         RowLayout {
@@ -34,7 +34,7 @@ Item {
                 implicitWidth: 36
                 implicitHeight: 36
                 radius: Common.Config.shape.corner.sm
-                color: Qt.alpha(Common.Config.textColor, 0.05)
+                color: Qt.alpha(Common.Config.color.on_surface, 0.05)
 
                 Text {
                     anchors.centerIn: parent
@@ -59,7 +59,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: root.value
-                    color: Common.Config.textColor
+                    color: Common.Config.color.on_surface
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 16
                     font.weight: Font.Bold
@@ -70,7 +70,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: root.title
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold
@@ -85,7 +85,7 @@ Item {
                     Layout.fillWidth: true
                     visible: root.subtext !== ""
                     text: root.subtext
-                    color: Common.Config.textMuted
+                    color: Common.Config.color.on_surface_variant
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 8
                     opacity: 0.3

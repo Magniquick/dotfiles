@@ -20,7 +20,7 @@ ModuleContainer {
     content: [
         IconLabel {
             antialiasing: true
-            color: Config.m3.tertiary
+            color: Config.color.tertiary
             renderType: Text.NativeRendering
             text: root.iconText
         }

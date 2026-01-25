@@ -16,7 +16,7 @@ ModuleContainer {
 
     property var parentWindow
 
-    backgroundColor: Config.moduleBackground
+    backgroundColor: Config.barModuleBackground
     contentSpacing: 0
     marginRight: Config.groupEdgeMargin
     marginTop: Config.outerGaps
