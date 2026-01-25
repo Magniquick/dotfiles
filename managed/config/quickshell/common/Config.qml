@@ -8,7 +8,9 @@ QtObject {
     id: root
 
     readonly property color barBackground: "transparent"
-    readonly property color barModuleBackground: color.on_secondary_fixed
+    readonly property color barModuleBackground: Qt.alpha(color.surface_container, 0.95)
+    readonly property color barModuleBorderColor: Qt.alpha(color.outline_variant, 0.6)
+    readonly property int barModuleBorderWidth: 1
     readonly property color barPopupInnerSurface: color.on_secondary_fixed_variant
     readonly property int barHeight: 32
     readonly property int barPadding: space.none

@@ -46,6 +46,8 @@ Rectangle {
     Layout.topMargin: root.marginTop
     antialiasing: true
     color: root.surfaceColor
+    border.width: root.backgroundTransparent ? 0 : Config.barModuleBorderWidth
+    border.color: root.backgroundTransparent ? "transparent" : Config.barModuleBorderColor
     implicitHeight: root.collapsed ? 0 : Math.round(root.contentImplicitHeight)
     implicitWidth: root.collapsed ? 0 : Math.round(root.contentImplicitWidth)
     radius: Math.min(width, height) / 2
