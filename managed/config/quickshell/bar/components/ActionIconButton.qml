@@ -7,8 +7,8 @@ ActionButtonBase {
     property string icon: ""
 
     disabledOpacity: Config.state.disabledOpacity
-    inactiveColor: Config.barPopupInnerSurface
-    hoverColor: Config.barPopupInnerSurface
+    inactiveColor: Config.barPopupSurface
+    hoverColor: Config.barPopupSurface
     height: Config.space.xl + Config.space.sm
     radius: width / 2
     width: Config.space.xl + Config.space.sm

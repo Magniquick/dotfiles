@@ -1,6 +1,6 @@
 import Quickshell
 import QtQuick
-import "./common" as Common
+import "common" as Common
 
 ShellRoot {
     id: root

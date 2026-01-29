@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import "../common" as Common
+import "../../common" as Common
 
 Item {
     id: root

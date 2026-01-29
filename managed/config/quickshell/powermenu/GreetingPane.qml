@@ -17,7 +17,7 @@ Rectangle {
     property int swatchBorder: 4
     property int swatchSize: 37
 
-    border.color: Qt.rgba(borderColor.r, borderColor.g, borderColor.b, 0.4)
+    border.color: Qt.alpha(borderColor, 0.4)
     border.width: 6
     bottomRightRadius: 0
     color: "transparent"

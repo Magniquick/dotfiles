@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
-import "./common" as Common
+import "../common" as Common
 
 PanelWindow {
     id: pillWindow

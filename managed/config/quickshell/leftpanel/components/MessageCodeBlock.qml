@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import "../common" as Common
+import "../../common" as Common
 
 // Code block styled like metrics cards - subtle bg, thin border
 Rectangle {

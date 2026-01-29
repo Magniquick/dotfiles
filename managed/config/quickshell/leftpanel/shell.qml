@@ -1,7 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
-import "./common" as Common
+import "../common" as Common
 
 ShellRoot {
     id: root

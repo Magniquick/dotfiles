@@ -26,6 +26,19 @@ ModuleContainer {
     readonly property var knownIconExtensions: ["png", "svg", "xpm", "jpg", "jpeg"]
     property var parentWindow
     readonly property var tray: SystemTray
+    readonly property int trayItemCount: root.getTrayItemCount()
+
+    function getTrayItemCount() {
+        if (!root.tray || !root.tray.items)
+            return 0;
+
+        if (root.tray.items.length !== undefined)
+            return root.tray.items.length;
+        if (root.tray.items.count !== undefined)
+            return root.tray.items.count;
+
+        return 0;
+    }
 
     function iconSource(iconName) {
         if (!iconName)
@@ -54,6 +67,7 @@ ModuleContainer {
     }
 
     backgroundColor: Config.barModuleBackground
+    collapsed: root.trayItemCount === 0
     contentSpacing: Config.moduleSpacing
     paddingLeft: Config.modulePaddingX
     paddingRight: Config.modulePaddingX
