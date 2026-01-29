@@ -3,7 +3,7 @@ import QtQuick
 Rectangle {
     id: right
 
-    property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
+    property color borderColor: colors.outline_variant
     property int borderRadius: 27
     property alias bunnyHeadpatting: bunny.headpatting
     property var colors
@@ -47,7 +47,7 @@ Rectangle {
             const dash = strokeWidth * 0.4;
             const gap = strokeWidth * 0.2;
             ctx.clearRect(0, 0, width, height);
-            ctx.strokeStyle = Qt.rgba(right.borderColor.r, right.borderColor.g, right.borderColor.b, 0.4);
+            ctx.strokeStyle = Qt.alpha(right.borderColor, 0.4);
             ctx.lineWidth = strokeWidth;
             ctx.setLineDash([dash, gap]);
             ctx.lineCap = "butt";

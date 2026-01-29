@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import "../common" as Common
+import "../../common" as Common
 import "./" as Components
 
 Item {
@@ -44,6 +44,16 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: composerArea.top
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            propagateComposedEvents: true
+            onPressed: mouse => {
+                composer.clearFocus();
+                mouse.accepted = false;
+            }
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -175,14 +185,19 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: 85
+        height: composer.implicitHeight + Common.Config.space.md * 2
 
         Components.ChatComposer {
             id: composer
-            anchors.fill: parent
-            anchors.margins: Common.Config.space.md
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 0
+            anchors.rightMargin: 0
+            anchors.topMargin: Common.Config.space.md
+            anchors.bottomMargin: Common.Config.space.md
+            height: implicitHeight
             busy: root.busy
-            copyEnabled: root.messages && root.messages.count > 0
             placeholderText: root.connectionOnline ? "Message..." : "Offline - use /model to switch"
             onSend: text => {
                 root.sendRequested(text);
@@ -192,7 +207,6 @@ Item {
                 root.commandTriggered(command);
                 composer.text = "";
             }
-            onCopyAllRequested: root.copyAllMessages()
         }
     }
 }

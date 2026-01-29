@@ -6,7 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
-import "./common" as Common
+import "../common" as Common
 import "./components" as Components
 
 Item {

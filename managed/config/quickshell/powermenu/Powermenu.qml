@@ -2,12 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
-import "./common" as Common
+import "common" as Common
 
 PanelWindow {
     id: window
 
-    readonly property color borderColor: Qt.rgba(88 / 255, 91 / 255, 112 / 255, 0.5)
+    readonly property color borderColor: colors.outline_variant
     readonly property int borderRadius: 27
     property alias bunnyHeadpatting: rightPane.bunnyHeadpatting
     property var colors: Common.Config.color

@@ -10,6 +10,7 @@
  */
 import ".."
 import "../components"
+import QtQuick
 
 ModuleContainer {
     id: root
@@ -45,8 +46,10 @@ ModuleContainer {
                             "whatsapp": "󰖣"
                         })
                     screen: root.screen
-                }
-            ]
         }
     ]
+
+}
+    ]
+
 }

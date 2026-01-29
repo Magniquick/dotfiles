@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
-import "./common" as Common
+import "../common" as Common
 import "./components" as Components
 
 Item {
@@ -288,10 +288,19 @@ Item {
                 body: "Chat cleared."
             });
             return;
+        case "/copy":
+            if (chatView) {
+                chatView.copyAllMessages();
+            }
+            messageModel.append({
+                sender: "assistant",
+                body: "Copied conversation."
+            });
+            return;
         case "/help":
             messageModel.append({
                 sender: "assistant",
-                body: "Available commands:\n" + "/model - Choose AI model\n" + "/mood - Set conversation mood\n" + "/clear - Clear chat history\n" + "/help - Show this help\n" + "/status - Show current settings"
+                body: "Available commands:\n" + "/model - Choose AI model\n" + "/mood - Set conversation mood\n" + "/clear - Clear chat history\n" + "/copy - Copy conversation\n" + "/help - Show this help\n" + "/status - Show current settings"
             });
             break;
         case "/status":
@@ -535,15 +544,10 @@ Item {
                 }
 
                 // Metrics tab right side
-                Text {
+                Item {
+                    Layout.preferredHeight: 1
+                    Layout.preferredWidth: 1
                     visible: root.currentTabIndex === 1
-                    text: "SYSTEM ACTIVE"
-                    color: Common.Config.color.on_surface_variant
-                    font.family: Common.Config.fontFamily
-                    font.pixelSize: 9
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1.5
-                    opacity: 0.5
                 }
             }
         }

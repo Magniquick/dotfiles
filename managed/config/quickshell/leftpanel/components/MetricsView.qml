@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
-import "../common" as Common
+import "../../common" as Common
 import "./" as Components
 
 Item {
@@ -121,6 +121,7 @@ Item {
                 icon: "\uf2c8"
                 subtext: "Package Temp"
                 accent: root.tempColor
+                centerContent: true
             }
 
             Components.StatCard {
@@ -129,6 +130,7 @@ Item {
                 icon: "\udb80\udeca"
                 subtext: root.sysInfo.disk_wear ? "Wear: " + root.sysInfo.disk_wear : ""
                 accent: root.diskHealthColor
+                centerContent: true
             }
         }
 
@@ -288,7 +290,9 @@ Item {
                     }
 
                     Text {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
                         text: root.isHealthy ? "HEALTHY" : "WARNING"
                         color: Common.Config.color.on_surface
                         font {
@@ -300,7 +304,9 @@ Item {
                     }
 
                     Text {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
                         text: root.isHealthy ? "All systems go" : "Check metrics"
                         color: Common.Config.color.on_surface_variant
                         font {

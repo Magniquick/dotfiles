@@ -77,6 +77,9 @@ ColumnLayout {
         }
     }
     TooltipCard {
+        backgroundColor: Config.color.on_secondary_fixed_variant
+        borderColor: Config.barModuleBorderColor
+        outlined: true
         content: [
             ColumnLayout {
                 Layout.fillWidth: true

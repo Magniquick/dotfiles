@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import "./common" as Common
+import "../common" as Common
 
 PanelWindow {
     id: root

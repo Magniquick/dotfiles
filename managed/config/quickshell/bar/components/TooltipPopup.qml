@@ -125,14 +125,14 @@ Item {
                 anchors.fill: parent
                 antialiasing: true
                 clip: true
-                color: Config.color.on_secondary_fixed
+                color: Config.barPopupSurface
                 radius: Config.tooltipRadius
             }
             Rectangle {
                 id: panelBorder
 
                 antialiasing: true
-                border.color: Config.color.outline
+                border.color: Config.barPopupBorderColor
                 border.width: 1
                 color: "transparent"
                 height: Math.max(0, panel.height - 1)

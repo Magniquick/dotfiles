@@ -5,8 +5,8 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    property color backgroundColor: Config.barPopupInnerSurface
-    property color borderColor: Config.color.outline
+    property color backgroundColor: Config.barPopupSurface
+    property color borderColor: Config.barPopupBorderColor
     property alias content: contentColumn.data
     property bool outlined: false
     property int padding: Config.space.md

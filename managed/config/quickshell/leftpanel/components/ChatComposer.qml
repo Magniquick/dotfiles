@@ -2,23 +2,27 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import "../common" as Common
+import "../../common" as Common
 
 Item {
     id: root
     property bool busy: false
     property string placeholderText: "Type a message..."
-    property alias text: inputField.text
-    property bool copyEnabled: false
+    property alias text: inputEdit.text
+    readonly property int maxLines: 5
+    readonly property int maxInputHeight: Math.ceil(inputMetrics.lineSpacing * root.maxLines) + inputEdit.topPadding + inputEdit.bottomPadding
 
     signal send(string text)
     signal commandTriggered(string command)
-    signal copyAllRequested()
 
     implicitHeight: composerContainer.implicitHeight
 
+    function clearFocus() {
+        inputEdit.focus = false;
+    }
+
     function handleSend() {
-        const text = inputField.text.trim();
+        const text = inputEdit.text.trim();
         if (text.length === 0)
             return;
 
@@ -37,7 +41,7 @@ Item {
         anchors.fill: inputContainer
         anchors.margins: -marginSize
         radius: Common.Config.shape.corner.lg + marginSize
-        opacity: inputField.activeFocus ? focusedOpacity : unfocusedOpacity
+        opacity: inputEdit.activeFocus ? focusedOpacity : unfocusedOpacity
         visible: !root.busy
 
         gradient: Gradient {
@@ -62,7 +66,9 @@ Item {
 
     Item {
         id: composerContainer
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         implicitHeight: inputContainer.height
 
         GlowLayer {
@@ -78,11 +84,15 @@ Item {
 
         Rectangle {
             id: inputContainer
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            implicitHeight: inputRow.implicitHeight + Common.Config.space.sm * 2
+            height: implicitHeight
             color: Common.Config.color.surface_container_highest
             radius: Common.Config.shape.corner.lg
             border.width: 1
-            border.color: inputField.activeFocus ? Common.Config.color.primary : Common.Config.color.outline
+            border.color: inputEdit.activeFocus ? Common.Config.color.primary : Common.Config.color.outline
 
             Behavior on border.color {
                 ColorAnimation {
@@ -91,71 +101,129 @@ Item {
             }
 
             HoverHandler { id: composerHover }
+            TapHandler {
+                id: composerTap
+                onTapped: inputEdit.forceActiveFocus()
+            }
 
             RowLayout {
+                id: inputRow
                 anchors.fill: parent
                 anchors.margins: Common.Config.space.sm
                 spacing: Common.Config.space.sm
 
-                TextArea {
-                    id: inputField
+                Item {
+                    id: inputWrap
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: 48
-                    placeholderText: root.placeholderText
-                    wrapMode: TextArea.Wrap
-                    color: Common.Config.color.on_surface
-                    font.family: Common.Config.fontFamily
-                    font.pixelSize: Common.Config.type.bodyMedium.size + 1
-                    placeholderTextColor: Common.Config.color.on_surface_variant
-                    enabled: !root.busy
-                    verticalAlignment: TextArea.AlignVCenter
+                    Layout.preferredHeight: Math.max(48, Math.min(textFlick.contentHeight, root.maxInputHeight))
 
-                    background: Rectangle {
-                        color: "transparent"
+                    function scrollToThumbY(localY) {
+                        const maxThumbY = Math.max(0, inputWrap.height - scrollThumb.height);
+                        const clampedY = Math.max(0, Math.min(maxThumbY, localY - scrollThumb.height / 2));
+                        const range = Math.max(1, textFlick.contentHeight - inputWrap.height);
+                        textFlick.contentY = maxThumbY > 0 ? (clampedY / maxThumbY) * range : 0;
                     }
 
-                    Keys.onPressed: event => {
-                        if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) {
-                            root.handleSend();
-                            event.accepted = true;
+                    Flickable {
+                        id: textFlick
+                        anchors.fill: parent
+                        contentWidth: width
+                        contentHeight: inputEdit.height
+                        clip: true
+
+                        TextEdit {
+                            id: inputEdit
+                            width: textFlick.width
+                            height: contentHeight + topPadding + bottomPadding
+                            y: Math.max(0, (inputWrap.height - height) / 2)
+                            text: ""
+                            wrapMode: TextEdit.Wrap
+                            color: Common.Config.color.on_surface
+                            font.family: Common.Config.fontFamily
+                            font.pixelSize: Common.Config.type.bodyMedium.size + 1
+                            selectionColor: Common.Config.color.primary
+                            selectedTextColor: Common.Config.color.on_primary
+                            readOnly: root.busy
+                            cursorVisible: inputEdit.activeFocus && !root.busy
+                            focus: false
+                            activeFocusOnPress: true
+                            topPadding: 4
+                            bottomPadding: 4
+                            leftPadding: 0
+                            rightPadding: 8
+                            onActiveFocusChanged: {
+                                if (!activeFocus) {
+                                    inputEdit.cursorPosition = inputEdit.text.length;
+                                }
+                            }
+
+                            onTextChanged: {
+                                // keep the flickable height in sync
+                                textFlick.contentHeight = inputEdit.y + inputEdit.height;
+                                if (textFlick.contentHeight > textFlick.height) {
+                                    textFlick.contentY = textFlick.contentHeight - textFlick.height;
+                                } else {
+                                    textFlick.contentY = 0;
+                                }
+                            }
+
+                            Keys.onPressed: event => {
+                                if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) {
+                                    root.handleSend();
+                                    event.accepted = true;
+                                }
+                            }
+                        }
+
+                        ScrollBar.vertical: null
+                    }
+
+                    Rectangle {
+                        id: scrollTrack
+                        anchors.right: parent.right
+                        anchors.rightMargin: 0
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: 6
+                        color: "transparent"
+                        visible: scrollThumb.visible
+                        z: 2
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onPressed: event => inputWrap.scrollToThumbY(event.y)
+                            onPositionChanged: event => {
+                                if (pressed)
+                                    inputWrap.scrollToThumbY(event.y);
+                            }
                         }
                     }
-                }
 
-                Rectangle {
-                    id: copyButton
-                    Layout.alignment: Qt.AlignBottom
-                    Layout.bottomMargin: Common.Config.space.xs
-                    Layout.preferredWidth: 36
-                    Layout.preferredHeight: 36
-                    implicitWidth: 36
-                    implicitHeight: 36
-                    radius: Common.Config.shape.corner.md
-                    color: copyArea.containsMouse ? Qt.alpha(Common.Config.color.primary, 0.12) : "transparent"
-                    border.width: 1
-                    border.color: copyArea.containsMouse ? Qt.alpha(Common.Config.color.outline, 0.6) : "transparent"
-                    visible: root.copyEnabled && composerHover.hovered
+                    Rectangle {
+                        id: scrollThumb
+                        anchors.right: parent.right
+                        anchors.rightMargin: 1
+                        width: 4
+                        height: Math.max(12, inputWrap.height * (inputWrap.height / Math.max(1, textFlick.contentHeight)))
+                        y: Math.min(inputWrap.height - height, textFlick.contentY / Math.max(1, textFlick.contentHeight - inputWrap.height) * (inputWrap.height - height))
+                        radius: 2
+                        color: Common.Config.color.on_surface_variant
+                        visible: textFlick.contentHeight > inputWrap.height + 1
+                        z: 3
+                    }
 
                     Text {
-                        anchors.centerIn: parent
-                        text: "\udb80\udd8f"
-                        color: copyArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface_variant
-                        font.family: Common.Config.iconFontFamily
-                        font.pixelSize: 14
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Common.Config.color.on_surface_variant
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: Common.Config.type.bodyMedium.size + 1
+                        text: root.placeholderText
+                        visible: inputEdit.text.length === 0
+                        opacity: 0.8
                     }
-
-                    MouseArea {
-                        id: copyArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.copyAllRequested()
-                    }
-
-                    ToolTip.visible: copyArea.containsMouse
-                    ToolTip.text: "Copy Conversation"
-                    ToolTip.delay: 400
                 }
 
                 Rectangle {
@@ -242,5 +310,12 @@ Item {
                 }
             }
         }
+    }
+
+    FontMetrics {
+        id: inputMetrics
+
+        font.family: Common.Config.fontFamily
+        font.pixelSize: Common.Config.type.bodyMedium.size + 1
     }
 }

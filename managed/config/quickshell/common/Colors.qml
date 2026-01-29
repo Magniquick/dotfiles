@@ -7,9 +7,8 @@ import Quickshell.Io
 Singleton {
     property alias color: jsonAdapter.color
     property alias palette: jsonAdapter.palette
-
     FileView {
-        path: Quickshell.shellPath("common/colors.json")
+        path: Qt.resolvedUrl("colors.json")
         watchChanges: true
         adapter: jsonAdapter
 

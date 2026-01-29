@@ -6,9 +6,9 @@ Rectangle {
     id: root
 
     property color accentColor: Config.color.primary
-    property color backgroundColor: Config.barPopupInnerSurface
+    property color backgroundColor: Config.color.on_secondary_fixed_variant
     property int barHeight: Math.max(1, Config.space.xs)
-    property color borderColor: Config.color.outline
+    property color borderColor: Config.barModuleBorderColor
     property int borderWidth: Config.tooltipBorderWidth
     property color chipColor: Config.color.surface_variant
     property string chipText: ""

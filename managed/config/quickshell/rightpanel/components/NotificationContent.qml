@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
-import "../common" as Common
+import "../../common" as Common
 
 RowLayout {
     id: root
