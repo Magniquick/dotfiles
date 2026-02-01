@@ -13,6 +13,7 @@
  * - yay: AUR helper for updates (click action)
  */
 pragma ComponentBehavior: Bound
+import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
 import QtQuick
@@ -24,10 +25,6 @@ ModuleContainer {
 
     property bool hasUpdates: false
     property string lastCheckedLabel: ""
-    readonly property string loginShell: {
-        const shellValue = Quickshell.env("SHELL");
-        return shellValue && shellValue !== "" ? shellValue : "sh";
-    }
     property bool moduleAvailable: false
     property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu"
     property bool processEnabled: true
@@ -198,7 +195,7 @@ ModuleContainer {
     CommandRunner {
         id: availabilityRunner
 
-        command: root.loginShell + " -lc 'command -v waybar-module-pacman-updates'"
+        command: Config.loginShell + " -lc 'command -v waybar-module-pacman-updates'"
         intervalMs: 0
 
         onRan: function (output) {

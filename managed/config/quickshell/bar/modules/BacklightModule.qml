@@ -65,8 +65,6 @@ ModuleContainer {
     property string onScrollDownCommand: "brillo -A 1"
     property string onScrollUpCommand: "brillo -U 1"
     property int sliderValue: 0
-    property int udevRestartAttempts: 0
-    property bool udevDegraded: false
     property bool brilloAvailable: false
     property bool udevadmAvailable: false
     property int brightnessDebounceMs: 150
@@ -147,43 +145,11 @@ ModuleContainer {
             width: 240
 
             // Header Section
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Config.space.md
-
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: Config.color.secondary
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.iconText
-                    }
-                }
-                ColumnLayout {
-                    spacing: Config.space.none
-
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineSmall.size
-                        font.weight: Font.Bold
-                        text: "Brightness"
-                    }
-                    Text {
-                        color: Config.color.on_surface_variant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: root.brightnessPercent >= 0 ? root.brightnessPercent + "%" : "Unavailable"
-                    }
-                }
-                Item {
-                    Layout.fillWidth: true
-                }
+            TooltipHeader {
+                icon: root.iconText
+                iconColor: Config.color.secondary
+                subtitle: root.brightnessPercent >= 0 ? root.brightnessPercent + "%" : "Unavailable"
+                title: "Brightness"
             }
 
             // Details Section
@@ -191,13 +157,7 @@ ModuleContainer {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.letterSpacing: 1.5
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "BRIGHTNESS DETAILS"
                 }
                 LevelSlider {
@@ -285,56 +245,13 @@ ModuleContainer {
 
         onTriggered: root.refreshBrightness()
     }
-    Timer {
-        id: udevRestartTimer
-
-        interval: Math.min(30000, 1000 * Math.pow(2, root.udevRestartAttempts))
-        running: false
-
-        onTriggered: {
-            root.udevDegraded = false;
-            udevMonitor.running = root.udevadmAvailable && root.backlightDevice !== "";
-        }
-    }
-    Timer {
-        id: udevBackoffResetTimer
-
-        interval: 60000
-        running: udevMonitor.running
-        repeat: false
-
-        onTriggered: {
-            if (root.udevRestartAttempts > 0) {
-                console.log("BacklightModule: udevadm monitor stable for 60s, resetting backoff");
-            }
-            root.udevRestartAttempts = 0;
-        }
-    }
-    Process {
+    ProcessMonitor {
         id: udevMonitor
 
         command: ["udevadm", "monitor", "--subsystem-match=backlight", "--property"]
-        running: root.udevadmAvailable && root.backlightDevice !== ""
+        enabled: root.udevadmAvailable && root.backlightDevice !== ""
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handleUdevEvent(data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => {
-            if (root.udevRestartAttempts === 0) {
-                console.warn(`BacklightModule: udevadm monitor exited with code ${code}, attempting restart`);
-            } else {
-                const backoff = Math.min(30000, 1000 * Math.pow(2, root.udevRestartAttempts));
-                console.warn(`BacklightModule: udevadm monitor crashed again (attempt ${root.udevRestartAttempts + 1}), next restart in ${backoff}ms`);
-            }
-            root.udevDegraded = true;
-            root.udevRestartAttempts++;
-            udevBackoffResetTimer.stop();
-            udevRestartTimer.restart();
-        }
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handleUdevEvent(data)
     }
     MouseArea {
         anchors.fill: parent

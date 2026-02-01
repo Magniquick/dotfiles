@@ -175,22 +175,28 @@ Item {
         NotificationTimeout {}
     }
 
-    NotificationServer {
-        id: notificationServer
-        actionIconsSupported: true
-        actionsSupported: true
-        bodyHyperlinksSupported: true
-        bodyImagesSupported: true
-        bodyMarkupSupported: true
-        bodySupported: true
-        extraHints: []
-        imageSupported: true
-        inlineReplySupported: true
-        keepOnReload: true
-        persistenceSupported: true
+    Loader {
+        id: notificationServerLoader
+        active: true
+        sourceComponent: Component {
+            NotificationServer {
+                id: notificationServer
+                actionIconsSupported: true
+                actionsSupported: true
+                bodyHyperlinksSupported: true
+                bodyImagesSupported: true
+                bodyMarkupSupported: true
+                bodySupported: true
+                extraHints: []
+                imageSupported: true
+                inlineReplySupported: true
+                keepOnReload: true
+                persistenceSupported: true
 
-        onNotification: notification => {
-            notificationStore.addNotification(notification);
+                onNotification: notification => {
+                    notificationStore.addNotification(notification);
+                }
+            }
         }
     }
 
@@ -212,6 +218,10 @@ Item {
         command: ["busctl", "--user", "status", "org.freedesktop.Notifications"]
         onExited: code => {
             root.notificationServerActive = code === 0;
+            if (code !== 0) {
+                notificationServerLoader.active = false;
+                notificationServerLoader.active = true;
+            }
         }
     }
 

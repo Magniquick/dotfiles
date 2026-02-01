@@ -24,13 +24,15 @@ PanelWindow {
     signal hoverUpdated(string actionName)
     signal requestClose
 
+    // Only show content once compositor has configured window geometry
+    readonly property bool geometryReady: window.width > 0 && window.height > 0
+
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "powermenu"
     color: "transparent"
     screen: targetScreen
-    visible: false
 
     onVisibleChanged: {
         if (visible) {
@@ -93,6 +95,7 @@ PanelWindow {
         id: content
 
         anchors.centerIn: parent
+        opacity: window.geometryReady ? 1 : 0
         z: 1
 
         Row {

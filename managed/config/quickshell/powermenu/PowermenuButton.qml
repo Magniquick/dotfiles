@@ -41,7 +41,7 @@ Rectangle {
 
     Behavior on opacity {
         NumberAnimation {
-            duration: 220
+            duration: Common.Config.motion.duration.longMs
         }
     }
 
@@ -67,14 +67,14 @@ Rectangle {
 
         Behavior on border.color {
             ColorAnimation {
-                duration: 120
+                duration: Common.Config.motion.duration.shortMs
             }
         }
     }
     Text {
         anchors.centerIn: parent
         color: button.accent
-        font.family: "JetBrainsMono NFP"
+        font.family: Common.Config.iconFontFamily
         font.pointSize: 30
         horizontalAlignment: Text.AlignHCenter
         text: button.icon
@@ -98,7 +98,7 @@ Rectangle {
             duration: button.revealDelay
         }
         NumberAnimation {
-            duration: 250
+            duration: Common.Config.motion.duration.longMs
             easing.overshoot: 3
             easing.type: Easing.OutBack
             property: "revealProgress"
@@ -109,7 +109,7 @@ Rectangle {
     NumberAnimation {
         id: revealOut
 
-        duration: 120
+        duration: Common.Config.motion.duration.shortMs
         easing.type: Easing.InOutQuad
         property: "revealProgress"
         running: false

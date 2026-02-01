@@ -1,45 +1,87 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-This repo is a Quickshell (Qt/QML) configuration. Key entry points:
-- `shell.qml`: root shell (bar per screen + clock)
-- `bar/`: main bar (`bar/shell.qml`, `bar/BarWindow.qml`)
-- `powermenu/`: overlay system actions
-- `hyprquickshot/`: screenshot tool
-- `rightpanel/`: right-side notification panel UI
-- `common/`, `bar/components/`, `bar/modules/`: shared tokens, UI primitives, and feature modules
+This file provides guidance for working with code in this module (rightpanel).
 
-Rust helpers live under `bar/scripts/src/` (e.g., `ical-cache`, `todoist-api`). There are no automated tests.
+## Architecture
 
-## Build, Test, and Development Commands
-- `quickshell` (or `qs`): run the main shell from repo root
-- `quickshell -c bar`: run bar only
-- `quickshell -c powermenu`: run powermenu only
-- `quickshell -c hyprquickshot -n`: run screenshot tool (no duplicates)
-- `cd bar/scripts/src/ical-cache && cargo build --release`: build calendar helper
-- `cd bar/scripts/src/todoist-api && cargo build --release`: build todo helper
+### Entry Point Flow
 
-QML changes require a restart of `quickshell` (no hot reload).
+`shell.qml` → `RightPanel.qml` → notification components
 
-## Coding Style & Naming Conventions
-- QML/JS: 2-space indentation
-- Types/IDs: `CamelCase` (e.g., `ModuleContainer`, `root`)
-- Properties/functions: `lowerCamelCase`
-- Constants: `UPPER_SNAKE`
-- Avoid deprecated APIs (`Quickshell.shellDir`/`Quickshell.shellPath()` instead of `configDir/configPath`)
+- **shell.qml**: Window management via `ShellRoot` + `Loader`. Uses `HyprlandFocusGrab` to capture focus when visible; clicking outside closes the panel via `GlobalState.rightPanelVisible`.
+- **RightPanel.qml**: Main notification center with D-Bus `NotificationServer` integration and dual-window system (main panel + popup overlay).
 
-Use `common/Config.qml` (`Config.color` / `Config.palette`) for tokens and palette. Keep modules small and self-contained.
+### Notification Data Flow
 
-## Testing Guidelines
-No automated tests. Manually verify:
-- powermenu: `Esc`/`q` closes, actions work
-- bar modules: layout stable, tooltips anchor correctly
-- notification panel: dismiss, actions, inline reply, and images work
-- performance: idle CPU ~0% with hidden overlays
+```
+D-Bus NotificationServer
+    → onNotification signal
+    → notificationStore.addNotification()
+    → NotificationEntry created with Timer
+    → list/popupList arrays updated
+    → ListView observes changes
+```
 
-## Commit & Pull Request Guidelines
-- Commits: short imperative subject (e.g., "Add powermenu action")
-- PRs: describe behavior changes, list manual checks, include screenshots/gifs for UI changes
+**NotificationEntry** (inline component): Holds notification state including `notificationId`, `notification` reference, `popup` flag, `timer`, and derived properties (`appName`, `title`, `body`, `urgency`, `iconSource`).
 
-## Security & Configuration Tips
-System actions use `systemctl`/`loginctl`. Review permissions before adding actions. Keep animations gated by visibility to avoid idle CPU usage.
+**notificationStore** (QtObject): Central state manager with methods:
+- `addNotification(notification)` – Creates entry, starts urgency-based timeout
+- `dismissNotification(id)` – Removes from lists, calls `notification.dismiss()`
+- `dismissAll()` – Clears everything
+- `timeoutNotification(id)` – Moves popup to history (or dismisses if transient)
+
+### Timeout Logic
+
+Urgency-based popup timeouts (matching dunst config):
+- Critical: 0 (no timeout)
+- Normal: 8000ms
+- Low: 3000ms
+
+Notifications can override via `expireTimeout` (-1 = use default, 0 = never, >0 = use value).
+
+### Dual Window System
+
+1. **Main panel** (420px wide): Full notification list anchored top-right with gaps
+2. **Popup overlay** (320px, max 560px height): Transient popups at `WlrLayer.Overlay`
+
+Both windows use separate `WlrLayershell.namespace` values for compositor identification.
+
+### Component Hierarchy
+
+```
+components/
+├── NotificationCard.qml      # List item: frame + content + dismiss handling
+├── NotificationContent.qml   # Rich renderer: icons, body, actions, inline reply
+├── NotificationFrame.qml     # Styled container with click-through
+├── ActionButton.qml          # Reusable button primitive
+└── PopupNotification.qml     # Popup variant (simpler, no source button)
+```
+
+**NotificationContent** handles:
+- App-specific icon overrides (WhatsApp, BatWatch, Kitty, OpenAI)
+- WhatsApp link detection → brand color `#25D366`
+- Circular app icon masking via `OpacityMask`
+- Action buttons with icon resolution
+- Inline reply field for compatible notifications
+- Source inspector (debug view showing all notification fields)
+
+### Server Health Monitoring
+
+A 10-second `Timer` runs `busctl --user status org.freedesktop.Notifications`. If the server crashes (exit code != 0), the `NotificationServer` loader is toggled to restart it.
+
+## Key Patterns
+
+**Visibility-controlled loading**: The main panel uses `Loader { active: GlobalState.rightPanelVisible }` to avoid rendering when hidden.
+
+**Popup visibility**: `popupWindow.visible` is bound to `popupContent.opacity > 0.01` to account for fade animations.
+
+**Image existence check**: `NotificationContent` spawns a `Process` to run `test -f` on image paths before displaying.
+
+## Testing Checklist
+
+- Clicking outside panel or pressing Escape closes it
+- Popup appears at top-right, fades out after timeout
+- Critical notifications persist until dismissed
+- Action buttons invoke notification actions
+- Inline reply works for apps that support it
+- Source inspector (code icon) shows raw notification data

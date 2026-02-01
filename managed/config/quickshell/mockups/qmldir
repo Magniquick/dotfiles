@@ -1,0 +1,3 @@
+module qs.mockups
+singleton Config 1.0 common/Config.qml
+HeaderMockup 1.0 HeaderMockup.qml

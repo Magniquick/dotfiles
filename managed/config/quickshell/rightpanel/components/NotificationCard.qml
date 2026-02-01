@@ -15,8 +15,6 @@ Item {
             left: parent.left
             right: parent.right
         }
-        paddingTop: 10
-        paddingBottom: 10
         onClicked: root.dismissRequested()
 
         NotificationContent {
@@ -29,6 +27,7 @@ Item {
             entry: root.entry
             showCloseButton: true
             showSourceButton: true
+            showBodyLeadIcon: false
             onCloseClicked: root.dismissRequested()
         }
     }

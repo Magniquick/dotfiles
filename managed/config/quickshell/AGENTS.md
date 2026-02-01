@@ -35,7 +35,6 @@ Custom Quickshell configuration for Wayland/Hyprland featuring a modular status 
 - **Right panel** (`rightpanel/shell.qml` → `rightpanel/RightPanel.qml`): Right-side overlay panel
 - **Powermenu** (`powermenu/shell.qml` → `powermenu/Powermenu.qml`): Overlay with system actions (poweroff/reboot/lock/hibernate/suspend/windows/etc)
 - **HyprQuickshot** (`hyprquickshot/shell.qml`): Screenshot tool with region/window/monitor selection
-- **Screenshots** (`screenshots/shell.qml`): On-screen screenshots pill with IPC controls
 
 ### Module System
 

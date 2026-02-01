@@ -25,6 +25,12 @@ ModuleContainer {
     property int healthPercent: -1
     property bool showTime: false
 
+    function normalizePercent(value) {
+        if (!isFinite(value))
+            return 0;
+        return value <= 1 ? value * 100 : value;
+    }
+
     function batteryColor(device) {
         if (!device || !device.ready)
             return Config.color.on_surface;
@@ -44,28 +50,41 @@ ModuleContainer {
         if (device.state === UPowerDeviceState.Charging || device.state === UPowerDeviceState.PendingCharge)
             return "󰂄";
 
-        const rawPercent = device.percentage;
-        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
+        const percent = root.normalizePercent(device.percentage);
         if (percent <= 10)
-            return "";
+            return "󰁺";
 
-        if (percent <= 35)
-            return "";
+        if (percent <= 20)
+            return "󰁻";
 
-        if (percent <= 65)
-            return "";
+        if (percent <= 30)
+            return "󰁼";
 
-        if (percent <= 85)
-            return "";
+        if (percent <= 40)
+            return "󰁽";
 
-        return "";
+        if (percent <= 50)
+            return "󰁾";
+
+        if (percent <= 60)
+            return "󰁿";
+
+        if (percent <= 70)
+            return "󰂀";
+
+        if (percent <= 80)
+            return "󰂁";
+
+        if (percent <= 90)
+            return "󰂂";
+
+        return "󰁹";
     }
     function batteryPercentValue(device) {
         if (!device || !device.ready)
             return 0;
 
-        const rawPercent = device.percentage;
-        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
+        const percent = root.normalizePercent(device.percentage);
         return Math.max(0, Math.min(100, percent));
     }
     function formatSeconds(seconds) {
@@ -84,13 +103,6 @@ ModuleContainer {
         return hours + "h " + minutes + "m";
     }
     function healthFromDevice(device) {
-        function toPercent(value) {
-            if (!isFinite(value))
-                return NaN;
-
-            return value <= 1 ? value * 100 : value;
-        }
-
         if (!device)
             return -1;
 
@@ -98,7 +110,7 @@ ModuleContainer {
             return -1;
 
         const healthRaw = device.healthPercentage;
-        const health = toPercent(healthRaw);
+        const health = root.normalizePercent(healthRaw);
         if (isFinite(health) && health > 0)
             return Math.round(health);
 
@@ -108,7 +120,7 @@ ModuleContainer {
             return 100;
 
         // As a last resort, derive full from energy + percentage and assume design==full.
-        const percent = toPercent(device.percentage);
+        const percent = root.normalizePercent(device.percentage);
         const percentFrac = percent / 100;
         if (isFinite(device.energy) && isFinite(percentFrac) && percentFrac > 0)
             return 100;
@@ -122,8 +134,7 @@ ModuleContainer {
         if (!device || !device.ready)
             return "";
 
-        const rawPercent = device.percentage;
-        const percent = rawPercent <= 1 ? rawPercent * 100 : rawPercent;
+        const percent = root.normalizePercent(device.percentage);
         return Math.round(percent) + "%";
     }
     function refreshHealth() {
@@ -201,43 +212,11 @@ ModuleContainer {
             width: 240 // Match CalendarTooltip width
 
             // Header Section
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Config.space.md
-
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-                    implicitHeight: Config.space.xxl * 2
-                    implicitWidth: Config.space.xxl * 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.batteryColor(UPower.displayDevice)
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.batteryIcon(UPower.displayDevice)
-                    }
-                }
-                ColumnLayout {
-                    spacing: Config.space.none
-
-                    Text {
-                        color: Config.color.on_surface
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineMedium.size
-                        font.weight: Font.Bold
-                        text: root.percentLabel(UPower.displayDevice)
-                    }
-                    Text {
-                        color: Config.color.on_surface_variant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: root.stateLabel(UPower.displayDevice)
-                    }
-                }
-                Item {
-                    Layout.fillWidth: true
-                }
+            TooltipHeader {
+                icon: root.batteryIcon(UPower.displayDevice)
+                iconColor: root.batteryColor(UPower.displayDevice)
+                subtitle: root.stateLabel(UPower.displayDevice)
+                title: root.percentLabel(UPower.displayDevice)
             }
             ProgressBar {
                 Layout.fillWidth: true
@@ -253,12 +232,7 @@ ModuleContainer {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "POWER PROFILE"
                 }
                 TooltipActionsRow {

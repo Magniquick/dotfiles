@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
+import Quickshell.Io
 import "../../common" as Common
 
 RowLayout {
@@ -11,6 +12,7 @@ RowLayout {
     property bool showCloseButton: false
     property bool showSourceButton: false
     property bool showSourceDetails: false
+    property bool showBodyLeadIcon: true
     signal closeClicked
 
     readonly property string rawBody: entry && entry.body ? entry.body : ""
@@ -34,15 +36,54 @@ RowLayout {
     readonly property string detailSummaryText: root.hasTitle ? root.summaryText : ""
     readonly property bool isBatWatch: (appNameText || "").toLowerCase() === "batwatch"
     readonly property string imageSource: root.isBatWatch ? "" : (entry && entry.notification && entry.notification.image ? entry.notification.image : "")
+    property bool imageFileExists: true
+
+    onImageSourceChanged: checkImageExistence()
+    Component.onCompleted: checkImageExistence()
+
+    function checkImageExistence() {
+        if (root.imageSource.length === 0) {
+            root.imageFileExists = false;
+            return;
+        }
+
+        let path = root.imageSource;
+        if (path.startsWith("image://icon/")) {
+            path = path.substring(13);
+        } else if (path.startsWith("file://")) {
+            path = path.substring(7);
+        }
+
+        // If it looks like an absolute path, check it.
+        if (path.startsWith("/")) {
+             fileCheckProcess.pathToCheck = path;
+             fileCheckProcess.running = false;
+             fileCheckProcess.running = true;
+        } else {
+            // Named icon or other resource, assume valid
+            root.imageFileExists = true;
+        }
+    }
+
+    Process {
+        id: fileCheckProcess
+        property string pathToCheck: ""
+        command: ["test", "-f", pathToCheck]
+        // qmllint disable signal-handler-parameters
+        onExited: (code) => {
+            root.imageFileExists = (code === 0);
+        }
+        // qmllint enable signal-handler-parameters
+    }
 
     readonly property color urgencyColor: {
         if (!entry || !entry.urgency)
-            return "#69bfce";
+            return Common.Config.color.primary;
         if (entry.urgency === "critical")
-            return "#E34F4F";
+            return Common.Config.color.error;
         if (entry.urgency === "low")
-            return "#5599E2";
-        return "#69bfce";
+            return Common.Config.color.secondary;
+        return Common.Config.color.primary;
     }
 
     spacing: 8
@@ -82,7 +123,7 @@ RowLayout {
         if (result.cleanBody.match(/<a\s+href="[^"]*web\.whatsapp\.com[^"]*">/i) !== null) {
             result.isWhatsApp = true;
             result.headerIconText = "\udb81\udda3";
-            result.headerIconColor = "#25D366";
+            result.headerIconColor = "#25D366"; // Official WhatsApp brand color
             result.cleanBody = result.cleanBody.replace(/^<a\s+href="[^"]*">[^<]*<\/a>\n*/i, "");
         }
         result.cleanBody = result.cleanBody.trim().replace(/\n/g, "<br>");
@@ -113,6 +154,7 @@ RowLayout {
         lines.push("urgency: " + (currentEntry.urgency || ""));
         lines.push("appIcon: " + (notification.appIcon || ""));
         lines.push("image: " + (notification.image || ""));
+        
         if (notification.expireTimeout !== undefined)
             lines.push("expireTimeout: " + notification.expireTimeout);
         if (notification.hints)
@@ -172,7 +214,7 @@ RowLayout {
                         height: 32
                         radius: width / 2
                         color: "transparent"
-                        visible: root.imageSource.length > 0
+                        visible: root.imageSource.length > 0 && leadingIconImage.status !== Image.Error && root.imageFileExists
 
                         Image {
                             id: leadingIconImage
@@ -283,12 +325,14 @@ RowLayout {
 
             Rectangle {
                 Layout.fillWidth: true
+                Layout.preferredHeight: sourceEdit.contentHeight + (Common.Config.space.sm * 2)
                 color: Qt.alpha(Common.Config.color.on_surface, 0.03)
                 radius: Common.Config.shape.corner.sm
                 border.width: 1
                 border.color: Common.Config.color.outline_variant
 
                 TextEdit {
+                    id: sourceEdit
                     anchors.fill: parent
                     anchors.margins: Common.Config.space.sm
                     text: root.sourceText
@@ -299,8 +343,8 @@ RowLayout {
                     font.pixelSize: 11
                     readOnly: true
                     selectByMouse: true
-                    cursorVisible: false
-                    activeFocusOnPress: false
+                    cursorVisible: true
+                    activeFocusOnPress: true
                 }
             }
         }
@@ -308,9 +352,10 @@ RowLayout {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            visible: root.detailSummaryText.length > 0 || root.cleanBody.length > 0
+            visible: (root.detailSummaryText.length > 0 || root.cleanBody.length > 0) && !root.showSourceDetails
 
             Text {
+                visible: root.showBodyLeadIcon
                 text: "\uea9c"
                 color: Common.Config.color.primary_fixed_dim
                 font.family: Common.Config.iconFontFamily
@@ -356,7 +401,7 @@ RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 4
             spacing: 8
-            visible: actionsRepeater.count > 0
+            visible: actionsRepeater.count > 0 && !root.showSourceDetails
 
             Repeater {
                 id: actionsRepeater
@@ -446,7 +491,7 @@ RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 4
             spacing: 8
-            visible: entry?.notification?.hasInlineReply ?? false
+            visible: (entry?.notification?.hasInlineReply ?? false) && !root.showSourceDetails
 
             Text {
                 text: "\uf4ad"

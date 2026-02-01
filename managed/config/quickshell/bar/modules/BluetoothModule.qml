@@ -115,43 +115,11 @@ ModuleContainer {
             width: 240
 
             // Header Section
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Config.space.md
-
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.stateColor()
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.displayText()
-                    }
-                }
-                ColumnLayout {
-                    spacing: Config.space.none
-
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineSmall.size
-                        font.weight: Font.Bold
-                        text: root.connectedNames !== "" ? root.connectedNames : (root.adapterName !== "" ? root.adapterName : "Bluetooth")
-                    }
-                    Text {
-                        color: Config.color.on_surface_variant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: root.statusLabel()
-                    }
-                }
-                Item {
-                    Layout.fillWidth: true
-                }
+            TooltipHeader {
+                icon: root.displayText()
+                iconColor: root.stateColor()
+                subtitle: root.statusLabel()
+                title: root.connectedNames !== "" ? root.connectedNames : (root.adapterName !== "" ? root.adapterName : "Bluetooth")
             }
             ProgressBar {
                 Layout.fillWidth: true
@@ -167,13 +135,7 @@ ModuleContainer {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.letterSpacing: 1.5
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "BLUETOOTH DETAILS"
                 }
                 InfoRow {
@@ -199,13 +161,7 @@ ModuleContainer {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.letterSpacing: 1.5
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "DEVICES"
                 }
                 RowLayout {

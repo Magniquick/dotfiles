@@ -32,7 +32,11 @@ ModuleContainer {
 
         onClicked: function (mouse) {
             if (mouse.button === Qt.RightButton) {
-                Quickshell.execDetached(["quickshell", "--path", Quickshell.env("HOME") + "/.config/quickshell/powermenu/"]);
+                Quickshell.execDetached([
+                    "quickshell",
+                    "--path",
+                    Quickshell.shellDir + "/powermenu"
+                ]);
             } else {
                 GlobalState.toggleLeftPanel();
             }

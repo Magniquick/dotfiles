@@ -101,8 +101,6 @@ ModuleContainer {
     property double txBytesPerSec: 0
     property string usbEthernetIcon: ""
     property var wifiIcons: ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]
-    property int monitorRestartAttempts: 0
-    property bool monitorDegraded: false
     property bool nmcliAvailable: false
     property double lastMonitorEventMs: 0
     property int monitorDebounceMs: 300
@@ -456,57 +454,20 @@ ModuleContainer {
             id: menu
 
             readonly property int maxMenuWidth: 520
-            readonly property int menuWidth: Math.min(menu.maxMenuWidth, Math.max(menu.minMenuWidth, headerRow.implicitWidth))
             readonly property int minMenuWidth: 240
+            readonly property int menuWidth: Math.min(menu.maxMenuWidth, Math.max(menu.minMenuWidth, headerRow.implicitWidth))
 
             implicitWidth: menu.menuWidth
             spacing: Config.space.md
             width: menu.menuWidth
 
             // Header Section
-            RowLayout {
+            TooltipHeader {
                 id: headerRow
-
-                Layout.fillWidth: true
-                spacing: Config.space.md
-
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.connectionState === "connected" ? Config.color.tertiary : Config.color.on_surface_variant
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.iconText
-                    }
-                }
-                ColumnLayout {
-                    spacing: Config.space.none
-
-                    Text {
-                        id: connectionTitleText
-
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineSmall.size
-                        font.weight: Font.Bold
-                        text: root.connectionType === "wifi" ? (root.ssid !== "" ? root.ssid : "Wi-Fi") : (root.connectionType === "ethernet" ? root.ethernetLabel() : "Disconnected")
-                    }
-                    Text {
-                        id: connectionSubtitleText
-
-                        color: Config.color.on_surface_variant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: root.connectionLabel()
-                    }
-                }
-                Item {
-                    Layout.fillWidth: true
-                }
+                icon: root.iconText
+                iconColor: root.connectionState === "connected" ? Config.color.tertiary : Config.color.on_surface_variant
+                subtitle: root.connectionLabel()
+                title: root.connectionType === "wifi" ? (root.ssid !== "" ? root.ssid : "Wi-Fi") : (root.connectionType === "ethernet" ? root.ethernetLabel() : "Disconnected")
             }
             ProgressBar {
                 Layout.fillWidth: true
@@ -522,13 +483,7 @@ ModuleContainer {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.letterSpacing: 1.5
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "NETWORK DETAILS"
                 }
                 InfoRow {
@@ -563,13 +518,7 @@ ModuleContainer {
                 spacing: Config.space.xs
                 visible: root.connectionState === "connected"
 
-                Text {
-                    Layout.bottomMargin: Config.space.xs
-                    color: Config.color.primary
-                    font.family: Config.fontFamily
-                    font.letterSpacing: 1.5
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Black
+                SectionHeader {
                     text: "TRAFFIC"
                 }
                 RowLayout {
@@ -705,31 +654,6 @@ ModuleContainer {
         }
     }
     Timer {
-        id: monitorRestartTimer
-
-        interval: Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts))
-        running: false
-
-        onTriggered: {
-            root.monitorDegraded = false;
-            networkManagerMonitor.running = root.nmcliAvailable;
-        }
-    }
-    Timer {
-        id: monitorBackoffResetTimer
-
-        interval: 60000
-        running: networkManagerMonitor.running
-        repeat: false
-
-        onTriggered: {
-            if (root.monitorRestartAttempts > 0) {
-                console.log("NetworkModule: nmcli monitor stable for 60s, resetting backoff");
-            }
-            root.monitorRestartAttempts = 0;
-        }
-    }
-    Timer {
         id: monitorDebouncedRefresh
 
         interval: root.monitorDebounceMs
@@ -742,31 +666,13 @@ ModuleContainer {
             root.forceRefreshRequested = false;
         }
     }
-    Process {
+    ProcessMonitor {
         id: networkManagerMonitor
 
         command: ["nmcli", "monitor"]
-        running: root.nmcliAvailable
+        enabled: root.nmcliAvailable
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handleNetworkManagerEvent(data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => {
-            if (root.monitorRestartAttempts === 0) {
-                console.warn(`NetworkModule: nmcli monitor exited with code ${code}, attempting restart`);
-            } else {
-                const backoff = Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts));
-                console.warn(`NetworkModule: nmcli monitor crashed again (attempt ${root.monitorRestartAttempts + 1}), next restart in ${backoff}ms`);
-            }
-            root.monitorDegraded = true;
-            root.monitorRestartAttempts++;
-            monitorBackoffResetTimer.stop();
-            monitorRestartTimer.restart();
-        }
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handleNetworkManagerEvent(data)
     }
     MouseArea {
         anchors.fill: parent

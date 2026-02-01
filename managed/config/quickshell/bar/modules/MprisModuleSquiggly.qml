@@ -71,7 +71,7 @@ Rectangle {
                 anchors.left: progressBall.horizontalCenter//
                 anchors.verticalCenter: progressBall.verticalCenter
                 radius: height
-                color: '#606b6b6b'
+                color: Qt.alpha(Config.color.outline, 0.4)
             }
 
             Rectangle {

@@ -75,7 +75,6 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import Quickshell.Io
 
 ModuleContainer {
     id: root
@@ -91,21 +90,6 @@ ModuleContainer {
     property int userFailedCount: 0
     property var userFailedUnits: []
     property bool userPropsSignalPending: false
-    property int monitorRestartAttempts: 0
-    property bool monitorDegraded: false
-
-    function handleMonitorCrash(monitorName, code) {
-        if (root.monitorRestartAttempts === 0) {
-            console.warn(`SystemdFailedModule: ${monitorName} exited with code ${code}, attempting restart`);
-        } else {
-            const backoff = Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts));
-            console.warn(`SystemdFailedModule: ${monitorName} crashed again (attempt ${root.monitorRestartAttempts + 1}), next restart in ${backoff}ms`);
-        }
-        root.monitorDegraded = true;
-        root.monitorRestartAttempts++;
-        monitorBackoffResetTimer.stop();
-        monitorRestartTimer.restart();
-    }
 
     function handleMonitorLine(source, data) {
         const trimmed = data.trim();
@@ -255,93 +239,37 @@ ModuleContainer {
             root.logEvent("userRunner output=" + root.userFailedCount);
         }
     }
-    Timer {
-        id: monitorRestartTimer
-
-        interval: Math.min(30000, 1000 * Math.pow(2, root.monitorRestartAttempts))
-        running: false
-
-        onTriggered: {
-            root.monitorDegraded = false;
-            systemMonitor.running = root.enableEventRefresh;
-            systemPropsMonitor.running = root.enableEventRefresh;
-            userMonitor.running = root.enableEventRefresh;
-            userPropsMonitor.running = root.enableEventRefresh;
-        }
-    }
-    Timer {
-        id: monitorBackoffResetTimer
-
-        interval: 60000
-        running: systemMonitor.running || systemPropsMonitor.running || userMonitor.running || userPropsMonitor.running
-        repeat: false
-
-        onTriggered: {
-            if (root.monitorRestartAttempts > 0) {
-                console.log("SystemdFailedModule: D-Bus monitors stable for 60s, resetting backoff");
-            }
-            root.monitorRestartAttempts = 0;
-        }
-    }
-    Process {
+    ProcessMonitor {
         id: systemMonitor
 
         command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-        running: root.enableEventRefresh
+        enabled: root.enableEventRefresh
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handleMonitorLine("system", data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => root.handleMonitorCrash("systemMonitor", code)
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handleMonitorLine("system", data)
     }
-    Process {
+    ProcessMonitor {
         id: systemPropsMonitor
 
         command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-        running: root.enableEventRefresh
+        enabled: root.enableEventRefresh
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handlePropsMonitorLine("system", data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => root.handleMonitorCrash("systemPropsMonitor", code)
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handlePropsMonitorLine("system", data)
     }
-    Process {
+    ProcessMonitor {
         id: userMonitor
 
         command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-        running: root.enableEventRefresh
+        enabled: root.enableEventRefresh
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handleMonitorLine("user", data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => root.handleMonitorCrash("userMonitor", code)
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handleMonitorLine("user", data)
     }
-    Process {
+    ProcessMonitor {
         id: userPropsMonitor
 
         command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-        running: root.enableEventRefresh
+        enabled: root.enableEventRefresh
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.handlePropsMonitorLine("user", data);
-            }
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => root.handleMonitorCrash("userPropsMonitor", code)
-        // qmllint enable signal-handler-parameters
+        onOutput: data => root.handlePropsMonitorLine("user", data)
     }
     Timer {
         id: eventDebounce

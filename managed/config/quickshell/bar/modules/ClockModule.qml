@@ -32,12 +32,8 @@ ModuleContainer {
         return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/ical" : "/tmp/quickshell-ical";
     }
     readonly property string calendarEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
-    readonly property string calendarRefreshCommand: root.loginShell + " -lc '" + root.calendarBinary + " --cache-dir " + root.calendarCacheDir + " --env-file " + root.calendarEnvFile + "'"
+    readonly property string calendarRefreshCommand: Config.loginShell + " -lc '" + root.calendarBinary + " --cache-dir " + root.calendarCacheDir + " --env-file " + root.calendarEnvFile + "'"
     property string calendarRefreshTime: ""
-    readonly property string loginShell: {
-        const shellValue = Quickshell.env("SHELL");
-        return shellValue && shellValue !== "" ? shellValue : "sh";
-    }
     property bool refreshing: false
     property bool showDate: false
 
