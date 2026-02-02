@@ -4,3 +4,4 @@ singleton ColorPalette 1.0 ../common/ColorPalette.qml
 singleton Config 1.0 ../common/Config.qml
 singleton DependencyCheck 1.0 ../common/services/DependencyCheck.qml
 singleton GlobalState 1.0 ../common/GlobalState.qml
+singleton PrivacyService 1.0 services/PrivacyService.qml

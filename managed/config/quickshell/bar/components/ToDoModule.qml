@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import Quickshell
-import Quickshell.Io
+import qsnative
 import ".."
 import "../components"
 import "../components/JsonUtils.js" as JsonUtils
@@ -12,12 +12,7 @@ import "../components/JsonUtils.js" as JsonUtils
 ColumnLayout {
     id: root
 
-    readonly property string cacheDir: {
-        const homeDir = Quickshell.env("HOME");
-        return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/todoist" : "/tmp/quickshell-todoist";
-    }
-    readonly property string cachePath: root.cacheDir + "/tasks.json"
-    property string currentProject: "Today"
+    property string currentProject: "Inbox"
     readonly property bool dropdownActive: projectSelector.popup.visible
     readonly property int iconSlot: Config.space.xxl * 2
     property string lastUpdated: ""
@@ -27,7 +22,6 @@ ColumnLayout {
     property var rawData: ({})
     readonly property var taskColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary, Config.color.secondary, Config.color.tertiary]
     property var tasks: []
-    readonly property string todoistBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/todoist-api")
     readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
     property bool usingCache: false
 
@@ -38,9 +32,14 @@ ColumnLayout {
         root.rawData = data;
         root.usingCache = !!fromCache;
 
-        let projects = ["Today"];
+        let projects = ["Inbox", "Today"];
         if (data.projects) {
-            projects = projects.concat(Object.keys(data.projects));
+            const projectKeys = Object.keys(data.projects);
+            for (let i = 0; i < projectKeys.length; i++) {
+                const name = projectKeys[i];
+                if (projects.indexOf(name) === -1)
+                    projects.push(name);
+            }
         }
         projectSelector.model = projects;
 
@@ -49,7 +48,7 @@ ColumnLayout {
         if (idx !== -1) {
             projectSelector.currentIndex = idx;
         } else {
-            root.currentProject = "Today";
+            root.currentProject = "Inbox";
             projectSelector.currentIndex = 0;
         }
 
@@ -64,38 +63,17 @@ ColumnLayout {
     function refresh() {
         root.loading = true;
         root.parseError = false;
-        listRunner.trigger();
+        Qt.callLater(function () {
+            todoistClient.listTasks(root.todoistEnvFile);
+            root.loading = false;
+        });
     }
     function scheduleProjectSelectorClose() {
         if (projectSelector.popup.visible)
             projectSelectorCloseTimer.restart();
     }
-    function loadCache() {
-        if (root.cachePath === "")
-            return;
-        cacheFile.reload();
-        const wrapper = JsonUtils.parseObject(cacheFile.text());
-        const cached = wrapper && wrapper.payload ? wrapper.payload : null;
-        if (cached && typeof cached === "object") {
-            root.applyTodoistData(cached, true);
-            const cachedAt = wrapper.cachedAt ? new Date(wrapper.cachedAt) : null;
-            if (cachedAt && !isNaN(cachedAt.getTime()))
-                root.lastUpdated = Qt.formatDateTime(cachedAt, "hh:mm ap");
-        } else {
-            root.usingCache = false;
-            if (root.parseError && (!root.rawData || Object.keys(root.rawData).length === 0))
-                root.tasks = [];
-        }
-    }
-    function shSingleQuote(value) {
-        // Wrap for POSIX shell single-quoted string: ' -> '\''.
-        return String(value).replace(/'/g, "'\\''");
-    }
     function taskCountLabel(count) {
         return count === 1 ? "1 Task" : count + " Tasks";
-    }
-    function todoistCommand(args) {
-        return root.todoistBinary + " --env-file '" + root.shSingleQuote(root.todoistEnvFile) + "' " + args;
     }
     function updateTasks() {
         if (!root.rawData)
@@ -112,7 +90,7 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Config.space.sm
 
-    Component.onCompleted: root.loadCache()
+    Component.onCompleted: root.refresh()
     onVisibleChanged: {
         if (!visible && projectSelector.popup.visible)
             projectSelector.popup.close();
@@ -141,53 +119,37 @@ ColumnLayout {
                 root.scheduleProjectSelectorClose();
         }
     }
-    CommandRunner {
-        id: listRunner
+    TodoistClient {
+        id: todoistClient
+    }
+    Timer {
+        id: refreshTimer
 
-        command: root.todoistCommand("list")
-        intervalMs: 300000 // 5 minutes
+        interval: 300000 // 5 minutes
+        repeat: true
+        running: true
 
-        onRan: function (output) {
-            const data = JsonUtils.parseObject(output);
+        onTriggered: root.refresh()
+    }
+    Connections {
+        target: todoistClient
+
+        function onData_jsonChanged() {
+            const data = JsonUtils.parseObject(todoistClient.data_json);
             if (data) {
                 root.applyTodoistData(data, false);
-                root.lastUpdated = Qt.formatDateTime(new Date(), "hh:mm ap");
+                const updatedAt = todoistClient.last_updated ? new Date(todoistClient.last_updated) : null;
+                if (updatedAt && !isNaN(updatedAt.getTime()))
+                    root.lastUpdated = Qt.formatDateTime(updatedAt, "hh:mm ap");
                 root.parseError = false;
-
-                const cachePayload = JSON.stringify({
-                    cachedAt: new Date().toISOString(),
-                    payload: data
-                });
-                cacheWriter.command = "mkdir -p \"" + root.cacheDir + "\" && printf %s '" + root.shSingleQuote(cachePayload) + "' > \"" + root.cachePath + "\"";
-                cacheWriter.trigger();
+                root.usingCache = false;
             } else {
                 root.parseError = true;
-                root.loadCache();
             }
-            root.loading = false;
         }
-    }
-    FileView {
-        id: cacheFile
-
-        path: root.cachePath
-        watchChanges: true
-        blockLoading: true
-
-        onFileChanged: root.loadCache()
-    }
-    CommandRunner {
-        id: cacheWriter
-
-        command: ""
-        enabled: true
-        intervalMs: 0
-    }
-    CommandRunner {
-        id: actionRunner
-
-        onRan: function (output) {
-            root.refresh();
+        function onErrorChanged() {
+            if (todoistClient.error && todoistClient.error !== "")
+                root.parseError = true;
         }
     }
 
@@ -217,13 +179,13 @@ ColumnLayout {
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.headlineMedium.size
                 font.weight: Font.Bold
-                text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (cached)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
+                text: root.loading ? "Loading tasks…" : (root.parseError ? (root.tasks.length > 0 ? (root.taskCountLabel(root.tasks.length) + " (last sync)") : "Tasks unavailable") : root.taskCountLabel(root.tasks.length))
             }
             Text {
                 color: Config.color.on_surface_variant
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.labelMedium.size
-                text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.usingCache ? "Todoist error — showing cached data." : "Todoist error — no cached data.") : "remaining to be completed.")
+                text: root.loading ? "Fetching from Todoist…" : (root.parseError ? (root.tasks.length > 0 ? "Todoist error — showing last sync." : "Todoist error — no data.") : "remaining to be completed.")
             }
         }
         Item {
@@ -417,105 +379,116 @@ ColumnLayout {
         }
     }
     // Task List
-    ColumnLayout {
-        id: taskListLayout
-
+    TooltipCard {
         Layout.fillWidth: true
-        spacing: Config.space.sm
+        backgroundColor: Config.color.on_secondary_fixed_variant
+        borderColor: Config.barModuleBorderColor
+        outlined: true
 
-        Repeater {
-            model: root.tasks
-
-            delegate: RowLayout {
-                id: taskItem
-
-                property bool completing: false
-                property bool deleting: false
-                required property int index
-                required property var modelData
-                readonly property int stripeWidth: root.minorSpace + Math.round(root.minorSpace / 2)
+        content: [
+            ColumnLayout {
+                id: taskListLayout
 
                 Layout.fillWidth: true
-                spacing: Config.space.md
+                spacing: Config.space.sm
 
-                Rectangle {
-                    Layout.fillHeight: true
-                    Layout.preferredHeight: Config.type.bodySmall.line + root.minorSpace
-                    Layout.preferredWidth: taskItem.stripeWidth
-                    implicitWidth: taskItem.stripeWidth
-                    color: root.getTaskColor(taskItem.index)
-                    opacity: 0.8
-                    radius: Config.shape.corner.xs
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    opacity: taskItem.completing || taskItem.deleting ? 0.3 : 1.0
-                    spacing: Config.space.none
+                Repeater {
+                    model: root.tasks
 
-                    Text {
+                    delegate: RowLayout {
+                        id: taskItem
+
+                        property bool completing: false
+                        property bool deleting: false
+                        required property int index
+                        required property var modelData
+                        readonly property int stripeWidth: root.minorSpace + Math.round(root.minorSpace / 2)
+
                         Layout.fillWidth: true
-                        color: root.getTaskColor(taskItem.index)
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.bodyMedium.size
-                        font.weight: Font.Medium
-                        text: taskItem.modelData.title
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface_variant
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelSmall.size
-                        maximumLineCount: 2
-                        text: taskItem.modelData.notes || ""
-                        visible: text !== ""
-                        wrapMode: Text.WordWrap
-                    }
-                }
-                Text {
-                    color: root.getTaskColor(taskItem.index)
-                    font.family: Config.fontFamily
-                    font.pixelSize: Config.type.labelSmall.size
-                    font.weight: Font.Bold
-                    opacity: 0.7
-                    text: taskItem.modelData.due_human || ""
-                    visible: text !== ""
-                }
+                        spacing: Config.space.md
 
-                // Complete Button
-                Text {
-                    color: Config.color.tertiary
-                    font.family: Config.iconFontFamily
-                    font.pixelSize: Config.type.titleSmall.size
-                    font.weight: Font.Black
-                    opacity: taskItem.completing ? 0.2 : 0.7
-                    text: "󰄬"
-
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-
-                        onClicked: {
-                            taskItem.completing = true;
-                            actionRunner.command = root.todoistCommand("complete " + root.shSingleQuote(taskItem.modelData.id));
-                            actionRunner.trigger();
+                        Rectangle {
+                            Layout.fillHeight: true
+                            Layout.preferredHeight: Config.type.bodySmall.line + root.minorSpace
+                            Layout.preferredWidth: taskItem.stripeWidth
+                            implicitWidth: taskItem.stripeWidth
+                            color: root.getTaskColor(taskItem.index)
+                            opacity: 0.8
+                            radius: Config.shape.corner.xs
                         }
-                        onEntered: if (!taskItem.completing)
-                            parent.opacity = 1.0
-                        onExited: if (!taskItem.completing)
-                            parent.opacity = 0.7
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            opacity: taskItem.completing || taskItem.deleting ? 0.3 : 1.0
+                            spacing: Config.space.none
+
+                            Text {
+                                Layout.fillWidth: true
+                                color: root.getTaskColor(taskItem.index)
+                                elide: Text.ElideRight
+                                font.family: Config.fontFamily
+                                font.pixelSize: Config.type.bodyMedium.size
+                                font.weight: Font.Medium
+                                text: taskItem.modelData.title
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                color: Config.color.on_surface_variant
+                                elide: Text.ElideRight
+                                font.family: Config.fontFamily
+                                font.pixelSize: Config.type.labelSmall.size
+                                maximumLineCount: 2
+                                text: taskItem.modelData.notes || ""
+                                visible: text !== ""
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                        Text {
+                            color: root.getTaskColor(taskItem.index)
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Bold
+                            opacity: 0.7
+                            text: taskItem.modelData.due_human || ""
+                            visible: text !== ""
+                        }
+
+                        // Complete Button
+                        Text {
+                            color: Config.color.tertiary
+                            font.family: Config.iconFontFamily
+                            font.pixelSize: Config.type.titleSmall.size
+                            font.weight: Font.Black
+                            opacity: taskItem.completing ? 0.2 : 0.7
+                            text: "󰄬"
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+
+                                onClicked: {
+                                    taskItem.completing = true;
+                                    Qt.callLater(function () {
+                                        todoistClient.completeTask(root.todoistEnvFile, taskItem.modelData.id);
+                                        root.refresh();
+                                    });
+                                }
+                                onEntered: if (!taskItem.completing)
+                                    parent.opacity = 1.0
+                                onExited: if (!taskItem.completing)
+                                    parent.opacity = 0.7
+                            }
+                        }
                     }
+                }
+                Text {
+                    color: Config.color.on_surface_variant
+                    font.family: Config.fontFamily
+                    font.italic: true
+                    font.pixelSize: Config.type.bodySmall.size
+                    text: "All caught up! 🎉"
+                    visible: root.tasks.length === 0 && !root.loading
                 }
             }
-        }
-        Text {
-            color: Config.color.on_surface_variant
-            font.family: Config.fontFamily
-            font.italic: true
-            font.pixelSize: Config.type.bodySmall.size
-            text: "All caught up! 🎉"
-            visible: root.tasks.length === 0 && !root.loading
-        }
+        ]
     }
 }

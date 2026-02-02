@@ -9,7 +9,7 @@
  * - Refresh button to sync tasks
  *
  * Dependencies:
- * - bar/scripts/src/todoist-api: Rust binary for Todoist API
+ * - common/modules/qs-native: CXX-Qt QML module for Todoist API
  * - ~/.local/bin/custom/todoist.sh: Todoist launcher script
  */
 pragma ComponentBehavior: Bound
@@ -21,8 +21,11 @@ ModuleContainer {
     id: root
 
     property bool dropdownPinned: false
+    property var todoData: null
+    readonly property int taskCount: root.todoData ? root.todoData.tasks.length : 0
+    // Intentionally no hover label; keep pill compact.
 
-    tooltipBrowserLink: "runapp ~/.local/bin/custom/todoist.sh"
+    tooltipBrowserLink: "runapp todoist.sh"
     tooltipHoverable: true
     tooltipPinned: dropdownPinned
     tooltipRefreshing: false
@@ -32,12 +35,19 @@ ModuleContainer {
     tooltipTitle: "Tasks"
 
     content: [
-        Text {
-            color: Config.color.tertiary
-            font.family: Config.iconFontFamily
-            font.pixelSize: Config.iconSize
-            text: "󰄭"
-            verticalAlignment: Text.AlignVCenter
+        Row {
+            spacing: root.contentSpacing
+
+            IconLabel {
+                color: Config.color.tertiary
+                font.pixelSize: Config.iconSize
+                text: "󰄭"
+            }
+            BarLabel {
+                color: Config.color.tertiary
+                font.pixelSize: Config.fontSize
+                text: root.todoData ? String(root.taskCount) : ""
+            }
         }
     ]
     tooltipContent: Component {
@@ -45,6 +55,7 @@ ModuleContainer {
             width: 320
 
             Component.onCompleted: {
+                root.todoData = this;
                 root.tooltipRefreshing = Qt.binding(() => {
                     return loading;
                 });
@@ -55,7 +66,7 @@ ModuleContainer {
                     if (!lastUpdated || lastUpdated === "")
                         return "";
 
-                    return usingCache ? ("Cached " + lastUpdated) : lastUpdated;
+                    return "Synced " + lastUpdated;
                 });
                 root.tooltipRefreshRequested.connect(refresh);
             }

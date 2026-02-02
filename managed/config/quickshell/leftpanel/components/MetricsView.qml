@@ -2,47 +2,28 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
 import "../../common" as Common
 import "./" as Components
+import qsnative
 
 Item {
     id: root
 
     // Expose uptime for footer
-    readonly property string uptime: sysInfo.uptime || "--"
-
-    property var sysInfo: ({
-            cpu: 0,
-            mem: 0,
-            mem_used: "0.0GB",
-            mem_total: "0.0GB",
-            disk: 0,
-            disk_health: "",
-            disk_wear: "",
-            temp: 0,
-            uptime: "",
-            psi_cpu_some: 0,
-            psi_cpu_full: 0,
-            psi_mem_some: 0,
-            psi_mem_full: 0,
-            psi_io_some: 0,
-            psi_io_full: 0
-        })
+    readonly property string uptime: sysInfoProvider.uptime || "--"
 
     function psiBarColor(val, isFull) {
         const baseColor = val >= 25 ? Common.Config.color.error : val >= 5 ? Common.Config.color.secondary : Common.Config.color.primary;
         return isFull ? baseColor : Qt.alpha(baseColor, 0.4);
     }
 
-    readonly property bool isHealthy: sysInfo.psi_cpu_full < 25 && sysInfo.psi_mem_full < 25 && sysInfo.psi_io_full < 25 && tempValue < 85
+    readonly property bool isHealthy: sysInfoProvider.psi_cpu_full < 25 && sysInfoProvider.psi_mem_full < 25 && sysInfoProvider.psi_io_full < 25 && tempValue < 85
 
-    readonly property string sysInfoCommand: Quickshell.shellPath("common/scripts/sys_info.sh")
-    readonly property real tempValue: Number(sysInfo.temp || 0)
+    readonly property real tempValue: Number(sysInfoProvider.temp || 0)
     readonly property color tempColor: tempValue >= 85 ? Common.Config.color.error : (tempValue >= 75 ? Common.Config.color.secondary : Common.Config.color.tertiary)
-    readonly property int diskWearPct: parseInt(sysInfo.disk_wear || "", 10)
+    readonly property int diskWearPct: parseInt(sysInfoProvider.disk_wear || "", 10)
     readonly property color diskHealthColor: {
-        const w = diskWearPct, s = (sysInfo.disk_health || "").toLowerCase();
+        const w = diskWearPct, s = (sysInfoProvider.disk_health || "").toLowerCase();
         if (!isNaN(w)) {
             if (w >= 90)
                 return Common.Config.color.error;
@@ -54,18 +35,8 @@ Item {
         return s === "" || s.includes("unknown") ? Common.Config.color.secondary : Common.Config.color.error;
     }
 
-    Process {
-        id: proc
-        command: ["bash", root.sysInfoCommand]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const data = JSON.parse(text);
-                    // Merge into existing object to avoid resetting values
-                    root.sysInfo = Object.assign({}, root.sysInfo, data);
-                } catch (e) {}
-            }
-        }
+    SysInfoProvider {
+        id: sysInfoProvider
     }
 
     Timer {
@@ -75,8 +46,7 @@ Item {
         // qmllint disable missing-property
         running: root.visible && root.QsWindow.window && root.QsWindow.window.visible
         // qmllint enable missing-property
-        onTriggered: if (!proc.running)
-            proc.running = true
+        onTriggered: sysInfoProvider.refresh()
     }
 
     ColumnLayout {
@@ -91,19 +61,19 @@ Item {
             spacing: Common.Config.space.sm
 
             Components.CircularGauge {
-                value: root.sysInfo.cpu
+                value: sysInfoProvider.cpu
                 accent: Common.Config.color.primary
                 label: "Processor"
                 icon: "\uf4bc"
             }
             Components.CircularGauge {
-                value: root.sysInfo.mem
+                value: sysInfoProvider.mem
                 accent: Common.Config.color.primary
                 label: "Memory"
                 icon: "\uefc5"
             }
             Components.CircularGauge {
-                value: root.sysInfo.disk
+                value: sysInfoProvider.disk
                 accent: root.diskHealthColor
                 label: "Storage"
                 icon: "\udb80\udeca"
@@ -117,7 +87,7 @@ Item {
 
             Components.StatCard {
                 title: "Thermal"
-                value: root.sysInfo.temp + "°C"
+                value: sysInfoProvider.temp + "°C"
                 icon: "\uf2c8"
                 subtext: "Package Temp"
                 accent: root.tempColor
@@ -126,9 +96,9 @@ Item {
 
             Components.StatCard {
                 title: "Disk Health"
-                value: root.sysInfo.disk_health || "Unknown"
+                value: sysInfoProvider.disk_health || "Unknown"
                 icon: "\udb80\udeca"
-                subtext: root.sysInfo.disk_wear ? "Wear: " + root.sysInfo.disk_wear : ""
+                subtext: sysInfoProvider.disk_wear ? "Wear: " + sysInfoProvider.disk_wear : ""
                 accent: root.diskHealthColor
                 centerContent: true
             }
@@ -155,8 +125,8 @@ Item {
 
                         readonly property string key: psiDelegate.modelData
                         readonly property string label: key === "cpu" ? "CPU" : (key === "mem" ? "MEM" : "I/O")
-                        readonly property real someVal: root.sysInfo["psi_" + key + "_some"] || 0
-                        readonly property real fullVal: root.sysInfo["psi_" + key + "_full"] || 0
+                        readonly property real someVal: sysInfoProvider["psi_" + key + "_some"] || 0
+                        readonly property real fullVal: sysInfoProvider["psi_" + key + "_full"] || 0
 
                         RowLayout {
                             Layout.fillWidth: true

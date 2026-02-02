@@ -4,21 +4,13 @@
  *
  * Features:
  * - Real-time monitoring of privacy-sensitive sensors
- * - Microphone usage detection via PipeWire (pw-dump)
- * - Camera usage detection via /dev/video* file locks (fuser)
- * - Location service monitoring via geoclue process detection
+ * - Microphone usage detection via PipeWire (Quickshell service)
+ * - Camera usage detection via PipeWire streams
  * - Screen sharing detection via PipeWire stream analysis
- * - Application name extraction for each active sensor
  * - Color-coded indicators (mic: green, camera: yellow, location: purple, screen: blue)
- * - Automatic script availability check
  *
  * Dependencies:
- * - privacy_dots.sh: Bash script that monitors all sensors
- *   - pw-dump (PipeWire): Audio and screen share detection
- *   - jq: JSON parsing
- *   - fuser: Camera device lock detection
- *   - geoclue: Location service process
- *   - ps: Process name extraction
+ * - PrivacyService (Quickshell.Services.Pipewire)
  *
  * Script Output Format:
  * {
@@ -33,19 +25,11 @@
  * }
  *
  * Configuration:
- * - privacyRefreshMs: Polling interval (default: 1000ms / 1s)
  * - Color customization via properties:
  *   - micColor: Config.color.tertiary (green)
  *   - cameraColor: Config.color.secondary (yellow)
  *   - locationColor: Config.color.tertiary (purple)
  *   - screenColor: Config.color.primary (blue)
- *
- * Error Handling:
- * - Script availability check on startup
- * - JSON validation with fallback parsing (JsonUtils.safeParse)
- * - Graceful degradation when script unavailable or fails
- * - Error output handling from script
- * - Console warnings for missing dependencies
  *
  * Privacy Considerations:
  * - Monitors system-wide sensor usage (not per-application by default)
@@ -57,41 +41,34 @@
  * PrivacyModule {}
  *
  * @example
- * // Custom refresh interval
- * PrivacyModule {
- *     privacyRefreshMs: 2000  // Check every 2 seconds
- * }
+ * PrivacyModule { }
  */
 pragma ComponentBehavior: Bound
 import ".."
 import "../components"
-import "../components/JsonUtils.js" as JsonUtils
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 
 ModuleContainer {
     id: root
 
-    property bool cameraActive: false
-    property string cameraApps: ""
+    property bool cameraActive: PrivacyService.cameraActive
+    property string cameraApps: root.cameraActive ? "Active" : ""
     property color cameraColor: Config.color.secondary
     property string cameraIcon: ""
     property bool locationActive: false
     property string locationApps: ""
     property color locationColor: Config.color.tertiary
     property string locationIcon: ""
-    property bool micActive: false
-    property string micApps: ""
+    property bool micActive: PrivacyService.microphoneActive
+    property string micApps: root.micActive ? "Active" : ""
     property color micColor: Config.color.tertiary
     property string micIcon: ""
-    property bool screenActive: false
-    property string screenApps: ""
+    property bool screenActive: PrivacyService.screensharingActive
+    property string screenApps: root.screenActive ? "Active" : ""
     property color screenColor: Config.color.primary
     property string screenIcon: "󰍹"
-    readonly property string scriptPath: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "modules/privacy/privacy_dots.sh")
     property string statusTooltip: "Privacy: idle"
-    property bool scriptAvailable: false
 
     function appLabel(apps) {
         if (!apps || apps.trim() === "")
@@ -108,41 +85,16 @@ ModuleContainer {
 
         return apps.slice(0, 29) + "...";
     }
-    function updateFromPayload(payload) {
-        if (!payload || typeof payload !== "object") {
-            root.micActive = false;
-            root.cameraActive = false;
-            root.screenActive = false;
-            root.locationActive = false;
-            root.micApps = "";
-            root.cameraApps = "";
-            root.screenApps = "";
-            root.locationApps = "";
-            root.updateTooltip();
-            return;
-        }
-        // Check for error in payload
-        if (payload.error) {
-            console.warn("PrivacyModule: Script error:", payload.error);
-            root.statusTooltip = "Privacy: Error - " + payload.error;
-            // Continue with default values from error payload
-        }
-        root.micActive = payload.mic === 1 || payload.mic === true;
-        root.cameraActive = payload.cam === 1 || payload.cam === true;
-        root.screenActive = payload.scr === 1 || payload.scr === true;
-        root.locationActive = payload.loc === 1 || payload.loc === true;
-        root.micApps = payload.mic_app ? String(payload.mic_app).trim() : "";
-        root.cameraApps = payload.cam_app ? String(payload.cam_app).trim() : "";
-        root.screenApps = payload.scr_app ? String(payload.scr_app).trim() : "";
-        root.locationApps = payload.loc_app ? String(payload.loc_app).trim() : "";
-        root.updateTooltip();
-    }
     function updateTooltip() {
         const micStatus = root.buildStatus("Mic", root.micApps);
         const camStatus = root.buildStatus("Cam", root.cameraApps);
         const locStatus = root.buildStatus("Location", root.locationApps);
         const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
         root.statusTooltip = micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
+    }
+
+    Component.onCompleted: {
+        root.updateTooltip();
     }
 
     collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive
@@ -205,41 +157,15 @@ ModuleContainer {
                     }
                 ]
             }
-            TooltipActionsRow {
-                ActionChip {
-                    text: "Refresh"
-
-                    onClicked: privacyRunner.trigger()
-                }
-            }
         }
     }
 
-    Component.onCompleted: {
-        DependencyCheck.requireExecutable(root.scriptPath, "PrivacyModule", function (available) {
-            root.scriptAvailable = available;
-            if (!available) {
-                root.statusTooltip = "Privacy: Script not available";
-            }
-        });
-    }
-    CommandRunner {
-        id: privacyRunner
-
-        command: root.scriptPath
-        enabled: root.scriptAvailable
-        intervalMs: 3000
-        logErrors: true
-
-        onRan: function (output) {
-            root.updateFromPayload(JsonUtils.parseObject(output));
-        }
-
-        onError: function (errorOutput, exitCode) {
-            console.warn(`PrivacyModule: Script failed with exit code ${exitCode}`);
-            if (errorOutput)
-                console.warn(`PrivacyModule: stderr: ${errorOutput}`);
-            root.statusTooltip = "Privacy: Script error (exit code " + exitCode + ")";
-        }
-    }
+    onMicActiveChanged: root.updateTooltip()
+    onCameraActiveChanged: root.updateTooltip()
+    onLocationActiveChanged: root.updateTooltip()
+    onScreenActiveChanged: root.updateTooltip()
+    onMicAppsChanged: root.updateTooltip()
+    onCameraAppsChanged: root.updateTooltip()
+    onLocationAppsChanged: root.updateTooltip()
+    onScreenAppsChanged: root.updateTooltip()
 }

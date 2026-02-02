@@ -1,14 +1,14 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Quickshell.Io
 import ".."
+import "./JsonUtils.js" as JsonUtils
 
 Item {
     id: calendar
 
     property bool active: false
-    property string cacheDir: ""
+    property var calendarClient: null
     property string calendarGeneratedAt: ""
     property string calendarStatus: ""
     property date currentDate: new Date()
@@ -17,8 +17,8 @@ Item {
     readonly property int monthRangeCenter: monthRangeYears * 12
     property var dayEvents: []
     property var eventsByDay: ({})
-    readonly property string eventsPath: calendar.cacheDir !== "" ? calendar.cacheDir + "/events.json" : ""
-    property string refreshCommand: ""
+    property string refreshEnvFile: ""
+    property int refreshDays: 180
     property date selectedDate: new Date()
     readonly property date today: new Date()
     readonly property int todayDay: today.getDate()
@@ -28,19 +28,12 @@ Item {
 
     signal dataLoaded
 
-    function applyCalendarFromAdapter() {
-        calendar.applyCalendarData({
-            "status": calendarAdapter.status,
-            "generatedAt": calendarAdapter.generatedAt,
-            "eventsByDay": calendarAdapter.eventsByDay
-        });
-        calendar.dataLoaded();
-    }
-    function reloadEventsFile() {
-        if (calendar.eventsPath === "")
+    function applyCalendarFromClient() {
+        if (!calendar.calendarClient)
             return;
-        eventsFile.reload();
-        calendar.applyCalendarFromAdapter();
+        const payload = JsonUtils.parseObject(calendar.calendarClient.events_json);
+        calendar.applyCalendarData(payload);
+        calendar.dataLoaded();
     }
     function applyCalendarData(payload) {
         if (!payload || typeof payload !== "object") {
@@ -106,10 +99,11 @@ Item {
         return Math.min(3, calendar.eventsByDay[key].length);
     }
     function refreshRequested() {
-        if (calendar.refreshCommand !== "")
-            refreshRunner.trigger();
-        else
-            calendar.reloadEventsFile();
+        if (!calendar.calendarClient)
+            return;
+        Qt.callLater(function () {
+            calendar.calendarClient.refreshFromEnv(calendar.refreshEnvFile, calendar.refreshDays);
+        });
     }
     function updateDayEvents() {
         const key = calendar.dayKey(calendar.selectedDate);
@@ -123,10 +117,8 @@ Item {
     implicitWidth: 240
 
     Component.onCompleted: {
-        if (calendar.refreshCommand !== "")
-            refreshRunner.trigger();
         calendar.updateDayEvents();
-        calendar.reloadEventsFile();
+        calendar.refreshRequested();
     }
     onActiveChanged: {
         if (!calendar.active) {
@@ -134,10 +126,7 @@ Item {
             monthListView.currentIndex = calendar.monthRangeCenter;
             return;
         }
-        if (calendar.refreshCommand !== "")
-            refreshRunner.trigger();
-        else
-            calendar.reloadEventsFile();
+        calendar.refreshRequested();
     }
     onCurrentDateChanged: {
         calendar.selectedDate = new Date(calendar.currentDate.getTime());
@@ -146,38 +135,30 @@ Item {
     onEventsByDayChanged: calendar.updateDayEvents()
     onSelectedDateChanged: calendar.updateDayEvents()
 
-    CommandRunner {
-        id: refreshRunner
+    Connections {
+        target: calendar.calendarClient
 
-        command: calendar.refreshCommand
-        enabled: calendar.refreshCommand !== ""
-        intervalMs: 3600000
-
-        onRan: function () {
-            if (calendar.active)
-                calendar.reloadEventsFile();
+        function onEvents_jsonChanged() {
+            calendar.applyCalendarFromClient();
+        }
+        function onGenerated_atChanged() {
+            calendar.calendarGeneratedAt = calendar.calendarClient.generated_at;
+        }
+        function onStatusChanged() {
+            calendar.calendarStatus = calendar.calendarClient.status;
+        }
+        function onErrorChanged() {
+            calendar.applyCalendarFromClient();
         }
     }
-    FileView {
-        id: eventsFile
-        // qmllint disable missing-type
-        adapter: calendarAdapter
-        // qmllint enable missing-type
-        path: calendar.eventsPath
-        watchChanges: true
-        blockLoading: true
+    Timer {
+        id: refreshTimer
 
-        onFileChanged: {
-            reload();
-            calendar.applyCalendarFromAdapter();
-        }
-    }
-    JsonAdapter {
-        id: calendarAdapter
+        interval: 3600000
+        repeat: true
+        running: true
 
-        property string status: ""
-        property string generatedAt: ""
-        property var eventsByDay: ({})
+        onTriggered: calendar.refreshRequested()
     }
     ColumnLayout {
         id: layout

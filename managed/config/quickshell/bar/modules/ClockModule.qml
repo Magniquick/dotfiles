@@ -9,9 +9,8 @@
  * - iCal cache for calendar events
  *
  * Dependencies:
- * - bar/scripts/ical-cache: Rust binary for iCal fetching/caching
+ * - common/modules/qs-native: CXX-Qt QML module for iCal fetching
  * - bar/.env: Environment file with calendar URLs
- * - Quickshell.Io: FileView for cache watching
  */
 pragma ComponentBehavior: Bound
 import ".."
@@ -19,20 +18,13 @@ import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
+import qsnative
 
 ModuleContainer {
     id: root
 
-    property alias calendarAdapter: calendarAdapter
-
-    readonly property string calendarBinary: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + "scripts/ical-cache")
-    readonly property string calendarCacheDir: {
-        const homeDir = Quickshell.env("HOME");
-        return homeDir && homeDir !== "" ? homeDir + "/.cache/quickshell/ical" : "/tmp/quickshell-ical";
-    }
     readonly property string calendarEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
-    readonly property string calendarRefreshCommand: Config.loginShell + " -lc '" + root.calendarBinary + " --cache-dir " + root.calendarCacheDir + " --env-file " + root.calendarEnvFile + "'"
+    readonly property int calendarDays: 180
     property string calendarRefreshTime: ""
     property bool refreshing: false
     property bool showDate: false
@@ -44,11 +36,10 @@ ModuleContainer {
         return Qt.formatDateTime(clock.date, "hh:mm ap");
     }
     Component.onCompleted: {
-        calendarFile.reload();
         root.updateCalendarRefreshTime();
     }
     function updateCalendarRefreshTime() {
-        const generatedAt = root.calendarAdapter.generatedAt;
+        const generatedAt = calendarClient.generated_at;
         if (generatedAt && String(generatedAt).trim() !== "") {
             const dt = new Date(generatedAt);
             root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
@@ -81,9 +72,10 @@ ModuleContainer {
                         id: calendarRef
 
                         active: root.tooltipActive
-                        cacheDir: root.calendarCacheDir
+                        calendarClient: calendarClient
                         currentDate: clock.date
-                        refreshCommand: root.calendarRefreshCommand
+                        refreshEnvFile: root.calendarEnvFile
+                        refreshDays: root.calendarDays
 
                         onDataLoaded: function () {
                             root.refreshing = false;
@@ -106,35 +98,20 @@ ModuleContainer {
 
     onTooltipActiveChanged: {
         if (tooltipActive) {
-            calendarFile.reload();
+            root.refreshing = true;
+            Qt.callLater(function () {
+                calendarClient.refreshFromEnv(root.calendarEnvFile, root.calendarDays);
+            });
             root.updateCalendarRefreshTime();
         }
     }
-    FileView {
-        id: calendarFile
-
-        path: root.calendarCacheDir + "/events.json"
-        watchChanges: true
-        blockLoading: true
-
-        onFileChanged: {
-            reload();
-            root.updateCalendarRefreshTime();
-        }
-        // qmllint disable unresolved-type
-        JsonAdapter {
-            id: calendarAdapter
-
-            property string status: ""
-            property string generatedAt: ""
-            property var eventsByDay: ({})
-        }
-        // qmllint enable unresolved-type
+    IcalCache {
+        id: calendarClient
     }
     Connections {
-        target: root.calendarAdapter
+        target: calendarClient
 
-        function onGeneratedAtChanged() {
+        function onGenerated_atChanged() {
             root.updateCalendarRefreshTime();
         }
     }

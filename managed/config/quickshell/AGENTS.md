@@ -20,6 +20,11 @@ Custom Quickshell configuration for Wayland/Hyprland featuring a modular status 
 **Building Rust helper scripts:**
 - ical-cache: `cd bar/scripts/src/ical-cache && cargo build --release`
 - todoist-api: `cd bar/scripts/src/todoist-api && cargo build --release`
+- qs-native (CXX-Qt QML module):
+  - Configure/build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
+  - QML import path: `~/.config/quickshell/common/modules/qs-native/build/qml` (needs `QML_IMPORT_PATH`)
+  - Quick test: `QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-native/build/qml quickshell`
+  - Systemd: ensure `~/.config/systemd/user/quickshell.service` sets `QML_IMPORT_PATH`
 
 **Configuration:**
 - HyprQuickshot saves screenshots to `$HQS_DIR` → `$XDG_SCREENSHOTS_DIR` → `$XDG_PICTURES_DIR/Screenshots` → `$HOME/Pictures/Screenshots` → `$HOME/Pictures`
@@ -57,6 +62,34 @@ The bar uses a **modular architecture** with key directories:
    - **Groups**: `StartMenuGroup`, `WorkspaceGroup`, `ControlsGroup`, `WirelessGroup`, `PanelGroup`
    - **Individual modules**: `ClockModule`, `MprisModule`, `NetworkModule`, `BatteryModule`, `BacklightModule`, `BluetoothModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `UpdatesModule`, `SystemdFailedModule`, `WireplumberModule`, `PowerProfilesModule`, `SpecialWorkspacesModule`, `ArchIconModule`, `ToDoModule`, etc.
 
+### Native Rust QML Modules
+
+- **`common/modules/qs-native`**: CXX-Qt QML plugin (import as `qsnative`)
+  - Build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
+  - Import path: `~/.config/quickshell/common/modules/qs-native/build/qml`
+  - QML types:
+    - `IcalCache`
+      - Invokable: `refreshFromEnv(envFile, days)`
+      - Properties: `status`, `generated_at`, `error`, `events_json`
+      - Notes: Runs in a background thread; cache (ETag + ICS) retained in-memory across refreshes.
+    - `TodoistClient`
+      - Invokables: `listTasks(envFile)`, `listTasklists(envFile)`, `completeTask(envFile, id)`, `deleteTask(envFile, id)`
+      - Properties: `data_json`, `error`, `last_updated`
+      - Notes: All calls are async; `data_json`/`last_updated` update on success.
+    - `SysInfoProvider`
+      - Invokable: `refresh()`
+      - Properties: `cpu`, `mem`, `mem_used`, `mem_total`, `disk`, `disk_health`, `disk_wear`, `temp`, `uptime`,
+        `psi_cpu_some`, `psi_cpu_full`, `psi_mem_some`, `psi_mem_full`, `psi_io_some`, `psi_io_full`, `disk_device`, `error`
+      - Notes: Disk health uses `smartctl` and is cached (6h TTL); CPU usage derived from `/proc/stat` deltas.
+    - `PrivacyProvider`
+      - Invokable: `refresh()`
+      - Properties: `mic`, `cam`, `loc`, `scr`, `mic_app`, `cam_app`, `loc_app`, `scr_app`, `error`
+      - Notes: Uses PipeWire (libpipewire) for mic/screen signals and `/proc` scanning for camera and geoclue.
+  - Runtime requirements:
+    - `smartctl` for disk health (optional; shows “Unknown” if unavailable)
+    - `.env` file in `bar/.env` for calendar URLs and Todoist token
+  - All network operations run off the UI thread and queue updates back onto Qt.
+
 ### Data Sources & Runtime Integration
 
 Modules integrate with system services via:
@@ -67,7 +100,7 @@ Modules integrate with system services via:
   - `systemctl --failed` + `busctl monitor` for systemd units
   - `pw-dump` + `fuser /dev/video*` for privacy monitoring (camera/microphone detection)
   - Custom scripts: `waybar-module-pacman-updates` (system updates JSON stream)
-- **Rust helpers**: `ical-cache` (calendar), `todoist-api` (task management)
+- **Rust helpers**: `qs-native` (calendar + task management via CXX-Qt QML module)
 
 However, try to use native quickshell modules if possible.
 
