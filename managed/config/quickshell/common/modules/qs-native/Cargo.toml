@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 cxx-qt-build = "0.8.0"
 
 [dependencies]
+alpm = "5.0.0"
 chrono = { version = "0.4.43", default-features = false, features = ["clock", "serde", "std"] }
 chrono-tz = "0.10.4"
 cxx = "1.0.194"

@@ -6,67 +6,54 @@
  * - Shows pending update count
  * - Tooltip lists available updates
  * - Click opens yay for system upgrade
- * - Auto-refresh via streaming JSON
  *
  * Dependencies:
- * - waybar-module-pacman-updates: JSON stream of pending updates
+ * - qsnative PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API)
  * - yay: AUR helper for updates (click action)
  */
 pragma ComponentBehavior: Bound
 import ".."
 import "../components"
-import "../components/JsonUtils.js" as JsonUtils
 import QtQuick
 import Quickshell
-import Quickshell.Io
+import qsnative
 
 ModuleContainer {
     id: root
 
     property bool hasUpdates: false
     property string lastCheckedLabel: ""
-    property bool moduleAvailable: false
+    readonly property bool moduleAvailable: root.checkupdatesAvailable && root.pacmanAvailable
+    property bool checkupdatesAvailable: false
+    property bool pacmanAvailable: false
     property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu"
-    property bool processEnabled: true
     property bool refreshing: false
     property string text: "0"
     property var updateItems: []
     property string updatedIcon: ""
-    readonly property string updatesCommand: "waybar-module-pacman-updates --tooltip-align-columns " + "--no-zero-output --interval-seconds 30 --network-interval-seconds 300"
     property int updatesCount: 0
     property string updatesIcon: ""
     property string updatesTooltip: "System up to date"
+    property bool noAur: false
+    property string updatesText: ""
+    property string aurUpdatesText: ""
+    property int aurUpdatesCount: 0
 
-    function decodeHtmlEntities(text) {
-        if (!text)
-            return "";
-
-        return String(text).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
-    }
     function markNoUpdates() {
         root.hasUpdates = false;
         root.updatesCount = 0;
         root.text = "";
         root.updatesTooltip = "System up to date";
         root.updateItems = [];
+        root.updatesText = "";
+        root.aurUpdatesText = "";
+        root.aurUpdatesCount = 0;
     }
-    function normalizeClassList(value) {
-        if (!value)
+    function parseUpdateItemsFromTooltip(linesText) {
+        if (!linesText || String(linesText).trim() === "")
             return [];
 
-        if (Array.isArray(value))
-            return value;
-
-        if (typeof value === "string")
-            return [value];
-
-        return [];
-    }
-    function parseUpdateItemsFromTooltip(tooltipText) {
-        if (!tooltipText || String(tooltipText).trim() === "")
-            return [];
-
-        const cleaned = root.decodeHtmlEntities(root.stripTags(tooltipText)).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+        const cleaned = String(linesText).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
         if (cleaned === "")
             return [];
 
@@ -101,64 +88,19 @@ ModuleContainer {
         }
         return items;
     }
-    function recordCheck() {
-        root.lastCheckedLabel = Qt.formatDateTime(new Date(), "hh:mm ap");
-    }
     function refreshUpdates(source) {
-        if (!root.moduleAvailable)
-            return;
-
         root.refreshing = true;
-        root.processEnabled = false;
-        updatesRestartTimer.restart();
+        updatesProvider.refresh(root.noAur);
     }
-    function stripTags(text) {
-        if (!text)
-            return "";
-
-        return String(text).replace(/<[^>]*>/g, "");
-    }
-    function updateFromPayloadText(payloadText) {
+    function updateFromProvider() {
         root.refreshing = false;
-        root.recordCheck();
-        if (!payloadText) {
-            root.markNoUpdates();
-            return;
-        }
-        const trimmed = payloadText.trim();
-        if (trimmed === "") {
-            root.markNoUpdates();
-            return;
-        }
-        const payload = JsonUtils.parseObject(trimmed);
-        if (!payload || typeof payload !== "object") {
-            const count = parseInt(trimmed, 10);
-            if (isFinite(count) && count > 0) {
-                root.hasUpdates = true;
-                root.updatesCount = count;
-                root.text = String(count);
-                root.updateItems = [];
-                root.updatesTooltip = root.text + " updates";
-            } else {
-                root.markNoUpdates();
-            }
-            return;
-        }
-        const textValue = payload.text ? String(payload.text).trim() : "";
-        const altValue = payload.alt ? String(payload.alt).trim() : "";
-        const classNames = root.normalizeClassList(payload.class);
-        const classHasUpdates = classNames.indexOf("has-updates") >= 0 || altValue === "has-updates";
-        const classUpdated = classNames.indexOf("updated") >= 0 || altValue === "updated";
-        const hasTextUpdates = textValue !== "" && textValue !== "0";
-        root.hasUpdates = classHasUpdates || (hasTextUpdates && !classUpdated);
-        const tooltipValue = payload.tooltip ? String(payload.tooltip).trim() : "";
-        const parsedItems = root.parseUpdateItemsFromTooltip(tooltipValue);
+        const totalCount = root.updatesCount + root.aurUpdatesCount;
+        root.hasUpdates = totalCount > 0;
+        const combinedText = [root.updatesText, root.aurUpdatesText].filter(text => text && text.trim() !== "").join("\n");
+        const parsedItems = root.parseUpdateItemsFromTooltip(combinedText);
         root.updateItems = root.hasUpdates ? parsedItems : [];
-        const parsedCount = parseInt(textValue, 10);
-        const countFromText = isFinite(parsedCount) ? parsedCount : 0;
-        root.updatesCount = root.hasUpdates ? (countFromText > 0 ? countFromText : parsedItems.length) : 0;
-        root.text = root.hasUpdates ? (textValue !== "" ? textValue : String(root.updatesCount)) : "";
-        root.updatesTooltip = root.hasUpdates ? root.updatesCount + " updates" : "System up to date";
+        root.text = root.hasUpdates ? String(totalCount) : "";
+        root.updatesTooltip = root.hasUpdates ? totalCount + " updates" : "System up to date";
     }
 
     collapsed: !root.moduleAvailable || (!root.hasUpdates && root.updatedIcon === "")
@@ -179,7 +121,7 @@ ModuleContainer {
     tooltipContent: Component {
         UpdatesTooltip {
             actionText: root.hasUpdates ? "Update" : "Open"
-            count: root.updatesCount
+            count: root.updatesCount + root.aurUpdatesCount
             hasUpdates: root.hasUpdates
             iconText: root.updatesIcon
             refreshing: root.refreshing
@@ -192,38 +134,68 @@ ModuleContainer {
 
     onTooltipRefreshRequested: root.refreshUpdates("manual")
 
-    CommandRunner {
-        id: availabilityRunner
-
-        command: Config.loginShell + " -lc 'command -v waybar-module-pacman-updates'"
-        intervalMs: 0
-
-        onRan: function (output) {
-            root.moduleAvailable = output.trim() !== "";
-        }
+    PacmanUpdatesProvider {
+        id: updatesProvider
     }
-    Process {
-        id: updatesProcess
 
-        command: ["sh", "-c", root.updatesCommand]
-        running: root.moduleAvailable && root.processEnabled
+    Timer {
+        id: updatesTimer
 
-        stdout: SplitParser {
-            onRead: function (data) {
-                root.updateFromPayloadText(data);
-            }
-        }
+        interval: 30000
+        repeat: true
+        running: root.moduleAvailable
+        triggeredOnStart: true
 
-        Component.onCompleted: root.markNoUpdates()
+        onTriggered: root.refreshUpdates("timer")
     }
     Timer {
-        id: updatesRestartTimer
+        id: updatesSyncTimer
 
-        interval: 120
-        repeat: false
+        interval: 300000
+        repeat: true
+        running: root.moduleAvailable
+        triggeredOnStart: true
 
-        onTriggered: root.processEnabled = true
+        onTriggered: updatesProvider.sync()
+    }
+
+    Component.onCompleted: {
+        root.markNoUpdates();
+        DependencyCheck.require("checkupdates", "UpdatesModule", function(available) {
+            root.checkupdatesAvailable = available;
+        });
+        DependencyCheck.require("pacman", "UpdatesModule", function(available) {
+            root.pacmanAvailable = available;
+        });
     }
 
     onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
+    onUpdatesCountChanged: root.updateFromProvider()
+    onAurUpdatesCountChanged: root.updateFromProvider()
+    onUpdatesTextChanged: root.updateFromProvider()
+    onAurUpdatesTextChanged: root.updateFromProvider()
+    onLastCheckedLabelChanged: root.refreshing = false
+
+    Connections {
+        target: updatesProvider
+
+        function onUpdates_countChanged() {
+            root.updatesCount = updatesProvider.updates_count;
+        }
+        function onAur_updates_countChanged() {
+            root.aurUpdatesCount = updatesProvider.aur_updates_count;
+        }
+        function onUpdates_textChanged() {
+            root.updatesText = updatesProvider.updates_text;
+        }
+        function onAur_updates_textChanged() {
+            root.aurUpdatesText = updatesProvider.aur_updates_text;
+        }
+        function onLast_checkedChanged() {
+            root.lastCheckedLabel = updatesProvider.last_checked;
+        }
+        function onErrorChanged() {
+            root.updateFromProvider();
+        }
+    }
 }

@@ -11,7 +11,7 @@
 - Basic file layout (top-level):
   - `shell.qml`, `BarWindow.qml`, `Config.qml`, `Colors.qml`, `DependencyCheck.qml`
   - `components/`, `modules/`, `powermenu/`
-  - `waybar/config.jsonc`, `waybar/style.css`
+  - `waybar/config.jsonc`, `waybar/style.css` (legacy)
 - Singletons (registered in `qmldir`):
   - `Config.qml`: Design tokens (fonts, spacing, colors, slider constants)
   - `Colors.qml`: Material palette + color roles
@@ -23,7 +23,7 @@
   - Systemd failed units: `systemctl --failed` plus `busctl monitor`.
   - Tray: `Quickshell.Services.SystemTray` (right-click opens menu).
   - Arch icon: `waybar/scripts/status.sh` on tooltip hover.
-  - Updates: `waybar-module-pacman-updates` JSON stream.
+  - Updates: `qsnative` PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API).
   - Privacy: `pw-dump` + `fuser /dev/video*` for camera on udev video4linux.
   - Network: `nmcli` status/wifi; wired uses `/sys/class/net/<dev>/device/subsystem` to detect USB and `udevadm info` for a human-friendly USB NIC label (underscores → spaces).
 

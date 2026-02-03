@@ -98,7 +98,7 @@ ModuleContainer {
     }
 
     collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive
-    contentSpacing: 8
+    contentSpacing: Config.space.sm
     tooltipHoverable: true
     tooltipText: root.statusTooltip
     tooltipTitle: "Privacy"

@@ -81,6 +81,10 @@ The bar uses a **modular architecture** with key directories:
       - Properties: `cpu`, `mem`, `mem_used`, `mem_total`, `disk`, `disk_health`, `disk_wear`, `temp`, `uptime`,
         `psi_cpu_some`, `psi_cpu_full`, `psi_mem_some`, `psi_mem_full`, `psi_io_some`, `psi_io_full`, `disk_device`, `error`
       - Notes: Disk health uses `smartctl` and is cached (6h TTL); CPU usage derived from `/proc/stat` deltas.
+    - `PacmanUpdatesProvider`
+      - Invokables: `refresh(noAur)`, `sync()`
+      - Properties: `updates_count`, `aur_updates_count`, `updates_text`, `aur_updates_text`, `last_checked`, `error`, `has_updates`
+      - Notes: Uses `checkupdates` for repo packages and `pacman -Qm` + AUR RPC for AUR; AUR cached in-memory.
     - `PrivacyProvider`
       - Invokable: `refresh()`
       - Properties: `mic`, `cam`, `loc`, `scr`, `mic_app`, `cam_app`, `loc_app`, `scr_app`, `error`
@@ -99,7 +103,7 @@ Modules integrate with system services via:
   - `nmcli` for network status/wifi
   - `systemctl --failed` + `busctl monitor` for systemd units
   - `pw-dump` + `fuser /dev/video*` for privacy monitoring (camera/microphone detection)
-  - Custom scripts: `waybar-module-pacman-updates` (system updates JSON stream)
+  - Updates: `checkupdates` + `pacman -Qm` (via `qsnative` PacmanUpdatesProvider)
 - **Rust helpers**: `qs-native` (calendar + task management via CXX-Qt QML module)
 
 However, try to use native quickshell modules if possible.
