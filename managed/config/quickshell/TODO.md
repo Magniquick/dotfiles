@@ -2,6 +2,15 @@
 
 ## Next (Performance + Maintainability)
 
+- [ ] HyprQuickshot: Extract `processScreenshot()` logic out of QML
+  Description: `hyprquickshot/shell.qml` still contains a large JS-heavy `processScreenshot(x, y, w, h)` function (path resolution, scaling, timestamp formatting, orchestration). Move pure logic to a dedicated `.js` helper (or `qs-native`) and keep QML focused on state + UI.
+
+- [ ] HyprQuickshot: Remove `Canvas` icon paint code
+  Description: `hyprquickshot/ui/ControlBar.qml` uses `Canvas.onPaint` to draw the freeze/play icon. Replace with static SVG assets (or a font glyph) and switch `Image.source` based on `screenFrozen` to reduce JS work and improve maintainability.
+
+- [ ] Network: Extract parsers out of `NetworkService.qml`
+  Description: `bar/services/NetworkService.qml` mixes process control with extensive string parsing/state mutation. Pull parsing helpers into `bar/services/network/*.js` (or a native module) and keep the service as “state + timers + process IO”.
+
 - [x] Fix singleton service root objects that host child QML objects
   Description: Some `bar/services/*.qml` singletons were `QtObject {}` with `Timer`/`Connections`/provider children, which triggers `Cannot assign to non-existent default property` at load time. Converted them to `Item { visible: false }`.
 

@@ -4,6 +4,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell.Widgets
 
+import "../common" as Common
+
 WrapperRectangle {
     id: root
 
@@ -128,36 +130,12 @@ WrapperRectangle {
                 contentItem: Item {
                     anchors.fill: parent
 
-                    Canvas {
-                        id: freezeIcon
+                    Text {
                         anchors.centerIn: parent
-                        height: 24
-                        width: 24
-
-                        onPaint: {
-                            const ctx = getContext("2d");
-                            ctx.resetTransform();
-                            ctx.clearRect(0, 0, width, height);
-                            ctx.fillStyle = root.colors.on_surface;
-
-                            if (root.screenFrozen) {
-                                const barWidth = width / 4;
-                                const gap = barWidth / 1.2;
-                                const startX = (width - (2 * barWidth + gap)) / 2;
-                                const top = height * 0.2;
-                                const barHeight = height * 0.6;
-                                ctx.fillRect(startX, top, barWidth, barHeight);
-                                ctx.fillRect(startX + barWidth + gap, top, barWidth, barHeight);
-                            } else {
-                                const padding = width * 0.28;
-                                ctx.beginPath();
-                                ctx.moveTo(padding, padding);
-                                ctx.lineTo(width - padding, height / 2);
-                                ctx.lineTo(padding, height - padding);
-                                ctx.closePath();
-                                ctx.fill();
-                            }
-                        }
+                        color: root.colors.on_surface
+                        font.family: Common.Config.iconFontFamily
+                        font.pixelSize: 24
+                        text: root.screenFrozen ? "" : ""
                     }
                 }
 
@@ -253,6 +231,4 @@ WrapperRectangle {
             }
         }
     }
-
-    onScreenFrozenChanged: freezeIcon.requestPaint()
 }

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell.Io
 import ".."
 import "../components"
+import "network/Parsers.js" as Parsers
 
 Item {
     id: root
@@ -92,18 +93,6 @@ Item {
         monitorDebouncedRefresh.restart();
     }
 
-    function findStatusLines(lines) {
-        let wifiLine = "";
-        let ethernetLine = "";
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].indexOf(":wifi:") > 0)
-                wifiLine = lines[i];
-            else if (lines[i].indexOf(":ethernet:") > 0)
-                ethernetLine = lines[i];
-        }
-        return { wifiLine, ethernetLine };
-    }
-
     function applyEthernetStatus(ethernetLine) {
         if (!ethernetLine)
             return false;
@@ -188,51 +177,6 @@ Item {
         root.resetTraffic();
     }
 
-    function parseWifiSignal(lines) {
-        let signalValue = 0;
-        let ssidValue = "";
-        let frequencyValue = 0;
-        for (let i = 0; i < lines.length; i++) {
-            const parts = lines[i].split(":");
-            if (parts[0] === "yes") {
-                signalValue = parseInt(parts[1] || "0", 10);
-                ssidValue = parts[2] || "";
-                frequencyValue = parseInt(parts[3] || "0", 10);
-                break;
-            }
-        }
-        return {
-            signalPercent: isNaN(signalValue) ? 0 : signalValue,
-            ssid: ssidValue,
-            frequencyMhz: isNaN(frequencyValue) ? 0 : frequencyValue
-        };
-    }
-
-    function parseIpDetails(lines) {
-        let ipValue = "";
-        let gatewayValue = "";
-        for (let i = 0; i < lines.length; i++) {
-            const parts = lines[i].split(":");
-            const key = parts[0];
-            const value = parts.slice(1).join(":");
-            if (key.indexOf("IP4.ADDRESS") === 0 && !ipValue)
-                ipValue = value;
-            else if (key === "IP4.GATEWAY")
-                gatewayValue = value;
-        }
-        return { ipAddress: ipValue, gateway: gatewayValue };
-    }
-
-    function parseTrafficBytes(lines) {
-        if (lines.length < 2)
-            return { valid: false, rxBytes: NaN, txBytes: NaN };
-        const rxBytes = parseFloat(lines[0]);
-        const txBytes = parseFloat(lines[1]);
-        if (!isFinite(rxBytes) || !isFinite(txBytes))
-            return { valid: false, rxBytes: NaN, txBytes: NaN };
-        return { valid: true, rxBytes, txBytes };
-    }
-
     function updateStatus(text) {
         if (!text)
             return;
@@ -242,7 +186,7 @@ Item {
 
         const wasWifiConnected = root.connectionType === "wifi" && root.connectionState === "connected";
         const lines = text.trim().split("\n");
-        const statusLines = root.findStatusLines(lines);
+        const statusLines = Parsers.findStatusLines(lines);
         if (root.applyWifiStatus(statusLines.wifiLine, wasWifiConnected))
             return;
         if (root.applyEthernetStatus(statusLines.ethernetLine))
@@ -263,7 +207,7 @@ Item {
     function updateSignal(text) {
         if (!text)
             return;
-        const details = root.parseWifiSignal(text.trim().split("\n"));
+        const details = Parsers.parseWifiSignal(text.trim().split("\n"));
         root.signalPercent = details.signalPercent;
         if (details.ssid)
             root.ssid = details.ssid;
@@ -276,7 +220,7 @@ Item {
             root.gateway = "";
             return;
         }
-        const details = root.parseIpDetails(text.trim().split("\n"));
+        const details = Parsers.parseIpDetails(text.trim().split("\n"));
         root.ipAddress = details.ipAddress;
         root.gateway = details.gateway;
     }
@@ -284,7 +228,7 @@ Item {
     function updateTraffic(text) {
         if (!text || text.trim() === "")
             return;
-        const parsed = root.parseTrafficBytes(text.trim().split("\n"));
+        const parsed = Parsers.parseTrafficBytes(text.trim().split("\n"));
         if (!parsed.valid)
             return;
         root.updateTrafficRates(parsed.rxBytes, parsed.txBytes, Date.now());

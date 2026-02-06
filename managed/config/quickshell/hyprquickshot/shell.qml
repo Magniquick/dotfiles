@@ -9,6 +9,7 @@ import Quickshell.Widgets
 import Quickshell.Io
 
 import "src" as Src
+import "src/ScreenshotUtils.js" as ScreenshotUtils
 import "ui" as Ui
 import "common" as Common
 import "../common" as RootCommon
@@ -107,45 +108,40 @@ Src.FreezeScreen {
         console.log(`[screenshot] processScreenshot start x=${x} y=${y} w=${width} h=${height}`);
         resetSelectionState();
 
-        const rawScale = hyprlandMonitor && hyprlandMonitor.scale !== undefined ? Number(hyprlandMonitor.scale) : 1;
-        const scale = rawScale && rawScale > 0 ? rawScale : 1;
-        const scaledX = Math.round(x * scale);
-        const scaledY = Math.round(y * scale);
-        const scaledWidth = Math.round(width * scale);
-        const scaledHeight = Math.round(height * scale);
-
-        const homeDir = Quickshell.env("HOME") || "";
-        const picturesBaseDir = Quickshell.env("HQS_DIR") || Quickshell.env("XDG_SCREENSHOTS_DIR") || (Quickshell.env("XDG_PICTURES_DIR") ? (Quickshell.env("XDG_PICTURES_DIR") + "/Screenshots") : "") || (homeDir ? (homeDir + "/Pictures/Screenshots") : "") || (homeDir + "/Pictures");
-        const picturesDir = picturesBaseDir;
-        const tempDir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp";
-
-        const now = new Date();
-        const timestamp = Qt.formatDateTime(now, "yyyy-MM-dd_hh-mm-ss-zzz");
-
-        const outputPath = root.saveToDisk ? `${picturesDir}/screenshot-${timestamp}.png` : `${tempDir}/hyprquickshot-preview-${timestamp}.png`;
-
-        lastScreenshotTemporary = !root.saveToDisk;
-        lastScreenshotPath = outputPath;
-
-        let sourcePath = tempPath;
-
-        if (root.screenFrozen && root.frozenFrame.toString() !== "") {
-            sourcePath = root.frozenFrame.toString().replace("file://", "");
-        }
-
         const screen = root.targetScreen;
-        const geometry = `${screen.x},${screen.y} ${screen.width}x${screen.height}`;
+        if (!screen)
+            return;
 
-        const captureCommand = (!root.screenFrozen) ? `grim -g "${geometry}" "${sourcePath}" && ` : "";
+        const env = {
+            HOME: Quickshell.env("HOME") || "",
+            HQS_DIR: Quickshell.env("HQS_DIR") || "",
+            XDG_SCREENSHOTS_DIR: Quickshell.env("XDG_SCREENSHOTS_DIR") || "",
+            XDG_PICTURES_DIR: Quickshell.env("XDG_PICTURES_DIR") || "",
+            XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR") || ""
+        };
 
-        const ensureDirCommand = root.saveToDisk ? `mkdir -p -- "${picturesDir}" && ` : "";
+        const plan = ScreenshotUtils.planScreenshot({
+            x,
+            y,
+            width,
+            height,
+            monitorScale: hyprlandMonitor && hyprlandMonitor.scale !== undefined ? hyprlandMonitor.scale : 1,
+            saveToDisk: root.saveToDisk,
+            screenFrozen: root.screenFrozen,
+            frozenFrame: root.frozenFrame,
+            tempPath: root.tempPath,
+            screenX: screen.x,
+            screenY: screen.y,
+            screenWidth: screen.width,
+            screenHeight: screen.height,
+            env: env,
+            now: new Date()
+        });
 
-        screenshotProcess.command = RootCommon.ProcessHelper.shell(
-            ensureDirCommand
-            + captureCommand
-            + `magick "${sourcePath}" -crop ${scaledWidth}x${scaledHeight}+${scaledX}+${scaledY} "${outputPath}" && `
-            + `rm -f -- "${tempPath}"`
-        );
+        root.lastScreenshotTemporary = plan.lastScreenshotTemporary;
+        root.lastScreenshotPath = plan.outputPath;
+
+        screenshotProcess.command = RootCommon.ProcessHelper.shell(plan.commandString);
 
         screenshotProcess.running = false;
         screenshotProcess.running = true;
