@@ -2,14 +2,23 @@
 
 ## Next (Performance + Maintainability)
 
-- [ ] Hoist per-screen monitors into shared services (multi-monitor perf)
-  Description: `shell.qml` creates a `bar/BarWindow.qml` per screen; modules spawn subprocess monitors/timers. Done for systemd failures via `bar/services/SystemdFailedService.qml`; remaining high-impact candidates: `NetworkModule`, `BacklightModule`, `UpdatesModule`, `ToDoModule`, calendar refresh.
+- [x] Fix singleton service root objects that host child QML objects
+  Description: Some `bar/services/*.qml` singletons were `QtObject {}` with `Timer`/`Connections`/provider children, which triggers `Cannot assign to non-existent default property` at load time. Converted them to `Item { visible: false }`.
+
+- [x] Finish HyprQuickshot UI decomposition wiring
+  Description: `hyprquickshot/shell.qml` now uses `hyprquickshot/ui/ControlBar.qml` and `hyprquickshot/ui/CountdownOverlay.qml`, with pulse calls routed through `countdownOverlay.pulse()`.
+
+- [x] Validate `quickshell` loads with `QML_IMPORT_PATH` set
+  Description: Verified `QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-native/build/qml quickshell` reaches “Configuration Loaded”.
+
+- [x] Hoist per-screen monitors into shared services (multi-monitor perf)
+  Description: `shell.qml` creates a `bar/BarWindow.qml` per screen; modules spawn subprocess monitors/timers. Done for systemd failures (`bar/services/SystemdFailedService.qml`), updates (`bar/services/UpdatesService.qml`), Todoist (`bar/services/TodoistService.qml`), calendar (`bar/services/CalendarService.qml`), backlight (`bar/services/BacklightService.qml`), and network (`bar/services/NetworkService.qml`).
 
 - [x] Remove API keys from process argv in LeftPanel AI client
   Description: `leftpanel/LeftPanel.qml` currently builds `curl` commands with secrets in the URL/header, which are visible via process listings. Refactor to pass secrets via `Process.environment` and send request bodies using `stdinEnabled + write()` (or move the client into `common/modules/qs-native`).
 
-- [ ] Split `leftpanel/LeftPanel.qml` into view + controller + model
-  Description: `leftpanel/LeftPanel.qml` mixes config IO, chat state, command parsing, network IO, and rendering. Introduce `leftpanel/services/AiClient.qml` and a small `ChatStore` object (prefer `ListModel` for messages) so the view stays declarative and smaller.
+- [x] Split `leftpanel/LeftPanel.qml` into view + controller + model
+  Description: Introduced `leftpanel/stores/ChatStore.qml`, `leftpanel/controllers/ChatController.qml`, and `leftpanel/views/LeftPanelView.qml`; `leftpanel/LeftPanel.qml` is now a composition root. Env/config parsing moved into `leftpanel/services/EnvLoader.qml` and `leftpanel/services/MoodConfig.qml`.
 
 - [x] Fix `bar/components/CommandRunner.qml` double-trigger on startup
   Description: `Component.onCompleted: trigger()` plus timer immediate-trigger logic causes two initial executions. Keep a single trigger mechanism (use `Timer.triggeredOnStart: true`).
@@ -20,23 +29,23 @@
 - [x] Convert notification store arrays to a real model
   Description: `rightpanel/RightPanel.qml` uses `property var list/popupList` with array copies and `filter()` rebuilds. Replace with `ListModel` plus `append/insert/remove` and track popup state incrementally to avoid O(n) allocation churn.
 
-- [ ] Gate or remove always-running animations
-  Description: Audit for infinite `loops: Animation.Infinite` animations and ensure they only run while visible/needed.
+- [x] Gate or remove always-running animations
+  Description: Gated all `Animation.Infinite` usages found behind window visibility checks.
 
-- [ ] Reduce `Qt5Compat.GraphicalEffects` usage in scrolling lists
-  Description: `OpacityMask` can be FBO-heavy under `ListView` and in always-instantiated tooltip content. Gated masks in `rightpanel/components/NotificationContent.qml` and `bar/modules/MprisModule.qml`; consider further reducing usage or lazy-loading tooltip content.
+- [x] Reduce `Qt5Compat.GraphicalEffects` usage in scrolling lists
+  Description: `OpacityMask` is now lazy-instantiated via `Loader` with viewport gating (notifications) and tooltip gating (MPRIS), and uses `cached: true`.
 
-- [ ] Make `screen:` explicit for all Wayland windows/popups
-  Description: Bind windows to the intended output to avoid “default monitor” surprises on multi-monitor setups. Done for `rightpanel/RightPanel.qml` popups; left/right panels in `shell.qml` still need an explicit screen selection strategy.
+- [x] Make `screen:` explicit for all Wayland windows/popups
+  Description: Bind windows to the intended output to avoid “default monitor” surprises on multi-monitor setups. `shell.qml` now binds left/right panels to the screen that triggered them (falling back to `screens[0]`). `rightpanel/RightPanel.qml` popups also bind to the owning panel screen.
 
-- [ ] Revisit bar layer configuration
-  Description: `bar/BarWindow.qml` sets `WlrLayershell.layer: WlrLayer.Background`, which can put the bar behind clients depending on compositor behavior. Consider `Top` (or `Overlay`) and verify expected focus/exclusive zone behavior.
+- [x] Revisit bar layer configuration
+  Description: `bar/BarWindow.qml` now uses `WlrLayershell.layer: WlrLayer.Top` and explicitly disables keyboard focus to avoid focus stealing.
 
 - [x] Remove `Config.devicePixelRatio` derived from `screens[0]`
   Description: Mixed-DPI setups will render tray icons incorrectly when using the first screen's DPR. Prefer per-window `Screen.devicePixelRatio` (or derive DPR from the owning window's `screen`).
 
-- [ ] Reduce `["sh","-c", ...]` usage and centralize it when unavoidable
-  Description: Many modules execute shell strings via `Quickshell.execDetached(["sh","-c", ...])`. Prefer argument arrays for fixed commands, and route configurable commands through a single helper that handles quoting and validation.
+- [x] Reduce `["sh","-c", ...]` usage and centralize it when unavoidable
+  Description: Introduced `common/services/ProcessHelper.qml` and migrated shell-string execution sites to `ProcessHelper` (using argv arrays where practical).
 
 ## Completed
 

@@ -26,7 +26,7 @@ Item {
                 width: Math.min(parent.width, parent.height)
                 height: width
 
-                property real animatedValue: 0
+                property real animatedValue: root.value
 
                 Behavior on animatedValue {
                     NumberAnimation {
@@ -35,16 +35,7 @@ Item {
                     }
                 }
 
-                Component.onCompleted: animatedValue = root.value
-
                 onAnimatedValueChanged: requestPaint()
-
-                Connections {
-                    target: root
-                    function onValueChanged() {
-                        gauge.animatedValue = root.value;
-                    }
-                }
 
                 onPaint: {
                     if (width <= 0 || height <= 0)

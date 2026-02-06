@@ -127,7 +127,7 @@ Item {
                             font.pixelSize: 14
 
                             SequentialAnimation on opacity {
-                                running: root.busy
+                                running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
                                 loops: Animation.Infinite
                                 NumberAnimation { to: 0.4; duration: 600 }
                                 NumberAnimation { to: 1.0; duration: 600 }
@@ -165,7 +165,7 @@ Item {
                                     color: Common.Config.color.primary
 
                                     SequentialAnimation on opacity {
-                                        running: root.busy
+                                        running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
                                         loops: Animation.Infinite
                                         PauseAnimation { duration: typingDot.index * 200 }
                                         NumberAnimation { to: 0.2; duration: 400 }

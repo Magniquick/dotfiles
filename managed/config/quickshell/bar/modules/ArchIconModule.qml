@@ -38,7 +38,7 @@ ModuleContainer {
                     Quickshell.shellDir + "/powermenu"
                 ]);
             } else {
-                GlobalState.toggleLeftPanel();
+                GlobalState.toggleLeftPanel(root.QsWindow.window ? root.QsWindow.window.screen : null);
             }
         }
     }

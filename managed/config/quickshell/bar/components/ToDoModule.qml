@@ -4,10 +4,8 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
 import Quickshell
-import qsnative
 import ".."
 import "../components"
-import "../components/JsonUtils.js" as JsonUtils
 
 ColumnLayout {
     id: root
@@ -15,22 +13,20 @@ ColumnLayout {
     property string currentProject: "Inbox"
     readonly property bool dropdownActive: projectSelector.popup.visible
     readonly property int iconSlot: Config.space.xxl * 2
-    property string lastUpdated: ""
-    property bool loading: false
+    readonly property string lastUpdated: TodoistService.lastUpdatedLabel
+    readonly property bool loading: TodoistService.loading
     readonly property int minorSpace: Config.spaceHalfXs
-    property bool parseError: false
+    readonly property bool parseError: TodoistService.parseError
     property var rawData: ({})
     readonly property var taskColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary, Config.color.secondary, Config.color.tertiary]
     property var tasks: []
-    readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
-    property bool usingCache: false
+    readonly property bool usingCache: TodoistService.usingCache
 
     function applyTodoistData(data, fromCache) {
         if (!data || typeof data !== "object")
             return;
 
         root.rawData = data;
-        root.usingCache = !!fromCache;
 
         let projects = ["Inbox", "Today"];
         if (data.projects) {
@@ -61,13 +57,7 @@ ColumnLayout {
         return taskColors[index % taskColors.length];
     }
     function refresh() {
-        root.loading = true;
-        root.parseError = false;
-        Qt.callLater(function () {
-            console.log("Todoist: refresh requested (env=" + root.todoistEnvFile + ")");
-            todoistClient.listTasks(root.todoistEnvFile);
-            root.loading = false;
-        });
+        TodoistService.refresh("manual");
     }
     function scheduleProjectSelectorClose() {
         if (projectSelector.popup.visible)
@@ -120,40 +110,11 @@ ColumnLayout {
                 root.scheduleProjectSelectorClose();
         }
     }
-    TodoistClient {
-        id: todoistClient
-    }
-    Timer {
-        id: refreshTimer
-
-        interval: 300000 // 5 minutes
-        repeat: true
-        running: true
-
-        onTriggered: root.refresh()
-    }
     Connections {
-        target: todoistClient
+        target: TodoistService
 
-        function onData_jsonChanged() {
-            const data = JsonUtils.parseObject(todoistClient.data_json);
-            if (data) {
-                root.applyTodoistData(data, false);
-                const updatedAt = todoistClient.last_updated ? new Date(todoistClient.last_updated) : null;
-                if (updatedAt && !isNaN(updatedAt.getTime()))
-                    root.lastUpdated = Qt.formatDateTime(updatedAt, "hh:mm ap");
-                root.parseError = false;
-                root.usingCache = false;
-            } else {
-                root.parseError = true;
-                console.warn("Todoist: failed to parse data_json payload");
-            }
-        }
-        function onErrorChanged() {
-            if (todoistClient.error && todoistClient.error !== "") {
-                root.parseError = true;
-                console.warn("Todoist: error from qsnative:", todoistClient.error);
-            }
+        function onDataChanged() {
+            root.applyTodoistData(TodoistService.data, TodoistService.usingCache);
         }
     }
 

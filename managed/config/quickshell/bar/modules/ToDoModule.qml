@@ -21,17 +21,33 @@ ModuleContainer {
     id: root
 
     property bool dropdownPinned: false
-    property var todoData: null
-    readonly property int taskCount: root.todoData ? root.todoData.tasks.length : 0
+    readonly property int taskCount: {
+        const data = TodoistService.data;
+        if (!data)
+            return 0;
+        let count = 0;
+        if (Array.isArray(data.today))
+            count += data.today.length;
+        const projects = data.projects;
+        if (projects && typeof projects === "object") {
+            const keys = Object.keys(projects);
+            for (let i = 0; i < keys.length; i++) {
+                const list = projects[keys[i]];
+                if (Array.isArray(list))
+                    count += list.length;
+            }
+        }
+        return count;
+    }
     // Intentionally no hover label; keep pill compact.
 
     tooltipBrowserLink: "runapp todoist.sh"
     tooltipHoverable: true
     tooltipPinned: dropdownPinned
-    tooltipRefreshing: false
+    tooltipRefreshing: TodoistService.loading
     tooltipShowBrowserIcon: true
     tooltipShowRefreshIcon: true
-    tooltipSubtitle: ""
+    tooltipSubtitle: TodoistService.lastUpdatedLabel ? ("Synced " + TodoistService.lastUpdatedLabel) : ""
     tooltipTitle: "Tasks"
 
     content: [
@@ -46,29 +62,22 @@ ModuleContainer {
             BarLabel {
                 color: Config.color.tertiary
                 font.pixelSize: Config.fontSize
-                text: root.todoData ? String(root.taskCount) : ""
+                text: root.taskCount > 0 ? String(root.taskCount) : ""
             }
         }
     ]
+
+    onTooltipRefreshRequested: TodoistService.refresh("manual")
+
     tooltipContent: Component {
         ToDoModule {
+            id: todoTooltip
             width: 320
 
-            Component.onCompleted: {
-                root.todoData = this;
-                root.tooltipRefreshing = Qt.binding(() => {
-                    return loading;
-                });
-                root.dropdownPinned = Qt.binding(() => {
-                    return dropdownActive;
-                });
-                root.tooltipSubtitle = Qt.binding(() => {
-                    if (!lastUpdated || lastUpdated === "")
-                        return "";
-
-                    return "Synced " + lastUpdated;
-                });
-                root.tooltipRefreshRequested.connect(refresh);
+            Binding {
+                target: root
+                property: "dropdownPinned"
+                value: todoTooltip.dropdownActive
             }
         }
     }

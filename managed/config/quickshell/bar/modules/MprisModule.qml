@@ -74,6 +74,9 @@ ModuleContainer {
 
     property var activePlayer: null
     property bool debugLogging: false
+    property int _positionBaseSeconds: 0
+    property double _positionBaseMs: 0
+    property double _positionNowMs: 0
     readonly property string displaySubtitle: root.trackArtist !== "" ? root.trackArtist : (root.activePlayer ? root.playerTitle : "No active player")
     readonly property string displayTitle: root.trackTitle !== "" ? root.trackTitle : (root.trackFullText !== "" ? root.trackFullText : "Nothing playing")
     property string fallbackText: ""
@@ -90,6 +93,23 @@ ModuleContainer {
     readonly property string trackFullText: root.formatTrackText(root.activePlayer)
     readonly property string trackText: root.clampText(root.trackFullText)
     readonly property string trackTitle: root.activePlayer && root.activePlayer.trackTitle ? root.activePlayer.trackTitle : ""
+    readonly property int displayPositionSeconds: {
+        const player = root.activePlayer;
+        if (!player)
+            return 0;
+
+        // If the tooltip is closed, avoid ticking; use the service value.
+        if (!root.tooltipActive)
+            return root.positionSeconds(player);
+
+        const base = root._positionBaseSeconds;
+        const baseMs = root._positionBaseMs;
+        const nowMs = root._positionNowMs > 0 ? root._positionNowMs : Date.now();
+        const playing = player.playbackState === MprisPlaybackState.Playing;
+        const delta = (playing && baseMs > 0) ? Math.max(0, Math.floor((nowMs - baseMs) / 1000)) : 0;
+        const length = root.lengthSeconds(player);
+        return root.clampNumber(base + delta, 0, Math.max(0, length));
+    }
 
     function clampNumber(value, min, max) {
         if (!isFinite(value))
@@ -195,6 +215,11 @@ ModuleContainer {
         if (selected !== root.activePlayer)
             root.activePlayer = selected;
     }
+    function _syncPositionBase() {
+        root._positionBaseSeconds = root.positionSeconds(root.activePlayer);
+        root._positionBaseMs = Date.now();
+        root._positionNowMs = root._positionBaseMs;
+    }
     function secondsFromValue(value) {
         if (!isFinite(value))
             return 0;
@@ -220,6 +245,7 @@ ModuleContainer {
         if (root.activePlayer && root.activePlayer.canTogglePlaying)
             root.activePlayer.togglePlaying();
     }
+    onActivePlayerChanged: root._syncPositionBase()
 
     content: [
         IconTextRow {
@@ -273,13 +299,15 @@ ModuleContainer {
                             radius: Config.shape.corner.sm
                             visible: false
                         }
-                        OpacityMask {
-                            readonly property bool effectEnabled: root.tooltipActive && root.hasArt
-
+                        Loader {
                             anchors.fill: parent
-                            visible: effectEnabled
-                            maskSource: effectEnabled ? artMask : null
-                            source: effectEnabled ? artImage : null
+                            active: root.tooltipActive && root.hasArt && artImage.status === Image.Ready
+                            sourceComponent: OpacityMask {
+                                anchors.fill: parent
+                                cached: true
+                                source: artImage
+                                maskSource: artMask
+                            }
                         }
                     }
                     Text {
@@ -341,7 +369,10 @@ ModuleContainer {
                                 id: titleMarquee
 
                                 loops: Animation.Infinite
-                                running: titleClip.hovered && titleClip.scrollDistance > 0 && root.visible
+                                running: titleClip.hovered
+                                    && titleClip.scrollDistance > 0
+                                    && root.visible
+                                    && root.QsWindow.window && root.QsWindow.window.visible
 
                                 PauseAnimation {
                                     duration: 350
@@ -387,7 +418,7 @@ ModuleContainer {
                             fillColor: Config.color.primary
                             maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
                             minimum: 0
-                            value: root.positionSeconds(root.activePlayer)
+                            value: root.displayPositionSeconds
 
                             // Only seek on drag release, not during drag (prevents multiple in-flight commands)
                             onDragEnded: value => {
@@ -432,7 +463,7 @@ ModuleContainer {
                             font.pixelSize: Config.type.labelSmall.size
                             text: {
                                 const total = root.lengthSeconds(root.activePlayer);
-                                const elapsed = total > 0 ? root.formatTime(root.positionSeconds(root.activePlayer)) : "--:--";
+                                const elapsed = total > 0 ? root.formatTime(root.displayPositionSeconds) : "--:--";
                                 if (total <= 0)
                                     return elapsed;
                                 return elapsed + " / " + root.formatTime(total);
@@ -537,11 +568,20 @@ ModuleContainer {
     Timer {
         interval: 1000
         repeat: true
-        running: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
+        running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
 
         onTriggered: {
-            if (root.activePlayer)
-                root.activePlayer.positionChanged();
+            root._positionNowMs = Date.now();
         }
+    }
+
+    Connections {
+        target: root.activePlayer
+
+        function onPositionChanged() { root._syncPositionBase(); }
+        function onTrackTitleChanged() { root._syncPositionBase(); }
+        function onTrackArtistChanged() { root._syncPositionBase(); }
+        function onPlaybackStateChanged() { root._syncPositionBase(); }
+        function onReady() { root._syncPositionBase(); }
     }
 }

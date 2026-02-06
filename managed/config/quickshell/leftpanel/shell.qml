@@ -7,12 +7,14 @@ ShellRoot {
     id: root
 
     readonly property int panelWidth: 380
+    readonly property var targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
 
     PanelWindow {
         id: panelWindow
         color: "transparent"
         visible: true
         implicitWidth: root.panelWidth
+        screen: root.targetScreen
 
         anchors {
             top: true

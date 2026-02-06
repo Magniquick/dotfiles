@@ -1,11 +1,13 @@
 import QtQml
 import QtQuick
 import Quickshell.Io
+import "../../common" as Common
 
 Item {
     id: root
 
-    property string command: ""
+    // String uses `sh -c` for backward-compat. Prefer passing an argv array.
+    property var command: ""
     property bool enabled: true
     property int intervalMs: 10000
     property string output: ""
@@ -19,10 +21,16 @@ Item {
     signal timeout
 
     function trigger() {
-        if (!enabled || !command)
+        if (!enabled)
+            return;
+        if (!command)
+            return;
+        if (typeof command === "string" && command.trim() === "")
+            return;
+        if (Array.isArray(command) && command.length === 0)
             return;
 
-        process.command = ["sh", "-c", command];
+        process.command = Common.ProcessHelper.normalize(command);
         process.running = true;
 
         if (root.timeoutMs > 0) {
@@ -50,7 +58,8 @@ Item {
         onTriggered: {
             if (process.running) {
                 if (root.logErrors) {
-                    console.warn(`CommandRunner: Command '${root.command}' timed out after ${root.timeoutMs}ms`);
+                    const cmdText = Array.isArray(root.command) ? root.command.join(" ") : String(root.command);
+                    console.warn(`CommandRunner: Command '${cmdText}' timed out after ${root.timeoutMs}ms`);
                 }
                 process.running = false;
                 root.timeout();

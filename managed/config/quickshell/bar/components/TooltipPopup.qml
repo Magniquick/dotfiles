@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
+import "../../common" as Common
 
 Item {
     id: root
@@ -196,7 +197,7 @@ Item {
                         SequentialAnimation on scale {
                             alwaysRunToEnd: false
                             loops: Animation.Infinite
-                            running: pulse.visible && Config.tooltipPulseAnimationEnabled && popup.reveal > 0.01
+                            running: popup.visible && pulse.visible && Config.tooltipPulseAnimationEnabled
 
                             NumberAnimation {
                                 duration: Config.motion.duration.pulse
@@ -249,7 +250,7 @@ Item {
                                 if (!root.browserLink || root.browserLink.trim() === "")
                                     return;
 
-                                Quickshell.execDetached(["sh", "-c", root.browserLink.trim()]);
+                                Common.ProcessHelper.execDetached(root.browserLink.trim());
                             }
                         }
                     }

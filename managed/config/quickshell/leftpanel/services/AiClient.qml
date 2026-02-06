@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
+import "../../common" as Common
 
 Item {
     id: root
@@ -100,7 +101,7 @@ Item {
 
         root._pendingPayload = payload + "\n";
 
-        proc.command = ["sh", "-c", root._runnerScript];
+        proc.command = Common.ProcessHelper.shell(root._runnerScript);
         proc.environment = ({
             AI_PROVIDER: provider,
             AI_MODEL_ID: root.modelId,

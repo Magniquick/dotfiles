@@ -16,39 +16,32 @@ import ".."
 import "../components"
 import QtQuick
 import Quickshell
-import qsnative
+import "../../common" as Common
 
 ModuleContainer {
     id: root
 
     property bool hasUpdates: false
-    property string lastCheckedLabel: ""
-    readonly property bool moduleAvailable: root.checkupdatesAvailable && root.pacmanAvailable
-    property bool checkupdatesAvailable: false
-    property bool pacmanAvailable: false
+    readonly property string lastCheckedLabel: UpdatesService.lastCheckedLabel
+    readonly property bool moduleAvailable: UpdatesService.moduleAvailable
     property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu"
-    property bool refreshing: false
+    readonly property bool refreshing: UpdatesService.refreshing
     property string text: "0"
     property var updateItems: []
     property string updatedIcon: ""
-    property int updatesCount: 0
+    readonly property int updatesCount: UpdatesService.updatesCount
     property string updatesIcon: ""
     property string updatesTooltip: "System up to date"
-    property bool noAur: false
-    property string updatesText: ""
-    property string aurUpdatesText: ""
-    property int aurUpdatesCount: 0
+    readonly property string updatesText: UpdatesService.updatesText
+    readonly property string aurUpdatesText: UpdatesService.aurUpdatesText
+    readonly property int aurUpdatesCount: UpdatesService.aurUpdatesCount
     property bool _providerUpdatePending: false
 
     function markNoUpdates() {
         root.hasUpdates = false;
-        root.updatesCount = 0;
         root.text = "";
         root.updatesTooltip = "System up to date";
         root.updateItems = [];
-        root.updatesText = "";
-        root.aurUpdatesText = "";
-        root.aurUpdatesCount = 0;
     }
     function parseUpdateItemsFromTooltip(linesText) {
         if (!linesText || String(linesText).trim() === "")
@@ -90,8 +83,7 @@ ModuleContainer {
         return items;
     }
     function refreshUpdates(source) {
-        root.refreshing = true;
-        updatesProvider.refresh(root.noAur);
+        UpdatesService.refresh(source);
     }
     function scheduleUpdateFromProvider() {
         if (root._providerUpdatePending)
@@ -104,7 +96,6 @@ ModuleContainer {
         });
     }
     function updateFromProvider() {
-        root.refreshing = false;
         const totalCount = root.updatesCount + root.aurUpdatesCount;
         root.hasUpdates = totalCount > 0;
         const combinedText = [root.updatesText, root.aurUpdatesText].filter(text => text && text.trim() !== "").join("\n");
@@ -139,74 +130,24 @@ ModuleContainer {
             updates: root.updateItems
             width: 360
 
-            onActionRequested: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
+            onActionRequested: Common.ProcessHelper.execDetached(root.onClickCommand)
         }
     }
 
     onTooltipRefreshRequested: root.refreshUpdates("manual")
 
-    PacmanUpdatesProvider {
-        id: updatesProvider
-    }
+    onClicked: Common.ProcessHelper.execDetached(root.onClickCommand)
 
-    Timer {
-        id: updatesTimer
-
-        interval: 30000
-        repeat: true
-        running: root.moduleAvailable
-        triggeredOnStart: true
-
-        onTriggered: root.refreshUpdates("timer")
-    }
-    Timer {
-        id: updatesSyncTimer
-
-        interval: 300000
-        repeat: true
-        running: root.moduleAvailable
-        triggeredOnStart: true
-
-        onTriggered: updatesProvider.sync()
-    }
-
-    Component.onCompleted: {
-        root.markNoUpdates();
-        DependencyCheck.require("checkupdates", "UpdatesModule", function(available) {
-            root.checkupdatesAvailable = available;
-        });
-        DependencyCheck.require("pacman", "UpdatesModule", function(available) {
-            root.pacmanAvailable = available;
-        });
-    }
-
-    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
-    onUpdatesCountChanged: root.scheduleUpdateFromProvider()
-    onAurUpdatesCountChanged: root.scheduleUpdateFromProvider()
-    onUpdatesTextChanged: root.scheduleUpdateFromProvider()
-    onAurUpdatesTextChanged: root.scheduleUpdateFromProvider()
-    onLastCheckedLabelChanged: root.refreshing = false
+    Component.onCompleted: root.markNoUpdates()
 
     Connections {
-        target: updatesProvider
+        target: UpdatesService
 
-        function onUpdates_countChanged() {
-            root.updatesCount = updatesProvider.updates_count;
-        }
-        function onAur_updates_countChanged() {
-            root.aurUpdatesCount = updatesProvider.aur_updates_count;
-        }
-        function onUpdates_textChanged() {
-            root.updatesText = updatesProvider.updates_text;
-        }
-        function onAur_updates_textChanged() {
-            root.aurUpdatesText = updatesProvider.aur_updates_text;
-        }
-        function onLast_checkedChanged() {
-            root.lastCheckedLabel = updatesProvider.last_checked;
-        }
-        function onErrorChanged() {
-            root.scheduleUpdateFromProvider();
-        }
+        function onUpdatesCountChanged() { root.scheduleUpdateFromProvider(); }
+        function onAurUpdatesCountChanged() { root.scheduleUpdateFromProvider(); }
+        function onUpdatesTextChanged() { root.scheduleUpdateFromProvider(); }
+        function onAurUpdatesTextChanged() { root.scheduleUpdateFromProvider(); }
+        function onErrorChanged() { root.scheduleUpdateFromProvider(); }
+        function onLastCheckedLabelChanged() { root.scheduleUpdateFromProvider(); }
     }
 }

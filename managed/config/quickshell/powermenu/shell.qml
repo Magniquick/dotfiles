@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import QtQuick
 import "common" as Common
 
@@ -43,13 +44,25 @@ ShellRoot {
             return;
         Quickshell.execDetached(cmd);
     }
+
+    function resolveFocusedScreen() {
+        const monitor = Hyprland.focusedMonitor;
+        if (monitor && monitor.name) {
+            for (const s of Quickshell.screens) {
+                if (s.name === monitor.name)
+                    return s;
+            }
+        }
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
+    }
+
     Powermenu {
         id: powermenu
 
         colors: root.colors
         hoverAction: root.powermenuHover
         selection: root.powermenuSelection
-        targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+        targetScreen: root.resolveFocusedScreen()
         visible: root.powermenuVisible
 
         onActionInvoked: actionName => root.onButton(actionName)

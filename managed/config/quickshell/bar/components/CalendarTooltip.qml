@@ -15,7 +15,12 @@ Item {
     readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
     readonly property int monthRangeYears: 5
     readonly property int monthRangeCenter: monthRangeYears * 12
-    property var dayEvents: []
+    readonly property var dayEvents: {
+        const key = calendar.dayKey(calendar.selectedDate);
+        if (!key || !calendar.eventsByDay || !calendar.eventsByDay[key])
+            return [];
+        return calendar.eventsByDay[key];
+    }
     property var eventsByDay: ({})
     property string refreshEnvFile: ""
     property int refreshDays: 180
@@ -40,7 +45,6 @@ Item {
             calendar.eventsByDay = ({});
             calendar.calendarStatus = "error";
             calendar.calendarGeneratedAt = "";
-            calendar.updateDayEvents();
             return;
         }
 
@@ -53,8 +57,6 @@ Item {
             calendar.calendarGeneratedAt = "";
             calendar.eventsByDay = payload.eventsByDay || payload || ({});
         }
-
-        calendar.updateDayEvents();
     }
     function dayKey(date) {
         if (!date)
@@ -105,11 +107,7 @@ Item {
             calendar.calendarClient.refreshFromEnv(calendar.refreshEnvFile, calendar.refreshDays);
         });
     }
-    function updateDayEvents() {
-        const key = calendar.dayKey(calendar.selectedDate);
-        const list = (key && calendar.eventsByDay && calendar.eventsByDay[key]) ? calendar.eventsByDay[key] : [];
-        calendar.dayEvents = list;
-    }
+    // `dayEvents` is derived declaratively from `eventsByDay` and `selectedDate`.
 
     implicitHeight: layout.implicitHeight
 
@@ -117,8 +115,6 @@ Item {
     implicitWidth: 240
 
     Component.onCompleted: {
-        calendar.updateDayEvents();
-        calendar.refreshRequested();
     }
     onActiveChanged: {
         if (!calendar.active) {
@@ -130,10 +126,7 @@ Item {
     }
     onCurrentDateChanged: {
         calendar.selectedDate = new Date(calendar.currentDate.getTime());
-        calendar.updateDayEvents();
     }
-    onEventsByDayChanged: calendar.updateDayEvents()
-    onSelectedDateChanged: calendar.updateDayEvents()
 
     Connections {
         target: calendar.calendarClient
@@ -150,15 +143,6 @@ Item {
         function onErrorChanged() {
             calendar.applyCalendarFromClient();
         }
-    }
-    Timer {
-        id: refreshTimer
-
-        interval: 3600000
-        repeat: true
-        running: true
-
-        onTriggered: calendar.refreshRequested()
     }
     ColumnLayout {
         id: layout

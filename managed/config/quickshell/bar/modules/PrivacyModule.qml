@@ -52,23 +52,29 @@ import QtQuick.Layouts
 ModuleContainer {
     id: root
 
-    property bool cameraActive: PrivacyService.cameraActive
-    property string cameraApps: root.cameraActive ? "Active" : ""
+    readonly property bool cameraActive: PrivacyService.cameraActive
+    readonly property string cameraApps: root.cameraActive ? "Active" : ""
     property color cameraColor: Config.color.secondary
     property string cameraIcon: ""
     property bool locationActive: false
     property string locationApps: ""
     property color locationColor: Config.color.tertiary
     property string locationIcon: ""
-    property bool micActive: PrivacyService.microphoneActive
-    property string micApps: root.micActive ? "Active" : ""
+    readonly property bool micActive: PrivacyService.microphoneActive
+    readonly property string micApps: root.micActive ? "Active" : ""
     property color micColor: Config.color.tertiary
     property string micIcon: ""
-    property bool screenActive: PrivacyService.screensharingActive
-    property string screenApps: root.screenActive ? "Active" : ""
+    readonly property bool screenActive: PrivacyService.screensharingActive
+    readonly property string screenApps: root.screenActive ? "Active" : ""
     property color screenColor: Config.color.primary
     property string screenIcon: "󰍹"
-    property string statusTooltip: "Privacy: idle"
+    readonly property string statusTooltip: {
+        const micStatus = root.buildStatus("Mic", root.micApps);
+        const camStatus = root.buildStatus("Cam", root.cameraApps);
+        const locStatus = root.buildStatus("Location", root.locationApps);
+        const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
+        return micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
+    }
 
     function appLabel(apps) {
         if (!apps || apps.trim() === "")
@@ -85,17 +91,7 @@ ModuleContainer {
 
         return apps.slice(0, 29) + "...";
     }
-    function updateTooltip() {
-        const micStatus = root.buildStatus("Mic", root.micApps);
-        const camStatus = root.buildStatus("Cam", root.cameraApps);
-        const locStatus = root.buildStatus("Location", root.locationApps);
-        const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
-        root.statusTooltip = micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
-    }
-
-    Component.onCompleted: {
-        root.updateTooltip();
-    }
+    // statusTooltip is a binding; no imperative syncing needed.
 
     collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive
     contentSpacing: Config.space.sm
@@ -160,12 +156,4 @@ ModuleContainer {
         }
     }
 
-    onMicActiveChanged: root.updateTooltip()
-    onCameraActiveChanged: root.updateTooltip()
-    onLocationActiveChanged: root.updateTooltip()
-    onScreenActiveChanged: root.updateTooltip()
-    onMicAppsChanged: root.updateTooltip()
-    onCameraAppsChanged: root.updateTooltip()
-    onLocationAppsChanged: root.updateTooltip()
-    onScreenAppsChanged: root.updateTooltip()
 }

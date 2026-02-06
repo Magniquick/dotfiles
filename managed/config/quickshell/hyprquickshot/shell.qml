@@ -9,7 +9,11 @@ import Quickshell.Widgets
 import Quickshell.Io
 
 import "src" as Src
+import "ui" as Ui
 import "common" as Common
+import "../common" as RootCommon
+import "." as Hqs
+import "./ui" as Ui
 
 Src.FreezeScreen {
     id: root
@@ -18,7 +22,7 @@ Src.FreezeScreen {
     property var activeScreen: null
     property bool awaitingScreenConfirm: false
     property var countdownCenter: Qt.point(width / 2, height / 2)
-    property int countdownValue: 3
+    property int countdownValue: Hqs.HqsConstants.countdownStartValue
     property bool grabReady: false
     property var hyprlandMonitor: Hyprland.focusedMonitor
     property string lastScreenshotPath: ""
@@ -32,7 +36,8 @@ Src.FreezeScreen {
     property var regionSelectorItem: regionSelectorLoader.item
     readonly property bool runningStandalone: (Quickshell.shellDir || "").endsWith("/hyprquickshot")
     readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
-    property bool saveToDisk: true
+    property bool _saveToDiskFallback: true
+    readonly property bool saveToDisk: settingsLoader.item ? settingsLoader.item.saveToDisk : root._saveToDiskFallback
     property bool sessionVisible: false
     property string tempPath
     property var windowSelectorItem: windowSelectorLoader.item
@@ -54,8 +59,8 @@ Src.FreezeScreen {
         recordingSelection = sel;
         countdownCenter = Qt.point(sel.x + sel.width / 2, sel.y + sel.height / 2);
         recordingState = "countdown";
-        countdownValue = 3;
-        countdownPulse.restart();
+        countdownValue = Hqs.HqsConstants.countdownStartValue;
+        countdownOverlay.pulse();
         countdownTimer.start();
     }
     function cleanupTempPath() {
@@ -66,7 +71,7 @@ Src.FreezeScreen {
     function clearRecordFlag() {
         if (!recordFlagPath)
             return;
-        Quickshell.execDetached(["sh", "-c", `rm -f -- "${recordFlagPath}"`]);
+        Quickshell.execDetached(["rm", "-f", "--", recordFlagPath]);
     }
     function deactivate() {
         if (!active && !sessionVisible)
@@ -135,7 +140,12 @@ Src.FreezeScreen {
 
         const ensureDirCommand = root.saveToDisk ? `mkdir -p -- "${picturesDir}" && ` : "";
 
-        screenshotProcess.command = ["sh", "-c", ensureDirCommand + captureCommand + `magick "${sourcePath}" -crop ${scaledWidth}x${scaledHeight}+${scaledX}+${scaledY} "${outputPath}" && ` + `rm -f -- "${tempPath}"`];
+        screenshotProcess.command = RootCommon.ProcessHelper.shell(
+            ensureDirCommand
+            + captureCommand
+            + `magick "${sourcePath}" -crop ${scaledWidth}x${scaledHeight}+${scaledX}+${scaledY} "${outputPath}" && `
+            + `rm -f -- "${tempPath}"`
+        );
 
         screenshotProcess.running = false;
         screenshotProcess.running = true;
@@ -144,9 +154,16 @@ Src.FreezeScreen {
     function toggleSaveMode() {
         if (recordingState === "countdown" || recordingState === "recording")
             return;
-        saveToDisk = !saveToDisk;
-        if (settingsLoader.item)
-            settingsLoader.item.saveToDisk = saveToDisk;
+        root.setSaveToDisk(!root.saveToDisk);
+    }
+
+    function setSaveToDisk(value) {
+        const next = !!value;
+        if (settingsLoader.item) {
+            settingsLoader.item.saveToDisk = next;
+            return;
+        }
+        root._saveToDiskFallback = next;
     }
     function resetSelectionState() {
         if (regionSelectorItem && typeof regionSelectorItem.resetSelection === "function")
@@ -169,7 +186,7 @@ Src.FreezeScreen {
     }
     function resetSessionState() {
         countdownTimer.stop();
-        countdownValue = 3;
+        countdownValue = Hqs.HqsConstants.countdownStartValue;
         recordingState = "idle";
         recordingSelection = null;
         awaitingScreenConfirm = false;
@@ -216,7 +233,7 @@ Src.FreezeScreen {
     }
     function stopRecordFlow() {
         countdownTimer.stop();
-        countdownValue = 3;
+        countdownValue = Hqs.HqsConstants.countdownStartValue;
         recordingState = "idle";
         recordingSelection = null;
         awaitingScreenConfirm = false;
@@ -236,7 +253,7 @@ Src.FreezeScreen {
     function writeRecordFlag() {
         if (!recordFlagPath)
             return;
-        Quickshell.execDetached(["sh", "-c", `touch -- "${recordFlagPath}"`]);
+        Quickshell.execDetached(["touch", "--", recordFlagPath]);
     }
 
     freezeOpacity: recordingState === "recording" ? 0.0 : 1.0
@@ -276,15 +293,12 @@ Src.FreezeScreen {
             property bool saveToDisk: true
 
             category: "Hyprquickshot"
-
-            Component.onCompleted: root.saveToDisk = saveToDisk
-            onSaveToDiskChanged: root.saveToDisk = saveToDisk
         }
     }
     Timer {
         id: grabDelay
 
-        interval: 60
+        interval: Hqs.HqsConstants.grabDelayMs
         repeat: false
         running: false
 
@@ -346,14 +360,14 @@ Src.FreezeScreen {
     Timer {
         id: countdownTimer
 
-        interval: 900
+        interval: Hqs.HqsConstants.countdownTickMs
         repeat: true
         running: false
 
         onTriggered: {
             if (root.countdownValue > 1) {
                 root.countdownValue -= 1;
-                countdownPulse.restart();
+                countdownOverlay.pulse();
             } else {
                 countdownTimer.stop();
                 root.recordingState = "recording";
@@ -445,7 +459,7 @@ Src.FreezeScreen {
             }
 
             if (root.lastScreenshotPath) {
-                Quickshell.execDetached(["sh", "-c", `wl-copy < "${root.lastScreenshotPath}" >/dev/null 2>&1`]);
+                RootCommon.ProcessHelper.execDetached(`wl-copy < "${root.lastScreenshotPath}" >/dev/null 2>&1`);
             }
             root.notifyScreenshotSuccess();
             root.resetSelectionState();
@@ -540,338 +554,43 @@ Src.FreezeScreen {
             }
         }
     }
-    WrapperRectangle {
+    Ui.ControlBar {
         id: controlWrapper
 
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 32
         anchors.horizontalCenter: parent.horizontalCenter
-        color: Qt.alpha(root.colors.surface, 0.93)
         margin: 8
-        opacity: root.recordingState === "recording" ? 0 : 1
-        radius: 12
-        states: []
-        visible: opacity > 0.05
+        colors: root.colors
+        mode: root.mode
+        recordingState: root.recordingState
+        recordMode: root.recordMode
+        saveToDisk: root.saveToDisk
+        screenFrozen: root.screenFrozen
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 180
-                easing.type: Easing.InOutQuad
-            }
+        onModeSelected: selectedMode => root.setMode(selectedMode)
+        onRecordRequested: {
+            if (root.recordingState !== "idle")
+                return;
+            root.startRecordFlow();
         }
-        transitions: Transition {
-        }
-
-        Row {
-            id: settingRow
-
-            spacing: 16
-
-            Row {
-                id: buttonRow
-
-                enabled: root.recordingState !== "countdown" && root.recordingState !== "recording"
-                opacity: 1
-                spacing: 8
-
-                Repeater {
-                    model: [
-                        {
-                            mode: "region",
-                            icon: "region"
-                        },
-                        {
-                            mode: "window",
-                            icon: "window"
-                        },
-                        {
-                            mode: "screen",
-                            icon: "screen"
-                        }
-                    ]
-
-                    Button {
-                        id: modeButton
-
-                        required property var modelData
-
-                        implicitHeight: 48
-                        implicitWidth: 48
-
-                        background: Rectangle {
-                            color: {
-                                if (root.mode === modeButton.modelData.mode)
-                                    return Qt.alpha(root.colors.primary, 0.5);
-                                if (modeButton.hovered)
-                                    return Qt.alpha(root.colors.surface_container_high, 0.5);
-
-                                return Qt.alpha(root.colors.surface_container, 0.5);
-                            }
-                            radius: 8
-
-                            Behavior on color {
-                                ColorAnimation {
-                                    duration: 100
-                                }
-                            }
-                        }
-                        contentItem: Item {
-                            anchors.fill: parent
-
-                            Image {
-                                anchors.centerIn: parent
-                                fillMode: Image.PreserveAspectFit
-                                height: 24
-                                source: Qt.resolvedUrl(`icons/${modeButton.modelData.icon}.svg`)
-                                width: 24
-                            }
-                        }
-
-                        onClicked: {
-                            root.setMode(modeButton.modelData.mode);
-                        }
-                    }
-                }
-            }
-            Rectangle {
-                id: divider
-
-                anchors.verticalCenter: parent.verticalCenter
-                color: Qt.alpha(root.colors.surface_container_high, 0.8)
-                height: 32
-                width: 1
-            }
-            Row {
-                id: switchRow
-
-                anchors.verticalCenter: buttonRow.verticalCenter
-                spacing: 8
-
-                Button {
-                    id: freezeButton
-
-                    Accessible.name: root.screenFrozen ? "Screen frozen" : "Screen live"
-                    checkable: true
-                    enabled: root.recordingState !== "countdown" && root.recordingState !== "recording"
-                    implicitHeight: 48
-                    implicitWidth: 48
-
-                    background: Rectangle {
-                        color: {
-                            if (freezeButton.checked)
-                                return Qt.alpha(root.colors.primary, 0.5);
-                            if (freezeButton.hovered)
-                                return Qt.alpha(root.colors.surface_container_high, 0.5);
-                            return Qt.alpha(root.colors.surface_container, 0.5);
-                        }
-                        radius: 8
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 100
-                            }
-                        }
-                    }
-                    contentItem: Item {
-                        anchors.fill: parent
-
-                        Canvas {
-                            id: freezeIcon
-
-                            anchors.centerIn: parent
-                            height: 24
-                            width: 24
-
-                            onPaint: {
-                                const ctx = getContext("2d");
-                                ctx.resetTransform();
-                                ctx.clearRect(0, 0, width, height);
-                                ctx.fillStyle = root.colors.on_surface;
-
-                                if (root.screenFrozen) {
-                                    const barWidth = width / 4;
-                                    const gap = barWidth / 1.2;
-                                    const startX = (width - (2 * barWidth + gap)) / 2;
-                                    const top = height * 0.2;
-                                    const barHeight = height * 0.6;
-                                    ctx.fillRect(startX, top, barWidth, barHeight);
-                                    ctx.fillRect(startX + barWidth + gap, top, barWidth, barHeight);
-                                } else {
-                                    const padding = width * 0.28;
-                                    ctx.beginPath();
-                                    ctx.moveTo(padding, padding);
-                                    ctx.lineTo(width - padding, height / 2);
-                                    ctx.lineTo(padding, height - padding);
-                                    ctx.closePath();
-                                    ctx.fill();
-                                }
-                            }
-                        }
-                        Connections {
-                            function onScreenFrozenChanged() {
-                                if (freezeButton.checked !== root.screenFrozen) {
-                                    freezeButton.checked = root.screenFrozen;
-                                }
-                                freezeIcon.requestPaint();
-                            }
-
-                            target: root
-                        }
-                    }
-
-                    Component.onCompleted: freezeButton.checked = root.screenFrozen
-                    onCheckedChanged: {
-                        if (checked === root.screenFrozen)
-                            return;
-                        if (checked) {
-                            root.freezeNow();
-                        } else {
-                            root.unfreezeNow();
-                        }
-                        freezeIcon.requestPaint();
-                    }
-                }
-                Button {
-                    id: saveButton
-
-                    Accessible.name: "Save to disk"
-                    checkable: true
-                    checked: root.saveToDisk
-                    enabled: root.recordingState !== "countdown" && root.recordingState !== "recording"
-                    implicitHeight: 48
-                    implicitWidth: 48
-
-                    background: Rectangle {
-                        color: {
-                            if (saveButton.checked)
-                                return Qt.alpha(root.colors.primary, 0.5);
-                            if (saveButton.hovered)
-                                return Qt.alpha(root.colors.surface_container_high, 0.5);
-                            return Qt.alpha(root.colors.surface_container, 0.5);
-                        }
-                        radius: 8
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 100
-                            }
-                        }
-                    }
-                    contentItem: Item {
-                        anchors.fill: parent
-
-                        Image {
-                            anchors.centerIn: parent
-                            fillMode: Image.PreserveAspectFit
-                            height: 24
-                            source: Qt.resolvedUrl("icons/save.svg")
-                            width: 24
-                        }
-                    }
-
-                    onCheckedChanged: {
-                        root.saveToDisk = checked;
-                        if (settingsLoader.item)
-                            settingsLoader.item.saveToDisk = checked;
-                    }
-                }
-                Button {
-                    id: recordButton
-
-                    Accessible.name: "Recording indicator"
-                    checkable: false
-                    height: 48
-                    scale: root.recordMode ? 1.05 : 1
-                    transformOrigin: Item.Center
-                    width: 48
-
-                    background: Rectangle {
-                        color: {
-                            if (root.recordMode)
-                                return Qt.alpha(root.colors.primary, 0.6);
-                            if (recordButton.hovered)
-                                return Qt.alpha(root.colors.surface_container_high, 0.5);
-                            return Qt.alpha(root.colors.surface_container, 0.5);
-                        }
-                        radius: 8
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 100
-                            }
-                        }
-                    }
-                    contentItem: Item {
-                        anchors.fill: parent
-
-                        Image {
-                            anchors.centerIn: parent
-                            fillMode: Image.PreserveAspectFit
-                            height: 24
-                            source: (root.recordingState === "selecting" || root.recordingState === "countdown") ? Qt.resolvedUrl("icons/start.svg") : Qt.resolvedUrl("icons/record.svg")
-                            width: 24
-                        }
-                    }
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 140
-                            easing.type: Easing.InOutQuad
-                        }
-                    }
-
-                    onClicked: {
-                        if (root.recordingState !== "idle")
-                            return;
-                        root.startRecordFlow();
-                    }
-                }
-            }
+        onSaveToDiskToggled: enabled => root.setSaveToDisk(enabled)
+        onScreenFrozenToggled: frozen => {
+            if (frozen === root.screenFrozen)
+                return;
+            if (frozen)
+                root.freezeNow();
+            else
+                root.unfreezeNow();
         }
     }
-    Item {
+    Ui.CountdownOverlay {
         id: countdownOverlay
 
-        anchors.fill: parent
-        opacity: visible ? 1 : 0
-        visible: root.recordingState === "countdown"
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 180
-                easing.type: Easing.InOutQuad
-            }
-        }
-
-        Rectangle {
-            id: countdownCircle
-
-            border.color: Qt.alpha(root.colors.primary, 0.6)
-            border.width: 2
-            color: Qt.alpha(root.colors.surface, 0.8)
-            height: 140
-            radius: 70
-            scale: 1.0
-            width: 140
-            x: root.countdownCenter.x - width / 2
-            y: root.countdownCenter.y - height / 2
-        }
-        NumberAnimation {
-            id: countdownPulse
-
-            duration: 320
-            easing.type: Easing.OutCubic
-            from: 0.8
-            property: "scale"
-            target: countdownCircle
-            to: 1.08
-        }
-        Text {
-            anchors.centerIn: countdownCircle
-            color: root.colors.on_surface
-            font.bold: true
-            font.pixelSize: 64
-            text: root.countdownValue
-        }
+        active: root.recordingState === "countdown"
+        center: root.countdownCenter
+        colors: root.colors
+        value: root.countdownValue
     }
     Item {
         id: fullMaskItem

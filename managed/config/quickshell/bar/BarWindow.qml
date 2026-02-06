@@ -12,7 +12,10 @@ PanelWindow {
     property var modelData
     property var targetScreen: modelData
 
-    WlrLayershell.layer: WlrLayer.Background
+    // A bar should sit above normal clients; Background can end up behind
+    // tiled/fullscreen windows depending on compositor behavior.
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     anchors.left: true
     anchors.right: true
     anchors.top: true

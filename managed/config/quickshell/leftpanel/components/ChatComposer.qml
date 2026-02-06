@@ -280,7 +280,7 @@ Item {
                                     color: Common.Config.color.on_surface_variant
 
                                     SequentialAnimation on opacity {
-                                        running: root.busy
+                                        running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
                                         loops: Animation.Infinite
                                         PauseAnimation {
                                             duration: busyDot.index * 120

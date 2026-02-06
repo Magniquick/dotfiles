@@ -47,6 +47,7 @@ ShellRoot {
 
         color: "transparent"
         visible: shellRoot.leftPanelShouldShow || shellRoot.leftPanelAnimating
+        screen: Bar.GlobalState.leftPanelScreen ? Bar.GlobalState.leftPanelScreen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
 
         anchors {
             top: true
@@ -121,6 +122,7 @@ ShellRoot {
 
         color: "transparent"
         visible: shellRoot.rightPanelShouldShow || shellRoot.rightPanelAnimating
+        screen: Bar.GlobalState.rightPanelScreen ? Bar.GlobalState.rightPanelScreen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
 
         anchors {
             top: true

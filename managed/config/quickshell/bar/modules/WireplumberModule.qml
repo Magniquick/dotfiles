@@ -19,6 +19,7 @@ import Quickshell
 import Quickshell.Services.Pipewire
 import ".."
 import "../components"
+import "../../common" as Common
 
 ModuleContainer {
     id: root
@@ -48,7 +49,7 @@ ModuleContainer {
             return;
         }
         const command = delta > 0 ? root.onScrollUpCommand : root.onScrollDownCommand;
-        Quickshell.execDetached(["sh", "-c", command]);
+        Common.ProcessHelper.execDetached(command);
     }
     function averageVolume(values) {
         let sum = 0;
@@ -93,7 +94,14 @@ ModuleContainer {
             return;
         }
         const percent = Math.round(next * 100);
-        Quickshell.execDetached(["sh", "-c", "wpctl set-volume -l " + root.maxVolume + " @DEFAULT_AUDIO_SINK@ " + percent + "%"]);
+        Quickshell.execDetached([
+            "wpctl",
+            "set-volume",
+            "-l",
+            String(root.maxVolume),
+            "@DEFAULT_AUDIO_SINK@",
+            percent + "%"
+        ]);
     }
     function sinkLabel() {
         if (!root.sink)
@@ -132,7 +140,7 @@ ModuleContainer {
             root.sinkAudio.muted = !root.sinkAudio.muted;
             return;
         }
-        Quickshell.execDetached(["sh", "-c", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"]);
+        Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]);
     }
 
     tooltipHoverable: true

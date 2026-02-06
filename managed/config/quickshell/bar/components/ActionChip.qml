@@ -1,5 +1,6 @@
 import ".."
 import QtQuick
+import Quickshell
 
 ActionButtonBase {
     id: root
@@ -46,7 +47,7 @@ ActionButtonBase {
                 duration: 1000
                 from: 0
                 loops: Animation.Infinite
-                running: root.loading && root.enabled
+                running: root.loading && root.enabled && root.visible && root.QsWindow.window && root.QsWindow.window.visible
                 to: 360
             }
         }

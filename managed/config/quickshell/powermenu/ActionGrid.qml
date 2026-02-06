@@ -8,8 +8,8 @@ Item {
     property var actions: defaultActions()
     property var colors
     property int columns: 3
-    // Local flag so we don't break the upstream binding when consuming the first hover.
-    property bool dropNextHover: suppressNextHover
+    // Local flag (not bound) so consuming the first hover does not break bindings.
+    property bool dropNextHover: false
     property string hoverAction: ""
     property bool hoverEnabled: true
     property int iconPadding: 6

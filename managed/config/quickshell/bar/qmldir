@@ -6,3 +6,8 @@ singleton DependencyCheck 1.0 ../common/services/DependencyCheck.qml
 singleton GlobalState 1.0 ../common/GlobalState.qml
 singleton PrivacyService 1.0 services/PrivacyService.qml
 singleton SystemdFailedService 1.0 services/SystemdFailedService.qml
+singleton UpdatesService 1.0 services/UpdatesService.qml
+singleton TodoistService 1.0 services/TodoistService.qml
+singleton CalendarService 1.0 services/CalendarService.qml
+singleton BacklightService 1.0 services/BacklightService.qml
+singleton NetworkService 1.0 services/NetworkService.qml

@@ -18,15 +18,12 @@ import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import qsnative
 
 ModuleContainer {
     id: root
 
-    readonly property string calendarEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
-    readonly property int calendarDays: 180
     property string calendarRefreshTime: ""
-    property bool refreshing: false
+    readonly property bool refreshing: CalendarService.refreshing
     property bool showDate: false
 
     function dateText() {
@@ -39,7 +36,7 @@ ModuleContainer {
         root.updateCalendarRefreshTime();
     }
     function updateCalendarRefreshTime() {
-        const generatedAt = calendarClient.generated_at;
+        const generatedAt = CalendarService.generatedAt;
         if (generatedAt && String(generatedAt).trim() !== "") {
             const dt = new Date(generatedAt);
             root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
@@ -72,19 +69,18 @@ ModuleContainer {
                         id: calendarRef
 
                         active: root.tooltipActive
-                        calendarClient: calendarClient
+                        calendarClient: CalendarService.client
                         currentDate: clock.date
-                        refreshEnvFile: root.calendarEnvFile
-                        refreshDays: root.calendarDays
+                        refreshEnvFile: CalendarService.envFile
+                        refreshDays: CalendarService.days
 
                         onDataLoaded: function () {
-                            root.refreshing = false;
+                            // CalendarService controls refreshing state.
                         }
 
                         // Handle refresh signal from parent
                         Connections {
                             function onTooltipRefreshRequested() {
-                                root.refreshing = true;
                                 calendarRef.refreshRequested();
                             }
 
@@ -98,20 +94,14 @@ ModuleContainer {
 
     onTooltipActiveChanged: {
         if (tooltipActive) {
-            root.refreshing = true;
-            Qt.callLater(function () {
-                calendarClient.refreshFromEnv(root.calendarEnvFile, root.calendarDays);
-            });
+            CalendarService.refresh("tooltip");
             root.updateCalendarRefreshTime();
         }
     }
-    IcalCache {
-        id: calendarClient
-    }
     Connections {
-        target: calendarClient
+        target: CalendarService
 
-        function onGenerated_atChanged() {
+        function onGeneratedAtChanged() {
             root.updateCalendarRefreshTime();
         }
     }

@@ -112,16 +112,27 @@ ModuleContainer {
         }
     }
 
+    // Keep service config declarative so it stays in sync without imperative
+    // signal handlers.
+    Binding {
+        target: SystemdFailedService
+        property: "debugLogging"
+        value: root.debugLogging
+    }
+    Binding {
+        target: SystemdFailedService
+        property: "enableEventRefresh"
+        value: root.enableEventRefresh
+    }
+    Binding {
+        target: SystemdFailedService
+        property: "eventDebounceMs"
+        value: root.eventDebounceMs
+    }
+
     Component.onCompleted: {
         root.tooltipRefreshRequested.connect(function () {
             SystemdFailedService.refreshCounts("manual");
         });
-        SystemdFailedService.debugLogging = root.debugLogging;
-        SystemdFailedService.enableEventRefresh = root.enableEventRefresh;
-        SystemdFailedService.eventDebounceMs = root.eventDebounceMs;
     }
-
-    onDebugLoggingChanged: SystemdFailedService.debugLogging = root.debugLogging
-    onEnableEventRefreshChanged: SystemdFailedService.enableEventRefresh = root.enableEventRefresh
-    onEventDebounceMsChanged: SystemdFailedService.eventDebounceMs = root.eventDebounceMs
 }

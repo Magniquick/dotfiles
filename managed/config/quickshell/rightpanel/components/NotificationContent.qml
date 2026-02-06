@@ -37,6 +37,17 @@ RowLayout {
     readonly property bool isBatWatch: (appNameText || "").toLowerCase() === "batwatch"
     readonly property string imageSource: root.isBatWatch ? "" : (entry && entry.notification && entry.notification.image ? entry.notification.image : "")
     property bool imageFileExists: true
+    readonly property bool inListViewport: {
+        const view = ListView.view;
+        if (!view)
+            return true;
+
+        // Delegate y is in ListView content coordinates.
+        const top = root.y;
+        const bottom = root.y + root.height;
+        const buffer = 64;
+        return bottom >= view.contentY - buffer && top <= view.contentY + view.height + buffer;
+    }
 
     onImageSourceChanged: checkImageExistence()
     Component.onCompleted: checkImageExistence()
@@ -232,13 +243,17 @@ RowLayout {
                             visible: false
                         }
 
-                        OpacityMask {
-                            readonly property bool effectEnabled: leadingIcon.visible
-
+                        Loader {
                             anchors.fill: parent
-                            visible: effectEnabled
-                            source: effectEnabled ? leadingIconImage : null
-                            maskSource: effectEnabled ? leadingIconMask : null
+                            active: leadingIcon.visible
+                                && root.inListViewport
+                                && leadingIconImage.status === Image.Ready
+                            sourceComponent: OpacityMask {
+                                anchors.fill: parent
+                                cached: true
+                                source: leadingIconImage
+                                maskSource: leadingIconMask
+                            }
                         }
                     }
 

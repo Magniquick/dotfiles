@@ -8,6 +8,7 @@ ShellRoot {
     id: root
 
     readonly property int panelWidth: 420
+    readonly property var targetScreen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
 
     HyprlandFocusGrab {
         id: focusGrab
@@ -22,6 +23,7 @@ ShellRoot {
         sourceComponent: PanelWindow {
             color: "transparent"
             implicitWidth: root.panelWidth
+            screen: root.targetScreen
 
             anchors {
                 top: true

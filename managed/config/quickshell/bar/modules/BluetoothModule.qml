@@ -19,6 +19,7 @@ import Quickshell
 import Quickshell.Bluetooth
 import ".."
 import "../components"
+import "../../common" as Common
 
 ModuleContainer {
     id: root
@@ -197,7 +198,7 @@ ModuleContainer {
                     Layout.fillWidth: true
                     text: "Open Settings"
 
-                    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
+                    onClicked: Common.ProcessHelper.execDetached(root.onClickCommand)
                 }
                 ActionChip {
                     Layout.fillWidth: true
@@ -222,5 +223,5 @@ ModuleContainer {
             root.refreshBluetooth();
     }
 
-    onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
+    onClicked: Common.ProcessHelper.execDetached(root.onClickCommand)
 }

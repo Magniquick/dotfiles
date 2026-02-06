@@ -14,6 +14,7 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
+import Quickshell
 
 ModuleContainer {
     id: root
@@ -33,6 +34,6 @@ ModuleContainer {
 
     MouseArea {
         anchors.fill: parent
-        onClicked: GlobalState.toggleRightPanel()
+        onClicked: GlobalState.toggleRightPanel(root.QsWindow.window ? root.QsWindow.window.screen : null)
     }
 }
