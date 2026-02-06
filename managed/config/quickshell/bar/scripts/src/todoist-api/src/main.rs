@@ -39,7 +39,8 @@ struct Task {
     content: String,
     description: Option<String>,
     project_id: String,
-    created_at: DateTime<Utc>,
+    added_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     due: Option<Due>,
 }
 
@@ -69,6 +70,14 @@ struct ListOutput {
     today: Vec<TaskOutput>,
     projects: HashMap<String, Vec<TaskOutput>>,
 }
+
+#[derive(Deserialize, Debug)]
+struct Paginated<T> {
+    results: Vec<T>,
+    next_cursor: Option<String>,
+}
+
+const TODOIST_API_BASE: &str = "https://api.todoist.com/api/v1";
 
 #[derive(Serialize)]
 struct StatusOutput {
@@ -130,18 +139,45 @@ fn build_client(token: &str) -> Result<Client, reqwest::Error> {
         .build()
 }
 
-fn list_tasks(client: &Client) -> Result<ListOutput, Box<dyn std::error::Error>> {
-    let tasks: Vec<Task> = client
-        .get("https://api.todoist.com/rest/v2/tasks")
-        .send()?
-        .error_for_status()?
-        .json()?;
+fn fetch_all_pages<T: for<'de> Deserialize<'de>>(
+    client: &Client,
+    url: &str,
+) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+    let mut out: Vec<T> = Vec::new();
+    let mut cursor: Option<String> = None;
 
-    let projects: Vec<Project> = client
-        .get("https://api.todoist.com/rest/v2/projects")
-        .send()?
-        .error_for_status()?
-        .json()?;
+    loop {
+        let mut full_url = reqwest::Url::parse(url)?;
+        {
+            let mut pairs = full_url.query_pairs_mut();
+            pairs.append_pair("limit", "200");
+            if let Some(next) = &cursor {
+                if !next.is_empty() {
+                    pairs.append_pair("cursor", next);
+                }
+            }
+        }
+
+        let page: Paginated<T> = client
+            .get(full_url)
+            .send()?
+            .error_for_status()?
+            .json()?;
+
+        out.extend(page.results);
+
+        match page.next_cursor {
+            Some(next) if !next.is_empty() => cursor = Some(next),
+            _ => break,
+        }
+    }
+
+    Ok(out)
+}
+
+fn list_tasks(client: &Client) -> Result<ListOutput, Box<dyn std::error::Error>> {
+    let tasks: Vec<Task> = fetch_all_pages(client, &format!("{}/tasks", TODOIST_API_BASE))?;
+    let projects: Vec<Project> = fetch_all_pages(client, &format!("{}/projects", TODOIST_API_BASE))?;
 
     let project_map: HashMap<String, String> = projects
         .iter()
@@ -164,7 +200,7 @@ fn list_tasks(client: &Client) -> Result<ListOutput, Box<dyn std::error::Error>>
                     notes: task.description,
                     due: Some(due_local.timestamp()),
                     due_human: Some(humanise(due_local, has_time)),
-                    updated: task.created_at.timestamp(),
+                    updated: task.updated_at.timestamp(),
                 });
                 continue;
             }
@@ -183,7 +219,7 @@ fn list_tasks(client: &Client) -> Result<ListOutput, Box<dyn std::error::Error>>
                 notes: task.description,
                 due: None,
                 due_human: None,
-                updated: task.created_at.timestamp(),
+                updated: task.updated_at.timestamp(),
             });
     }
 
@@ -199,17 +235,13 @@ fn list_tasks(client: &Client) -> Result<ListOutput, Box<dyn std::error::Error>>
 }
 
 fn list_projects(client: &Client) -> Result<Vec<Project>, Box<dyn std::error::Error>> {
-    let projects: Vec<Project> = client
-        .get("https://api.todoist.com/rest/v2/projects")
-        .send()?
-        .error_for_status()?
-        .json()?;
+    let projects: Vec<Project> = fetch_all_pages(client, &format!("{}/projects", TODOIST_API_BASE))?;
     Ok(projects)
 }
 
 fn complete_task(client: &Client, id: &str) -> Result<StatusOutput, Box<dyn std::error::Error>> {
     client
-        .post(&format!("https://api.todoist.com/rest/v2/tasks/{}/close", id))
+        .post(&format!("{}/tasks/{}/close", TODOIST_API_BASE, id))
         .send()?
         .error_for_status()?;
 
@@ -218,7 +250,7 @@ fn complete_task(client: &Client, id: &str) -> Result<StatusOutput, Box<dyn std:
 
 fn delete_task(client: &Client, id: &str) -> Result<StatusOutput, Box<dyn std::error::Error>> {
     client
-        .delete(&format!("https://api.todoist.com/rest/v2/tasks/{}", id))
+        .delete(&format!("{}/tasks/{}", TODOIST_API_BASE, id))
         .send()?
         .error_for_status()?;
 

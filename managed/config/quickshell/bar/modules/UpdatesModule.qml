@@ -38,6 +38,7 @@ ModuleContainer {
     property string updatesText: ""
     property string aurUpdatesText: ""
     property int aurUpdatesCount: 0
+    property bool _providerUpdatePending: false
 
     function markNoUpdates() {
         root.hasUpdates = false;
@@ -91,6 +92,16 @@ ModuleContainer {
     function refreshUpdates(source) {
         root.refreshing = true;
         updatesProvider.refresh(root.noAur);
+    }
+    function scheduleUpdateFromProvider() {
+        if (root._providerUpdatePending)
+            return;
+
+        root._providerUpdatePending = true;
+        Qt.callLater(() => {
+            root._providerUpdatePending = false;
+            root.updateFromProvider();
+        });
     }
     function updateFromProvider() {
         root.refreshing = false;
@@ -170,10 +181,10 @@ ModuleContainer {
     }
 
     onClicked: Quickshell.execDetached(["sh", "-c", root.onClickCommand])
-    onUpdatesCountChanged: root.updateFromProvider()
-    onAurUpdatesCountChanged: root.updateFromProvider()
-    onUpdatesTextChanged: root.updateFromProvider()
-    onAurUpdatesTextChanged: root.updateFromProvider()
+    onUpdatesCountChanged: root.scheduleUpdateFromProvider()
+    onAurUpdatesCountChanged: root.scheduleUpdateFromProvider()
+    onUpdatesTextChanged: root.scheduleUpdateFromProvider()
+    onAurUpdatesTextChanged: root.scheduleUpdateFromProvider()
     onLastCheckedLabelChanged: root.refreshing = false
 
     Connections {
@@ -195,7 +206,7 @@ ModuleContainer {
             root.lastCheckedLabel = updatesProvider.last_checked;
         }
         function onErrorChanged() {
-            root.updateFromProvider();
+            root.scheduleUpdateFromProvider();
         }
     }
 }

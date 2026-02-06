@@ -28,13 +28,14 @@ Item {
             return root.timeoutLowMs;
         return root.timeoutNormalMs;
     }
-    readonly property bool popupsVisible: notificationStore.popupList.length > 0
+    readonly property bool popupsVisible: notificationStore.popupModel.count > 0
     readonly property real popupTargetOpacity: popupsVisible ? 1 : 0
 
     component NotificationEntry: QtObject {
         required property int notificationId
         property var notification
         property bool popup: false
+        property bool dismissing: false
         property bool isTransient: notification && notification.hints && notification.hints.transient ? true : false
         property string appName: notification && notification.appName ? notification.appName : ""
         property var title: notification ? notification.title : undefined
@@ -53,7 +54,7 @@ Item {
         property Timer timer
 
         onNotificationChanged: {
-            if (notification === null) {
+            if (!dismissing && notification === null) {
                 notificationStore.dismissNotification(notificationId);
             }
         }
@@ -65,18 +66,27 @@ Item {
         onTriggered: notificationStore.timeoutNotification(notificationId)
     }
 
+    ListModel {
+        id: notificationsModel
+    }
+
+    ListModel {
+        id: popupsModel
+    }
+
     QtObject {
         id: notificationStore
-        property var list: []
-        property var popupList: []
+        property alias model: notificationsModel
+        property alias popupModel: popupsModel
         property int idOffset: 0
 
-        function refreshPopupList() {
-            popupList = list.filter(entry => entry.popup);
-        }
-
-        function updateList(newList) {
-            list = newList;
+        function findIndexById(model, id) {
+            for (let i = 0; i < model.count; i++) {
+                if (model.get(i).notificationId === id) {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         function requestDismiss(notification) {
@@ -98,13 +108,21 @@ Item {
 
         function addNotification(notification) {
             notification.tracked = true;
+            const id = notification.id + idOffset;
             const entry = notificationEntryComponent.createObject(notificationStore, {
-                "notificationId": notification.id + idOffset,
+                "notificationId": id,
                 "notification": notification
             });
-            updateList([entry, ...list]);
+            notificationsModel.insert(0, {
+                "notificationId": id,
+                "entryObj": entry
+            });
 
             entry.popup = true;
+            popupsModel.insert(0, {
+                "notificationId": id,
+                "entryObj": entry
+            });
             // qmllint disable missing-property
             const urgencyTimeout = root.getTimeoutForUrgency(entry.urgency);
             // qmllint enable missing-property
@@ -113,54 +131,66 @@ Item {
             if (notification.expireTimeout !== 0 && urgencyTimeout !== 0) {
                 const timeout = notification.expireTimeout > 0 ? notification.expireTimeout : urgencyTimeout;
                 entry.timer = notificationTimerComponent.createObject(notificationStore, {
-                    "notificationId": notification.id + idOffset,
+                    "notificationId": id,
                     "interval": timeout
                 });
             }
-            refreshPopupList();
         }
 
         function dismissNotification(id) {
-            const index = list.findIndex(entry => entry.notificationId === id);
+            const index = findIndexById(notificationsModel, id);
             if (index === -1) {
                 return;
             }
-            const entry = list[index];
+            const entry = notificationsModel.get(index).entryObj;
             if (entry.timer) {
                 entry.timer.stop();
                 entry.timer.destroy();
             }
+            entry.dismissing = true;
             requestDismiss(entry.notification);
-            const newList = [...list];
-            newList.splice(index, 1);
-            updateList(newList);
-            refreshPopupList();
+            notificationsModel.remove(index);
+
+            const popupIndex = findIndexById(popupsModel, id);
+            if (popupIndex !== -1) {
+                popupsModel.remove(popupIndex);
+            }
+            entry.destroy();
         }
 
         function dismissAll() {
-            list.forEach(entry => {
+            const entries = [];
+            for (let i = 0; i < notificationsModel.count; i++) {
+                entries.push(notificationsModel.get(i).entryObj);
+            }
+            entries.forEach(entry => {
                 if (entry.timer) {
                     entry.timer.stop();
                     entry.timer.destroy();
                 }
+                entry.dismissing = true;
                 requestDismiss(entry.notification);
             });
-            updateList([]);
-            refreshPopupList();
+            notificationsModel.clear();
+            popupsModel.clear();
+            entries.forEach(entry => entry.destroy());
         }
 
         function timeoutNotification(id) {
-            const index = list.findIndex(entry => entry.notificationId === id);
+            const index = findIndexById(notificationsModel, id);
             if (index === -1) {
                 return;
             }
-            const entry = list[index];
+            const entry = notificationsModel.get(index).entryObj;
             entry.popup = false;
+
+            const popupIndex = findIndexById(popupsModel, id);
+            if (popupIndex !== -1) {
+                popupsModel.remove(popupIndex);
+            }
+
             if (entry.isTransient) {
                 dismissNotification(id);
-            } else {
-                updateList([...list]);
-                refreshPopupList();
             }
         }
     }
@@ -275,8 +305,8 @@ Item {
             }
 
             Text {
-                visible: notificationStore.list.length > 0
-                text: notificationStore.list.length.toString()
+                visible: notificationStore.model.count > 0
+                text: notificationStore.model.count.toString()
                 color: Common.Config.color.on_surface_variant
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.labelMedium.size
@@ -292,7 +322,7 @@ Item {
             }
 
             Components.ActionButton {
-                visible: notificationStore.list.length > 0
+                visible: notificationStore.model.count > 0
                 label: "Clear"
                 icon: "\uf1f8"
                 onClicked: notificationStore.dismissAll()
@@ -305,7 +335,7 @@ Item {
 
             Text {
                 anchors.centerIn: parent
-                visible: notificationStore.list.length === 0
+                visible: notificationStore.model.count === 0
                 text: "No notifications"
                 color: Common.Config.color.on_surface_variant
                 font.family: Common.Config.fontFamily
@@ -316,9 +346,9 @@ Item {
             ListView {
                 id: notificationList
                 anchors.fill: parent
-                visible: notificationStore.list.length > 0
+                visible: notificationStore.model.count > 0
                 spacing: Common.Config.space.sm
-                model: notificationStore.list
+                model: notificationStore.model
                 clip: true
 
                 ScrollBar.vertical: ScrollBar {
@@ -362,10 +392,10 @@ Item {
                 }
 
                 delegate: Components.NotificationCard {
-                    required property var modelData
+                    required property var entryObj
 
                     width: ListView.view.width
-                    entry: modelData
+                    entry: entryObj
                     onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
                 }
             }
@@ -434,6 +464,8 @@ Item {
         color: "transparent"
         implicitWidth: root.popupWidth
         implicitHeight: Math.min(root.popupMaxHeight, popupListView.contentHeight + Common.Config.space.md * 2)
+        // Keep popups on the same output as the owning right panel window.
+        screen: root.QsWindow.window ? root.QsWindow.window.screen : null
 
         anchors {
             top: true
@@ -479,7 +511,7 @@ Item {
                 spacing: Common.Config.space.sm
                 interactive: popupListView.contentHeight > root.popupMaxHeight
                 clip: true
-                model: notificationStore.popupList
+                model: notificationStore.popupModel
 
                 add: Transition {
                     ParallelAnimation {
@@ -518,10 +550,10 @@ Item {
                 }
 
                 delegate: Components.PopupNotification {
-                    required property var modelData
+                    required property var entryObj
 
                     width: ListView.view.width
-                    entry: modelData
+                    entry: entryObj
                     onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
                 }
             }

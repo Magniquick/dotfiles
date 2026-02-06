@@ -1,6 +1,6 @@
 /**
  * @module SystemdFailedModule
- * @description Systemd failed units monitor with real-time D-Bus event detection
+ * @description Systemd failed units monitor UI (binds to singleton SystemdFailedService)
  *
  * Features:
  * - Monitors both system and user systemd instances
@@ -82,106 +82,12 @@ ModuleContainer {
     property bool debugLogging: false
     property bool enableEventRefresh: true
     property int eventDebounceMs: 750
-    property int failedCount: root.systemFailedCount + root.userFailedCount
-    property string lastRefreshedLabel: ""
-    property int systemFailedCount: 0
-    property var systemFailedUnits: []
-    property bool systemPropsSignalPending: false
-    property int userFailedCount: 0
-    property var userFailedUnits: []
-    property bool userPropsSignalPending: false
-
-    function handleMonitorLine(source, data) {
-        const trimmed = data.trim();
-        if (trimmed === "")
-            return;
-
-        if (trimmed.indexOf("signal ") === 0) {
-            root.logEvent(source + "Monitor signal " + trimmed);
-            root.scheduleRefresh(source);
-        }
-    }
-    function handlePropsMonitorLine(source, data) {
-        const trimmed = data.trim();
-        if (trimmed === "")
-            return;
-
-        if (trimmed.indexOf("signal ") === 0) {
-            if (source === "system")
-                root.systemPropsSignalPending = true;
-            else
-                root.userPropsSignalPending = true;
-            root.logEvent(source + "Props signal " + trimmed);
-            return;
-        }
-        const pending = source === "system" ? root.systemPropsSignalPending : root.userPropsSignalPending;
-        if (!pending)
-            return;
-
-        if (trimmed.indexOf("string \"NFailedUnits\"") !== -1 || trimmed.indexOf("string \"FailedUnits\"") !== -1) {
-            root.logEvent(source + "Props matched failed units");
-            if (source === "system")
-                root.systemPropsSignalPending = false;
-            else
-                root.userPropsSignalPending = false;
-            root.scheduleRefresh(source + "-props");
-        }
-    }
-    function logEvent(message) {
-        if (!root.debugLogging)
-            return;
-
-        console.log("SystemdFailedModule " + new Date().toISOString() + " " + message);
-    }
-    function parseFailedUnits(text) {
-        if (!text || text.trim() === "")
-            return [];
-
-        const lines = text.trim().split("\n").map(line => {
-            return line.trim();
-        }).filter(line => {
-            return line !== "";
-        });
-        const units = [];
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-            if (line.indexOf("0 loaded units listed") === 0)
-                continue;
-
-            if (line.indexOf("UNIT ") === 0)
-                continue;
-
-            line = line.replace(/^●\s+/, "");
-            const parts = line.split(/\s+/);
-            if (parts.length === 0)
-                continue;
-
-            const unit = parts[0] || "";
-            const load = parts[1] || "";
-            const active = parts[2] || "";
-            const sub = parts[3] || "";
-            const description = parts.slice(4).join(" ");
-            if (unit)
-                units.push({
-                    "unit": unit,
-                    "load": load,
-                    "active": active,
-                    "sub": sub,
-                    "description": description
-                });
-        }
-        return units;
-    }
-    function refreshCounts(source) {
-        root.logEvent("refreshCounts " + (source || "unknown"));
-        systemRunner.trigger();
-        userRunner.trigger();
-    }
-    function scheduleRefresh(source) {
-        root.logEvent("scheduleRefresh " + source);
-        if (!eventDebounce.running)
-            eventDebounce.start();
-    }
+    readonly property int failedCount: SystemdFailedService.failedCount
+    readonly property string lastRefreshedLabel: SystemdFailedService.lastRefreshedLabel
+    readonly property int systemFailedCount: SystemdFailedService.systemFailedCount
+    readonly property var systemFailedUnits: SystemdFailedService.systemFailedUnits
+    readonly property int userFailedCount: SystemdFailedService.userFailedCount
+    readonly property var userFailedUnits: SystemdFailedService.userFailedUnits
 
     collapsed: root.failedCount <= 0
     tooltipShowRefreshIcon: true
@@ -208,78 +114,14 @@ ModuleContainer {
 
     Component.onCompleted: {
         root.tooltipRefreshRequested.connect(function () {
-            root.refreshCounts("manual");
+            SystemdFailedService.refreshCounts("manual");
         });
-        root.refreshCounts("startup");
+        SystemdFailedService.debugLogging = root.debugLogging;
+        SystemdFailedService.enableEventRefresh = root.enableEventRefresh;
+        SystemdFailedService.eventDebounceMs = root.eventDebounceMs;
     }
 
-    CommandRunner {
-        id: systemRunner
-
-        command: "systemctl --failed --no-legend --plain --no-pager"
-        intervalMs: 0
-
-        onOutputChanged: {
-            root.systemFailedUnits = root.parseFailedUnits(output);
-            root.systemFailedCount = root.systemFailedUnits.length;
-            root.lastRefreshedLabel = Qt.formatDateTime(new Date(), "hh:mm ap");
-            root.logEvent("systemRunner output=" + root.systemFailedCount);
-        }
-    }
-    CommandRunner {
-        id: userRunner
-
-        command: "systemctl --user --failed --no-legend --plain --no-pager"
-        intervalMs: 0
-
-        onOutputChanged: {
-            root.userFailedUnits = root.parseFailedUnits(output);
-            root.userFailedCount = root.userFailedUnits.length;
-            root.lastRefreshedLabel = Qt.formatDateTime(new Date(), "hh:mm ap");
-            root.logEvent("userRunner output=" + root.userFailedCount);
-        }
-    }
-    ProcessMonitor {
-        id: systemMonitor
-
-        command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-        enabled: root.enableEventRefresh
-
-        onOutput: data => root.handleMonitorLine("system", data)
-    }
-    ProcessMonitor {
-        id: systemPropsMonitor
-
-        command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-        enabled: root.enableEventRefresh
-
-        onOutput: data => root.handlePropsMonitorLine("system", data)
-    }
-    ProcessMonitor {
-        id: userMonitor
-
-        command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-        enabled: root.enableEventRefresh
-
-        onOutput: data => root.handleMonitorLine("user", data)
-    }
-    ProcessMonitor {
-        id: userPropsMonitor
-
-        command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-        enabled: root.enableEventRefresh
-
-        onOutput: data => root.handlePropsMonitorLine("user", data)
-    }
-    Timer {
-        id: eventDebounce
-
-        interval: root.eventDebounceMs
-        repeat: false
-
-        onTriggered: {
-            root.logEvent("eventDebounce fired");
-            root.refreshCounts("debounce");
-        }
-    }
+    onDebugLoggingChanged: SystemdFailedService.debugLogging = root.debugLogging
+    onEnableEventRefreshChanged: SystemdFailedService.enableEventRefresh = root.enableEventRefresh
+    onEventDebounceMsChanged: SystemdFailedService.eventDebounceMs = root.eventDebounceMs
 }

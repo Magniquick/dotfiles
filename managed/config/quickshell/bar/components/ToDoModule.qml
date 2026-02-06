@@ -64,6 +64,7 @@ ColumnLayout {
         root.loading = true;
         root.parseError = false;
         Qt.callLater(function () {
+            console.log("Todoist: refresh requested (env=" + root.todoistEnvFile + ")");
             todoistClient.listTasks(root.todoistEnvFile);
             root.loading = false;
         });
@@ -145,11 +146,14 @@ ColumnLayout {
                 root.usingCache = false;
             } else {
                 root.parseError = true;
+                console.warn("Todoist: failed to parse data_json payload");
             }
         }
         function onErrorChanged() {
-            if (todoistClient.error && todoistClient.error !== "")
+            if (todoistClient.error && todoistClient.error !== "") {
                 root.parseError = true;
+                console.warn("Todoist: error from qsnative:", todoistClient.error);
+            }
         }
     }
 

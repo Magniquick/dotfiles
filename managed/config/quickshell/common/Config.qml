@@ -30,7 +30,9 @@ QtObject {
     }
     readonly property var color: Colors.color
     readonly property var palette: Colors.palette
-    readonly property real devicePixelRatio: (Quickshell.screens && Quickshell.screens.length > 0) ? Quickshell.screens[0].devicePixelRatio : 1
+    // Mixed-DPI note: avoid a global DPR derived from `Quickshell.screens[0]`.
+    // Use `QsWindow.devicePixelRatio` (per-window) or `ShellScreen.devicePixelRatio` (per-screen)
+    // at the point of use instead.
     readonly property int moduleMarginBottom: space.none
     readonly property int outerGaps: 4
     readonly property int moduleMarginX: space.none

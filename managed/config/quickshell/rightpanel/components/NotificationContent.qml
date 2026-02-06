@@ -233,9 +233,12 @@ RowLayout {
                         }
 
                         OpacityMask {
+                            readonly property bool effectEnabled: leadingIcon.visible
+
                             anchors.fill: parent
-                            source: leadingIconImage
-                            maskSource: leadingIconMask
+                            visible: effectEnabled
+                            source: effectEnabled ? leadingIconImage : null
+                            maskSource: effectEnabled ? leadingIconMask : null
                         }
                     }
 

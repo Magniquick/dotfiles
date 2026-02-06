@@ -6,6 +6,10 @@ This file provides guidance for working with code in this repository.
 
 Custom Quickshell configuration for Wayland/Hyprland featuring a modular status bar, left/right panels, powermenu, screenshot utilities (HyprQuickshot), and system clock. Quickshell is a Qt/QML-based compositor shell toolkit.
 
+## Documentation
+
+Always use Context7 to look up Quickshell documentation.
+
 ## Build and Run Commands
 
 **Running the shell:**

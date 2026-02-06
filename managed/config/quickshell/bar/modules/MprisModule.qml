@@ -274,9 +274,12 @@ ModuleContainer {
                             visible: false
                         }
                         OpacityMask {
+                            readonly property bool effectEnabled: root.tooltipActive && root.hasArt
+
                             anchors.fill: parent
-                            maskSource: artMask
-                            source: artImage
+                            visible: effectEnabled
+                            maskSource: effectEnabled ? artMask : null
+                            source: effectEnabled ? artImage : null
                         }
                     }
                     Text {

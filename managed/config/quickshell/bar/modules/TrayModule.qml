@@ -189,8 +189,10 @@ ModuleContainer {
                                 fillMode: Image.PreserveAspectFit
                                 height: Config.iconSize + Config.space.xs
                                 source: root.iconSource(trayItem.modelData.icon)
-                                sourceSize.height: Math.round(height * Config.devicePixelRatio)
-                                sourceSize.width: Math.round(width * Config.devicePixelRatio)
+                                // `sourceSize` is in physical pixels; use the DPR of the window this delegate
+                                // is actually rendered in (fixes mixed-DPI setups).
+                                sourceSize.height: Math.round(height * ((trayItem.QsWindow.window && trayItem.QsWindow.window.devicePixelRatio) ? trayItem.QsWindow.window.devicePixelRatio : 1))
+                                sourceSize.width: Math.round(width * ((trayItem.QsWindow.window && trayItem.QsWindow.window.devicePixelRatio) ? trayItem.QsWindow.window.devicePixelRatio : 1))
                                 width: Config.iconSize + Config.space.xs
                             }
                             MouseArea {

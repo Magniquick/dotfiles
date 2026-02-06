@@ -29,6 +29,7 @@ Item {
     property string title: ""
     readonly property var contentItem: contentLoader.item
     readonly property var window: targetItem ? targetItem.QsWindow.window : null
+    property bool _anchorUpdatePending: false
 
     signal refreshRequested
 
@@ -36,14 +37,31 @@ Item {
         if (!root.window || !root.targetItem)
             return;
 
-        root.anchorRect = root.window.itemRect(root.targetItem);
+        const nextRect = root.window.itemRect(root.targetItem);
+        if (nextRect.x === root.anchorRect.x
+            && nextRect.y === root.anchorRect.y
+            && nextRect.width === root.anchorRect.width
+            && nextRect.height === root.anchorRect.height)
+            return;
+
+        root.anchorRect = nextRect;
     }
-    function updateAnchor() {
+    function _updateAnchorNow() {
         root.refreshAnchorRect();
         // qmllint disable unresolved-type
         if (popup.visible)
             popup.anchor.updateAnchor();
     // qmllint enable unresolved-type
+    }
+    function updateAnchor() {
+        if (root._anchorUpdatePending)
+            return;
+
+        root._anchorUpdatePending = true;
+        Qt.callLater(() => {
+            root._anchorUpdatePending = false;
+            root._updateAnchorNow();
+        });
     }
 
     onOpenChanged: root.updateAnchor()

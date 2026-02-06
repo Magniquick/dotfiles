@@ -32,18 +32,12 @@ Item {
 
     visible: false
 
-    Component.onCompleted: trigger()
-
     Timer {
         interval: root.intervalMs
         repeat: true
         running: root.enabled && root.intervalMs > 0
+        triggeredOnStart: true
 
-        onRunningChanged: {
-            // Trigger immediately when timer starts
-            if (running)
-                root.trigger();
-        }
         onTriggered: root.trigger()
     }
     Timer {

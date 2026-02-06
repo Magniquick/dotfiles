@@ -1098,7 +1098,8 @@ struct Task {
     content: String,
     description: Option<String>,
     project_id: String,
-    created_at: DateTime<Utc>,
+    added_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     due: Option<Due>,
 }
 
@@ -1129,29 +1130,62 @@ struct ListOutput {
     projects: HashMap<String, Vec<TaskOutput>>,
 }
 
+#[derive(Deserialize, Debug)]
+struct Paginated<T> {
+    results: Vec<T>,
+    next_cursor: Option<String>,
+}
+
+const TODOIST_API_BASE: &str = "https://api.todoist.com/api/v1";
+
+fn fetch_all_pages<T: for<'de> Deserialize<'de>>(
+    client: &reqwest::blocking::Client,
+    url: &str,
+) -> Result<Vec<T>, String> {
+    let mut out: Vec<T> = Vec::new();
+    let mut cursor: Option<String> = None;
+
+    loop {
+        let mut full_url =
+            reqwest::Url::parse(url).map_err(|err| err.to_string())?;
+        {
+            let mut pairs = full_url.query_pairs_mut();
+            pairs.append_pair("limit", "200");
+            if let Some(next) = &cursor {
+                if !next.is_empty() {
+                    pairs.append_pair("cursor", next);
+                }
+            }
+        }
+
+        let page: Paginated<T> = client
+            .get(full_url)
+            .send()
+            .map_err(|err| err.to_string())?
+            .error_for_status()
+            .map_err(|err| err.to_string())?
+            .json()
+            .map_err(|err| err.to_string())?;
+
+        out.extend(page.results);
+
+        match page.next_cursor {
+            Some(next) if !next.is_empty() => cursor = Some(next),
+            _ => break,
+        }
+    }
+
+    Ok(out)
+}
+
 fn todoist_list_tasks(env_file: &str) -> Result<String, String> {
     load_env(env_file);
     let token = std::env::var("TODOIST_API_TOKEN")
         .map_err(|_| "TODOIST_API_TOKEN not found in environment (.env)".to_string())?;
     let client = build_client(&token)?;
 
-    let tasks: Vec<Task> = client
-        .get("https://api.todoist.com/rest/v2/tasks")
-        .send()
-        .map_err(|err| err.to_string())?
-        .error_for_status()
-        .map_err(|err| err.to_string())?
-        .json()
-        .map_err(|err| err.to_string())?;
-
-    let projects: Vec<Project> = client
-        .get("https://api.todoist.com/rest/v2/projects")
-        .send()
-        .map_err(|err| err.to_string())?
-        .error_for_status()
-        .map_err(|err| err.to_string())?
-        .json()
-        .map_err(|err| err.to_string())?;
+    let tasks: Vec<Task> = fetch_all_pages(&client, &format!("{}/tasks", TODOIST_API_BASE))?;
+    let projects: Vec<Project> = fetch_all_pages(&client, &format!("{}/projects", TODOIST_API_BASE))?;
 
     let project_map: HashMap<String, String> = projects
         .iter()
@@ -1174,7 +1208,7 @@ fn todoist_list_tasks(env_file: &str) -> Result<String, String> {
                     notes: task.description,
                     due: Some(due_local.timestamp()),
                     due_human: Some(humanise(due_local, has_time)),
-                    updated: task.created_at.timestamp(),
+                    updated: task.updated_at.timestamp(),
                 });
                 continue;
             }
@@ -1193,7 +1227,7 @@ fn todoist_list_tasks(env_file: &str) -> Result<String, String> {
                 notes: task.description,
                 due: None,
                 due_human: None,
-                updated: task.created_at.timestamp(),
+                updated: task.updated_at.timestamp(),
             });
     }
 
@@ -1216,14 +1250,7 @@ fn todoist_list_projects(env_file: &str) -> Result<String, String> {
         .map_err(|_| "TODOIST_API_TOKEN not found in environment (.env)".to_string())?;
     let client = build_client(&token)?;
 
-    let projects: Vec<Project> = client
-        .get("https://api.todoist.com/rest/v2/projects")
-        .send()
-        .map_err(|err| err.to_string())?
-        .error_for_status()
-        .map_err(|err| err.to_string())?
-        .json()
-        .map_err(|err| err.to_string())?;
+    let projects: Vec<Project> = fetch_all_pages(&client, &format!("{}/projects", TODOIST_API_BASE))?;
 
     serde_json::to_string(&projects).map_err(|err| err.to_string())
 }
@@ -1235,7 +1262,7 @@ fn todoist_complete_task(env_file: &str, id: &str) -> Result<(), String> {
     let client = build_client(&token)?;
 
     client
-        .post(&format!("https://api.todoist.com/rest/v2/tasks/{}/close", id))
+        .post(&format!("{}/tasks/{}/close", TODOIST_API_BASE, id))
         .send()
         .map_err(|err| err.to_string())?
         .error_for_status()
@@ -1251,7 +1278,7 @@ fn todoist_delete_task(env_file: &str, id: &str) -> Result<(), String> {
     let client = build_client(&token)?;
 
     client
-        .delete(&format!("https://api.todoist.com/rest/v2/tasks/{}", id))
+        .delete(&format!("{}/tasks/{}", TODOIST_API_BASE, id))
         .send()
         .map_err(|err| err.to_string())?
         .error_for_status()

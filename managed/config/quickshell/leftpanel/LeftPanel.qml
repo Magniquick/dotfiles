@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Quickshell.Io
 import "../common" as Common
 import "./components" as Components
+import "./services" as Services
 
 Item {
     id: root
@@ -243,7 +244,7 @@ Item {
         // Re-send the request
         aiBusy = true;
         backendStatus = "Thinking...";
-        aiProc.startRequest([
+        aiClient.startRequest([
             {
                 role: "system",
                 content: moodPrompts[root.currentMood]
@@ -345,7 +346,7 @@ Item {
 
         aiBusy = true;
         backendStatus = "Thinking...";
-        aiProc.startRequest([
+        aiClient.startRequest([
             {
                 role: "system",
                 content: moodPrompts[currentMood]
@@ -553,111 +554,35 @@ Item {
         }
     }
 
-    Process {
-        id: aiProc
-        property string lastError: ""
-        property string requestProvider: ""
+    Services.AiClient {
+        id: aiClient
+        modelId: root.modelId
+        openaiApiKey: root.openaiApiKey
+        geminiApiKey: root.geminiApiKey
 
-        function startRequest(history) {
-            requestProvider = root.currentProvider;
+        onReplyReceived: function(reply) {
+            root.aiBusy = false;
+            root.backendStatus = "Ready";
 
-            if (root.currentProvider === "gemini") {
-                const systemMsg = history.find(m => m.role === "system");
-                const chatMsgs = history.filter(m => m.role !== "system");
-                const contents = chatMsgs.map(m => ({
-                            role: m.role === "assistant" ? "model" : "user",
-                            parts: [
-                                {
-                                    text: m.content
-                                }
-                            ]
-                        }));
-                const payload = JSON.stringify({
-                    contents: contents,
-                    systemInstruction: systemMsg ? {
-                        parts: [
-                            {
-                                text: systemMsg.content
-                            }
-                        ]
-                    } : undefined
-                });
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${root.modelId}:generateContent?key=${root.geminiApiKey}`;
-                command = ["curl", "-sS", endpoint, "-H", "Content-Type: application/json", "-d", payload];
-            } else {
-                const payload = JSON.stringify({
-                    model: root.modelId,
-                    messages: history
-                });
-                command = ["curl", "-sS", "https://api.openai.com/v1/chat/completions", "-H", "Content-Type: application/json", "-H", "Authorization: Bearer " + root.openaiApiKey, "-d", payload];
-            }
-            running = true;
+            root.chatHistory.push({
+                role: "assistant",
+                content: reply
+            });
+            messageModel.append({
+                sender: "assistant",
+                body: reply
+            });
+            root.scrollToLatestMessage();
         }
 
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.aiBusy = false;
-                root.backendStatus = "Ready";
-                if (!text || text.trim().length === 0) {
-                    messageModel.append({
-                        sender: "assistant",
-                        body: "No response received from the backend."
-                    });
-                    return;
-                }
-                let reply = "";
-                try {
-                    const data = JSON.parse(text);
-                    if (aiProc.requestProvider === "gemini") {
-                        reply = data.candidates[0].content.parts[0].text;
-                    } else {
-                        reply = data.choices[0].message.content;
-                    }
-                } catch (err) {
-                    messageModel.append({
-                        sender: "assistant",
-                        body: "Failed to parse response: " + err + "\n" + text.substring(0, 200)
-                    });
-                    return;
-                }
-                if (!reply || reply.trim().length === 0) {
-                    messageModel.append({
-                        sender: "assistant",
-                        body: "Backend returned an empty reply."
-                    });
-                    return;
-                }
-                root.chatHistory.push({
-                    role: "assistant",
-                    content: reply
-                });
-                messageModel.append({
-                    sender: "assistant",
-                    body: reply
-                });
-                root.scrollToLatestMessage();
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text && text.trim().length > 0) {
-                    aiProc.lastError = text.trim();
-                }
-            }
-        }
-
-        onRunningChanged: {
-            if (!running && lastError.length > 0) {
-                root.aiBusy = false;
-                root.backendStatus = "Error";
-                messageModel.append({
-                    sender: "assistant",
-                    body: "Backend error: " + lastError
-                });
-                aiProc.lastError = "";
-                root.scrollToLatestMessage();
-            }
+        onErrorOccurred: function(message) {
+            root.aiBusy = false;
+            root.backendStatus = "Error";
+            messageModel.append({
+                sender: "assistant",
+                body: message
+            });
+            root.scrollToLatestMessage();
         }
     }
 

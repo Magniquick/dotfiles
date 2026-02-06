@@ -60,6 +60,9 @@ PanelWindow {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Config.moduleSpacing
 
+            IdleInhibitModule {
+                targetWindow: root
+            }
             ControlsGroup {}
             WirelessGroup {}
             BatteryModule {}
