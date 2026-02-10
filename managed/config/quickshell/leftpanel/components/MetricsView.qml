@@ -40,6 +40,15 @@ Item {
     }
 
     Timer {
+        id: cpuPrimeTimer
+        interval: 200
+        repeat: false
+        running: false
+        onTriggered: sysInfoProvider.refresh()
+    }
+
+    Timer {
+        id: pollTimer
         interval: 2000
         repeat: true
         triggeredOnStart: true
@@ -47,6 +56,13 @@ Item {
         running: root.visible && root.QsWindow.window && root.QsWindow.window.visible
         // qmllint enable missing-property
         onTriggered: sysInfoProvider.refresh()
+        onRunningChanged: {
+            if (running) {
+                // CPU% needs a previous /proc/stat sample; take an early second sample so we
+                // don't wait the full 2s for the first "real" value.
+                cpuPrimeTimer.restart();
+            }
+        }
     }
 
     ColumnLayout {
@@ -138,7 +154,6 @@ Item {
                                     family: Common.Config.fontFamily
                                     pixelSize: 9
                                     weight: Font.Bold
-                                    letterSpacing: 2
                                 }
                                 opacity: 0.5
                             }
@@ -222,75 +237,7 @@ Item {
                 }
             }
 
-            // Health status card
-            Rectangle {
-                Layout.preferredWidth: 100
-                Layout.fillHeight: true
-                radius: Common.Config.shape.corner.lg
-                color: Qt.alpha(Common.Config.color.on_surface, 0.02)
-                border.width: 1
-                border.color: Qt.alpha(Common.Config.color.on_surface, 0.05)
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Common.Config.space.md
-                    spacing: Common.Config.space.xs
-
-                    Item {
-                        Layout.fillHeight: true
-                    }
-
-                    // Status icon with pulse
-                    Rectangle {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 40
-                        Layout.preferredHeight: 40
-                        implicitWidth: 40
-                        implicitHeight: 40
-                        radius: 20
-                        color: Qt.alpha(root.isHealthy ? Common.Config.color.tertiary : Common.Config.color.error, 0.1)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.isHealthy ? "\udb80\udda8" : "\uf071"
-                            color: root.isHealthy ? Common.Config.color.tertiary : Common.Config.color.error
-                            font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 20
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignHCenter
-                        horizontalAlignment: Text.AlignHCenter
-                        text: root.isHealthy ? "HEALTHY" : "WARNING"
-                        color: Common.Config.color.on_surface
-                        font {
-                            family: Common.Config.fontFamily
-                            pixelSize: 10
-                            weight: Font.Bold
-                            letterSpacing: 2
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignHCenter
-                        horizontalAlignment: Text.AlignHCenter
-                        text: root.isHealthy ? "All systems go" : "Check metrics"
-                        color: Common.Config.color.on_surface_variant
-                        font {
-                            family: Common.Config.fontFamily
-                            pixelSize: 9
-                        }
-                        opacity: 0.5
-                    }
-
-                    Item {
-                        Layout.fillHeight: true
-                    }
-                }
-            }
+            // (Health card removed; footer already reflects health state.)
         }
 
         Item {

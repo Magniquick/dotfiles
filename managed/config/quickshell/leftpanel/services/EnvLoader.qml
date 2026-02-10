@@ -38,6 +38,6 @@ Item {
 
     readonly property string openaiApiKey: envVars["OPENAI_API_KEY"] || ""
     readonly property string geminiApiKey: envVars["GEMINI_API_KEY"] || ""
-    readonly property string modelId: envVars["OPENAI_MODEL"] || "gemini-2.0-flash"
+    // Default model when OPENAI_MODEL is not set in leftpanel/.env.
+    readonly property string modelId: envVars["OPENAI_MODEL"] || "gemini-2.5-flash-lite"
 }
-

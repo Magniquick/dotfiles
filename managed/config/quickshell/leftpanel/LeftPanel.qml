@@ -3,13 +3,21 @@ import QtQuick
 import QtQuick.Layouts
 import "../common" as Common
 import "./services" as Services
-import "./stores" as Stores
-import "./controllers" as Controllers
 import "./views" as Views
+import qsnative
 
 Item {
     id: root
-    focus: true
+
+    function focusComposer() {
+        if (panelView && panelView.focusComposer)
+            panelView.focusComposer();
+    }
+
+    function clearTextFocus() {
+        if (panelView && panelView.clearTextFocus)
+            panelView.clearTextFocus();
+    }
 
     Services.EnvLoader {
         id: envLoader
@@ -24,6 +32,8 @@ Item {
     readonly property bool hasApiKey: activeApiKey.length > 0
 
     property string currentMood: "default"
+    property bool showCommandPicker: false
+    property string activeCommand: ""
 
     // Check if syntax highlighting is available
     readonly property bool syntaxHighlightingAvailable: syntaxCheckLoader.status === Loader.Ready
@@ -38,16 +48,14 @@ Item {
         { label: "Metrics", icon: "\udb80\ude03", accent: Common.Config.color.primary }
     ]
 
-    readonly property var availableModels: [
-        { value: "gpt-4o", label: "GPT-4o", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Most capable OpenAI", accent: Common.Config.color.tertiary },
-        { value: "gpt-4o-mini", label: "GPT-4o Mini", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Fast and efficient", accent: Common.Config.color.tertiary },
-        { value: "gpt-4-turbo", label: "GPT-4 Turbo", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Previous flagship", accent: Common.Config.color.tertiary },
-        { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo", iconImage: "./assets/OpenAI-white-monoblossom.svg", description: "Fastest, cheapest", accent: Common.Config.color.tertiary },
-        { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Next-gen Flash (default)", accent: Common.Config.color.primary },
-        { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Fast multimodal", accent: Common.Config.color.primary },
-        { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Cost-efficient", accent: Common.Config.color.primary },
-        { value: "gemini-2.0-pro-exp-02-05", label: "Gemini 2.0 Pro", iconImage: "./assets/Google_Gemini_icon_2025.svg.png", description: "Best for complex tasks", accent: Common.Config.color.primary }
-    ]
+    AiModelCatalog {
+        id: modelCatalog
+        openai_api_key: root.openaiApiKey
+        gemini_api_key: root.geminiApiKey
+        openai_base_url: "" // future: openrouter/litellm/etc
+    }
+
+    property var availableModels: []
 
     Services.MoodConfig {
         id: moodConfig
@@ -65,55 +73,72 @@ Item {
         return model ? model.label : modelId;
     }
 
+    function rebuildAvailableModels() {
+        let parsed = [];
+        try {
+            parsed = JSON.parse(modelCatalog.models_json || "[]");
+        } catch (e) {
+            parsed = [];
+        }
+
+        const out = [];
+        for (let i = 0; i < parsed.length; i++) {
+            const m = parsed[i] || {};
+            const value = m.value || "";
+            const provider = m.provider || (value.startsWith("gemini-") ? "gemini" : "openai");
+            out.push({
+                value,
+                label: m.label || value,
+                description: m.description || "",
+                recommended: !!m.recommended,
+                iconImage: provider === "gemini"
+                    ? "./assets/Google_Gemini_icon_2025.svg.png"
+                    : "./assets/OpenAI-white-monoblossom.svg",
+                accent: provider === "gemini"
+                    ? Common.Config.color.primary
+                    : Common.Config.color.tertiary
+            });
+        }
+        root.availableModels = out;
+    }
+
     function closePanel() {
         Common.GlobalState.leftPanelVisible = false;
     }
 
-    Stores.ChatStore {
-        id: chatStore
-    }
+    AiChatSession {
+        id: chatSession
+        model_id: root.modelId
+        system_prompt: root.moodPrompts[root.currentMood] || ""
+        openai_api_key: root.openaiApiKey
+        gemini_api_key: root.geminiApiKey
+        openai_base_url: "" // future: openrouter/litellm/etc
 
-    Services.AiClient {
-        id: aiClient
-        modelId: root.modelId
-        openaiApiKey: root.openaiApiKey
-        geminiApiKey: root.geminiApiKey
-
-        onReplyReceived: function(reply) {
-            chatController.aiBusy = false;
-            chatController.backendStatus = "Ready";
-            chatStore.appendAssistant(reply);
-            panelView.scrollToEnd();
+        onOpenModelPickerRequested: {
+            modelCatalog.refresh();
+            root.activeCommand = "model";
+            root.showCommandPicker = true;
         }
-
-        onErrorOccurred: function(message) {
-            chatController.aiBusy = false;
-            chatController.backendStatus = "Error";
-            chatStore.appendAssistantInfo(message);
-            panelView.scrollToEnd();
+        onOpenMoodPickerRequested: {
+            root.activeCommand = "mood";
+            root.showCommandPicker = true;
         }
-    }
-
-    Controllers.ChatController {
-        id: chatController
-        store: chatStore
-        aiClient: aiClient
-        moodPrompts: root.moodPrompts
-        moodModels: root.moodModels
-        modelId: root.modelId
-        currentMood: root.currentMood
-        hasApiKey: root.hasApiKey
-        currentProvider: root.currentProvider
-        openaiApiKey: root.openaiApiKey
-        geminiApiKey: root.geminiApiKey
-        syntaxHighlightingAvailable: root.syntaxHighlightingAvailable
-
         onScrollToEndRequested: panelView.scrollToEnd()
-        onCopyAllRequested: panelView.copyAllMessages()
+        onCopyAllRequested: function(text) {
+            Quickshell.clipboardText = text;
+        }
+    }
+
+    Connections {
+        target: modelCatalog
+
+        function onModels_jsonChanged() {
+            root.rebuildAvailableModels();
+        }
     }
 
     onModelIdChanged: {
-        chatStore.resetForModelSwitch(root.modelId);
+        chatSession.resetForModelSwitch(root.modelId);
         panelView.scrollToEnd();
     }
 
@@ -122,36 +147,49 @@ Item {
         anchors.fill: parent
 
         tabs: root.tabs
-        messages: chatStore.messages
-        aiBusy: chatController.aiBusy
+        messagesModel: chatSession
+        chatSession: chatSession
+        aiBusy: chatSession.busy
         modelId: root.modelId
         modelLabel: root.currentModelLabel
         moodIcon: root.currentMoodIcon
         moodName: root.currentMoodName
-        connectionOnline: chatController.connectionStatus === "online"
-        connectionStatus: chatController.connectionStatus
-        showCommandPicker: chatController.showCommandPicker
-        activeCommand: chatController.activeCommand
+        connectionOnline: root.hasApiKey
+        connectionStatus: root.hasApiKey ? "online" : "offline"
+        showCommandPicker: root.showCommandPicker
+        activeCommand: root.activeCommand
         availableModels: root.availableModels
         availableMoods: root.availableMoods
 
-        footerDotColor: root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error
-        footerLeftText: panelView.currentTabIndex === 0 ? ("MODEL: " + root.modelId.toUpperCase()) : ""
-        footerRightText: panelView.currentTabIndex === 0 ? ("MOOD: " + root.currentMoodName.toUpperCase()) : ""
+        footerDotColor: panelView.currentTabIndex === 0
+            ? (root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error)
+            : (panelView.metricsHealthy ? Common.Config.color.tertiary : Common.Config.color.secondary)
+        footerLeftText: panelView.currentTabIndex === 0
+            ? ("MODEL: " + root.modelId.toUpperCase())
+            : ("UPTIME: " + panelView.metricsUptime)
+        footerRightText: panelView.currentTabIndex === 0
+            ? ("MOOD: " + root.currentMoodName.toUpperCase())
+            : (panelView.metricsHealthy ? "HEALTH: OK" : "HEALTH: WARN")
 
         onCloseRequested: root.closePanel()
         onTabSelected: index => panelView.currentTabIndex = index
-        onSendRequested: text => chatController.sendMessage(text)
-        onCommandTriggered: command => chatController.handleCommand(command)
-        onRegenerateRequested: index => chatController.regenerateMessage(index)
-        onDeleteRequested: index => chatController.deleteMessage(index)
-        onEditRequested: (index, newContent) => chatController.editMessage(index, newContent)
+        onSendRequested: function(text, attachmentsJson) {
+            const trimmed = (attachmentsJson || "").trim();
+            if (!trimmed || trimmed === "[]")
+                chatSession.submitInput(text);
+            else
+                chatSession.submitInputWithAttachments(text, trimmed);
+        }
+        onCommandTriggered: command => chatSession.submitInput(command)
+        onRegenerateRequested: messageId => chatSession.regenerate(messageId)
+        onDeleteRequested: messageId => chatSession.deleteMessage(messageId)
+        onEditRequested: (messageId, newContent) => chatSession.editMessage(messageId, newContent)
 
-        onDismissCommandPickerRequested: chatController.showCommandPicker = false
+        onDismissCommandPickerRequested: root.showCommandPicker = false
 
         onModelSelected: value => {
             root.modelId = value;
-            chatController.showCommandPicker = false;
+            root.showCommandPicker = false;
         }
 
         onMoodSelected: value => {
@@ -159,9 +197,14 @@ Item {
             const newModel = root.moodModels[value];
             if (newModel && newModel !== root.modelId)
                 root.modelId = newModel;
-            chatStore.appendAssistantInfo(`Mood: ${value}`);
-            chatController.showCommandPicker = false;
+            chatSession.appendInfo(`Mood: ${value}`);
+            root.showCommandPicker = false;
             panelView.scrollToEnd();
         }
+    }
+
+    Component.onCompleted: {
+        // Avoid forcing a network refresh on startup; open the model picker to refresh when needed.
+        root.rebuildAvailableModels();
     }
 }

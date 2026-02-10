@@ -15,6 +15,7 @@ Item {
     property bool logErrors: false
     readonly property bool running: process.running
     property int timeoutMs: 0
+    property string _pendingStdout: ""
 
     signal ran(string output)
     signal error(string errorOutput, int exitCode)
@@ -29,6 +30,10 @@ Item {
             return;
         if (Array.isArray(command) && command.length === 0)
             return;
+
+        root.output = "";
+        root.errorOutput = "";
+        root._pendingStdout = "";
 
         process.command = Common.ProcessHelper.normalize(command);
         process.running = true;
@@ -75,8 +80,7 @@ Item {
             waitForEnd: true
 
             onStreamFinished: {
-                root.output = stdoutCollector.text.trim();
-                root.ran(root.output);
+                root._pendingStdout = stdoutCollector.text.trim();
             }
         }
 
@@ -89,6 +93,12 @@ Item {
         onExited: code => {
             timeoutTimer.stop();
             root.errorOutput = stderrCollector.text.trim();
+
+            if (code === 0 && root.errorOutput === "") {
+                root.output = root._pendingStdout;
+                root.ran(root.output);
+                return;
+            }
 
             if (code !== 0 || root.errorOutput !== "") {
                 if (root.logErrors) {

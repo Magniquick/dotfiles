@@ -41,7 +41,7 @@ ModuleContainer {
     }
     // Intentionally no hover label; keep pill compact.
 
-    tooltipBrowserLink: "runapp todoist.sh"
+    tooltipBrowserLink: ["runapp", "todoist.sh"]
     tooltipHoverable: true
     tooltipPinned: dropdownPinned
     tooltipRefreshing: TodoistService.loading

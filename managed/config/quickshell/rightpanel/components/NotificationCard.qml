@@ -8,6 +8,8 @@ Item {
 
     width: 400
     implicitHeight: frame.implicitHeight
+    // Keep ListView layout stable when content height resolves after creation.
+    height: implicitHeight
 
     NotificationFrame {
         id: frame

@@ -1,0 +1,3 @@
+[submodule "managed/config/quickshell/common/modules/rounded-polygon-qmljs"]
+	path = managed/config/quickshell/common/modules/rounded-polygon-qmljs
+	url = https://github.com/end-4/rounded-polygon-qmljs.git

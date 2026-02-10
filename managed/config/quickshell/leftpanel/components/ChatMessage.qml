@@ -14,6 +14,8 @@ Item {
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
     property bool done: true
+    property bool thinking: false
+    property bool streaming: false
 
     property bool editing: false
     property bool renderMarkdown: true
@@ -105,7 +107,6 @@ Item {
                         family: Common.Config.fontFamily
                         pixelSize: 11
                         weight: Font.Bold
-                        letterSpacing: 1.5
                         capitalization: Font.AllUppercase
                     }
                     opacity: 0.5
@@ -171,9 +172,74 @@ Item {
                 }
             }
 
+            // In-progress assistant message (placeholder while streaming).
+            Item {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                visible: root.thinking
+
+                Column {
+                    width: parent.width
+                    spacing: 4
+
+                    Text {
+                        text: "THINKING"
+                        color: Common.Config.color.on_surface_variant
+                        font {
+                            family: Common.Config.fontFamily
+                            pixelSize: 9
+                            weight: Font.Bold
+                        }
+                        opacity: 0.5
+                    }
+
+                    Row {
+                        spacing: 4
+
+                        Repeater {
+                            model: 3
+                            Rectangle {
+                                id: typingDot
+                                required property int index
+                                width: 4
+                                height: 4
+                                radius: 2
+                                color: Common.Config.color.primary
+
+                                SequentialAnimation on opacity {
+                                    running: root.thinking && root.visible && root.QsWindow.window && root.QsWindow.window.visible
+                                    loops: Animation.Infinite
+                                    PauseAnimation { duration: typingDot.index * 200 }
+                                    NumberAnimation { to: 0.2; duration: 400 }
+                                    NumberAnimation { to: 1.0; duration: 400 }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // While streaming, render the raw text directly (no markdown parsing / code block
+            // splitting) to avoid stutter from rebuilding delegates on every token chunk.
+            TextEdit {
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                visible: root.streaming && !root.thinking && !root.editing
+                text: root.content
+                textFormat: TextEdit.PlainText
+                color: Common.Config.color.on_surface
+                wrapMode: TextEdit.Wrap
+                font.family: Common.Config.fontFamily
+                font.pixelSize: 13
+                readOnly: true
+                selectByMouse: true
+                cursorVisible: false
+                activeFocusOnPress: false
+            }
+
             // Content blocks
             Repeater {
-                model: (root.editing || !root.renderMarkdown) ? [] : root.contentBlocks
+                model: (root.streaming || root.thinking || root.editing || !root.renderMarkdown) ? [] : root.contentBlocks
 
                 Loader {
                     required property var modelData
@@ -196,7 +262,11 @@ Item {
                     Component {
                         id: textBlockComponent
                         TextEdit {
-                            text: modelData.content
+                            // Treat "soft" newlines as hard breaks for chat rendering:
+                            // many LLMs emit single '\n' for layout, but Markdown collapses them.
+                            text: root.renderMarkdown
+                                ? String(modelData.content).replace(/\n/g, "  \n")
+                                : modelData.content
                             textFormat: root.renderMarkdown ? TextEdit.MarkdownText : TextEdit.PlainText
                             color: Common.Config.color.on_surface
                             wrapMode: TextEdit.Wrap
@@ -224,7 +294,7 @@ Item {
             TextEdit {
                 Layout.fillWidth: true
                 Layout.topMargin: 2
-                visible: !root.editing && !root.renderMarkdown
+                visible: !root.streaming && !root.thinking && !root.editing && !root.renderMarkdown
                 text: root.content
                 textFormat: TextEdit.PlainText
                 color: Common.Config.color.on_surface

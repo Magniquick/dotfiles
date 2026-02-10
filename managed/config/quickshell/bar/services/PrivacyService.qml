@@ -35,7 +35,7 @@ Singleton {
             if ((node.type & PwNodeType.AudioInStream) === PwNodeType.AudioInStream) {
                 if (!looksLikeSystemVirtualMic(node)) {
                     if (node.audio && node.audio.muted) {
-                        return false
+                        continue
                     }
                     return true
                 }
@@ -124,7 +124,7 @@ Singleton {
                 if (mediaName.includes("desktop") || appName.includes("screen") || appName === "obs") {
                     if (node.properties["stream.is-live"] === "true") {
                         if (node.audio && node.audio.muted) {
-                            return false
+                            continue
                         }
                         return true
                     }

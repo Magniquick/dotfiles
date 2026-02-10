@@ -1,49 +1,25 @@
 /**
  * @module BacklightModule
- * @description Screen brightness control module with hardware monitoring and interactive controls
+ * @description Screen brightness control module (internal backlight + optional external DDC)
  *
  * Features:
- * - Real-time brightness monitoring via sysfs (/sys/class/backlight)
- * - Hardware event detection via udevadm monitor (150ms debounced when tooltip closed)
+ * - Per-screen control (each bar instance controls its own `screen`)
+ * - Internal backlight via `qsnative.BacklightProvider` (sysfs + udev, no polling)
+ * - External monitors via DDC/CI using `ddcutil` (if installed and detected)
  * - Interactive slider control (1-100%)
  * - Quick preset buttons (20%, 50%, 80%, 100%)
  * - Mouse wheel adjustment support
- * - Automatic crash recovery for udev monitor (exponential backoff)
  *
  * Dependencies:
- * - brillo: Command-line brightness control utility
- * - udevadm: Hardware event monitoring (optional but recommended)
- * - /sys/class/backlight/<device>/: Sysfs brightness interface
+ * - Internal: `qsnative` module (BacklightProvider) + permission to write `/sys/class/backlight/<device>/brightness`
+ * - External (optional): `ddcutil`
  *
  * Configuration:
- * - backlightDevice: Device name (default: "intel_backlight")
- * - brightnessDebounceMs: Event debounce interval (default: 150ms)
- * - onScrollUpCommand: Command for scroll up (default: "brillo -U 1")
- * - onScrollDownCommand: Command for scroll down (default: "brillo -A 1")
- *
- * Performance:
- * - Selective event filtering: only reacts to ACTION=change events (not property lines)
- * - Debounced event handling reduces CPU load during rapid brightness changes
- * - Debounce bypassed when tooltip is open for immediate visual feedback
- * - Single brightness change: 1 trigger per change (was ~24 events with broad filter)
- * - File reads: 2 per brightness change (actual + max brightness)
- *
- * Error Handling:
- * - Command availability checks on startup
- * - Graceful degradation when tools unavailable
- * - Auto-restart for crashed udev monitor (exponential backoff up to 30s)
- * - Console warnings for missing dependencies
+ * - None (device detection is automatic)
  *
  * @example
  * // Basic usage with defaults
- * BacklightModule {}
- *
- * @example
- * // Custom device and debounce interval
- * BacklightModule {
- *     backlightDevice: "amdgpu_bl0"
- *     brightnessDebounceMs: 200
- * }
+ * BacklightModule { screen: someShellScreen }
  */
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -55,12 +31,21 @@ import "../components"
 ModuleContainer {
     id: root
 
-    readonly property string backlightDevice: BacklightService.backlightDevice
-    readonly property int brightnessPercent: BacklightService.brightnessPercent
+    required property var screen
+
+    readonly property var brightnessMonitor: BrightnessService.getMonitorForScreen(root.screen)
+    readonly property string backlightDevice: root.brightnessMonitor && root.brightnessMonitor.method === "backlight" ? root.brightnessMonitor.backlightDevice : ""
+    readonly property string method: root.brightnessMonitor ? root.brightnessMonitor.method : "none"
+    readonly property string ddcBusNum: root.brightnessMonitor && root.brightnessMonitor.method === "ddc" ? root.brightnessMonitor.ddcBusNum : ""
+
+    readonly property int brightnessPercent: {
+        if (!root.brightnessMonitor || !isFinite(root.brightnessMonitor.brightness))
+            return -1;
+        return Math.round(root.brightnessMonitor.brightness * 100);
+    }
     readonly property string iconText: root.iconForBrightness()
     property var icons: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "󰃚"]
-    readonly property int sliderValue: BacklightService.sliderValue
-    readonly property bool brilloAvailable: BacklightService.brilloAvailable
+    readonly property int sliderValue: root.brightnessPercent >= 0 ? root.brightnessPercent : 0
     function iconForBrightness() {
         const percent = root.brightnessPercent;
         if (percent < 0)
@@ -70,12 +55,21 @@ ModuleContainer {
         return root.icons[index];
     }
     function setBrightness(percent) {
-        BacklightService.setBrightness(percent);
+        if (!root.brightnessMonitor)
+            return;
+        const next = Math.max(1, Math.min(100, percent));
+        root.brightnessMonitor.setBrightness(next / 100.0);
     }
 
     tooltipHoverable: true
     tooltipText: ""
     tooltipTitle: "Brightness"
+
+    onTooltipActiveChanged: {
+        if (root.tooltipActive && root.brightnessMonitor && typeof root.brightnessMonitor.refresh === "function") {
+            root.brightnessMonitor.refresh();
+        }
+    }
 
     content: [
         IconLabel {
@@ -119,8 +113,20 @@ ModuleContainer {
                 InfoRow {
                     Layout.fillWidth: true
                     label: "Device"
-                    value: root.backlightDevice
-                    visible: root.backlightDevice !== ""
+                    value: root.method === "ddc" ? (root.screen ? root.screen.name : "") : root.backlightDevice
+                    visible: root.method !== "none"
+                }
+                InfoRow {
+                    Layout.fillWidth: true
+                    label: "Method"
+                    value: root.method
+                    visible: root.method !== "none"
+                }
+                InfoRow {
+                    Layout.fillWidth: true
+                    label: "DDC Bus"
+                    value: root.ddcBusNum
+                    visible: root.method === "ddc" && root.ddcBusNum !== ""
                 }
             }
             TooltipActionsRow {
@@ -158,10 +164,13 @@ ModuleContainer {
         anchors.fill: parent
 
         onWheel: function (wheel) {
+            if (!root.brightnessMonitor)
+                return;
+            const step = 1;
             if (wheel.angleDelta.y > 0)
-                BacklightService.scrollUp();
+                root.setBrightness(root.brightnessPercent + step);
             else if (wheel.angleDelta.y < 0)
-                BacklightService.scrollDown();
+                root.setBrightness(root.brightnessPercent - step);
         }
     }
 }

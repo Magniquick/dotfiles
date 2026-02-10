@@ -12,7 +12,9 @@ Item {
     readonly property bool active: root.enabled && (root.open || root.pinned || (root.hoverable && root.popupHovered))
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
     property bool autoScroll: true
-    property string browserLink: ""
+    // Either a URL string (opened via xdg-open) or an argv array.
+    // Do not pass a shell string here; it will be ignored for safety.
+    property var browserLink: ""
     property Component contentComponent: null
     property bool enabled: true
     property bool hoverable: false
@@ -33,6 +35,37 @@ Item {
     property bool _anchorUpdatePending: false
 
     signal refreshRequested
+
+    function _looksLikeUrl(s) {
+        if (!s)
+            return false;
+        const t = String(s).trim();
+        // Accept "scheme://..." and also "scheme:" (mailto:, about:, etc).
+        return t.indexOf("://") !== -1 || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(t);
+    }
+
+    function _openBrowserLink() {
+        if (Array.isArray(root.browserLink)) {
+            if (root.browserLink.length === 0)
+                return;
+            Common.ProcessHelper.execDetached(root.browserLink);
+            return;
+        }
+
+        if (typeof root.browserLink !== "string")
+            return;
+
+        const link = root.browserLink.trim();
+        if (!link)
+            return;
+
+        if (!root._looksLikeUrl(link)) {
+            console.warn("[TooltipPopup] browserLink must be a URL string or argv array; refusing to exec shell string:", link);
+            return;
+        }
+
+        Common.ProcessHelper.execDetached(["xdg-open", link]);
+    }
 
     function refreshAnchorRect() {
         if (!root.window || !root.targetItem)
@@ -229,7 +262,9 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                         implicitHeight: browserIconText.implicitHeight
                         implicitWidth: browserIconText.implicitWidth
-                        visible: root.showBrowserIcon && root.browserLink !== ""
+                        visible: root.showBrowserIcon
+                                 && ((Array.isArray(root.browserLink) && root.browserLink.length > 0)
+                                     || (typeof root.browserLink === "string" && root.browserLink.trim() !== ""))
 
                         Text {
                             id: browserIconText
@@ -247,10 +282,7 @@ Item {
                         }
                         TapHandler {
                             onTapped: {
-                                if (!root.browserLink || root.browserLink.trim() === "")
-                                    return;
-
-                                Common.ProcessHelper.execDetached(root.browserLink.trim());
+                                root._openBrowserLink();
                             }
                         }
                     }

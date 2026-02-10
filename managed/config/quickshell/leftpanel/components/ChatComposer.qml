@@ -3,34 +3,143 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../../common" as Common
+import "../../common/modules/rounded_polygon_qmljs" as RoundedPoly
+import "../../common/modules/rounded_polygon_qmljs/material-shapes.js" as MaterialShapes
 
 Item {
     id: root
     property bool busy: false
     property string placeholderText: "Type a message..."
     property alias text: inputEdit.text
+    property var chatSession: null
     readonly property int maxLines: 5
     readonly property int maxInputHeight: Math.ceil(inputMetrics.lineSpacing * root.maxLines) + inputEdit.topPadding + inputEdit.bottomPadding
 
-    signal send(string text)
+    signal send(string text, string attachmentsJson)
     signal commandTriggered(string command)
 
     implicitHeight: composerContainer.implicitHeight
+
+    property var pendingAttachments: []
+
+    function focusInput() {
+        // Avoid forcing focus while the panel window is mid-transition or not visible yet.
+        if (!root.visible)
+            return;
+        if (root.QsWindow && root.QsWindow.window && !root.QsWindow.window.visible)
+            return;
+        inputEdit.forceActiveFocus();
+    }
 
     function clearFocus() {
         inputEdit.focus = false;
     }
 
+    function attachmentSource(a) {
+        if (!a)
+            return "";
+        const p = (a.path || "").trim();
+        if (p.length > 0)
+            return "file://" + p;
+        const mime = (a.mime || "").trim();
+        const b64 = (a.b64 || "").trim();
+        if (mime.length > 0 && b64.length > 0)
+            return "data:" + mime + ";base64," + b64;
+        return "";
+    }
+
+    function isPdfAttachment(a) {
+        if (!a)
+            return false;
+        const mime = String(a.mime || "").trim().toLowerCase();
+        if (mime === "application/pdf")
+            return true;
+        const p = String(a.path || "").trim().toLowerCase();
+        return p.endsWith(".pdf");
+    }
+
+    function attachmentLabel(a) {
+        const p = String((a || {}).path || "").trim();
+        if (!p)
+            return "Attachment";
+        const parts = p.split("/");
+        return parts.length ? parts[parts.length - 1] : p;
+    }
+
+    function tryPasteImageFromClipboard() {
+        if (!root.chatSession || !root.chatSession.pasteImageFromClipboard)
+            return false;
+
+        const json = String(root.chatSession.pasteImageFromClipboard() || "").trim();
+        if (!json)
+            return false;
+
+        let parsed = null;
+        try {
+            parsed = JSON.parse(json);
+        } catch (e) {
+            parsed = null;
+        }
+
+        if (!parsed)
+            return false;
+
+        // Normalize to array in case the backend returns a single object.
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (let i = 0; i < items.length; i++) {
+            const a = items[i] || {};
+            // Only accept things we can render or send.
+            if (!a.path && !a.b64)
+                continue;
+            root.pendingAttachments = root.pendingAttachments.concat([a]);
+        }
+        return true;
+    }
+
+    function tryPasteAttachmentFromClipboard() {
+        if (!root.chatSession || !root.chatSession.pasteAttachmentFromClipboard)
+            return false;
+
+        const json = String(root.chatSession.pasteAttachmentFromClipboard() || "").trim();
+        if (!json)
+            return false;
+
+        let parsed = null;
+        try {
+            parsed = JSON.parse(json);
+        } catch (e) {
+            parsed = null;
+        }
+
+        if (!parsed)
+            return false;
+
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (let i = 0; i < items.length; i++) {
+            const a = items[i] || {};
+            if (!a.path && !a.b64)
+                continue;
+            root.pendingAttachments = root.pendingAttachments.concat([a]);
+        }
+        return true;
+    }
+
     function handleSend() {
         const text = inputEdit.text.trim();
-        if (text.length === 0)
+        if (text.length === 0 && root.pendingAttachments.length === 0)
             return;
 
         if (text.startsWith("/")) {
             root.commandTriggered(text);
         } else {
-            root.send(text);
+            root.send(text, JSON.stringify(root.pendingAttachments || []));
+            root.pendingAttachments = [];
         }
+
+        // Reset to the default single-line height after sending.
+        inputEdit.text = "";
+        textFlick.contentY = 0;
+        root.focusInput();
     }
 
     component GlowLayer: Rectangle {
@@ -87,7 +196,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            implicitHeight: inputRow.implicitHeight + Common.Config.space.sm * 2
+            implicitHeight: inputRow.implicitHeight + attachmentStrip.implicitHeight + Common.Config.space.sm * 2
             height: implicitHeight
             color: Common.Config.color.surface_container_highest
             radius: Common.Config.shape.corner.lg
@@ -103,19 +212,134 @@ Item {
             HoverHandler { id: composerHover }
             TapHandler {
                 id: composerTap
-                onTapped: inputEdit.forceActiveFocus()
+                onTapped: root.focusInput()
             }
 
-            RowLayout {
-                id: inputRow
+            ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Common.Config.space.sm
                 spacing: Common.Config.space.sm
 
                 Item {
-                    id: inputWrap
+                    id: attachmentStrip
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.max(48, Math.min(textFlick.contentHeight, root.maxInputHeight))
+                    visible: root.pendingAttachments.length > 0
+                    implicitHeight: visible ? 56 : 0
+
+                    Flickable {
+                        anchors.fill: parent
+                        contentWidth: attachmentsRow.implicitWidth
+                        contentHeight: height
+                        clip: true
+
+                        Row {
+                            id: attachmentsRow
+                            spacing: Common.Config.space.sm
+                            height: parent.height
+
+                            Repeater {
+                                model: root.pendingAttachments
+                                delegate: Item {
+                                    required property var modelData
+                                    required property int index
+
+                                    width: 56
+                                    height: 56
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: Common.Config.shape.corner.md
+                                        color: Qt.alpha(Common.Config.color.on_surface, 0.04)
+                                        border.width: 1
+                                        border.color: Qt.alpha(Common.Config.color.on_surface, 0.10)
+                                        clip: true
+
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            source: root.attachmentSource(modelData)
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                            cache: false
+                                            visible: !root.isPdfAttachment(modelData)
+                                        }
+
+                                        Item {
+                                            anchors.fill: parent
+                                            visible: root.isPdfAttachment(modelData)
+
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "\uf1c1" // file-pdf
+                                                color: Common.Config.color.on_surface_variant
+                                                font.family: Common.Config.iconFontFamily
+                                                font.pixelSize: 22
+                                            }
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.bottom: parent.bottom
+                                                anchors.margins: 4
+                                                text: root.attachmentLabel(modelData)
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 1
+                                                color: Common.Config.color.on_surface_variant
+                                                font.family: Common.Config.fontFamily
+                                                font.pixelSize: 9
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 18
+                                            height: 18
+                                            radius: 9
+                                            anchors.top: parent.top
+                                            anchors.right: parent.right
+                                            anchors.topMargin: 3
+                                            anchors.rightMargin: 3
+                                            color: Qt.alpha(Common.Config.color.surface_container_highest, 0.85)
+                                            border.width: 1
+                                            border.color: Qt.alpha(Common.Config.color.on_surface, 0.12)
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "\uf00d"
+                                                color: Common.Config.color.on_surface_variant
+                                                font.family: Common.Config.iconFontFamily
+                                                font.pixelSize: 10
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    const next = [];
+                                                    for (let i = 0; i < root.pendingAttachments.length; i++) {
+                                                        if (i !== index)
+                                                            next.push(root.pendingAttachments[i]);
+                                                    }
+                                                    root.pendingAttachments = next;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    id: inputRow
+                    Layout.fillWidth: true
+                    spacing: Common.Config.space.sm
+
+                    Item {
+                        id: inputWrap
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(48, Math.min(textFlick.contentHeight, root.maxInputHeight))
 
                     function scrollToThumbY(localY) {
                         const maxThumbY = Math.max(0, inputWrap.height - scrollThumb.height);
@@ -158,16 +382,29 @@ Item {
                             }
 
                             onTextChanged: {
-                                // keep the flickable height in sync
-                                textFlick.contentHeight = inputEdit.y + inputEdit.height;
-                                if (textFlick.contentHeight > textFlick.height) {
-                                    textFlick.contentY = textFlick.contentHeight - textFlick.height;
-                                } else {
-                                    textFlick.contentY = 0;
-                                }
+                                // Keep the scroll pinned to bottom only when needed.
+                                Qt.callLater(function() {
+                                    if (textFlick.contentHeight > textFlick.height)
+                                        textFlick.contentY = textFlick.contentHeight - textFlick.height;
+                                    else
+                                        textFlick.contentY = 0;
+                                });
                             }
 
                             Keys.onPressed: event => {
+                                // Prefer image paste over text paste when clipboard contains an image.
+                                if (!root.busy
+                                    && ((event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier))
+                                        || (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier)))) {
+                                    if (root.tryPasteImageFromClipboard()) {
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (root.tryPasteAttachmentFromClipboard()) {
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                }
                                 if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) {
                                     root.handleSend();
                                     event.accepted = true;
@@ -236,6 +473,10 @@ Item {
                     implicitHeight: 44
                     radius: Common.Config.shape.corner.md
                     color: root.busy ? Common.Config.color.surface_container_highest : Common.Config.color.primary
+                    border.width: 1
+                    border.color: root.busy
+                        ? Qt.alpha(Common.Config.color.on_surface, 0.10)
+                        : Qt.alpha(Common.Config.color.on_primary, 0.0)
 
                     scale: sendButtonArea.pressed ? 0.92 : (sendButtonArea.containsMouse ? 1.05 : 1.0)
 
@@ -254,47 +495,91 @@ Item {
 
                     Item {
                         anchors.centerIn: parent
+                        width: parent.width
+                        height: parent.height
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "\uf1d9"
-                            color: root.busy ? Common.Config.color.on_surface_variant : Common.Config.color.on_primary
-                            font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 20
-                            visible: !root.busy
-                        }
+                        Item {
+                            id: sendGlyphWrap
+                            anchors.fill: parent
 
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 3
-                            visible: root.busy
+                            // Keep animations off when the window isn't visible (idle CPU).
+                            readonly property bool animOk: root.visible
+                                && (!root.QsWindow || !root.QsWindow.window || root.QsWindow.window.visible)
 
-                            Repeater {
-                                model: 3
-                                Rectangle {
-                                    id: busyDot
-                                    required property int index
-                                    width: 5
-                                    height: 5
-                                    radius: 2.5
-                                    color: Common.Config.color.on_surface_variant
+                            // While generating, keep morphing between a small set of shapes.
+                            // When idle, show a stable "send" glyph.
+                            property int busyShapeIndex: 0
+                            readonly property var busyShapeGetters: [
+                                MaterialShapes.getCircle,
+                                MaterialShapes.getSquare,
+                                MaterialShapes.getSlanted,
+                                MaterialShapes.getArch,
+                                MaterialShapes.getFan,
+                                MaterialShapes.getArrow,
+                                MaterialShapes.getSemiCircle,
+                                MaterialShapes.getOval,
+                                MaterialShapes.getPill,
+                                MaterialShapes.getTriangle,
+                                MaterialShapes.getDiamond,
+                                MaterialShapes.getClamShell,
+                                MaterialShapes.getPentagon,
+                                MaterialShapes.getGem,
+                                MaterialShapes.getSunny,
+                                MaterialShapes.getVerySunny,
+                                MaterialShapes.getCookie4Sided,
+                                MaterialShapes.getCookie6Sided,
+                                MaterialShapes.getCookie7Sided,
+                                MaterialShapes.getCookie9Sided,
+                                MaterialShapes.getCookie12Sided,
+                                MaterialShapes.getGhostish,
+                                MaterialShapes.getClover4Leaf,
+                                MaterialShapes.getClover8Leaf,
+                                MaterialShapes.getBurst,
+                                MaterialShapes.getSoftBurst,
+                                MaterialShapes.getBoom,
+                                MaterialShapes.getSoftBoom,
+                                MaterialShapes.getFlower,
+                                MaterialShapes.getPuffy,
+                                MaterialShapes.getPuffyDiamond,
+                                MaterialShapes.getPixelCircle,
+                                MaterialShapes.getPixelTriangle,
+                                MaterialShapes.getBun,
+                                MaterialShapes.getHeart
+                            ]
 
-                                    SequentialAnimation on opacity {
-                                        running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
-                                        loops: Animation.Infinite
-                                        PauseAnimation {
-                                            duration: busyDot.index * 120
-                                        }
-                                        NumberAnimation {
-                                            to: 0.3
-                                            duration: 250
-                                        }
-                                        NumberAnimation {
-                                            to: 1.0
-                                            duration: 250
-                                        }
-                                    }
+                            Timer {
+                                interval: 650
+                                repeat: true
+                                running: root.busy && sendGlyphWrap.animOk
+                                onTriggered: sendGlyphWrap.busyShapeIndex =
+                                    (sendGlyphWrap.busyShapeIndex + 1) % sendGlyphWrap.busyShapeGetters.length
+                            }
+
+                            Connections {
+                                target: root
+                                function onBusyChanged() {
+                                    // Reset to a deterministic start when entering/leaving busy.
+                                    sendGlyphWrap.busyShapeIndex = 0;
                                 }
+                            }
+
+                            // Morph between "send" and "busy" shapes; ShapeCanvas handles morphing
+                            // internally by animating `progress` on roundedPolygon changes.
+                            RoundedPoly.ShapeCanvas {
+                                id: sendGlyph
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                polygonIsNormalized: true
+
+                                color: root.busy ? Common.Config.color.primary : Common.Config.color.on_primary
+                                borderWidth: 0
+                                borderColor: Qt.alpha(Common.Config.color.on_surface, 0.0)
+
+                                roundedPolygon: root.busy
+                                    ? sendGlyphWrap.busyShapeGetters[sendGlyphWrap.busyShapeIndex]()
+                                    : MaterialShapes.getArrow()
+
+                                Component.onCompleted: requestPaint()
                             }
                         }
                     }
@@ -310,6 +595,7 @@ Item {
                 }
             }
         }
+    }
     }
 
     FontMetrics {

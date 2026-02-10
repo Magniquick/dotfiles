@@ -45,10 +45,9 @@ quickshell
 ## Key Patterns
 
 ### Adding Models
-Add to `availableModels` in `LeftPanel.qml`:
-```qml
-{ value: "model-id", label: "Display Name", iconImage: "./assets/icon.svg", description: "...", accent: Common.Config.color.primary }
-```
+The model list is provided by `qsnative.AiModelCatalog` (Rust, via `rig`) and exposed to QML as JSON.
+
+There is no pinned/static model list; models come from the provider list endpoints.
 
 ### Adding Moods
 Add to `./system-prompts/moods.json`:
@@ -62,7 +61,7 @@ Models starting with `gemini` use Gemini API, others use OpenAI. Switching model
 ### Environment Variables
 - `OPENAI_API_KEY` - OpenAI API key
 - `GEMINI_API_KEY` - Gemini API key
-- `OPENAI_MODEL` - Default model (defaults to `gpt-4o-mini`)
+- `OPENAI_MODEL` - Default model (defaults to `gemini-2.5-flash-lite`)
 
 ## Styling
 

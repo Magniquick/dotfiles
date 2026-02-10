@@ -66,7 +66,9 @@ PanelWindow {
             IdleInhibitModule {
                 targetWindow: root
             }
-            ControlsGroup {}
+            ControlsGroup {
+                screen: root.targetScreen
+            }
             WirelessGroup {}
             BatteryModule {}
             ToDoModule {}

@@ -6,12 +6,15 @@ import "../components" as Components
 
 Item {
     id: root
-    focus: true
+    // Don't force focus on the panel root; focus is managed explicitly by the shell
+    // to avoid Wayland text-input surface churn during open/close animations.
 
     required property var tabs
     property int currentTabIndex: 0
 
-    required property ListModel messages
+    required property var messagesModel
+    // Optional: used for copy-all without walking the model in QML.
+    property var chatSession: null
     property bool aiBusy: false
     property string modelId: ""
     property string modelLabel: ""
@@ -29,13 +32,17 @@ Item {
     property string footerRightText: ""
     property color footerDotColor: Common.Config.color.tertiary
 
+    // Metrics tab footer data (provided by MetricsView).
+    readonly property string metricsUptime: metricsView ? metricsView.uptime : "--"
+    readonly property bool metricsHealthy: metricsView ? metricsView.isHealthy : true
+
     signal closeRequested
     signal tabSelected(int index)
-    signal sendRequested(string text)
+    signal sendRequested(string text, string attachmentsJson)
     signal commandTriggered(string command)
-    signal regenerateRequested(int index)
-    signal deleteRequested(int index)
-    signal editRequested(int index, string newContent)
+    signal regenerateRequested(string messageId)
+    signal deleteRequested(string messageId)
+    signal editRequested(string messageId, string newContent)
     signal modelSelected(string value)
     signal moodSelected(string value)
     signal dismissCommandPickerRequested
@@ -50,6 +57,20 @@ Item {
     function copyAllMessages() {
         if (chatView)
             chatView.copyAllMessages();
+    }
+
+    function focusComposer() {
+        if (root.currentTabIndex !== 0)
+            return;
+        if (root.showCommandPicker)
+            return;
+        if (chatView && chatView.focusComposer)
+            chatView.focusComposer();
+    }
+
+    function clearTextFocus() {
+        if (chatView && chatView.clearTextFocus)
+            chatView.clearTextFocus();
     }
 
     Keys.onPressed: event => {
@@ -99,18 +120,21 @@ Item {
                 Components.ChatView {
                     id: chatView
                     anchors.fill: parent
-                    messages: root.messages
+                    messagesModel: root.messagesModel
+                    chatSession: root.chatSession
                     busy: root.aiBusy
                     modelId: root.modelId
                     modelLabel: root.modelLabel
                     moodIcon: root.moodIcon
                     moodName: root.moodName
                     connectionOnline: root.connectionOnline
-                    onSendRequested: text => root.sendRequested(text)
+                    onSendRequested: function(text, attachmentsJson) {
+                        root.sendRequested(text, attachmentsJson)
+                    }
                     onCommandTriggered: command => root.commandTriggered(command)
-                    onRegenerateRequested: index => root.regenerateRequested(index)
-                    onDeleteRequested: index => root.deleteRequested(index)
-                    onEditRequested: (index, newContent) => root.editRequested(index, newContent)
+                    onRegenerateRequested: messageId => root.regenerateRequested(messageId)
+                    onDeleteRequested: messageId => root.deleteRequested(messageId)
+                    onEditRequested: (messageId, newContent) => root.editRequested(messageId, newContent)
                 }
 
                 Rectangle {
@@ -121,14 +145,26 @@ Item {
                     readonly property bool isModelPicker: root.activeCommand === "model"
 
                     MouseArea {
+                        id: overlayDismissArea
                         anchors.fill: parent
-                        onClicked: root.dismissCommandPickerRequested()
+                        onClicked: mouse => {
+                            if (!commandPicker || !commandPicker.visible) {
+                                root.dismissCommandPickerRequested();
+                                return;
+                            }
+                            const p = commandPicker.mapFromItem(overlayDismissArea, mouse.x, mouse.y);
+                            const inside = p.x >= 0 && p.y >= 0 && p.x <= commandPicker.width && p.y <= commandPicker.height;
+                            if (!inside)
+                                root.dismissCommandPickerRequested();
+                        }
                     }
 
                     Components.CommandPicker {
+                        id: commandPicker
                         anchors.centerIn: parent
                         command: parent.isModelPicker ? "/MODEL" : "/MOOD"
                         options: parent.isModelPicker ? root.availableModels : root.availableMoods
+                        showAllToggle: parent.isModelPicker
                         visible: root.showCommandPicker
 
                         onOptionSelected: value => {
@@ -144,6 +180,7 @@ Item {
             }
 
             Components.MetricsView {
+                id: metricsView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }
@@ -180,7 +217,6 @@ Item {
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
                         font.weight: Font.Bold
-                        font.letterSpacing: 1.5
                         anchors.verticalCenter: parent.verticalCenter
                         opacity: 0.7
                         visible: root.footerLeftText !== ""
@@ -195,7 +231,6 @@ Item {
                     font.family: Common.Config.fontFamily
                     font.pixelSize: 9
                     font.weight: Font.Bold
-                    font.letterSpacing: 1.5
                     opacity: 0.7
                     visible: root.footerRightText !== ""
                 }

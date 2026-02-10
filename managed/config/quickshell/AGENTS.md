@@ -21,9 +21,7 @@ Always use Context7 to look up Quickshell documentation.
 - HyprQuickshot (screenshot utility): `quickshell -c hyprquickshot -n` (the `-n` prevents multiple instances)
 - Reload: Restart `quickshell` after QML changes (no hot reload)
 
-**Building Rust helper scripts:**
-- ical-cache: `cd bar/scripts/src/ical-cache && cargo build --release`
-- todoist-api: `cd bar/scripts/src/todoist-api && cargo build --release`
+**Building native modules:**
 - qs-native (CXX-Qt QML module):
   - Configure/build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
   - QML import path: `~/.config/quickshell/common/modules/qs-native/build/qml` (needs `QML_IMPORT_PATH`)
@@ -71,6 +69,9 @@ The bar uses a **modular architecture** with key directories:
 - **`common/modules/qs-native`**: CXX-Qt QML plugin (import as `qsnative`)
   - Build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
   - Import path: `~/.config/quickshell/common/modules/qs-native/build/qml`
+  - Source layout:
+    - `common/modules/qs-native/src/lib.rs` contains the `#[cxx_qt::bridge]` and the QObject backing structs (`*Rust`), because CXX-Qt generated code needs direct field access for `#[qproperty]`.
+    - Feature code lives in modules under `common/modules/qs-native/src/` (e.g. `ai/`, `ical/`, `todoist/`, `pacman/`, `sysinfo/`, `util/`).
   - QML types:
     - `IcalCache`
       - Invokable: `refreshFromEnv(envFile, days)`
@@ -89,10 +90,15 @@ The bar uses a **modular architecture** with key directories:
       - Invokables: `refresh(noAur)`, `sync()`
       - Properties: `updates_count`, `aur_updates_count`, `updates_text`, `aur_updates_text`, `last_checked`, `error`, `has_updates`
       - Notes: Uses `checkupdates` for repo packages and `pacman -Qm` + AUR RPC for AUR; AUR cached in-memory.
-    - `PrivacyProvider`
-      - Invokable: `refresh()`
-      - Properties: `mic`, `cam`, `loc`, `scr`, `mic_app`, `cam_app`, `loc_app`, `scr_app`, `error`
-      - Notes: Uses PipeWire (libpipewire) for mic/screen signals and `/proc` scanning for camera and geoclue.
+    - `AiChatSession`
+      - Invokables: `submitInput`, `submitInputWithAttachments`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
+        `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`
+      - Properties: `model_id`, `system_prompt`, `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`, `messages_json`
+      - Notes: `QAbstractListModel` that streams assistant output into the last assistant row.
+    - `AiModelCatalog`
+      - Invokables: `refresh()`
+      - Properties: `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`, `models_json`
+      - Notes: Fetches provider model lists and outputs a merged JSON array for the model picker.
   - Runtime requirements:
     - `smartctl` for disk health (optional; shows “Unknown” if unavailable)
     - `.env` file in `bar/.env` for calendar URLs and Todoist token
@@ -102,7 +108,7 @@ The bar uses a **modular architecture** with key directories:
 
 Modules integrate with system services via:
 - **Quickshell services**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland` (workspaces)
-- **Sysfs/udev**: Backlight (`/sys/class/backlight/<device>/actual_brightness` + `udevadm monitor`)
+- **Sysfs/udev**: Internal backlight via `qsnative.BacklightProvider` (sysfs + udev, no polling)
 - **External commands**:
   - `nmcli` for network status/wifi
   - `systemctl --failed` + `busctl monitor` for systemd units
@@ -227,7 +233,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 ## Dependencies
 
-- **Runtime**: `quickshell`, `hyprland`, `grim`, `imagemagick`, `wl-clipboard`, `nmcli`, `systemctl`, `pipewire` (`pw-dump`), `brillo`, `udevadm`, `wpctl`
+- **Runtime**: `quickshell`, `hyprland`, `grim`, `imagemagick`, `wl-clipboard`, `nmcli`, `systemctl`, `udevadm`, `pipewire` (`pw-dump`), `wpctl` (optional: `ddcutil` for external monitor brightness)
 - **Build**: `cargo` (for Rust scripts), Qt6 QML modules
 - **Versioning**: Track Quickshell `master` branch; when using Context7, target the `master` branch docs.
 

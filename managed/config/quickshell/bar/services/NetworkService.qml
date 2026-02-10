@@ -39,6 +39,10 @@ Item {
     property double lastRxBytes: 0
     property double lastTxBytes: 0
     property double lastTrafficSampleMs: 0
+    // Traffic sampling can be triggered by multiple paths (initial refresh + nmcli status output + timer).
+    // Guard against tiny deltas that produce absurd spikes, and smooth rates for a less jittery UI.
+    property int minTrafficSampleDeltaMs: 600
+    property double trafficEmaAlpha: 0.5
 
     // Polling/monitor debounce and caching
     property bool needsInitialRefresh: true
@@ -254,14 +258,33 @@ Item {
         root.lastTrafficSampleMs = 0;
     }
 
+    function applyEma(previous, sample, alpha) {
+        if (!isFinite(sample) || sample < 0)
+            return 0;
+        if (!isFinite(previous) || previous <= 0)
+            return sample;
+        const a = Math.max(0.01, Math.min(0.99, alpha));
+        return previous * (1 - a) + sample * a;
+    }
+
     function updateTrafficRates(rxBytes, txBytes, now) {
         if (root.lastTrafficSampleMs > 0 && now > root.lastTrafficSampleMs) {
-            const deltaSeconds = (now - root.lastTrafficSampleMs) / 1000;
+            const deltaMs = (now - root.lastTrafficSampleMs);
+            if (deltaMs < root.minTrafficSampleDeltaMs) {
+                // Too soon since last sample: update baseline but don't recompute rate.
+                root.lastRxBytes = rxBytes;
+                root.lastTxBytes = txBytes;
+                root.lastTrafficSampleMs = now;
+                return;
+            }
+            const deltaSeconds = deltaMs / 1000;
             const rxDelta = rxBytes - root.lastRxBytes;
             const txDelta = txBytes - root.lastTxBytes;
             if (rxDelta >= 0 && txDelta >= 0 && deltaSeconds > 0) {
-                root.rxBytesPerSec = rxDelta / deltaSeconds;
-                root.txBytesPerSec = txDelta / deltaSeconds;
+                const rxInstant = rxDelta / deltaSeconds;
+                const txInstant = txDelta / deltaSeconds;
+                root.rxBytesPerSec = root.applyEma(root.rxBytesPerSec, rxInstant, root.trafficEmaAlpha);
+                root.txBytesPerSec = root.applyEma(root.txBytesPerSec, txInstant, root.trafficEmaAlpha);
             } else {
                 root.rxBytesPerSec = 0;
                 root.txBytesPerSec = 0;

@@ -70,7 +70,7 @@ image {
 shape {
     monitor =
     size = 320, 55
-    color = $overlay2_translucent
+    color = $base
     rounding = -1
     border_size = 0
     border_color = $text
@@ -103,7 +103,7 @@ input-field {
     dots_spacing = 0.2
     dots_center = true
     outer_color = $text
-    inner_color = $overlay2_translucent
+    inner_color = $base
     font_color = $text
     fade_on_empty = false
     font_family = JetBrainsMono Nerd Font

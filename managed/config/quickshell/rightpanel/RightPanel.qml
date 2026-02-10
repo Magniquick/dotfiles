@@ -15,6 +15,8 @@ Item {
     readonly property int popupWidth: 320
     readonly property int popupMaxHeight: 560
     property bool notificationServerActive: false
+    property int _notificationStatusFailures: 0
+    property int _notificationStatusIntervalMs: 10000
 
     // Timeouts per urgency (matching dunst config)
     readonly property int timeoutLowMs: 3000
@@ -232,7 +234,7 @@ Item {
 
     Timer {
         id: notificationStatusTimer
-        interval: 10000
+        interval: root._notificationStatusIntervalMs
         repeat: true
         running: true
         triggeredOnStart: true
@@ -247,11 +249,20 @@ Item {
         id: notificationStatusProcess
         command: ["busctl", "--user", "status", "org.freedesktop.Notifications"]
         onExited: code => {
-            root.notificationServerActive = code === 0;
-            if (code !== 0) {
-                notificationServerLoader.active = false;
-                notificationServerLoader.active = true;
+            if (code === 0) {
+                root.notificationServerActive = true;
+                root._notificationStatusFailures = 0;
+                root._notificationStatusIntervalMs = 10000;
+                return;
             }
+
+            // Avoid thrashing the NotificationServer Loader if busctl is missing
+            // or the bus is transient. Back off status checks instead.
+            root.notificationServerActive = false;
+            root._notificationStatusFailures += 1;
+
+            const next = Math.min(300000, 10000 * Math.pow(2, root._notificationStatusFailures));
+            root._notificationStatusIntervalMs = Math.round(next);
         }
     }
 

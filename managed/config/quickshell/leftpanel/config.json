@@ -23,7 +23,7 @@
 			"name": "Concise",
 			"subtext": "Brief, to-the-point responses",
 			"icon": "\uf0c8",
-			"default_model": "gemini-2.0-flash-lite",
+			"default_model": "gemini-2.5-flash-lite",
 			"prompt": "You are a helpful assistant. Keep responses brief and to the point. No fluff, no filler. Answer directly."
 		},
 		{

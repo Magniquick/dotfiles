@@ -31,6 +31,10 @@ ShellRoot {
         leftPanelAnimating = true;
         if (leftPanelShouldShow) {
             leftFocusGrab.active = true;
+        } else {
+            // Clear text focus early to avoid Wayland text-input surface churn while sliding out.
+            if (leftPanelRoot && leftPanelRoot.clearTextFocus)
+                leftPanelRoot.clearTextFocus();
         }
     }
 
@@ -86,6 +90,12 @@ ShellRoot {
                             shellRoot.leftPanelAnimating = false;
                             if (!Bar.GlobalState.leftPanelVisible) {
                                 leftFocusGrab.active = false;
+                            } else {
+                                // Only focus once the open animation has settled.
+                                Qt.callLater(function() {
+                                    if (Bar.GlobalState.leftPanelVisible && leftPanelRoot && leftPanelRoot.focusComposer)
+                                        leftPanelRoot.focusComposer();
+                                });
                             }
                         }
                     }
@@ -93,6 +103,7 @@ ShellRoot {
             }
 
             LeftPanel.LeftPanel {
+                id: leftPanelRoot
                 anchors.fill: parent
             }
         }

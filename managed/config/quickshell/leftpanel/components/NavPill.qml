@@ -70,7 +70,6 @@ Item {
                             font.family: Common.Config.fontFamily
                             font.pixelSize: 11
                             font.weight: Font.Black
-                            font.letterSpacing: 1.8
                             font.capitalization: Font.AllUppercase
                             opacity: tabItem.isActive ? 1.0 : (tabItem.isHovered ? 0.8 : 0.5)
 

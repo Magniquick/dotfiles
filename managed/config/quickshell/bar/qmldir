@@ -9,5 +9,5 @@ singleton SystemdFailedService 1.0 services/SystemdFailedService.qml
 singleton UpdatesService 1.0 services/UpdatesService.qml
 singleton TodoistService 1.0 services/TodoistService.qml
 singleton CalendarService 1.0 services/CalendarService.qml
-singleton BacklightService 1.0 services/BacklightService.qml
+singleton BrightnessService 1.0 services/BrightnessService.qml
 singleton NetworkService 1.0 services/NetworkService.qml

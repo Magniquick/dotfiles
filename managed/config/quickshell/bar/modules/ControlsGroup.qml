@@ -12,6 +12,8 @@ import "../components"
 import QtQuick
 
 ModuleContainer {
+    property var screen
+
     backgroundColor: Config.barModuleBackground
     contentSpacing: 0
     marginTop: Config.outerGaps
@@ -29,6 +31,7 @@ ModuleContainer {
             marginTop: 0
         },
         BacklightModule {
+            screen: root.screen
             backgroundColor: "transparent"
             marginBottom: 0
             marginLeft: 0

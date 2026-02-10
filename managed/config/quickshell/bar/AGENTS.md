@@ -17,7 +17,9 @@
   - `Colors.qml`: Material palette + color roles
   - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
 - Runtime data sources/services:
-  - Backlight: `/sys/class/backlight/<device>/actual_brightness` + `udevadm monitor`.
+  - Brightness:
+    - Internal panel: `qsnative.BacklightProvider` (sysfs + udev, no polling)
+    - External monitors: `ddcutil` via `bar/services/BrightnessService.qml`
   - MPRIS via `Quickshell.Services.Mpris` (ignore `playerctld`).
   - Notifications: `swaync-client -swb`.
   - Systemd failed units: `systemctl --failed` plus `busctl monitor`.

@@ -12,9 +12,7 @@ import "src" as Src
 import "src/ScreenshotUtils.js" as ScreenshotUtils
 import "ui" as Ui
 import "common" as Common
-import "../common" as RootCommon
 import "." as Hqs
-import "./ui" as Ui
 
 Src.FreezeScreen {
     id: root
@@ -141,7 +139,7 @@ Src.FreezeScreen {
         root.lastScreenshotTemporary = plan.lastScreenshotTemporary;
         root.lastScreenshotPath = plan.outputPath;
 
-        screenshotProcess.command = RootCommon.ProcessHelper.shell(plan.commandString);
+	        screenshotProcess.command = Common.ProcessHelper.shell(plan.commandString);
 
         screenshotProcess.running = false;
         screenshotProcess.running = true;
@@ -455,7 +453,7 @@ Src.FreezeScreen {
             }
 
             if (root.lastScreenshotPath) {
-                RootCommon.ProcessHelper.execDetached(`wl-copy < "${root.lastScreenshotPath}" >/dev/null 2>&1`);
+	                Common.ProcessHelper.execDetached(`wl-copy < "${root.lastScreenshotPath}" >/dev/null 2>&1`);
             }
             root.notifyScreenshotSuccess();
             root.resetSelectionState();

@@ -82,7 +82,6 @@ Item {
                         font.family: Common.Config.fontFamily
                         font.pixelSize: 9
                         font.weight: Font.Bold
-                        font.letterSpacing: 1.5
                         font.capitalization: Font.AllUppercase
                         opacity: 0.5
                         elide: Text.ElideRight

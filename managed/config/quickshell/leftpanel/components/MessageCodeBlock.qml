@@ -61,7 +61,6 @@ Rectangle {
                             family: Common.Config.fontFamily
                             pixelSize: 9
                             weight: Font.Bold
-                            letterSpacing: 1.5
                         }
                         anchors.verticalCenter: parent.verticalCenter
                     }

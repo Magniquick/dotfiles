@@ -124,9 +124,20 @@ PanelWindow {
     Rectangle {
         anchors.fill: parent
         color: "black"
-        opacity: root.surfaceTransparencyActive ? 0 : 0
+        // While we make the surface fully transparent to grab a frame, keep an
+        // invisible shield to avoid accidental clicks on whatever is behind.
+        opacity: 0
         visible: root.surfaceTransparencyActive
         z: 9999
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.AllButtons
+            onPressed: function(mouse) {
+                mouse.accepted = true;
+            }
+        }
     }
     Item {
         id: overlayContainer

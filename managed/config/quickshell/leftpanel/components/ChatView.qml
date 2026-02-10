@@ -8,7 +8,8 @@ import "./" as Components
 
 Item {
     id: root
-    property ListModel messages
+    property var messagesModel
+    property var chatSession: null
     property bool busy: false
     property string modelId: ""
     property string modelLabel: ""
@@ -16,26 +17,31 @@ Item {
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
 
-    signal sendRequested(string text)
+    signal sendRequested(string text, string attachmentsJson)
     signal commandTriggered(string command)
-    signal regenerateRequested(int index)
-    signal deleteRequested(int index)
-    signal editRequested(int index, string newContent)
+    signal regenerateRequested(string messageId)
+    signal deleteRequested(string messageId)
+    signal editRequested(string messageId, string newContent)
 
     function positionToEnd() {
         messageList.positionViewAtEnd();
     }
 
     function copyAllMessages() {
-        const lines = [];
-        for (let i = 0; i < messages.count; i++) {
-            const msg = messages.get(i);
-            if (msg.body.includes("Chat history cleared") || msg.body.startsWith("Mood:"))
-                continue;
-            const name = msg.sender === "user" ? "user" : root.moodName.toLowerCase();
-            lines.push(`*${name}*: ${msg.body}`);
+        if (root.chatSession && root.chatSession.copyAllText) {
+            Quickshell.clipboardText = root.chatSession.copyAllText();
+            return;
         }
-        Quickshell.clipboardText = lines.join("\n");
+    }
+
+    function focusComposer() {
+        if (composer && composer.focusInput)
+            composer.focusInput();
+    }
+
+    function clearTextFocus() {
+        if (composer && composer.clearFocus)
+            composer.clearFocus();
     }
 
     Item {
@@ -67,7 +73,25 @@ Item {
             anchors.margins: 10
             spacing: 10
             clip: true
-            model: root.messages
+            model: root.messagesModel
+
+            // Follow output as it streams, but don't fight the user if they've scrolled up.
+            property bool autoFollow: true
+
+            function maybeFollow() {
+                if (!autoFollow)
+                    return;
+                Qt.callLater(() => messageList.positionViewAtEnd());
+            }
+
+            onMovementStarted: {
+                // If the user scrolls away from the bottom, stop auto-follow.
+                autoFollow = atYEnd;
+            }
+            onMovementEnded: {
+                autoFollow = atYEnd;
+            }
+            onContentHeightChanged: maybeFollow()
 
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
@@ -82,101 +106,33 @@ Item {
 
             delegate: Components.ChatMessage {
                 required property int index
+                required property string messageId
                 required property string sender
                 required property string body
 
                 width: messageList.width
                 messageIndex: index
+                // Expose stable ID for actions.
+                property string _messageId: messageId
                 role: sender
                 content: body
                 modelLabel: sender === "assistant" ? root.modelLabel : ""
                 moodIcon: root.moodIcon
                 moodName: root.moodName
-                done: true
+                // The backend inserts an assistant message up-front and streams into it.
+                // Treat the last assistant message as "streaming" while busy, and render a
+                // lightweight view to avoid expensive markdown/code-block reflows per chunk.
+                streaming: root.busy
+                    && sender === "assistant"
+                    && index === (messageList.count - 1)
+                thinking: streaming && String(body || "").trim().length === 0
+                done: !streaming
 
-                onRegenerateRequested: root.regenerateRequested(index)
-                onDeleteRequested: root.deleteRequested(index)
-                onEditSaved: newContent => root.editRequested(index, newContent)
+                onRegenerateRequested: root.regenerateRequested(_messageId)
+                onDeleteRequested: root.deleteRequested(_messageId)
+                onEditSaved: newContent => root.editRequested(_messageId, newContent)
             }
 
-            footer: Item {
-                width: messageList.width
-                height: root.busy ? 48 : 0
-                visible: root.busy
-
-                RowLayout {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        verticalCenter: parent.verticalCenter
-                    }
-                    spacing: Common.Config.space.sm
-
-                    // Icon box (matches message style)
-                    Rectangle {
-                        Layout.preferredWidth: 32
-                        Layout.preferredHeight: 32
-                        radius: Common.Config.shape.corner.sm
-                        color: Qt.alpha(Common.Config.color.on_surface, 0.05)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.moodIcon
-                            color: Common.Config.color.primary
-                            font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 14
-
-                            SequentialAnimation on opacity {
-                                running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.4; duration: 600 }
-                                NumberAnimation { to: 1.0; duration: 600 }
-                            }
-                        }
-                    }
-
-                    // Typing indicator
-                    ColumnLayout {
-                        spacing: 2
-
-                        Text {
-                            text: "THINKING"
-                            color: Common.Config.color.on_surface_variant
-                            font {
-                                family: Common.Config.fontFamily
-                                pixelSize: 9
-                                weight: Font.Bold
-                                letterSpacing: 1.5
-                            }
-                            opacity: 0.5
-                        }
-
-                        Row {
-                            spacing: 4
-
-                            Repeater {
-                                model: 3
-                                Rectangle {
-                                    id: typingDot
-                                    required property int index
-                                    width: 4
-                                    height: 4
-                                    radius: 2
-                                    color: Common.Config.color.primary
-
-                                    SequentialAnimation on opacity {
-                                        running: root.busy && root.visible && root.QsWindow.window && root.QsWindow.window.visible
-                                        loops: Animation.Infinite
-                                        PauseAnimation { duration: typingDot.index * 200 }
-                                        NumberAnimation { to: 0.2; duration: 400 }
-                                        NumberAnimation { to: 1.0; duration: 400 }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -198,14 +154,16 @@ Item {
             anchors.bottomMargin: Common.Config.space.md
             height: implicitHeight
             busy: root.busy
+            chatSession: root.chatSession
             placeholderText: root.connectionOnline ? "Message..." : "Offline - use /model to switch"
-            onSend: text => {
-                root.sendRequested(text);
-                composer.text = "";
+            onSend: function(text, attachmentsJson) {
+                // When we send a message, re-enable following the tail.
+                messageList.autoFollow = true;
+                root.sendRequested(text, attachmentsJson);
             }
             onCommandTriggered: command => {
+                messageList.autoFollow = true;
                 root.commandTriggered(command);
-                composer.text = "";
             }
         }
     }

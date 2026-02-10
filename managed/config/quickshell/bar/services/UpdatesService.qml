@@ -60,10 +60,11 @@ Item {
     }
 
     Timer {
-        interval: 300000
+        // Syncing package DBs is expensive; do it manually or on a long cadence.
+        interval: 86400000
         repeat: true
         running: root.moduleAvailable
-        triggeredOnStart: true
+        triggeredOnStart: false
 
         onTriggered: root.sync()
     }

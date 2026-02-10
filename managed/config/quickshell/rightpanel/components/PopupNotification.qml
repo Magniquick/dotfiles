@@ -7,6 +7,10 @@ Item {
 
     width: 320
     implicitHeight: frame.implicitHeight
+    // ListView positions delegates using `height`; bind it so late implicitHeight
+    // changes (e.g. async image checks / text wrap) trigger relayout instead of
+    // overlapping the previous item.
+    height: implicitHeight
 
     NotificationFrame {
         id: frame
