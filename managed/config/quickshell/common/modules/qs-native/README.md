@@ -23,6 +23,7 @@ This produces:
 
 - `cargo-build_qs_native_rust`: build Rust crate and copy shared library
 - `cargo-clean_qs_native_rust`: clean Rust artifacts under module target dir
+- `cargo-prune_qs_native_rust`: remove stale debug-profile cache only
 - `qs_native_qml_module_sync`: build full plugin and sync QML module files
 
 ## Runtime
@@ -36,4 +37,5 @@ QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-native/build/qml quickshe
 ## Notes
 
 - Cargo artifacts are stored in `common/modules/qs-native/build/cargo/build`.
-- Helper scripts are profile-aware (`debug` and `release`) via `CARGO_PROFILE_DIR`.
+- CMake always builds Rust with Cargo `release` profile for this module.
+- Release incremental is enabled (`CARGO_INCREMENTAL=1` + `CARGO_PROFILE_RELEASE_INCREMENTAL=true`).

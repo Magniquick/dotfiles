@@ -25,24 +25,24 @@ endif()
 
 set(CARGO_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo/build")
 set(RUST_SHARED_LIB "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}qs_native_rust${CMAKE_SHARED_LIBRARY_SUFFIX}")
-
-set(CARGO_PROFILE_FLAG "")
-set(CARGO_PROFILE_DIR "debug")
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-    set(CARGO_PROFILE_FLAG "--release")
-    set(CARGO_PROFILE_DIR "release")
-endif()
+set(CARGO_PROFILE_FLAG "--release")
+set(CARGO_PROFILE_DIR "release")
 
 set(RUST_SHARED_LIB_SRC "${CARGO_TARGET_DIR}/${CARGO_PROFILE_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}qs_native_rust${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(CARGO_ENV_VARS
+    "CXX_QT_EXPORT_DIR=${CMAKE_CURRENT_BINARY_DIR}/cxxqt/"
+    "CXX_QT_EXPORT_CRATE_qs_native_rust=1"
+    "CXX_QT_QT_MODULES=Qt::Core,Qt::Gui,Qt::Qml"
+    "QMAKE=${QMAKE_EXECUTABLE}"
+    "CXX_${RUST_HOST_TRIPLE}=${CMAKE_CXX_COMPILER}"
+    "CARGO_BUILD_RUSTC=${RUSTC_EXECUTABLE}"
+    "CARGO_INCREMENTAL=1"
+    "CARGO_PROFILE_RELEASE_INCREMENTAL=true"
+)
 
 add_custom_target(_cargo-build_qs_native_rust
     COMMAND ${CMAKE_COMMAND} -E env
-        "CXX_QT_EXPORT_DIR=${CMAKE_CURRENT_BINARY_DIR}/cxxqt/"
-        "CXX_QT_EXPORT_CRATE_qs_native_rust=1"
-        "CXX_QT_QT_MODULES=Qt::Core,Qt::Gui,Qt::Qml"
-        "QMAKE=${QMAKE_EXECUTABLE}"
-        "CXX_${RUST_HOST_TRIPLE}=${CMAKE_CXX_COMPILER}"
-        "CARGO_BUILD_RUSTC=${RUSTC_EXECUTABLE}"
+        ${CARGO_ENV_VARS}
         "${CARGO_EXECUTABLE}" rustc
             --lib
             --package qs_native
@@ -73,6 +73,11 @@ if(NOT TARGET cargo-clean)
     add_custom_target(cargo-clean)
 endif()
 add_dependencies(cargo-clean cargo-clean_qs_native_rust)
+
+add_custom_target(cargo-prune_qs_native_rust
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${CARGO_TARGET_DIR}/debug"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+)
 
 add_library(qs_native_rust_shared SHARED IMPORTED)
 set_target_properties(qs_native_rust_shared
