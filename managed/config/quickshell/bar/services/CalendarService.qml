@@ -9,7 +9,7 @@ Item {
     id: root
     visible: false
 
-    readonly property string envFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
+    readonly property string envFile: Config.envFile
     property int days: 180
 
     readonly property var client: calendarClient

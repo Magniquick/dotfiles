@@ -10,7 +10,7 @@ Item {
     id: root
     visible: false
 
-    readonly property string todoistEnvFile: Quickshell.shellPath(((Quickshell.shellDir || "").endsWith("/bar") ? "" : "bar/") + ".env")
+    readonly property string todoistEnvFile: Config.envFile
 
     property var data: ({})
     property string lastUpdatedLabel: ""

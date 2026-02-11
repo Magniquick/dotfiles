@@ -28,6 +28,8 @@ QtObject {
         const shellValue = Quickshell.env("SHELL");
         return shellValue && shellValue !== "" ? shellValue : "sh";
     }
+    // Centralized secrets/config env file. Used by multiple shells/modules.
+    readonly property string envFile: Quickshell.shellPath("common/.env")
     readonly property var color: Colors.color
     readonly property var palette: Colors.palette
     // Mixed-DPI note: avoid a global DPR derived from `Quickshell.screens[0]`.

@@ -10,7 +10,7 @@
  *
  * Dependencies:
  * - common/modules/qs-native: CXX-Qt QML module for iCal fetching
- * - bar/.env: Environment file with calendar URLs
+ * - common/.env: Environment file with calendar URLs
  */
 pragma ComponentBehavior: Bound
 import ".."

@@ -6,7 +6,7 @@ Item {
     id: root
     visible: false
 
-    property url envFileUrl: Qt.resolvedUrl("../.env")
+    property url envFileUrl: Qt.resolvedUrl("../../common/.env")
 
     FileView {
         id: envFile
@@ -38,6 +38,6 @@ Item {
 
     readonly property string openaiApiKey: envVars["OPENAI_API_KEY"] || ""
     readonly property string geminiApiKey: envVars["GEMINI_API_KEY"] || ""
-    // Default model when OPENAI_MODEL is not set in leftpanel/.env.
+    // Default model when OPENAI_MODEL is not set in the shared env file.
     readonly property string modelId: envVars["OPENAI_MODEL"] || "gemini-2.5-flash-lite"
 }

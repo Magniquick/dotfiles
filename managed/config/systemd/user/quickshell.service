@@ -6,8 +6,7 @@ After=graphical-session.target
 Requisite=graphical-session.target
 
 [Service]
-Environment=QML_IMPORT_PATH=%h/.config/quickshell/common/modules/qs-native/build/qml
-ExecStart=/usr/bin/quickshell
+ExecStart=/home/magni/.config/quickshell/qs
 ExecStop=/usr/bin/quickshell kill
 Restart=on-failure
 

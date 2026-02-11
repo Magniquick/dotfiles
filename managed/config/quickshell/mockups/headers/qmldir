@@ -1,6 +1,0 @@
-singleton Config 1.0 ../common/Config.qml
-CurrentHeader 1.0 CurrentHeader.qml
-CompactLabelHeader 1.0 CompactLabelHeader.qml
-PillHeader 1.0 PillHeader.qml
-AccentBarHeader 1.0 AccentBarHeader.qml
-MinimalHeader 1.0 MinimalHeader.qml

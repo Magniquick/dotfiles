@@ -60,6 +60,7 @@
  * }
  */
 pragma ComponentBehavior: Bound
+import Quickshell
 import ".."
 import "../components"
 import QtQuick
@@ -68,6 +69,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
+import spotifylyrics 1.0
 
 ModuleContainer {
     id: root
@@ -75,8 +77,15 @@ ModuleContainer {
     property var activePlayer: null
     property bool debugLogging: false
     property int _positionBaseSeconds: 0
+    property double _positionBasePreciseSeconds: 0
     property double _positionBaseMs: 0
     property double _positionNowMs: 0
+    property var lyricsModel: []
+    property int _lastLyricIndex: -2
+    property int currentLyricIndex: -1
+    property double _lyricsManualUntilMs: 0
+    property string _lyricsTrackRef: ""
+    readonly property string lyricsEnvFile: Config.envFile
     readonly property string displaySubtitle: root.trackArtist !== "" ? root.trackArtist : (root.activePlayer ? root.playerTitle : "No active player")
     readonly property string displayTitle: root.trackTitle !== "" ? root.trackTitle : (root.trackFullText !== "" ? root.trackFullText : "Nothing playing")
     property string fallbackText: ""
@@ -109,6 +118,156 @@ ModuleContainer {
         const delta = (playing && baseMs > 0) ? Math.max(0, Math.floor((nowMs - baseMs) / 1000)) : 0;
         const length = root.lengthSeconds(player);
         return root.clampNumber(base + delta, 0, Math.max(0, length));
+    }
+
+    function updateLyricsModel() {
+        if (!root.tooltipActive) {
+            root.lyricsModel = [];
+            root._lastLyricIndex = -2;
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        if (!root.activePlayer || !root.hasTrack) {
+            root.lyricsModel = [{ text: "♪", isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        const trackRef = root.spotifyLyricsTrackRef(root.activePlayer);
+        if (!trackRef) {
+            root.lyricsModel = [{ text: "♪ Lyrics unavailable ♪", isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        if (lyricsClient.error && lyricsClient.error !== "") {
+            root.lyricsModel = [{ text: "Lyrics error: " + lyricsClient.error, isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        if (!lyricsClient.loaded) {
+            root.lyricsModel = [{ text: lyricsClient.busy ? "Loading lyrics..." : "♪ No lyrics available ♪", isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        const lines = lyricsClient.lines;
+        if (!lines || lines.length === 0) {
+            root.lyricsModel = [{ text: "♪ No lyrics available ♪", isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        // Use millisecond-resolution position to avoid "whole-second" lag.
+        const player = root.activePlayer;
+        const playing = player && player.playbackState === MprisPlaybackState.Playing;
+        const baseMs = root._positionBaseMs;
+        const basePosSec = root._positionBasePreciseSeconds;
+        const deltaMs = (playing && baseMs > 0) ? Math.max(0, Date.now() - baseMs) : 0;
+        const posMs = Math.max(0, Math.floor(basePosSec * 1000 + deltaMs));
+        let currentIndex = -1;
+
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const startMs = parseInt(lines[i].startTimeMs);
+            if (!isFinite(startMs))
+                continue;
+            if (posMs >= startMs) {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex === -1) {
+            root.lyricsModel = [{ text: "♪", isCurrent: true }];
+            root.currentLyricIndex = -1;
+            return;
+        }
+
+        if (currentIndex === root._lastLyricIndex)
+            return;
+        root._lastLyricIndex = currentIndex;
+        root.currentLyricIndex = currentIndex;
+        // Keep the old placeholder model for error/loading states; the UI reads
+        // lyricsClient.lines for the scrollable view when loaded.
+        root.lyricsModel = [];
+    }
+
+    function spotifyLyricsTrackRef(player) {
+        if (!player)
+            return "";
+
+        // Avoid wasting requests for non-Spotify players.
+        const desktopEntry = player.desktopEntry ? String(player.desktopEntry).toLowerCase() : "";
+        const identity = player.identity ? String(player.identity).toLowerCase() : "";
+        if (desktopEntry.indexOf("spotify") < 0 && identity.indexOf("spotify") < 0)
+            return "";
+
+        const md = player.metadata || ({});
+
+        // Prefer xesam:url, if present (often a https://open.spotify.com/track/... URL).
+        const xesamUrl = md["xesam:url"];
+        if (typeof xesamUrl === "string" && xesamUrl !== "")
+            return xesamUrl;
+        if (Array.isArray(xesamUrl) && xesamUrl.length > 0 && typeof xesamUrl[0] === "string")
+            return xesamUrl[0];
+
+        // Fall back to mpris:trackid, which for Spotify commonly ends in the 22-char track ID.
+        const mprisTrackId = md["mpris:trackid"];
+        if (typeof mprisTrackId === "string" && mprisTrackId !== "") {
+            const parts = mprisTrackId.split("/");
+            const last = parts.length > 0 ? parts[parts.length - 1] : "";
+            if (last)
+                return last;
+        }
+
+        // Last resort: uniqueId sometimes looks like a stable identifier, but is not guaranteed.
+        const uniqueId = player.uniqueId ? String(player.uniqueId) : "";
+        if (/^[A-Za-z0-9]{22}$/.test(uniqueId))
+            return uniqueId;
+
+        return "";
+    }
+
+    function scheduleLyricsRefresh() {
+        if (!root.tooltipActive)
+            return;
+        lyricsRefreshDebounce.stop();
+        lyricsRefreshDebounce.start();
+    }
+
+    function refreshLyricsNow() {
+        if (!root.tooltipActive)
+            return;
+
+        const ref = root.spotifyLyricsTrackRef(root.activePlayer);
+        if (!ref) {
+            root._lyricsTrackRef = "";
+            root.updateLyricsModel();
+            return;
+        }
+
+        if (ref === root._lyricsTrackRef && (lyricsClient.loaded || lyricsClient.busy)) {
+            root.updateLyricsModel();
+            return;
+        }
+
+        root._lyricsTrackRef = ref;
+        lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref);
+        root.updateLyricsModel();
+    }
+
+    SpotifyLyricsClient {
+        id: lyricsClient
+    }
+
+    Timer {
+        id: lyricsRefreshDebounce
+        interval: 200
+        repeat: false
+        running: false
+        onTriggered: root.refreshLyricsNow()
     }
 
     function clampNumber(value, min, max) {
@@ -216,7 +375,11 @@ ModuleContainer {
             root.activePlayer = selected;
     }
     function _syncPositionBase() {
-        root._positionBaseSeconds = root.positionSeconds(root.activePlayer);
+        const player = root.activePlayer;
+        const pos = player ? Number(player.position) : 0;
+        const safePrecise = isFinite(pos) ? Math.max(0, pos) : 0;
+        root._positionBasePreciseSeconds = safePrecise;
+        root._positionBaseSeconds = Math.max(0, Math.floor(safePrecise));
         root._positionBaseMs = Date.now();
         root._positionNowMs = root._positionBaseMs;
     }
@@ -245,7 +408,18 @@ ModuleContainer {
         if (root.activePlayer && root.activePlayer.canTogglePlaying)
             root.activePlayer.togglePlaying();
     }
-    onActivePlayerChanged: root._syncPositionBase()
+    onActivePlayerChanged: {
+        root._syncPositionBase();
+        root._lastLyricIndex = -2;
+        root.scheduleLyricsRefresh();
+    }
+    onDisplayPositionSecondsChanged: root.updateLyricsModel()
+    onTooltipActiveChanged: {
+        root._lastLyricIndex = -2;
+        if (root.tooltipActive)
+            root.scheduleLyricsRefresh();
+        root.updateLyricsModel();
+    }
 
     content: [
         IconTextRow {
@@ -520,6 +694,155 @@ ModuleContainer {
                     }
                 }
             }
+
+            Rectangle {
+                Layout.fillWidth: true
+                // 3 visible lyric rows + vertical padding.
+                Layout.preferredHeight: Config.type.bodyLarge.size * 3 + Config.space.md * 4
+                border.color: Qt.alpha(Config.color.outline_variant, 0.55)
+                border.width: 1
+                clip: true
+                color: Qt.alpha(Config.color.surface_container_highest, 0.45)
+                radius: Config.shape.corner.md
+
+                Item {
+                    anchors.fill: parent
+                    anchors.margins: Config.space.md
+
+                    readonly property bool lyricsLoaded: lyricsClient.loaded && lyricsClient.lines && lyricsClient.lines.length > 0
+
+                    // Placeholder / error / loading text
+                    Text {
+                        anchors.centerIn: parent
+                        visible: !parent.lyricsLoaded
+                        color: Config.color.on_surface_variant
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.bodyMedium.size
+                        horizontalAlignment: Text.AlignHCenter
+                        lineHeight: 1.1
+                        lineHeightMode: Text.ProportionalHeight
+                        maximumLineCount: 2
+                        opacity: 0.8
+                        text: (root.lyricsModel && root.lyricsModel.length > 0) ? root.lyricsModel[0].text : "Loading lyrics..."
+                        wrapMode: Text.WordWrap
+                        width: parent.width
+                    }
+
+                    ListView {
+                        id: lyricsView
+
+                        anchors.fill: parent
+                        clip: true
+                        visible: parent.lyricsLoaded
+
+                        model: lyricsClient.lines
+                        spacing: Config.space.xs
+                        interactive: true
+
+                        // Use a bit of padding so centering feels intentional.
+                        topMargin: Math.round(height * 0.28)
+                        bottomMargin: topMargin
+
+                        Behavior on contentY {
+                            enabled: root.tooltipActive
+                                && Date.now() > root._lyricsManualUntilMs
+                                && !lyricsView.dragging
+                                && !lyricsView.moving
+                            NumberAnimation {
+                                duration: Config.motion.duration.medium
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+
+                        onMovementStarted: root._lyricsManualUntilMs = Date.now() + 1500
+                        onMovementEnded: root._lyricsManualUntilMs = Date.now() + 700
+
+                        ScrollIndicator.vertical: ScrollIndicator {
+                            active: lyricsView.visible && root.tooltipActive
+                            visible: active
+                        }
+
+                        delegate: Text {
+                            required property var modelData
+                            required property int index
+
+                            readonly property string words: {
+                                // modelData is a QVariantMap from C++.
+                                if (modelData && modelData.words !== undefined)
+                                    return String(modelData.words || "");
+                                if (modelData && modelData["words"] !== undefined)
+                                    return String(modelData["words"] || "");
+                                return "";
+                            }
+
+                            readonly property bool isCurrent: index === root.currentLyricIndex
+
+                            color: isCurrent ? Config.color.on_surface : Config.color.on_surface_variant
+                            elide: Text.ElideRight
+                            font.family: Config.fontFamily
+                            font.pixelSize: isCurrent ? Config.type.bodyLarge.size : Config.type.bodyMedium.size
+                            font.weight: isCurrent ? Font.DemiBold : Font.Normal
+                            horizontalAlignment: Text.AlignHCenter
+                            lineHeight: 1.1
+                            lineHeightMode: Text.ProportionalHeight
+                            maximumLineCount: 2
+                            opacity: isCurrent ? 1.0 : 0.55
+                            text: words !== "" ? words : "♪"
+                            wrapMode: Text.WordWrap
+                            width: ListView.view ? ListView.view.width : parent.width
+
+                            Behavior on opacity {
+                                enabled: root.tooltipActive
+                                NumberAnimation {
+                                    duration: Config.motion.duration.medium
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                            Behavior on font.pixelSize {
+                                enabled: root.tooltipActive
+                                NumberAnimation {
+                                    duration: Config.motion.duration.medium
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                            Behavior on color {
+                                enabled: root.tooltipActive
+                                ColorAnimation { duration: Config.motion.duration.medium }
+                            }
+                        }
+
+                        function followCurrent() {
+                            if (!lyricsView.visible)
+                                return;
+                            if (root.currentLyricIndex < 0)
+                                return;
+                            if (Date.now() <= root._lyricsManualUntilMs)
+                                return;
+                            if (lyricsView.dragging || lyricsView.moving)
+                                return;
+                            Qt.callLater(function() {
+                                if (!lyricsView.visible)
+                                    return;
+                                lyricsView.positionViewAtIndex(root.currentLyricIndex, ListView.Center);
+                            });
+                        }
+
+                        Component.onCompleted: followCurrent()
+
+                        Connections {
+                            target: root
+                            function onCurrentLyricIndexChanged() { lyricsView.followCurrent(); }
+                            function onTooltipActiveChanged() { if (root.tooltipActive) lyricsView.followCurrent(); }
+                        }
+
+                        Connections {
+                            target: lyricsClient
+                            function onLoadedChanged() { lyricsView.followCurrent(); }
+                            function onLinesChanged() { lyricsView.followCurrent(); }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -566,22 +889,34 @@ ModuleContainer {
         }
     }
     Timer {
-        interval: 1000
+        interval: 200
         repeat: true
         running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
 
         onTriggered: {
             root._positionNowMs = Date.now();
+            root.updateLyricsModel();
         }
+    }
+
+    Connections {
+        target: lyricsClient
+
+        function onLoadedChanged() { root._lastLyricIndex = -2; root.updateLyricsModel(); }
+        function onLinesChanged() { root._lastLyricIndex = -2; root.updateLyricsModel(); }
+        function onErrorChanged() { root.updateLyricsModel(); }
+        function onBusyChanged() { root.updateLyricsModel(); }
     }
 
     Connections {
         target: root.activePlayer
 
         function onPositionChanged() { root._syncPositionBase(); }
-        function onTrackTitleChanged() { root._syncPositionBase(); }
-        function onTrackArtistChanged() { root._syncPositionBase(); }
+        function onTrackTitleChanged() { root._syncPositionBase(); root.scheduleLyricsRefresh(); }
+        function onTrackArtistChanged() { root._syncPositionBase(); root.scheduleLyricsRefresh(); }
         function onPlaybackStateChanged() { root._syncPositionBase(); }
-        function onReady() { root._syncPositionBase(); }
+        function onUniqueIdChanged() { root.scheduleLyricsRefresh(); }
+        function onMetadataChanged() { root.scheduleLyricsRefresh(); }
+        function onReady() { root._syncPositionBase(); root.scheduleLyricsRefresh(); }
     }
 }
