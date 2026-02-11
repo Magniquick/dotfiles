@@ -4,9 +4,13 @@ endif()
 if(NOT DEFINED OUTPUT_ARCHIVE)
   message(FATAL_ERROR "OUTPUT_ARCHIVE not set")
 endif()
+if(NOT DEFINED CARGO_PROFILE_DIR)
+  set(CARGO_PROFILE_DIR "debug")
+endif()
 
 file(GLOB archive_candidates
-  "${CARGO_BUILD_DIR}/*/debug/build/qs_native-*/out/libqs_native-cxxqt-generated.a")
+  "${CARGO_BUILD_DIR}/${CARGO_PROFILE_DIR}/build/qs_native-*/out/libqs_native-cxxqt-generated.a"
+  "${CARGO_BUILD_DIR}/*/${CARGO_PROFILE_DIR}/build/qs_native-*/out/libqs_native-cxxqt-generated.a")
 
 list(LENGTH archive_candidates archive_count)
 if(archive_count EQUAL 0)

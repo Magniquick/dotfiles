@@ -7,13 +7,19 @@ endif()
 if(NOT DEFINED STAMP_FILE)
   message(FATAL_ERROR "STAMP_FILE not set")
 endif()
+if(NOT DEFINED CARGO_PROFILE_DIR)
+  set(CARGO_PROFILE_DIR "debug")
+endif()
 
 file(GLOB header_dir_candidates
-  "${CARGO_BUILD_DIR}/*/debug/build/qs_native-*/out/cxxqtbuild/include/qs_native")
+  "${CARGO_BUILD_DIR}/${CARGO_PROFILE_DIR}/build/qs_native-*/out/cxxqtbuild/include/qs_native"
+  "${CARGO_BUILD_DIR}/*/${CARGO_PROFILE_DIR}/build/qs_native-*/out/cxxqtbuild/include/qs_native")
 file(GLOB cxx_qt_lib_candidates
-  "${CARGO_BUILD_DIR}/*/debug/build/cxx-qt-lib-*/out/cxxqtbuild/include")
+  "${CARGO_BUILD_DIR}/${CARGO_PROFILE_DIR}/build/cxx-qt-lib-*/out/cxxqtbuild/include"
+  "${CARGO_BUILD_DIR}/*/${CARGO_PROFILE_DIR}/build/cxx-qt-lib-*/out/cxxqtbuild/include")
 file(GLOB cxx_qt_candidates
-  "${CARGO_BUILD_DIR}/*/debug/build/cxx-qt-*/out/include")
+  "${CARGO_BUILD_DIR}/${CARGO_PROFILE_DIR}/build/cxx-qt-*/out/include"
+  "${CARGO_BUILD_DIR}/*/${CARGO_PROFILE_DIR}/build/cxx-qt-*/out/include")
 
 list(LENGTH header_dir_candidates header_dir_count)
 if(header_dir_count EQUAL 0)

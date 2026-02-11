@@ -1,6 +1,9 @@
 if(NOT DEFINED OUTPUT_DIR)
   message(FATAL_ERROR "OUTPUT_DIR not set")
 endif()
+if(NOT DEFINED CARGO_PROFILE_DIR)
+  set(CARGO_PROFILE_DIR "debug")
+endif()
 
 if(DEFINED CXXQT_QML_DIR AND EXISTS "${CXXQT_QML_DIR}")
   set(qml_src_dir "${CXXQT_QML_DIR}")
@@ -10,7 +13,8 @@ else()
   endif()
 
   file(GLOB qml_dir_candidates
-    "${CARGO_BUILD_DIR}/*/debug/build/qs_native-*/out/qt-build-utils/qml_modules/qsnative")
+    "${CARGO_BUILD_DIR}/${CARGO_PROFILE_DIR}/build/qs_native-*/out/qt-build-utils/qml_modules/qsnative"
+    "${CARGO_BUILD_DIR}/*/${CARGO_PROFILE_DIR}/build/qs_native-*/out/qt-build-utils/qml_modules/qsnative")
 
   list(LENGTH qml_dir_candidates qml_dir_count)
   if(qml_dir_count EQUAL 0)
