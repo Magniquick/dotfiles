@@ -5,11 +5,20 @@ notify_and_handle_action() {
     body=$2
     icon=$3
     app="HyprShot"
+    ocr_action_timeout_seconds=15
 
-    if [ -n "$icon" ]; then
-        action=$(notify-send -a "$app" "$summary" "$body" -i "$icon" --action=ocr=OCR --wait)
+    if command -v timeout >/dev/null 2>&1; then
+        if [ -n "$icon" ]; then
+            action=$(timeout "${ocr_action_timeout_seconds}s" notify-send -a "$app" "$summary" "$body" -i "$icon" --action=ocr=OCR --wait 2>/dev/null || true)
+        else
+            action=$(timeout "${ocr_action_timeout_seconds}s" notify-send -a "$app" "$summary" "$body" --action=ocr=OCR --wait 2>/dev/null || true)
+        fi
     else
-        action=$(notify-send -a "$app" "$summary" "$body" --action=ocr=OCR --wait)
+        if [ -n "$icon" ]; then
+            action=$(notify-send -a "$app" "$summary" "$body" -i "$icon" --action=ocr=OCR --wait)
+        else
+            action=$(notify-send -a "$app" "$summary" "$body" --action=ocr=OCR --wait)
+        fi
     fi
 
     if [ "$action" != "ocr" ]; then
