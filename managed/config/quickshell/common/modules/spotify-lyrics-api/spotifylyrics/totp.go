@@ -5,22 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
-	"unsafe"
 )
-
-var nativeEndian binary.ByteOrder = binary.BigEndian
-
-func init() {
-	// Upstream PHP uses pack('J', counter) which is machine-endian.
-	// Match that behavior so token generation stays compatible.
-	var x uint16 = 1
-	b := (*[2]byte)(unsafe.Pointer(&x))
-	if b[0] == 1 {
-		nativeEndian = binary.LittleEndian
-	} else {
-		nativeEndian = binary.BigEndian
-	}
-}
 
 // generateTOTP returns a 6-digit RFC 6238 TOTP code using HMAC-SHA1 and a 30s period.
 func generateTOTP(serverTimeSeconds int64, secret string) (string, error) {
@@ -34,7 +19,8 @@ func generateTOTP(serverTimeSeconds int64, secret string) (string, error) {
 	counter := uint64(serverTimeSeconds / period)
 
 	var buf [8]byte
-	nativeEndian.PutUint64(buf[:], counter)
+	// Token generation for Spotify expects big-endian counter bytes.
+	binary.BigEndian.PutUint64(buf[:], counter)
 
 	mac := hmac.New(sha1.New, []byte(secret))
 	_, _ = mac.Write(buf[:])

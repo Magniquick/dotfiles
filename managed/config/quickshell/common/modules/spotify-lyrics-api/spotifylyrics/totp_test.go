@@ -1,7 +1,6 @@
 package spotifylyrics
 
 import (
-	"encoding/binary"
 	"testing"
 )
 
@@ -13,11 +12,8 @@ func TestGenerateTOTP_RFC6238Vector_6Digits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Upstream PHP uses pack('J') which is machine-endian; we mirror that.
+	// Spotify token generation expects big-endian counter bytes.
 	want := "287082" // big-endian RFC vector
-	if nativeEndian == binary.LittleEndian {
-		want = "160385"
-	}
 	if code != want {
 		t.Fatalf("got %q want %q", code, want)
 	}
