@@ -1,9 +1,9 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
+import Qcm.Material as MD
 import "../../common" as Common
 
 RowLayout {
@@ -519,7 +519,7 @@ RowLayout {
                 Layout.alignment: Qt.AlignBaseline
             }
 
-            TextField {
+            MD.TextField {
                 id: inlineReplyField
                 Layout.fillWidth: true
                 placeholderText: entry && entry.notification && entry.notification.inlineReplyPlaceholder ? entry.notification.inlineReplyPlaceholder : "Reply"

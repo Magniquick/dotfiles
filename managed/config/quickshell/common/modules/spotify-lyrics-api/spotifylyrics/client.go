@@ -26,35 +26,6 @@ var (
 	trackIDRegex = regexp.MustCompile(`(?i)(?:https?://open\.spotify\.com/)?(?:track/|track:)([A-Za-z0-9]+)`)
 )
 
-func logTokenFailure(format string, args ...interface{}) {
-	line := fmt.Sprintf("[spotifylyrics] "+format+"\n", args...)
-	_, _ = fmt.Fprint(os.Stdout, line)
-	_, _ = fmt.Fprint(os.Stderr, line)
-
-	// Best-effort local log file for environments where stdout/stderr are not visible.
-	logPath := filepath.Join(os.TempDir(), "spotifylyrics.log")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	_, _ = f.WriteString(time.Now().Format(time.RFC3339) + " " + line)
-	_ = f.Close()
-}
-
-func writeTokenFailureSnapshot(status int, body []byte) {
-	payload := map[string]interface{}{
-		"timestamp": time.Now().Format(time.RFC3339),
-		"status":    status,
-		"body":      string(body),
-	}
-	b, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return
-	}
-	path := filepath.Join(os.TempDir(), "spotifylyrics-token-error.json")
-	_ = os.WriteFile(path, b, 0o600)
-}
-
 type Client struct {
 	spdc string
 
@@ -300,13 +271,11 @@ func (c *Client) getTokenParams(ctx context.Context) (url.Values, error) {
 func (c *Client) fetchToken(ctx context.Context) (*TokenResponse, error) {
 	params, err := c.getTokenParams(ctx)
 	if err != nil {
-		logTokenFailure("token params failed: %v", err)
 		return nil, err
 	}
 	u := c.tokenURL + "?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		logTokenFailure("token request build failed: %v", err)
 		return nil, err
 	}
 	req.Header.Set("User-Agent", c.tokenUserAgent)
@@ -315,17 +284,14 @@ func (c *Client) fetchToken(ctx context.Context) (*TokenResponse, error) {
 	hc := c.spotifyHTTPClient(c.tokenTimeout, c.insecureSpotifyTLS)
 	resp, err := hc.Do(req)
 	if err != nil {
-		logTokenFailure("token http call failed: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logTokenFailure("token response read failed: %v", err)
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		writeTokenFailureSnapshot(resp.StatusCode, body)
 		msg := strings.TrimSpace(string(body))
 		if msg == "" {
 			msg = "token request failed"
@@ -337,27 +303,22 @@ func (c *Client) fetchToken(ctx context.Context) (*TokenResponse, error) {
 			}
 			msg = "token request failed: " + msg
 		}
-		logTokenFailure("token request failed (status=%d): %s", resp.StatusCode, msg)
 		return nil, &Error{Status: resp.StatusCode, Message: msg}
 	}
 
 	var tr TokenResponse
 	if err := json.Unmarshal(body, &tr); err != nil {
-		logTokenFailure("token json decode failed: %v", err)
 		return nil, fmt.Errorf("invalid token response: %w", err)
 	}
 	if tr.AccessToken == "" || tr.IsAnonymous {
-		logTokenFailure("token validation failed: anonymous or empty access token")
 		return nil, &Error{Message: "SP_DC appears to be invalid"}
 	}
 	if tr.AccessTokenExpirationTimestampMs == 0 {
-		logTokenFailure("token validation failed: missing expiration timestamp")
 		return nil, &Error{Message: "token response missing expiration timestamp"}
 	}
 
 	// Cache the raw JSON so future schema additions don't break us.
 	if err := writeFileAtomic(c.cachePath, body, 0o600); err != nil {
-		logTokenFailure("token cache write failed: %v", err)
 		return nil, fmt.Errorf("failed to write token cache: %w", err)
 	}
 	return &tr, nil

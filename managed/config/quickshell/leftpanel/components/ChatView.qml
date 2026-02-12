@@ -1,8 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import QtQuick.Templates as T
+import Qcm.Material as MD
 import "../../common" as Common
 import "./" as Components
 
@@ -61,13 +62,13 @@ Item {
             }
         }
 
-        Rectangle {
+        MD.Pane {
             anchors.fill: parent
-            color: Common.Config.color.surface_container_low
+            backgroundColor: Common.Config.color.surface_container_low
             radius: Common.Config.shape.corner.md
         }
 
-        ListView {
+        MD.ListView {
             id: messageList
             anchors.fill: parent
             anchors.margins: 10
@@ -93,8 +94,8 @@ Item {
             }
             onContentHeightChanged: maybeFollow()
 
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
+            T.ScrollBar.vertical: MD.ScrollBar {
+                policy: T.ScrollBar.AsNeeded
                 width: 4
                 background: Rectangle { color: "transparent" }
                 contentItem: Rectangle {

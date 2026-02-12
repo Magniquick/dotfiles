@@ -1,8 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
+import Qcm.Material as MD
 import "common" as Common
 
-Rectangle {
+MD.Pane {
     id: button
 
     property color accent: Common.Config.color.error
@@ -17,12 +18,11 @@ Rectangle {
     property int strokeWidth: 2
 
     signal activated(string actionName)
-    signal hovered(string actionName)
-    signal unhovered(string actionName)
+    signal hoverEntered(string actionName)
+    signal hoverExited(string actionName)
 
     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-    border.width: 0
-    color: "transparent"
+    backgroundColor: "transparent"
     height: 54
     implicitHeight: height
     implicitWidth: width
@@ -34,10 +34,10 @@ Rectangle {
             base = hoverAction === actionName ? 1 : 0.5;
         return base;
     }
-    radius: 14
     scale: revealProgress
     transformOrigin: Item.Center
     width: 54
+    radius: 14
 
     Behavior on opacity {
         NumberAnimation {
@@ -86,8 +86,8 @@ Rectangle {
         hoverEnabled: button.mouseEnabled
 
         onClicked: button.activated(button.actionName)
-        onEntered: button.hovered(button.actionName)
-        onExited: button.unhovered(button.actionName)
+        onEntered: button.hoverEntered(button.actionName)
+        onExited: button.hoverExited(button.actionName)
     }
     SequentialAnimation {
         id: revealIn

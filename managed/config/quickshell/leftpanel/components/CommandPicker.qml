@@ -1,10 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
+import Qcm.Material as MD
 import "../../common" as Common
 
-Rectangle {
+MD.Card {
     id: root
 
     property string command: ""
@@ -18,10 +18,7 @@ Rectangle {
     property bool showAll: false
     property var filteredOptions: []
 
-    color: Common.Config.color.surface_dim
-    radius: Common.Config.shape.corner.xl
-    border.width: 2
-    border.color: Common.Config.color.primary
+    type: MD.Enum.CardOutlined
 
     width: 320
     height: Math.min(
@@ -149,7 +146,7 @@ Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    TextField {
+                    MD.TextField {
                         id: filterInput
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
@@ -223,7 +220,7 @@ Rectangle {
         }
 
         // Options list
-        ListView {
+        MD.ListView {
             id: optionsList
             Layout.fillWidth: true
             Layout.fillHeight: true

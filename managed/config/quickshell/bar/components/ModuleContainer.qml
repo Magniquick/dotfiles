@@ -50,9 +50,9 @@ Rectangle {
     color: root.surfaceColor
     border.width: root.backgroundTransparent ? 0 : Config.barModuleBorderWidth
     border.color: root.backgroundTransparent ? "transparent" : Config.barModuleBorderColor
+    radius: Math.min(width, height) / 2
     implicitHeight: root.collapsed ? 0 : Math.round(root.contentImplicitHeight)
     implicitWidth: root.collapsed ? 0 : Math.round(root.contentImplicitWidth)
-    radius: Math.min(width, height) / 2
     visible: !root.collapsed
 
     Behavior on color {

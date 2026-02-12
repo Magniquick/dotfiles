@@ -27,6 +27,10 @@ Always use Context7 to look up Quickshell documentation.
   - QML import path: `~/.config/quickshell/common/modules/qs-native/build/qml` (needs `QML_IMPORT_PATH`)
   - Quick test: `QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-native/build/qml quickshell`
   - Systemd: ensure `~/.config/systemd/user/quickshell.service` sets `QML_IMPORT_PATH`
+- spotify-lyrics-api (Go + C++ QML module):
+  - Rebuild helper (recommended): `./tools/rebuild-spotifylyrics.sh`
+  - Why: Go shared-library changes may be skipped by incremental CMake builds; the helper forces a clean rebuild and restarts `quickshell` for the same `-p` path.
+  - Manual equivalent: `rm -rf common/modules/spotify-lyrics-api/build && cmake -S common/modules/spotify-lyrics-api -B common/modules/spotify-lyrics-api/build && cmake --build common/modules/spotify-lyrics-api/build && quickshell -p "$(pwd)" kill`
 
 **Configuration:**
 - HyprQuickshot saves screenshots to `$HQS_DIR` → `$XDG_SCREENSHOTS_DIR` → `$XDG_PICTURES_DIR/Screenshots` → `$HOME/Pictures/Screenshots` → `$HOME/Pictures`

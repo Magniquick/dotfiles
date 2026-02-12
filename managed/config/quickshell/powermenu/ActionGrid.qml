@@ -81,14 +81,14 @@ Item {
                 onActivated: action => {
                     return gridHolder.activated(action);
                 }
-                onHovered: action => {
+                onHoverEntered: action => {
                     if (gridHolder.dropNextHover) {
                         gridHolder.dropNextHover = false;
                         return;
                     }
                     gridHolder.hovered(action);
                 }
-                onUnhovered: () => {
+                onHoverExited: () => {
                     return gridHolder.unhovered();
                 }
             }

@@ -1,12 +1,13 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import Quickshell
+import Qcm.Material as MD
 import "../../common" as Common
 
 // Code block styled like metrics cards - subtle bg, thin border
-Rectangle {
+MD.Card {
     id: root
     property string code: ""
     property string language: "txt"
@@ -15,10 +16,7 @@ Rectangle {
     signal codeEdited(string newCode)
 
     implicitHeight: codeColumn.implicitHeight
-    radius: Common.Config.shape.corner.sm
-    color: Qt.alpha(Common.Config.color.on_surface, 0.02)
-    border.width: 1
-    border.color: Qt.alpha(Common.Config.color.on_surface, 0.05)
+    type: MD.Enum.CardOutlined
 
     ColumnLayout {
         id: codeColumn
@@ -149,7 +147,7 @@ Rectangle {
             }
 
             // Code area
-            Flickable {
+            MD.Flickable {
                 id: codeFlick
                 Layout.fillWidth: true
                 implicitHeight: codeArea.implicitHeight
@@ -158,8 +156,8 @@ Rectangle {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
-                ScrollBar.horizontal: ScrollBar {
-                    policy: ScrollBar.AsNeeded
+                T.ScrollBar.horizontal: MD.ScrollBar {
+                    policy: T.ScrollBar.AsNeeded
                     height: 4
                     contentItem: Rectangle {
                         implicitHeight: 4
@@ -168,7 +166,7 @@ Rectangle {
                     }
                 }
 
-                TextArea {
+                MD.TextEdit {
                     id: codeArea
                     width: Math.max(implicitWidth, codeFlick.width)
                     readOnly: !root.editing
@@ -180,8 +178,6 @@ Rectangle {
                     selectedTextColor: Common.Config.color.on_surface
                     text: root.code
                     wrapMode: TextEdit.NoWrap
-                    padding: 0
-                    background: null
 
                     onTextChanged: {
                         if (root.editing) root.codeEdited(text)

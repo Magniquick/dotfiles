@@ -1,11 +1,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
+import Qcm.Material as MD
 import "../common" as Common
 import "./components" as Components
 
@@ -266,19 +267,26 @@ Item {
         }
     }
 
-    Rectangle {
+    MD.Pane {
         anchors.fill: parent
-        border.width: 1
-        border.color: Common.Config.color.outline
         radius: Common.Config.shape.corner.lg
-        gradient: Gradient {
-            GradientStop {
-                position: 0.0
-                color: Common.Config.color.surface_dim
-            }
-            GradientStop {
-                position: 1.0
-                color: Common.Config.color.surface_container
+        backgroundColor: Common.Config.color.surface_container
+
+        Rectangle {
+            anchors.fill: parent
+            border.width: 1
+            border.color: Common.Config.color.outline
+            color: "transparent"
+            radius: Common.Config.shape.corner.lg
+            gradient: Gradient {
+                GradientStop {
+                    position: 0.0
+                    color: Common.Config.color.surface_dim
+                }
+                GradientStop {
+                    position: 1.0
+                    color: Common.Config.color.surface_container
+                }
             }
         }
     }
@@ -354,7 +362,7 @@ Item {
                 font.weight: Common.Config.type.bodyMedium.weight
             }
 
-            ListView {
+            MD.ListView {
                 id: notificationList
                 anchors.fill: parent
                 visible: notificationStore.model.count > 0
@@ -362,8 +370,8 @@ Item {
                 model: notificationStore.model
                 clip: true
 
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
+                T.ScrollBar.vertical: MD.ScrollBar {
+                    policy: T.ScrollBar.AsNeeded
                 }
 
                 add: Transition {
@@ -508,7 +516,7 @@ Item {
                 }
             }
 
-            ListView {
+            MD.ListView {
                 id: popupListView
                 anchors {
                     top: parent.top
