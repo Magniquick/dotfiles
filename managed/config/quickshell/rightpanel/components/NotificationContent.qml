@@ -13,6 +13,24 @@ RowLayout {
     property bool showSourceButton: false
     property bool showSourceDetails: false
     property bool showBodyLeadIcon: true
+    // Popup auto-dismiss ring around the close button.
+    property bool autoDismissRingVisible: false
+    property real autoDismissProgress: 0.0
+    property bool autoDismissPaused: false
+    // Popup notifications should stay compact. When bodyMaxLines > 0 and
+    // bodyExpandable is true, the body is clamped with ellipsis and can be
+    // expanded (e.g. on hover) by increasing maximumLineCount.
+    property int bodyMaxLines: 0
+    property bool bodyExpandable: false
+    // If enabled, callers can expand the body on hover by setting bodyHoverActive.
+    // Expanded previews are still capped for UI stability.
+    property bool bodyExpandOnHover: false
+    property bool bodyHoverActive: false
+    property int bodyHoverMaxLines: 15
+    // Inserts soft hyphens into long "word" tokens so line wrapping can show a
+    // hyphen when breaking. Kept optional because it can interact badly with
+    // rich text; we only apply it to plain segments (and allow <br>).
+    property bool bodyHyphenate: false
     signal closeClicked
 
     readonly property string rawBody: entry && entry.body ? entry.body : ""
@@ -22,6 +40,12 @@ RowLayout {
     readonly property color headerIconColor: processedContent.headerIconColor
     readonly property string sourceText: buildSourceText(entry)
     readonly property string cleanBody: processedContent.cleanBody
+    readonly property string displayBody: {
+        const s = root.cleanBody || "";
+        if (!root.bodyHyphenate || s.length === 0)
+            return s;
+        return hyphenateStyledTextAllowBr(s);
+    }
     readonly property string titleText: {
         if (!entry || entry.title === undefined || entry.title === null)
             return "";
@@ -48,6 +72,14 @@ RowLayout {
         const buffer = 64;
         return bottom >= view.contentY - buffer && top <= view.contentY + view.height + buffer;
     }
+
+    readonly property bool bodyOverflows: root.bodyMaxLines > 0
+        && root.cleanBody.length > 0
+        && bodyMeasure.lineCount > root.bodyMaxLines
+
+    readonly property int _collapsedBodyLines: root.bodyMaxLines
+    readonly property int _expandedBodyLines: Math.min(15, Math.max(root.bodyMaxLines, root.bodyHoverMaxLines))
+    readonly property bool _hoverExpandActive: root.bodyExpandOnHover && root.bodyHoverActive
 
     onImageSourceChanged: checkImageExistence()
     Component.onCompleted: checkImageExistence()
@@ -139,6 +171,33 @@ RowLayout {
         }
         result.cleanBody = result.cleanBody.trim().replace(/\n/g, "<br>");
         return result;
+    }
+
+    function insertSoftHyphensPlain(text) {
+        // Insert a soft hyphen (\u00ad) every N characters in long alnum tokens.
+        // Soft hyphen is only rendered when a line break happens there.
+        const SOFT_HYPHEN = "\u00ad";
+        const N = 12;
+        const MIN_LEN = 18;
+        return String(text).split(/(\s+)/).map(part => {
+            // Keep whitespace as-is
+            if (part.match(/^\s+$/))
+                return part;
+            // Only touch "word-like" tokens; avoid mangling punctuation-heavy strings.
+            if (!part.match(/^[A-Za-z0-9]+$/) || part.length < MIN_LEN)
+                return part;
+            return part.replace(new RegExp("([A-Za-z0-9]{" + N + "})(?=[A-Za-z0-9])", "g"), "$1" + SOFT_HYPHEN);
+        }).join("");
+    }
+
+    function hyphenateStyledTextAllowBr(styledText) {
+        // We always emit <br> from preprocessNotification; treat that as a safe
+        // separator. If other tags are present in a segment, skip that segment.
+        const parts = String(styledText).split(/<br\s*\/?>/i);
+        if (parts.length === 1) {
+            return styledText.indexOf("<") === -1 ? insertSoftHyphensPlain(styledText) : styledText;
+        }
+        return parts.map(p => (p.indexOf("<") === -1 ? insertSoftHyphensPlain(p) : p)).join("<br>");
     }
 
     function stringifyValue(value) {
@@ -271,12 +330,30 @@ RowLayout {
                             }
                         }
 
-                        Text {
+                        // Simple built-in ring. Note: its arc radius is hardcoded
+                        // internally, so we size it with arcRadius.
+                        MD.CircleProgressShape {
                             anchors.centerIn: parent
+                            width: parent.width
+                            height: parent.height
+                            // Button is 24x24; keep the ring tucked in.
+                            arcRadius: Math.max(0, (height / 2) - 3)
+                            progress: Math.max(0, Math.min(1, root.autoDismissProgress))
+                            strokeWidth: 2
+                            visible: root.autoDismissRingVisible
+                            opacity: root.autoDismissPaused ? 0.45 : 0.85
+                        }
+
+                        Text {
+                            anchors.fill: parent
                             text: "\uf00d"
-                            color: closeArea.containsMouse ? Common.Config.color.on_surface : Common.Config.color.surface_container_highest
+                            color: closeArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface
                             font.family: Common.Config.iconFontFamily
                             font.pixelSize: 11
+                            font.weight: Font.Bold
+                            opacity: 0.95
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
 
                             Behavior on color {
                                 ColorAnimation {
@@ -400,10 +477,18 @@ RowLayout {
                 }
 
                 Text {
+                    id: bodyText
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignBaseline
-                    text: root.cleanBody
+                    text: root.displayBody
                     textFormat: Text.StyledText
+                    maximumLineCount: (root.bodyMaxLines > 0 && root.bodyExpandable)
+                        ? (root._hoverExpandActive ? root._expandedBodyLines : root._collapsedBodyLines)
+                        : 0
+                    elide: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive)
+                        ? Text.ElideRight
+                        : Text.ElideNone
+                    clip: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive)
                     color: Common.Config.color.on_surface
                     font.family: "Kyok"
                     font.weight: Font.Medium
@@ -411,6 +496,21 @@ RowLayout {
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     visible: root.cleanBody.length > 0
                     onLinkActivated: link => Qt.openUrlExternally(link)
+                }
+
+                // Hidden measurement text used to decide whether we should show the
+                // expand chevron. Must match bodyText styling and width.
+                Text {
+                    id: bodyMeasure
+                    visible: false
+                    width: bodyText.width
+                    text: root.displayBody
+                    textFormat: Text.StyledText
+                    color: "transparent"
+                    font.family: bodyText.font.family
+                    font.weight: bodyText.font.weight
+                    font.pointSize: bodyText.font.pointSize
+                    wrapMode: bodyText.wrapMode
                 }
             }
         }
