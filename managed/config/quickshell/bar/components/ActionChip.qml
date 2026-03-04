@@ -9,11 +9,13 @@ ActionButtonBase {
     property string text: ""
 
     hoverScaleEnabled: true
-    implicitHeight: Config.space.xl + Config.space.xs
+    hoverScale: 1.015
+    implicitHeight: Config.space.xl + Config.space.sm
     implicitWidth: label.implicitWidth + Config.space.xl + (root.loading ? spinner.width + Config.space.sm : 0)
     radius: height / 2
-    inactiveColor: Config.barPopupSurface
-    hoverColor: Config.barPopupSurface
+    inactiveColor: Qt.alpha(Config.color.surface_container_high, 0.92)
+    hoverColor: Config.color.surface_container_highest
+    borderColor: Qt.alpha(Config.color.outline_variant, 0.72)
 
     onClicked: {
         flashAnimation.restart();
@@ -64,6 +66,15 @@ ActionButtonBase {
             font.weight: Config.type.labelMedium.weight
             text: root.text
         }
+    }
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        color: Qt.alpha(Config.color.on_surface, 0.06)
+        height: Math.round(parent.height * 0.42)
+        radius: root.radius
+        visible: true
     }
 
         Rectangle {
