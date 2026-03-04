@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -32,15 +30,15 @@ type Client struct {
 	hc                       *http.Client
 	insecureSpotifyTransport http.RoundTripper
 
-	tokenURL        string
-	lyricsBaseURL   string
-	serverTimeURL   string
-	secretDictURL   string
-	secretCachePath string
+	tokenURL       string
+	lyricsBaseURL  string
+	serverTimeURL  string
+	secretDictURL  string
+	cacheDir       string
+	tokenCacheKey  string
+	secretCacheKey string
+	lyricsScopeKey string
 
-	cachePath string // token cache path
-
-	lyricsCacheDir     string
 	lyricsCacheTTL     time.Duration
 	lyricsCacheEnabled bool
 
@@ -56,16 +54,45 @@ func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.hc = hc }
 }
 
+// WithCacheDir configures a base cache directory for all spotify cache files.
+func WithCacheDir(dir string) Option {
+	return func(c *Client) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return
+		}
+		c.cacheDir = dir
+	}
+}
+
 func WithCachePath(path string) Option {
-	return func(c *Client) { c.cachePath = path }
+	return func(c *Client) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		c.tokenCacheKey = cacheLogicalKey(cacheKindToken, hashScopeTag("legacy_path_sha256", path), cacheTokenID)
+	}
 }
 
 func WithSecretCachePath(path string) Option {
-	return func(c *Client) { c.secretCachePath = path }
+	return func(c *Client) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		c.secretCacheKey = cacheLogicalKey(cacheKindSecret, cacheSecretScope, hashScopeTag("legacy_path_sha256", path))
+	}
 }
 
 func WithLyricsCacheDir(dir string) Option {
-	return func(c *Client) { c.lyricsCacheDir = dir }
+	return func(c *Client) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return
+		}
+		c.lyricsScopeKey = hashScopeTag("legacy_dir_sha256", dir)
+	}
 }
 
 func WithLyricsCacheTTL(ttl time.Duration) Option {
@@ -107,11 +134,20 @@ func WithInsecureSpotifyTLS(enabled bool) Option {
 // New creates a Spotify lyrics client. The sp_dc value is required; pass it in
 // from the SP_DC environment variable or other source.
 func New(spdc string, opts ...Option) (*Client, error) {
+	return NewWithCacheDir(spdc, "", opts...)
+}
+
+// NewWithCacheDir creates a Spotify lyrics client and allows providing a base
+// cache directory at construction time.
+func NewWithCacheDir(spdc string, cacheDir string, opts ...Option) (*Client, error) {
 	spdc = strings.TrimSpace(spdc)
 	if spdc == "" {
 		return nil, &Error{Message: "SP_DC is required"}
 	}
-	cacheDir := defaultCacheDir()
+	cacheDir = strings.TrimSpace(cacheDir)
+	if cacheDir == "" {
+		cacheDir = defaultCacheDir()
+	}
 	c := &Client{
 		spdc:               spdc,
 		hc:                 &http.Client{Timeout: 30 * time.Second},
@@ -119,9 +155,7 @@ func New(spdc string, opts ...Option) (*Client, error) {
 		lyricsBaseURL:      defaultLyricsBaseURL,
 		serverTimeURL:      defaultServerTimeURL,
 		secretDictURL:      defaultSecretDictURL,
-		secretCachePath:    filepath.Join(cacheDir, "secretDict_cache.json"),
-		cachePath:          filepath.Join(cacheDir, "token.json"),
-		lyricsCacheDir:     filepath.Join(cacheDir, "lyrics"),
+		cacheDir:           cacheDir,
 		lyricsCacheTTL:     7 * 24 * time.Hour,
 		lyricsCacheEnabled: true,
 		// Upstream uses different UA strings per request.
@@ -147,6 +181,27 @@ func New(spdc string, opts ...Option) (*Client, error) {
 		_ = c.spotifyTransport(true)
 	}
 	return c, nil
+}
+
+func (c *Client) tokenCacheEntryKey() string {
+	if c.tokenCacheKey != "" {
+		return c.tokenCacheKey
+	}
+	return tokenCacheKey(c.spdc)
+}
+
+func (c *Client) secretCacheEntryKey() string {
+	if c.secretCacheKey != "" {
+		return c.secretCacheKey
+	}
+	return secretCacheKey(c.secretDictURL)
+}
+
+func (c *Client) lyricsCacheEntryKey(trackID string) string {
+	if c.lyricsScopeKey != "" {
+		return cacheLogicalKey(cacheKindLyrics, c.lyricsScopeKey, "track:"+strings.ToLower(strings.TrimSpace(trackID)))
+	}
+	return lyricsCacheKey(trackID)
 }
 
 // TrackIDFromURL extracts a track ID from a Spotify URL or URI.
@@ -250,7 +305,7 @@ func (c *Client) getTokenParams(ctx context.Context) (url.Values, error) {
 	if err != nil {
 		return nil, err
 	}
-	secret, version, err := fetchLatestSecret(ctx, c.hc, c.secretDictURL, c.secretCachePath)
+	secret, version, err := fetchLatestSecret(ctx, c.hc, c.secretDictURL, c.cacheDir, c.secretCacheEntryKey())
 	if err != nil {
 		return nil, err
 	}
@@ -318,14 +373,14 @@ func (c *Client) fetchToken(ctx context.Context) (*TokenResponse, error) {
 	}
 
 	// Cache the raw JSON so future schema additions don't break us.
-	if err := writeFileAtomic(c.cachePath, body, 0o600); err != nil {
+	if err := writeCachePayload(c.cacheDir, c.tokenCacheEntryKey(), body); err != nil {
 		return nil, fmt.Errorf("failed to write token cache: %w", err)
 	}
 	return &tr, nil
 }
 
 func (c *Client) readCachedToken() (*TokenResponse, error) {
-	b, err := os.ReadFile(c.cachePath)
+	b, _, err := readCachePayload(c.cacheDir, c.tokenCacheEntryKey())
 	if err != nil {
 		return nil, err
 	}
@@ -340,11 +395,8 @@ func (c *Client) readCachedToken() (*TokenResponse, error) {
 }
 
 func (c *Client) invalidateCachedToken() {
-	if strings.TrimSpace(c.cachePath) == "" {
-		return
-	}
 	// Best-effort invalidation; callers already have the primary error context.
-	_ = os.Remove(c.cachePath)
+	deleteCachePayload(c.cacheDir, c.tokenCacheEntryKey())
 }
 
 // EnsureToken makes sure a non-expired token exists (uses the cache file).
@@ -366,9 +418,10 @@ func (c *Client) GetLyrics(ctx context.Context, trackID string) (*LyricsResponse
 	if trackID == "" {
 		return nil, &Error{Message: "track id is required"}
 	}
+	lyricsCacheKey := c.lyricsCacheEntryKey(trackID)
 
 	if c.lyricsCacheEnabled {
-		if lr, ok := readLyricsCache(c.lyricsCacheDir, trackID, c.lyricsCacheTTL); ok {
+		if lr, ok := readLyricsCache(c.cacheDir, lyricsCacheKey, c.lyricsCacheTTL); ok {
 			return lr, nil
 		}
 	}
@@ -428,7 +481,7 @@ func (c *Client) GetLyrics(ctx context.Context, trackID string) (*LyricsResponse
 
 	if c.lyricsCacheEnabled {
 		// Best-effort; don't fail the request if the cache write fails.
-		_ = writeLyricsCache(c.lyricsCacheDir, trackID, body)
+		_ = writeLyricsCache(c.cacheDir, lyricsCacheKey, body)
 	}
 	return &lr, nil
 }

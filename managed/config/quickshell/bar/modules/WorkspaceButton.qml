@@ -12,7 +12,7 @@
  * - Quickshell.Hyprland: Workspace dispatch
  */
 import ".."
-import "../components"
+import "../../common/materialkit" as MK
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
@@ -115,6 +115,7 @@ T.Button {
         font.family: root.fontFamily
         font.pixelSize: root.fontSize
         font.bold: root.active
+        renderType: Text.NativeRendering
         color: root.urgent ? Config.color.secondary : (root.active ? Config.color.primary : Config.color.on_surface_variant)
     }
 
@@ -127,7 +128,7 @@ T.Button {
         // Avoid any "almost transparent" rendering artifacts by not drawing at all when idle.
         visible: root.active || root.wsHovered || root.pressed
 
-        HybridRipple {
+        MK.HybridRipple {
             anchors.fill: parent
             radius: parent.radius
             pressX: root.pressX

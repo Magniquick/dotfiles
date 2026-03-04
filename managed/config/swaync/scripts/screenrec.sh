@@ -9,7 +9,7 @@ record_or_stop() {
 	if [[ ! -d $recording_dir ]]; then
 		mkdir -p "$recording_dir" || { echo "Error: Failed to create the directory $recording_dir"; exit 1; }
 	fi
-	
+
 	# Check if recording should start or stop
 	if [[ $SWAYNC_TOGGLE_STATE == true ]]; then
 		# Start recording
@@ -23,12 +23,12 @@ record_or_stop() {
 		# Stop recording
 		local pid
 		pid=$(pidof wl-screenrec)
-		
+
 		if [[ -n $pid ]]; then
 			# Send SIGINT signal to stop wl-screenrec
 			echo "Sending Ctrl + C signal to wl-screenrec with PID $pid"
 			kill -SIGINT "$pid"
-			
+
 			# Get the most recent recording file
 			local filename
 			# shellcheck disable=SC2012 # we know the contents of the directory are safe

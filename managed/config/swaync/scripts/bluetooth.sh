@@ -8,7 +8,7 @@ if [[ $SWAYNC_TOGGLE_STATE == true ]]; then {
 } >/dev/null 2>&1 || :
 else {
 	notify-send -a "swaync" "Bluetooth Disabled"
-	bluetoothctl power off; 
+	bluetoothctl power off;
 } >/dev/null 2>&1 || :
 fi
 

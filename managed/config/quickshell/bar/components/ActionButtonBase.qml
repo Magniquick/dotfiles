@@ -1,4 +1,5 @@
 import ".."
+import "../../common/materialkit" as MK
 import QtQuick
 
 Rectangle {
@@ -49,7 +50,7 @@ Rectangle {
 
         anchors.fill: parent
     }
-    HybridRipple {
+    MK.HybridRipple {
         anchors.fill: parent
         color: Config.color.on_surface
         pressX: mouseArea.pressX

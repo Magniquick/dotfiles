@@ -59,7 +59,7 @@ char* QsGo_AiChat_LastMetrics();
 
 /* ---------- Todoist ---------- */
 
-char* QsGo_Todoist_List(const char* envFile);
+char* QsGo_Todoist_List(const char* envFile, const char* cachePath, int preferCache);
 char* QsGo_Todoist_Action(const char* envFile, const char* verb, const char* argsJSON);
 
 /* ---------- Memory ---------- */

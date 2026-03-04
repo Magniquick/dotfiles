@@ -6,7 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
-import Qcm.Material as MD
+import "../common/materialkit" as MK
 import "../common" as Common
 import "./components" as Components
 
@@ -466,7 +466,7 @@ Item {
         }
     }
 
-    MD.Pane {
+    MK.Pane {
         anchors.fill: parent
         radius: Common.Config.shape.corner.lg
         backgroundColor: Common.Config.color.surface_container
@@ -600,7 +600,7 @@ Item {
                 font.weight: Common.Config.type.bodyMedium.weight
             }
 
-            MD.ListView {
+            MK.ListView {
                 id: notificationList
                 anchors.fill: parent
                 visible: notificationStore.model.count > 0
@@ -608,7 +608,7 @@ Item {
                 model: root.inGroupFocusView ? notificationStore.focusedEntries : notificationStore.groupedModel
                 clip: true
 
-                T.ScrollBar.vertical: MD.ScrollBar {
+                T.ScrollBar.vertical: MK.ScrollBar {
                     policy: T.ScrollBar.AsNeeded
                 }
 

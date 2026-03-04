@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # grab the address (will be empty if no matching window)
-addr=$(hyprctl clients -j | jq -r 'limit(1; .[] 
-	| select(.class | test("brave-typst.app__-Default")) 
+addr=$(hyprctl clients -j | jq -r 'limit(1; .[]
+	| select(.class | test("brave-typst.app__-Default"))
 	| .address)')
 
 if [[ -n "$addr" ]]; then

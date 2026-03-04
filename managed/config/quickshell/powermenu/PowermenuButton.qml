@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
-import Qcm.Material as MD
+import "../common/materialkit" as MK
 import "common" as Common
 
-MD.Pane {
+MK.Pane {
     id: button
 
     property color accent: Common.Config.color.error
@@ -86,7 +86,7 @@ MD.Pane {
         radius: button.radius
         clip: true
 
-        HybridRipple {
+        MK.HybridRipple {
             anchors.fill: parent
             color: button.accent
             pressX: buttonMouseArea.pressX

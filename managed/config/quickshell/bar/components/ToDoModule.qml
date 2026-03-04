@@ -57,7 +57,7 @@ ColumnLayout {
         return taskColors[index % taskColors.length];
     }
     function refresh() {
-        TodoistService.refresh("manual");
+        TodoistService.refresh("view");
     }
     function scheduleProjectSelectorClose() {
         if (projectSelector.popup.visible)
@@ -434,7 +434,7 @@ ColumnLayout {
                                     taskItem.completing = true;
                                     Qt.callLater(function () {
                                         TodoistService.completeTask(taskItem.modelData.id);
-                                        root.refresh();
+                                        TodoistService.refresh("manual");
                                     });
                                 }
                                 onEntered: if (!taskItem.completing)

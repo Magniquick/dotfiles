@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "../../common" as Common
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 
 Item {
     id: root
@@ -105,7 +105,7 @@ Item {
                     }
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: tabItem.modelData.accent
                     pressX: tabMouseArea.pressX

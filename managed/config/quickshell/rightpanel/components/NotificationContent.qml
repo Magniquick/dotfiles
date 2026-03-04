@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 import "../../common/components" as CommonComponents
 
@@ -360,7 +360,7 @@ RowLayout {
                             }
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: chevronArea.pressX
@@ -390,7 +390,7 @@ RowLayout {
 
                         // Simple built-in ring. Note: its arc radius is hardcoded
                         // internally, so we size it with arcRadius.
-                        MD.CircleProgressShape {
+                        MK.CircleProgressShape {
                             anchors.centerIn: parent
                             width: parent.width
                             height: parent.height
@@ -421,7 +421,7 @@ RowLayout {
                             }
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: closeArea.pressX
@@ -464,7 +464,7 @@ RowLayout {
                             }
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: sourceArea.pressX
@@ -675,7 +675,7 @@ RowLayout {
                             }
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: actionArea.pressX
@@ -713,7 +713,7 @@ RowLayout {
                 Layout.alignment: Qt.AlignBaseline
             }
 
-            MD.TextField {
+            MK.TextField {
                 id: inlineReplyField
                 Layout.fillWidth: true
                 placeholderText: entry && entry.notification && entry.notification.inlineReplyPlaceholder ? entry.notification.inlineReplyPlaceholder : "Reply"
@@ -737,7 +737,7 @@ RowLayout {
                     font.pointSize: 10
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: Common.Config.color.on_surface
                     pressX: replyArea.pressX

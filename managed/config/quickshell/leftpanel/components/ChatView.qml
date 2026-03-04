@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import QtQuick.Templates as T
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 import "./" as Components
 
@@ -62,13 +62,13 @@ Item {
             }
         }
 
-        MD.Pane {
+        MK.Pane {
             anchors.fill: parent
             backgroundColor: Common.Config.color.surface_container_low
             radius: Common.Config.shape.corner.md
         }
 
-        MD.ListView {
+        MK.ListView {
             id: messageList
             anchors.fill: parent
             anchors.margins: 10
@@ -94,7 +94,7 @@ Item {
             }
             onContentHeightChanged: maybeFollow()
 
-            T.ScrollBar.vertical: MD.ScrollBar {
+            T.ScrollBar.vertical: MK.ScrollBar {
                 policy: T.ScrollBar.AsNeeded
                 width: 4
                 background: Rectangle { color: "transparent" }

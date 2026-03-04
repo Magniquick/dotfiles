@@ -7,7 +7,7 @@ arch = [
 	"cachyos-keyring",
 	"cachyos-mirrorlist",
 	"cachyos-v3-mirrorlist",
-	
+
 	# required (in order):
 	"base",			# contains systemd & systemd-boot
 	"base-devel",

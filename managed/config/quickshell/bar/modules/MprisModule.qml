@@ -69,9 +69,8 @@ import QtQuick.Layouts
 import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import unifiedlyrics 1.0
-import "file:/home/magni/.config/quickshell/common/modules/QmlMaterial/qml/component/slider" as QMSlider
 
 ModuleContainer {
     id: root
@@ -137,12 +136,29 @@ ModuleContainer {
         return root.clampNumber(base + delta, 0, Math.max(0, length));
     }
 
-    function buildLyricsLookupKey(spotifyRef) {
+    function lengthMicrosForLyrics(player) {
+        if (!player)
+            return "";
+
+        const md = player.metadata || ({});
+        const raw = md["mpris:length"];
+        let value = "";
+        if (typeof raw === "number" && isFinite(raw)) {
+            value = String(Math.max(0, Math.floor(raw)));
+        } else if (typeof raw === "string" && raw.trim() !== "") {
+            const parsed = Number(raw.trim());
+            if (isFinite(parsed) && parsed >= 0)
+                value = String(Math.floor(parsed));
+        }
+        return value;
+    }
+
+    function buildLyricsLookupKey() {
         const track = root.trackTitle ? String(root.trackTitle).trim() : "";
         const artist = root.trackArtist ? String(root.trackArtist).trim() : "";
         const album = root.trackAlbum ? String(root.trackAlbum).trim() : "";
-        const duration = root.lengthSeconds(root.activePlayer);
-        return [spotifyRef || "", track, artist, album, String(duration)].join("\u001F");
+        const lengthMicros = root.lengthMicrosForLyrics(root.activePlayer);
+        return [track, artist, album, lengthMicros].join("\u241E");
     }
 
     function chooseLyricsSource() {
@@ -285,16 +301,16 @@ ModuleContainer {
             return;
 
         const ref = root.spotifyLyricsTrackRef(root.activePlayer);
-        const lookupKey = root.buildLyricsLookupKey(ref);
+        const lookupKey = root.buildLyricsLookupKey();
         const track = root.trackTitle ? String(root.trackTitle).trim() : "";
         const artist = root.trackArtist ? String(root.trackArtist).trim() : "";
         const album = root.trackAlbum ? String(root.trackAlbum).trim() : "";
-        const duration = root.lengthSeconds(root.activePlayer);
+        const lengthMicros = root.lengthMicrosForLyrics(root.activePlayer);
 
         if (lookupKey !== root._lyricsLookupKey || (!lyricsClient.loaded && !lyricsClient.busy)) {
             root._lyricsLookupKey = lookupKey;
             root._lyricsTrackRef = ref;
-            lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, duration);
+            lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, lengthMicros);
         }
 
         root.updateLyricsModel();
@@ -683,7 +699,7 @@ ModuleContainer {
                         Layout.topMargin: Config.space.sm
                         implicitHeight: progressSlider.implicitHeight
 
-                        QMSlider.SplitLinearSlider {
+                        MK.SplitLinearSlider {
                             id: progressSlider
 
                             anchors.left: parent.left
@@ -754,10 +770,10 @@ ModuleContainer {
                         Layout.topMargin: Config.space.sm
                         spacing: Config.space.sm
 
-                        MD.IconButton {
+                        MK.IconButton {
                             id: previousButton
                             enabled: !!root.activePlayer && root.activePlayer.canGoPrevious
-                            type: MD.Enum.IBtFilledTonal
+                            type: MK.Enum.ibtFilledTonal
                             icon.name: ""
                             contentItem: Text {
                                 horizontalAlignment: Text.AlignHCenter
@@ -767,15 +783,15 @@ ModuleContainer {
                                 text: ""
                                 color: previousButton.enabled ? Config.color.on_primary_container : Qt.alpha(Config.color.on_surface, 0.38)
                             }
-                            background: MD.ElevationRectangle {
+                            background: MK.ElevationRectangle {
                                 implicitWidth: previousButton.implicitBackgroundSize
                                 implicitHeight: previousButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: previousButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: previousButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevation: previousButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
                                 elevationVisible: true
 
-                                HybridRipple {
+                                MK.HybridRipple {
                                     anchors.fill: parent
                                     radius: Math.max(height / 2, 0)
                                     pressX: previousButton.pressX
@@ -791,12 +807,12 @@ ModuleContainer {
                                     root.activePlayer.previous();
                             }
                         }
-                        MD.IconButton {
+                        MK.IconButton {
                             id: playPauseButton
                             Layout.leftMargin: Config.space.xs
                             Layout.rightMargin: Config.space.xs
                             enabled: !!root.activePlayer && root.activePlayer.canTogglePlaying
-                            type: MD.Enum.IBtFilled
+                            type: MK.Enum.ibtFilled
                             icon.name: ""
                             contentItem: Text {
                                 horizontalAlignment: Text.AlignHCenter
@@ -806,15 +822,15 @@ ModuleContainer {
                                 text: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing ? "" : ""
                                 color: playPauseButton.enabled ? Config.color.on_primary : Qt.alpha(Config.color.on_surface, 0.38)
                             }
-                            background: MD.ElevationRectangle {
+                            background: MK.ElevationRectangle {
                                 implicitWidth: playPauseButton.implicitBackgroundSize
                                 implicitHeight: playPauseButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: playPauseButton.enabled ? Config.color.primary : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: playPauseButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevation: playPauseButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
                                 elevationVisible: true
 
-                                HybridRipple {
+                                MK.HybridRipple {
                                     anchors.fill: parent
                                     radius: Math.max(height / 2, 0)
                                     pressX: playPauseButton.pressX
@@ -830,10 +846,10 @@ ModuleContainer {
                                     root.activePlayer.togglePlaying();
                             }
                         }
-                        MD.IconButton {
+                        MK.IconButton {
                             id: nextButton
                             enabled: !!root.activePlayer && root.activePlayer.canGoNext
-                            type: MD.Enum.IBtFilledTonal
+                            type: MK.Enum.ibtFilledTonal
                             icon.name: ""
                             contentItem: Text {
                                 horizontalAlignment: Text.AlignHCenter
@@ -843,15 +859,15 @@ ModuleContainer {
                                 text: ""
                                 color: nextButton.enabled ? Config.color.on_primary_container : Qt.alpha(Config.color.on_surface, 0.38)
                             }
-                            background: MD.ElevationRectangle {
+                            background: MK.ElevationRectangle {
                                 implicitWidth: nextButton.implicitBackgroundSize
                                 implicitHeight: nextButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: nextButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: nextButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevation: nextButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
                                 elevationVisible: true
 
-                                HybridRipple {
+                                MK.HybridRipple {
                                     anchors.fill: parent
                                     radius: Math.max(height / 2, 0)
                                     pressX: nextButton.pressX

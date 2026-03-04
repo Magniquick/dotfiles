@@ -3,11 +3,11 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import Quickshell
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 // Code block styled like metrics cards - subtle bg, thin border
-MD.Card {
+MK.Card {
     id: root
     property string code: ""
     property string language: "txt"
@@ -16,7 +16,7 @@ MD.Card {
     signal codeEdited(string newCode)
 
     implicitHeight: codeColumn.implicitHeight
-    type: MD.Enum.CardOutlined
+    type: MK.Enum.cardOutlined
 
     ColumnLayout {
         id: codeColumn
@@ -87,7 +87,7 @@ MD.Card {
                     opacity: copyBtn.copied ? 1 : 0.6
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: Common.Config.color.on_surface
                     pressX: copyArea.pressX
@@ -158,7 +158,7 @@ MD.Card {
             }
 
             // Code area
-            MD.Flickable {
+            MK.Flickable {
                 id: codeFlick
                 Layout.fillWidth: true
                 implicitHeight: codeArea.implicitHeight
@@ -167,7 +167,7 @@ MD.Card {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
-                T.ScrollBar.horizontal: MD.ScrollBar {
+                T.ScrollBar.horizontal: MK.ScrollBar {
                     policy: T.ScrollBar.AsNeeded
                     height: 4
                     contentItem: Rectangle {
@@ -177,7 +177,7 @@ MD.Card {
                     }
                 }
 
-                MD.TextEdit {
+                MK.TextEdit {
                     id: codeArea
                     width: Math.max(implicitWidth, codeFlick.width)
                     readOnly: !root.editing

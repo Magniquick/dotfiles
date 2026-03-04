@@ -1,21 +1,22 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-      - id: end-of-file-fixer
       - id: check-merge-conflict
       - id: check-yaml
-      - id: check-json
       - id: mixed-line-ending
         args: [--fix=lf]
-      - id: check-added-large-files
-        args: [--maxkb=1024]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
 
   - repo: local
     hooks:
       - id: qmllint
-        name: qmllint (qt6)
-        entry: managed/config/quickshell/tools/qmllint.sh
+        name: qmllint (qt6, fix all qml)
+        entry: bash -lc 'managed/config/quickshell/tools/qmllint.sh --fix $(find . -name "*.qml")'
         language: system
-        files: ^(managed/config/quickshell/)?(shell\.qml|bar/.*\.qml|leftpanel/.*\.qml|rightpanel/.*\.qml|powermenu/.*\.qml|hyprquickshot/(shell\.qml|src/.*\.qml|ui/.*\.qml)|common/(Config|Colors|ColorPalette|GlobalState|MaterialBridge)\.qml|common/services/.*\.qml|sysclock/.*\.qml)$
+        pass_filenames: false

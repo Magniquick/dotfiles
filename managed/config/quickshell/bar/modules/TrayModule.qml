@@ -19,7 +19,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
 import Quickshell.Services.SystemTray
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 
 ModuleContainer {
     id: root
@@ -323,7 +323,7 @@ ModuleContainer {
                                                 implicitWidth: menuEntry.isSeparator ? 1 : (menuContent.implicitWidth + Config.space.sm * 2)
                                                 Layout.preferredWidth: implicitWidth
 
-                                                HybridRipple {
+                                                MK.HybridRipple {
                                                     anchors.fill: parent
                                                     color: Config.color.on_surface
                                                     pressX: menuMouseArea.pressX

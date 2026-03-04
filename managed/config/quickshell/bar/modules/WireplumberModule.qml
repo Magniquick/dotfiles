@@ -16,7 +16,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import ".."
 import "../components"
 
@@ -518,7 +518,7 @@ ModuleContainer {
                     Layout.preferredHeight: 24
                     Layout.preferredWidth: 24
 
-                    MD.CircleProgressBar {
+                    MK.CircleProgressBar {
                         anchors.fill: parent
                         enabled: root.pipewireGloballyReady
                         from: 0
@@ -552,7 +552,7 @@ ModuleContainer {
                 }
             }
 
-            HybridRipple {
+            MK.HybridRipple {
                 anchors.fill: parent
                 color: active ? Config.color.on_primary_container : Config.color.on_surface
                 pressX: rowMouseArea.pressX
@@ -807,7 +807,7 @@ ModuleContainer {
                                     Layout.preferredHeight: 24
                                     Layout.preferredWidth: 24
 
-                                    MD.CircleProgressBar {
+                                    MK.CircleProgressBar {
                                         id: appVolumeCircle
 
                                         anchors.fill: parent
@@ -845,7 +845,7 @@ ModuleContainer {
                                 }
                             }
 
-                            HybridRipple {
+                            MK.HybridRipple {
                                 anchors.fill: parent
                                 color: Config.color.on_surface
                                 pressX: appRowHoverArea.pressX

@@ -1,5 +1,5 @@
 import QtQuick
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Item {
@@ -18,7 +18,7 @@ Item {
             left: parent.left
             right: parent.right
         }
-        elevation: MD.Token.elevation.level1
+        elevation: MK.Token.elevation.level1
         onClicked: root.dismissRequested()
 
         NotificationContent {

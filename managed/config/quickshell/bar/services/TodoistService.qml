@@ -11,15 +11,19 @@ Item {
     visible: false
 
     readonly property string todoistEnvFile: Config.envFile
+    readonly property string todoistCachePath: Quickshell.cachePath("todoist/tasks_cache.json")
 
     property var data: ({})
     property string lastUpdatedLabel: ""
     property bool loading: false
     property bool parseError: false
     property string error: ""
-    readonly property bool usingCache: false
+    property bool usingCache: false
+    property string lastRefreshReason: "startup"
 
     function refresh(reason) {
+        root.lastRefreshReason = String(reason || "unknown");
+        client.prefer_cache = root.lastRefreshReason !== "manual";
         client.refresh();
     }
 
@@ -56,6 +60,8 @@ Item {
     TodoistClient {
         id: client
         env_file: root.todoistEnvFile
+        cache_path: root.todoistCachePath
+        prefer_cache: true
     }
 
     Timer {
@@ -84,11 +90,17 @@ Item {
             if (!parsed) {
                 root.parseError = true;
                 root.error = "Failed to parse todoist payload";
+                console.log("[TodoistService] parse error: invalid payload");
                 return;
             }
             root.data = parsed;
-            root.parseError = false;
-            root.error = "";
+            root.usingCache = parsed.using_cache === true;
+            root.error = parsed.error ? String(parsed.error) : "";
+            root.parseError = root.error !== "";
+
+            const source = root.usingCache ? "cache" : "live";
+            const status = root.error ? (" (error: " + root.error + ")") : "";
+            console.log("[TodoistService] refresh=" + root.lastRefreshReason + " preferCache=" + client.prefer_cache + " source=" + source + " cachePath=" + root.todoistCachePath + status);
 
             const updatedAt = parsed.last_updated ? new Date(parsed.last_updated) : null;
             if (updatedAt && !isNaN(updatedAt.getTime()))

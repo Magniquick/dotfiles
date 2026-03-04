@@ -34,6 +34,7 @@ ActionButtonBase {
             color: root.active ? Config.color.on_primary_fixed_variant : Config.color.on_surface
             font.family: Config.iconFontFamily
             font.pixelSize: Config.type.labelMedium.size
+            renderType: Text.NativeRendering
             opacity: root.loading ? 1 : 0
             text: "󰔟"
             visible: opacity > 0
@@ -64,6 +65,7 @@ ActionButtonBase {
             font.family: Config.fontFamily
             font.pixelSize: Config.type.labelMedium.size
             font.weight: Config.type.labelMedium.weight
+            renderType: Text.NativeRendering
             text: root.text
         }
     }

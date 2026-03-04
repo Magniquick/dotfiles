@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Widgets
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 
 import "../common" as Common
 
@@ -52,7 +52,7 @@ WrapperRectangle {
                     { mode: "screen", icon: "screen" }
                 ]
 
-                delegate: MD.Button {
+                delegate: MK.Button {
                     id: modeButton
                     required property var modelData
 
@@ -103,7 +103,7 @@ WrapperRectangle {
             anchors.verticalCenter: buttonRow.verticalCenter
             spacing: 8
 
-            MD.Button {
+            MK.Button {
                 id: freezeButton
 
                 Accessible.name: root.screenFrozen ? "Screen frozen" : "Screen live"
@@ -142,7 +142,7 @@ WrapperRectangle {
                 onClicked: root.screenFrozenToggled(!root.screenFrozen)
             }
 
-            MD.Button {
+            MK.Button {
                 id: saveButton
 
                 Accessible.name: "Save to disk"
@@ -181,7 +181,7 @@ WrapperRectangle {
                 onClicked: root.saveToDiskToggled(!root.saveToDisk)
             }
 
-            MD.Button {
+            MK.Button {
                 id: recordButton
 
                 Accessible.name: "Recording indicator"

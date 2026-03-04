@@ -128,8 +128,8 @@ func QsGo_AiChat_LastMetrics() *C.char {
 // ----- Todoist -----
 
 //export QsGo_Todoist_List
-func QsGo_Todoist_List(envFile *C.char) *C.char {
-	return C.CString(todoist.ListTasks(C.GoString(envFile)))
+func QsGo_Todoist_List(envFile, cachePath *C.char, preferCache C.int) *C.char {
+	return C.CString(todoist.ListTasks(C.GoString(envFile), C.GoString(cachePath), preferCache != 0))
 }
 
 //export QsGo_Todoist_Action

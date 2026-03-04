@@ -1,5 +1,5 @@
 import QtQuick
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Rectangle {
@@ -33,7 +33,7 @@ Rectangle {
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
-    HybridRipple {
+    MK.HybridRipple {
         anchors.fill: parent
         color: Common.Config.color.on_surface
         pressX: mouseArea.pressX

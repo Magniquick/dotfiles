@@ -1,9 +1,6 @@
 #include "UnifiedLyricsClient.h"
 
 #include <QFile>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QRegularExpression>
 #include <QtGlobal>
 #include <QtConcurrent/QtConcurrent>
@@ -36,15 +33,15 @@ UnifiedLyricsClient::UnifiedLyricsClient(QObject *parent)
     setLoaded(false);
   });
 
-  connect(&m_watcher, &QFutureWatcher<QByteArray>::finished, this, [this]() {
+  connect(&m_watcher, &QFutureWatcher<UnifiedLyricsBackendResult>::finished, this, [this]() {
     stopTimeout();
 
-    const QByteArray out = m_watcher.result();
+    const UnifiedLyricsBackendResult out = m_watcher.result();
     const quint64 finishedId = m_watcher.property("requestId").toULongLong();
     if (finishedId != m_requestId)
       return;
 
-    if (out.isEmpty()) {
+    if (!out.valid) {
       setError(QStringLiteral("Empty response from lyrics backend"));
       setStatus(QStringLiteral("Error"));
       setBusy(false);
@@ -52,45 +49,18 @@ UnifiedLyricsClient::UnifiedLyricsClient(QObject *parent)
       return;
     }
 
-    QJsonParseError pe;
-    const QJsonDocument doc = QJsonDocument::fromJson(out, &pe);
-    if (pe.error != QJsonParseError::NoError || !doc.isObject()) {
-      setError(QStringLiteral("Invalid JSON from lyrics backend"));
+    if (out.error) {
+      setError(out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
       setStatus(QStringLiteral("Error"));
       setBusy(false);
       setLoaded(false);
       return;
     }
 
-    const QJsonObject obj = doc.object();
-    if (obj.value(QStringLiteral("error")).toBool(false)) {
-      setError(obj.value(QStringLiteral("message")).toString(QStringLiteral("Unknown error")));
-      setStatus(QStringLiteral("Error"));
-      setBusy(false);
-      setLoaded(false);
-      return;
-    }
-
-    setSource(obj.value(QStringLiteral("source")).toString());
-    setSyncType(obj.value(QStringLiteral("syncType")).toString());
-    setMetadata(obj.value(QStringLiteral("metadata")).toObject().toVariantMap());
-
-    QVariantList lines;
-    const QJsonValue linesVal = obj.value(QStringLiteral("lines"));
-    if (linesVal.isArray()) {
-      const QJsonArray arr = linesVal.toArray();
-      lines.reserve(arr.size());
-      for (const auto &v : arr) {
-        if (!v.isObject())
-          continue;
-        const QJsonObject ln = v.toObject();
-        QVariantMap m;
-        m.insert(QStringLiteral("startTimeMs"), ln.value(QStringLiteral("startTimeMs")).toString());
-        m.insert(QStringLiteral("words"), ln.value(QStringLiteral("words")).toString());
-        lines.push_back(m);
-      }
-    }
-    setLines(lines);
+    setSource(out.source);
+    setSyncType(out.syncType);
+    setMetadata(QVariantMap{{QStringLiteral("provider"), out.provider}});
+    setLines(out.lines);
 
     setStatus(QStringLiteral("OK"));
     setBusy(false);
@@ -207,7 +177,7 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
                                          const QString &trackName,
                                          const QString &artistName,
                                          const QString &albumName,
-                                         int durationSeconds)
+                                         const QString &lengthMicros)
 {
   if (spotifyTrackRef.trimmed().isEmpty() && (trackName.trimmed().isEmpty() || artistName.trimmed().isEmpty())) {
     setError(QStringLiteral("spotifyTrackRef or (trackName+artistName) required"));
@@ -232,7 +202,7 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
   const QByteArray trackUtf8 = trackName.trimmed().toUtf8();
   const QByteArray artistUtf8 = artistName.trimmed().toUtf8();
   const QByteArray albumUtf8 = albumName.trimmed().toUtf8();
-  const QByteArray durationUtf8 = QByteArray::number(qMax(0, durationSeconds));
+  const QByteArray lengthMicrosUtf8 = lengthMicros.trimmed().toUtf8();
 
   const quint64 requestId = ++m_requestId;
   m_watcher.setProperty("requestId", QVariant::fromValue<qulonglong>(requestId));
@@ -243,18 +213,39 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
                                          trackUtf8,
                                          artistUtf8,
                                          albumUtf8,
-                                         durationUtf8]() -> QByteArray {
-    char *out = UnifiedLyrics_GetLyricsJson(spdcUtf8.constData(),
-                                            spotifyRefUtf8.constData(),
-                                            trackUtf8.constData(),
-                                            artistUtf8.constData(),
-                                            albumUtf8.constData(),
-                                            durationUtf8.constData());
+                                         lengthMicrosUtf8]() -> UnifiedLyricsBackendResult {
+    UnifiedLyricsBackendResult result;
+    UnifiedLyricsResult *out = UnifiedLyrics_GetLyrics(spdcUtf8.constData(),
+                                                       spotifyRefUtf8.constData(),
+                                                       trackUtf8.constData(),
+                                                       artistUtf8.constData(),
+                                                       albumUtf8.constData(),
+                                                       lengthMicrosUtf8.constData());
     if (!out)
-      return QByteArray();
-    QByteArray bytes(out);
-    UnifiedLyrics_FreeString(out);
-    return bytes;
+      return result;
+
+    result.valid = true;
+    result.error = out->error;
+    if (out->message)
+      result.message = QString::fromUtf8(out->message);
+    if (out->source)
+      result.source = QString::fromUtf8(out->source);
+    if (out->syncType)
+      result.syncType = QString::fromUtf8(out->syncType);
+    if (out->provider)
+      result.provider = QString::fromUtf8(out->provider);
+
+    result.lines.reserve(static_cast<int>(out->lineCount));
+    for (size_t i = 0; i < out->lineCount; ++i) {
+      const UnifiedLyricsLine &ln = out->lines[i];
+      QVariantMap row;
+      row.insert(QStringLiteral("startTimeMs"), ln.startTimeMs ? QString::fromUtf8(ln.startTimeMs) : QString());
+      row.insert(QStringLiteral("words"), ln.words ? QString::fromUtf8(ln.words) : QString());
+      result.lines.push_back(row);
+    }
+
+    UnifiedLyrics_FreeResult(out);
+    return result;
   }));
 
   return true;

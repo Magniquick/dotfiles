@@ -11,6 +11,12 @@ QsGoTodoist::QsGoTodoist(QObject* parent) : QObject(parent) {}
 void QsGoTodoist::setEnvFile(const QString& v)
 { if (v != m_envFile) { m_envFile = v; emit envFileChanged(); } }
 
+void QsGoTodoist::setCachePath(const QString& v)
+{ if (v != m_cachePath) { m_cachePath = v; emit cachePathChanged(); } }
+
+void QsGoTodoist::setPreferCache(bool v)
+{ if (v != m_preferCache) { m_preferCache = v; emit preferCacheChanged(); } }
+
 bool QsGoTodoist::refresh()
 {
   if (m_loading) return false;
@@ -18,8 +24,10 @@ bool QsGoTodoist::refresh()
   m_error = QString(); emit errorChanged();
 
   const QByteArray ef = m_envFile.toUtf8();
-  QThreadPool::globalInstance()->start([this, ef]() {
-    char* raw = QsGo_Todoist_List(ef.constData());
+  const QByteArray cp = m_cachePath.toUtf8();
+  const int preferCache = m_preferCache ? 1 : 0;
+  QThreadPool::globalInstance()->start([this, ef, cp, preferCache]() {
+    char* raw = QsGo_Todoist_List(ef.constData(), cp.constData(), preferCache);
     QByteArray json(raw);
     QsGo_Free(raw);
 

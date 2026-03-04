@@ -1,11 +1,7 @@
 package spotifylyrics
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -14,20 +10,12 @@ type lyricsCache struct {
 	Body    json.RawMessage `json:"body"`
 }
 
-func lyricsCachePath(cacheDir, trackID string) string {
-	// Avoid path issues and keep filenames deterministic even if the input isn't.
-	sum := sha256.Sum256([]byte(trackID))
-	name := hex.EncodeToString(sum[:]) + ".json"
-	return filepath.Join(cacheDir, name)
-}
-
-func readLyricsCache(cacheDir, trackID string, ttl time.Duration) (*LyricsResponse, bool) {
-	if cacheDir == "" || trackID == "" || ttl <= 0 {
+func readLyricsCache(cacheDir, cacheKey string, ttl time.Duration) (*LyricsResponse, bool) {
+	if cacheDir == "" || cacheKey == "" || ttl <= 0 {
 		return nil, false
 	}
 
-	path := lyricsCachePath(cacheDir, trackID)
-	b, err := os.ReadFile(path)
+	b, savedAt, err := readCachePayload(cacheDir, cacheKey)
 	if err != nil {
 		return nil, false
 	}
@@ -36,10 +24,11 @@ func readLyricsCache(cacheDir, trackID string, ttl time.Duration) (*LyricsRespon
 	if err := json.Unmarshal(b, &lc); err != nil {
 		return nil, false
 	}
-	if len(lc.Body) == 0 || lc.SavedAt <= 0 {
+	if len(lc.Body) == 0 {
 		return nil, false
 	}
-	if time.Since(time.Unix(lc.SavedAt, 0)) > ttl {
+	// Envelope time is authoritative and avoids trusting stale legacy payload fields.
+	if savedAt <= 0 || time.Since(time.Unix(savedAt, 0)) > ttl {
 		return nil, false
 	}
 
@@ -53,8 +42,8 @@ func readLyricsCache(cacheDir, trackID string, ttl time.Duration) (*LyricsRespon
 	return &lr, true
 }
 
-func writeLyricsCache(cacheDir, trackID string, body []byte) error {
-	if cacheDir == "" || trackID == "" || len(body) == 0 {
+func writeLyricsCache(cacheDir, cacheKey string, body []byte) error {
+	if cacheDir == "" || cacheKey == "" || len(body) == 0 {
 		return nil
 	}
 
@@ -66,6 +55,5 @@ func writeLyricsCache(cacheDir, trackID string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	path := lyricsCachePath(cacheDir, trackID)
-	return writeFileAtomic(path, b, 0o600)
+	return writeCachePayload(cacheDir, cacheKey, b)
 }

@@ -12,6 +12,10 @@ func defaultCacheDir() string {
 	if err == nil && ucd != "" {
 		return filepath.Join(ucd, "quickshell", "spotify-lyrics-api")
 	}
-	// Fallback: keep behavior functional even in weird environments.
-	return filepath.Join(os.TempDir(), "spotify-lyrics-api")
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil && home != "" {
+		return filepath.Join(home, ".cache", "quickshell", "spotify-lyrics-api")
+	}
+	// Final sane default when home lookup is unavailable.
+	return filepath.Join(".cache", "quickshell", "spotify-lyrics-api")
 }

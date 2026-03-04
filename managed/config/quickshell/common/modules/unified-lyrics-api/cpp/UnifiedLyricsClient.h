@@ -6,6 +6,16 @@
 #include <QVariantMap>
 #include <QFutureWatcher>
 
+struct UnifiedLyricsBackendResult {
+  bool valid = false;
+  bool error = false;
+  QString message;
+  QString source;
+  QString syncType;
+  QString provider;
+  QVariantList lines;
+};
+
 class UnifiedLyricsClient : public QObject
 {
   Q_OBJECT
@@ -36,7 +46,7 @@ public:
                                   const QString &trackName,
                                   const QString &artistName,
                                   const QString &albumName,
-                                  int durationSeconds);
+                                  const QString &lengthMicros);
 
 signals:
   void busyChanged();
@@ -63,7 +73,7 @@ private:
   void stopTimeout();
 
   QTimer m_timeout;
-  QFutureWatcher<QByteArray> m_watcher;
+  QFutureWatcher<UnifiedLyricsBackendResult> m_watcher;
   quint64 m_requestId = 0;
 
   bool m_busy = false;

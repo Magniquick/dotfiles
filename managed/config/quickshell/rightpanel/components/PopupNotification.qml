@@ -1,5 +1,5 @@
 import QtQuick
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Item {
@@ -158,7 +158,7 @@ Item {
         }
         // Popups sit on an overlay layer; the drop shadow makes the container
         // edge harder to read against busy backgrounds.
-        elevation: MD.Token.elevation.level0
+        elevation: MK.Token.elevation.level0
         frameBorderWidth: 1
         frameBorderColor: Qt.alpha(Common.Config.color.outline, 0.42)
         onClicked: root.activatePopup()
@@ -172,7 +172,7 @@ Item {
             }
             entry: root.entry
             showCloseButton: true
-            autoDismissRingVisible: autoDismissEnabled
+            autoDismissRingVisible: root.autoDismissEnabled
             autoDismissProgress: root.dismissProgress
             autoDismissPaused: root.autoDismissPaused
             bodyMaxLines: 3

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -61,8 +60,8 @@ func decodeSecretDictOrdered(body []byte) ([]secretDictEntry, error) {
 	return out, nil
 }
 
-func readSecretCache(path string) (*secretCache, error) {
-	b, err := os.ReadFile(path)
+func readSecretCache(cacheDir, cacheKey string) (*secretCache, error) {
+	b, _, err := readCachePayload(cacheDir, cacheKey)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +75,7 @@ func readSecretCache(path string) (*secretCache, error) {
 	return &sc, nil
 }
 
-func writeSecretCache(path string, etag string, body []byte) error {
+func writeSecretCache(cacheDir, cacheKey, etag string, body []byte) error {
 	sc := secretCache{
 		ETag:    etag,
 		Body:    body,
@@ -86,17 +85,17 @@ func writeSecretCache(path string, etag string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(path, b, 0o600)
+	return writeCachePayload(cacheDir, cacheKey, b)
 }
 
-func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cachePath string) (secret string, version string, _ error) {
+func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDir string, cacheKey string) (secret string, version string, _ error) {
 	if hc == nil {
 		return "", "", fmt.Errorf("http client is nil")
 	}
 
 	var cached *secretCache
-	if cachePath != "" {
-		if sc, err := readSecretCache(cachePath); err == nil {
+	if cacheDir != "" && cacheKey != "" {
+		if sc, err := readSecretCache(cacheDir, cacheKey); err == nil {
 			cached = sc
 		}
 	}
@@ -128,9 +127,9 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cachePa
 		if err != nil {
 			return "", "", err
 		}
-		if cachePath != "" {
+		if cacheDir != "" && cacheKey != "" {
 			// Best-effort cache write.
-			_ = writeSecretCache(cachePath, resp.Header.Get("ETag"), body)
+			_ = writeSecretCache(cacheDir, cacheKey, resp.Header.Get("ETag"), body)
 		}
 	}
 

@@ -1,16 +1,33 @@
 #pragma once
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-char *UnifiedLyrics_GetLyricsJson(const char *spdc,
-                                  const char *spotifyTrackRef,
-                                  const char *trackName,
-                                  const char *artistName,
-                                  const char *albumName,
-                                  const char *durationSeconds);
-void UnifiedLyrics_FreeString(char *s);
+typedef struct {
+  char *startTimeMs;
+  char *words;
+} UnifiedLyricsLine;
+
+typedef struct {
+  _Bool error;
+  char *message;
+  char *source;
+  char *syncType;
+  char *provider;
+  UnifiedLyricsLine *lines;
+  size_t lineCount;
+} UnifiedLyricsResult;
+
+UnifiedLyricsResult *UnifiedLyrics_GetLyrics(const char *spdc,
+                                             const char *spotifyTrackRef,
+                                             const char *trackName,
+                                             const char *artistName,
+                                             const char *albumName,
+                                             const char *lengthMicros);
+void UnifiedLyrics_FreeResult(UnifiedLyricsResult *result);
 
 #ifdef __cplusplus
 }

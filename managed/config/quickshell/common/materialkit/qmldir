@@ -1,0 +1,20 @@
+module qs.common.materialkit
+
+singleton Enum 1.0 Enum.qml
+singleton Token 1.0 Token.qml
+singleton Util 1.0 Util.qml
+
+Pane 1.0 Pane.qml
+Card 1.0 Card.qml
+ListView 1.0 ListView.qml
+ScrollBar 1.0 ScrollBar.qml
+Button 1.0 Button.qml
+IconButton 1.0 IconButton.qml
+TextField 1.0 TextField.qml
+TextEdit 1.0 TextEdit.qml
+Flickable 1.0 Flickable.qml
+ElevationRectangle 1.0 ElevationRectangle.qml
+CircleProgressShape 1.0 CircleProgressShape.qml
+CircleProgressBar 1.0 CircleProgressBar.qml
+SplitLinearSlider 1.0 SplitLinearSlider.qml
+HybridRipple 1.0 HybridRipple.qml

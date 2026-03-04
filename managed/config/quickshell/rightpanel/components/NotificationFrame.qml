@@ -1,5 +1,5 @@
 import QtQuick
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Item {
@@ -17,16 +17,16 @@ Item {
     // Strict parity with bar module borders.
     property color frameBorderColor: Qt.alpha(Common.Config.color.outline_variant, 0.6)
     // Conventional "card" depth. Tuned by callers (list vs popup).
-    property int elevation: MD.Token.elevation.level1
+    property int elevation: MK.Token.elevation.level1
 
     default property alias contentData: contentHost.data
 
     implicitHeight: contentHost.implicitHeight + paddingTop + paddingBottom
 
-    MD.ElevationRectangle {
+    MK.ElevationRectangle {
         anchors.fill: parent
         color: root.frameColor
-        corners: MD.Util.corners(root.frameRadius)
+        corners: MK.Util.corners(root.frameRadius)
         elevation: root.elevation
     }
 
@@ -44,7 +44,7 @@ Item {
         color: "transparent"
         radius: root.frameRadius
 
-        HybridRipple {
+        MK.HybridRipple {
             anchors.fill: parent
             color: Common.Config.color.on_surface
             pressX: frameMouseArea.pressX

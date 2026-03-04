@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	apiSync "github.com/CnTeng/todoist-api-go/sync"
 	"github.com/CnTeng/todoist-api-go/todoist"
 	"github.com/joho/godotenv"
-	"os"
 )
 
 type taskOutput struct {
@@ -29,6 +29,8 @@ type listOutput struct {
 	Today       []taskOutput            `json:"today"`
 	Projects    map[string][]taskOutput `json:"projects"`
 	LastUpdated string                  `json:"last_updated"`
+	UsingCache  bool                    `json:"using_cache"`
+	Error       string                  `json:"error,omitempty"`
 }
 
 func readToken(envFile string) (string, error) {
@@ -49,47 +51,115 @@ func makeClient(token string) *todoist.Client {
 	return todoist.NewClient(http.DefaultClient, token, todoist.DefaultHandler)
 }
 
-// ListTasks fetches all tasks and returns JSON.
-func ListTasks(envFile string) string {
-	token, err := readToken(envFile)
-	if err != nil {
-		b, _ := json.Marshal(map[string]string{"error": err.Error()})
-		return string(b)
+func fullSyncToken() string {
+	t := apiSync.DefaultSyncToken
+	return t
+}
+
+func effectiveSyncToken(state *cacheState) string {
+	if state == nil {
+		return fullSyncToken()
+	}
+	st := strings.TrimSpace(state.SyncToken)
+	if st == "" {
+		return fullSyncToken()
+	}
+	return st
+}
+
+func mergeProjects(dst map[string]*apiSync.Project, projects []*apiSync.Project) map[string]*apiSync.Project {
+	if dst == nil {
+		dst = map[string]*apiSync.Project{}
+	}
+	for _, p := range projects {
+		if p == nil || strings.TrimSpace(p.ID) == "" {
+			continue
+		}
+		if p.IsDeleted || p.IsArchived {
+			delete(dst, p.ID)
+			continue
+		}
+		dst[p.ID] = p
+	}
+	return dst
+}
+
+func mergeTasks(dst map[string]*apiSync.Task, tasks []*apiSync.Task) map[string]*apiSync.Task {
+	if dst == nil {
+		dst = map[string]*apiSync.Task{}
+	}
+	for _, task := range tasks {
+		if task == nil || strings.TrimSpace(task.ID) == "" {
+			continue
+		}
+		if task.Checked || task.IsDeleted {
+			delete(dst, task.ID)
+			continue
+		}
+		dst[task.ID] = task
+	}
+	return dst
+}
+
+func applySyncResponse(state *cacheState, resp *apiSync.SyncResponse) *cacheState {
+	if state == nil {
+		state = &cacheState{}
+	}
+	if resp == nil {
+		if state.Tasks == nil {
+			state.Tasks = map[string]*apiSync.Task{}
+		}
+		if state.Projects == nil {
+			state.Projects = map[string]*apiSync.Project{}
+		}
+		return state
 	}
 
-	client := makeClient(token)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	syncToken := apiSync.DefaultSyncToken
-	resourceTypes := apiSync.ResourceTypes{apiSync.Tasks, apiSync.Projects}
-	resp, err := client.Sync(ctx, &apiSync.SyncRequest{
-		SyncToken:     &syncToken,
-		ResourceTypes: &resourceTypes,
-	})
-	if err != nil {
-		b, _ := json.Marshal(map[string]string{"error": err.Error()})
-		return string(b)
+	if resp.FullSync {
+		state.Tasks = map[string]*apiSync.Task{}
+		state.Projects = map[string]*apiSync.Project{}
 	}
+
+	state.Projects = mergeProjects(state.Projects, resp.Projects)
+	state.Tasks = mergeTasks(state.Tasks, resp.Tasks)
+	if state.Tasks == nil {
+		state.Tasks = map[string]*apiSync.Task{}
+	}
+	if state.Projects == nil {
+		state.Projects = map[string]*apiSync.Project{}
+	}
+
+	if st := strings.TrimSpace(resp.SyncToken); st != "" {
+		state.SyncToken = st
+	}
+	return state
+}
+
+func renderListOutput(state *cacheState, usingCache bool, errMsg string) listOutput {
+	out := listOutput{
+		Today:      make([]taskOutput, 0),
+		Projects:   map[string][]taskOutput{},
+		UsingCache: usingCache,
+		Error:      strings.TrimSpace(errMsg),
+	}
+	if state == nil {
+		out.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+		return out
+	}
+
+	today := time.Now().In(time.Local)
+	todayDate := dateOnly(today)
 
 	projectNames := map[string]string{}
-	for _, p := range resp.Projects {
+	for _, p := range state.Projects {
 		if p == nil || p.IsDeleted || p.IsArchived {
 			continue
 		}
 		projectNames[p.ID] = p.Name
 	}
 
-	today := time.Now().In(time.Local)
-	todayDate := dateOnly(today)
-
-	out := listOutput{
-		Today:    make([]taskOutput, 0),
-		Projects: map[string][]taskOutput{},
-	}
 	var latestUpdate time.Time
-
-	for _, task := range resp.Tasks {
+	for _, task := range state.Tasks {
 		if task == nil || task.Checked || task.IsDeleted {
 			continue
 		}
@@ -130,8 +200,54 @@ func ListTasks(envFile string) string {
 		out.Projects[k] = p
 	}
 
+	return out
+}
+
+func marshalOutput(out listOutput) string {
 	b, _ := json.Marshal(out)
 	return string(b)
+}
+
+// ListTasks fetches all tasks and returns JSON.
+func ListTasks(envFile, cachePath string, preferCache bool) string {
+	cachedState, _ := readCacheState(cachePath)
+	if preferCache && cachedState != nil {
+		return marshalOutput(renderListOutput(cachedState, true, ""))
+	}
+
+	token, err := readToken(envFile)
+	if err != nil {
+		if cachedState != nil {
+			return marshalOutput(renderListOutput(cachedState, true, err.Error()))
+		}
+		return marshalOutput(listOutput{Error: err.Error(), UsingCache: false})
+	}
+
+	client := makeClient(token)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	syncToken := effectiveSyncToken(cachedState)
+	resourceTypes := apiSync.ResourceTypes{apiSync.Tasks, apiSync.Projects}
+	resp, err := client.Sync(ctx, &apiSync.SyncRequest{
+		SyncToken:     &syncToken,
+		ResourceTypes: &resourceTypes,
+	})
+	if err != nil {
+		if cachedState != nil {
+			return marshalOutput(renderListOutput(cachedState, true, err.Error()))
+		}
+		return marshalOutput(listOutput{Error: err.Error(), UsingCache: false})
+	}
+
+	nextState := applySyncResponse(cachedState, resp)
+	if werr := writeCacheState(cachePath, nextState); werr != nil {
+		out := renderListOutput(nextState, false, "")
+		out.Error = "cache write failed: " + werr.Error()
+		return marshalOutput(out)
+	}
+
+	return marshalOutput(renderListOutput(nextState, false, ""))
 }
 
 // Action executes a task action (close/delete/add/update) and returns JSON.

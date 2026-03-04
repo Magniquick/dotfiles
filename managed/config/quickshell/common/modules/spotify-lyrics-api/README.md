@@ -15,6 +15,7 @@ Main constructor:
 
 ```go
 c, err := spotifylyrics.New(os.Getenv("SP_DC"))
+c, err := spotifylyrics.NewWithCacheDir(os.Getenv("SP_DC"), "/custom/cache/root")
 ```
 
 Main methods:
@@ -26,10 +27,30 @@ Main methods:
 
 Useful options on `New(...)`:
 
-- `WithCachePath(path)` for token cache file.
-- `WithSecretCachePath(path)` for secret dictionary cache file.
-- `WithLyricsCacheDir(dir)` / `WithLyricsCacheTTL(ttl)` / `WithLyricsCacheEnabled(bool)`.
+- `NewWithCacheDir(spdc, cacheDir)` to set one cache root for token/secret/lyrics caches.
+- `WithCachePath(path)`, `WithSecretCachePath(path)`, `WithLyricsCacheDir(dir)` for legacy key scoping overrides.
+- `WithLyricsCacheTTL(ttl)` / `WithLyricsCacheEnabled(bool)`.
 - `WithTokenTimeout(d)` and user-agent overrides.
+
+## Cache key model
+
+The cache uses unified, versioned logical keys:
+
+- Token: `lyrics:v1:token:spdc_sha256:<sha256(trim(spdc))>:default`
+- Secret dict: `lyrics:v1:secret_dict:global:url_sha256:<sha256(secretDictURL)>`
+- Lyrics: `lyrics:v1:lyrics:global:track:<lower(trim(trackID))>`
+
+Why token includes `spdc_sha256`:
+- Spotify access tokens are obtained from `sp_dc` and are session/account scoped.
+- Lyrics cache is intentionally not scoped by `sp_dc` to maximize reuse by track ID.
+
+## Secret dict
+
+`secretDict.json` is an upstream Spotify-related version map used to derive token request parameters.
+
+- It is fetched from the configured `secretDictURL`.
+- We cache it with `ETag` to support conditional requests (`If-None-Match`).
+- It is global (not tied to `SP_DC`), so its key does not include `spdc_sha256`.
 
 Response shape (from `GetLyrics*`):
 

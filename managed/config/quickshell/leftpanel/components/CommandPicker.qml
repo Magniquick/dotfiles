@@ -1,10 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
-MD.Card {
+MK.Card {
     id: root
 
     property string command: ""
@@ -18,7 +18,7 @@ MD.Card {
     property bool showAll: false
     property var filteredOptions: []
 
-    type: MD.Enum.CardOutlined
+    type: MK.Enum.cardOutlined
 
     width: 320
     height: Math.min(
@@ -108,7 +108,7 @@ MD.Card {
                     font.pixelSize: 14
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: Common.Config.color.error
                     pressX: closeArea.pressX
@@ -158,7 +158,7 @@ MD.Card {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    MD.TextField {
+                    MK.TextField {
                         id: filterInput
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
@@ -190,7 +190,7 @@ MD.Card {
                             font.pixelSize: 13
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: clearArea.pressX
@@ -234,7 +234,7 @@ MD.Card {
                     font.weight: Font.Bold
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: root.showAll ? Common.Config.color.on_primary : Common.Config.color.on_surface
                     pressX: toggleArea.pressX
@@ -257,7 +257,7 @@ MD.Card {
         }
 
         // Options list
-        MD.ListView {
+        MK.ListView {
             id: optionsList
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -365,7 +365,7 @@ MD.Card {
                     onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
 
-                HybridRipple {
+                MK.HybridRipple {
                     anchors.fill: parent
                     color: Common.Config.color.on_surface
                     pressX: optionArea.pressX

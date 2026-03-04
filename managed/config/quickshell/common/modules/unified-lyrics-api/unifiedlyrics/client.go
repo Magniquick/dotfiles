@@ -2,11 +2,10 @@ package unifiedlyrics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"spotify-lyrics-api/spotifylyrics"
 )
@@ -17,7 +16,7 @@ type Request struct {
 	TrackName       string
 	ArtistName      string
 	AlbumName       string
-	DurationSeconds int
+	LengthMicros    string
 }
 
 type Result struct {
@@ -31,21 +30,13 @@ type ResultMetadata struct {
 	Provider string `json:"provider"`
 }
 
-type cacheEntry struct {
-	result    Result
-	expiresAt time.Time
-}
-
 type Client struct {
-	mu       sync.RWMutex
-	cache    map[string]cacheEntry
-	cacheTTL time.Duration
+	spotifyCacheDir string
 }
 
-func New() *Client {
+func New(spotifyCacheDir string) *Client {
 	return &Client{
-		cache:    make(map[string]cacheEntry),
-		cacheTTL: 30 * time.Minute,
+		spotifyCacheDir: strings.TrimSpace(spotifyCacheDir),
 	}
 }
 
@@ -53,10 +44,15 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	if c == nil {
 		return nil, errors.New("nil client")
 	}
-
-	cacheKey := buildCacheKey(req)
-	if cached := c.getCached(cacheKey); cached != nil {
-		return cached, nil
+	tuple := identityTuple(req)
+	if tuple != "" {
+		key := spotifylyrics.FinalLyricsCacheKey(tuple)
+		if payload, _, err := spotifylyrics.ReadUnifiedCachePayload(c.spotifyCacheDir, key); err == nil {
+			var cached finalLyricsCachePayload
+			if json.Unmarshal(payload, &cached) == nil && len(cached.Result.Lines) > 0 {
+				return cloneResult(&cached.Result), nil
+			}
+		}
 	}
 
 	var spotifyOut *Result
@@ -67,7 +63,7 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	spdc := strings.TrimSpace(req.SPDC)
 	spotifyRef := strings.TrimSpace(req.SpotifyTrackRef)
 	if spdc != "" && spotifyRef != "" {
-		sc, err := spotifylyrics.New(spdc)
+		sc, err := spotifylyrics.NewWithCacheDir(spdc, c.spotifyCacheDir)
 		if err == nil {
 			lr, err := sc.GetLyricsFromURL(ctx, spotifyRef)
 			if err == nil && lr != nil && len(lr.Lyrics.Lines) > 0 {
@@ -82,7 +78,6 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 				spotifyOut = newResult("spotify_normal", syncType, lines)
 				if strings.EqualFold(syncType, "LINE_SYNCED") {
 					spotifyOut.Source = "spotify_synced"
-					c.putCached(cacheKey, spotifyOut)
 					return spotifyOut, nil
 				}
 			}
@@ -97,15 +92,15 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	track := strings.TrimSpace(req.TrackName)
 	artist := strings.TrimSpace(req.ArtistName)
 	album := strings.TrimSpace(req.AlbumName)
+	durationSeconds := durationSecondsFromMicros(req.LengthMicros)
 	if track != "" && artist != "" {
 		lc := NewLrcLibClient()
-		lr, err := lc.GetLyrics(ctx, track, artist, album, req.DurationSeconds)
+		lr, err := lc.GetLyrics(ctx, track, artist, album, durationSeconds)
 		if err == nil && lr != nil && len(lr.Lines) > 0 {
 			syncType := strings.TrimSpace(lr.SyncType)
 			lrclibOut = newResult("lrclib_normal", syncType, lr.Lines)
 			if strings.EqualFold(syncType, "LINE_SYNCED") {
 				lrclibOut.Source = "lrclib_synced"
-				c.putCached(cacheKey, lrclibOut)
 				return lrclibOut, nil
 			}
 		}
@@ -115,11 +110,11 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	}
 
 	if spotifyOut != nil {
-		c.putCached(cacheKey, spotifyOut)
+		c.writeFinalCache(tuple, spotifyOut)
 		return spotifyOut, nil
 	}
 	if lrclibOut != nil {
-		c.putCached(cacheKey, lrclibOut)
+		c.writeFinalCache(tuple, lrclibOut)
 		return lrclibOut, nil
 	}
 
@@ -178,47 +173,57 @@ func cloneResult(r *Result) *Result {
 	}
 }
 
-func buildCacheKey(req Request) string {
-	return fmt.Sprintf("%s\x1f%s\x1f%s\x1f%d",
-		strings.TrimSpace(req.SpotifyTrackRef),
-		strings.ToLower(strings.TrimSpace(req.TrackName)),
-		strings.ToLower(strings.TrimSpace(req.ArtistName)),
-		req.DurationSeconds,
-	)
+type finalLyricsCachePayload struct {
+	Result        Result `json:"result"`
+	IdentityTuple string `json:"identityTuple"`
 }
 
-func (c *Client) getCached(key string) *Result {
-	if key == "" {
-		return nil
-	}
-	now := time.Now()
+const tupleSep = "\u241E"
 
-	c.mu.RLock()
-	entry, ok := c.cache[key]
-	c.mu.RUnlock()
-	if !ok {
-		return nil
-	}
-	if now.After(entry.expiresAt) {
-		c.mu.Lock()
-		delete(c.cache, key)
-		c.mu.Unlock()
-		return nil
-	}
-	return cloneResult(&entry.result)
+func identityTuple(req Request) string {
+	title := strings.TrimSpace(req.TrackName)
+	artist := strings.TrimSpace(req.ArtistName)
+	album := strings.TrimSpace(req.AlbumName)
+	length := normalizeLengthMicros(req.LengthMicros)
+	return title + tupleSep + artist + tupleSep + album + tupleSep + length
 }
 
-func (c *Client) putCached(key string, r *Result) {
-	if key == "" || r == nil || len(r.Lines) == 0 {
+func normalizeLengthMicros(lengthMicros string) string {
+	s := strings.TrimSpace(lengthMicros)
+	if s == "" {
+		return ""
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || v < 0 {
+		return ""
+	}
+	return strconv.FormatInt(v, 10)
+}
+
+func durationSecondsFromMicros(lengthMicros string) int {
+	s := normalizeLengthMicros(lengthMicros)
+	if s == "" {
+		return 0
+	}
+	us, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || us <= 0 {
+		return 0
+	}
+	return int(us / 1_000_000)
+}
+
+func (c *Client) writeFinalCache(tuple string, result *Result) {
+	if strings.TrimSpace(tuple) == "" || result == nil || len(result.Lines) == 0 {
 		return
 	}
-	exp := time.Now().Add(c.cacheTTL)
-	clone := cloneResult(r)
-
-	c.mu.Lock()
-	c.cache[key] = cacheEntry{
-		result:    *clone,
-		expiresAt: exp,
+	key := spotifylyrics.FinalLyricsCacheKey(tuple)
+	payload := finalLyricsCachePayload{
+		Result:        *cloneResult(result),
+		IdentityTuple: tuple,
 	}
-	c.mu.Unlock()
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	_ = spotifylyrics.WriteUnifiedCachePayload(c.spotifyCacheDir, key, b)
 }

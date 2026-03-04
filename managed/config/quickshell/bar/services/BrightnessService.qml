@@ -315,8 +315,8 @@ Item {
         const raw = Math.max(1, Math.min(max, Math.round(next * max)));
 
         monitor._ddcSetRunning = true;
-        ddcSetProc.command = ["ddcutil", "-b", monitor.ddcBusNum, "--sleep-multiplier=0.05", "setvcp", "10", String(raw)];
-        ddcSetProc.running = true;
+        monitor.ddcSetProc.command = ["ddcutil", "-b", monitor.ddcBusNum, "--sleep-multiplier=0.05", "setvcp", "10", String(raw)];
+        monitor.ddcSetProc.running = true;
       }
     }
 
@@ -342,8 +342,8 @@ Item {
       }
       onExited: (exitCode, exitStatus) => {
         // Make running edge-triggered for repeated refreshes.
-        if (ddcGetProc.running)
-          ddcGetProc.running = false;
+        if (monitor.ddcGetProc.running)
+          monitor.ddcGetProc.running = false;
       }
     }
 

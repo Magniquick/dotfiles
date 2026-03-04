@@ -1,7 +1,7 @@
 pragma Singleton
 
 import QtQuick
-import Qcm.Material as MD
+import "materialkit" as MK
 import "."
 
 QtObject {
@@ -12,24 +12,24 @@ QtObject {
     readonly property string iconFamily: "JetBrainsMono NFP"
 
     function applyTheme() {
-        if (!MD.Token || !MD.Token.color)
+        if (!MK.Token || !MK.Token.color)
             return;
 
         // Keep Quickshell palette authority with matugen by pinning accent to matugen primary.
-        MD.Token.color.useSysColorSM = false;
-        MD.Token.color.useSysAccentColor = false;
-        MD.Token.color.accentColor = root.colors.primary;
+        MK.Token.color.useSysColorSM = false;
+        MK.Token.color.useSysAccentColor = false;
+        MK.Token.color.accentColor = root.colors.primary;
     }
 
     function applyFonts() {
-        if (!MD.Token || !MD.Token.font)
+        if (!MK.Token || !MK.Token.font)
             return;
 
         if (root.textFamily && root.textFamily.length > 0)
-            MD.Token.font.default_font.family = root.textFamily;
+            MK.Token.font.default_font.family = root.textFamily;
         if (root.iconFamily && root.iconFamily.length > 0) {
-            MD.Token.font.icon_family = root.iconFamily;
-            MD.Token.font.icon_fill_family = root.iconFamily;
+            MK.Token.font.icon_family = root.iconFamily;
+            MK.Token.font.icon_fill_family = root.iconFamily;
         }
     }
 

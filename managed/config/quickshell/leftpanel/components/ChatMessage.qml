@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Item {

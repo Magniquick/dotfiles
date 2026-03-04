@@ -4,7 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../../common" as Common
 import "../../common/modules/rounded_polygon_qmljs" as RoundedPoly
-import Qcm.Material as MD
+import "../../common/materialkit" as MK
 import "../../common/modules/rounded_polygon_qmljs/material-shapes.js" as MaterialShapes
 
 Item {
@@ -280,7 +280,7 @@ Item {
                             onHoveredChanged: if (hovered) root.selectedSuggestion = index
                         }
 
-                        HybridRipple {
+                        MK.HybridRipple {
                             anchors.fill: parent
                             color: Common.Config.color.on_surface
                             pressX: suggestionArea.pressX
@@ -442,7 +442,7 @@ Item {
                                                 font.pixelSize: 10
                                             }
 
-                                            HybridRipple {
+                                            MK.HybridRipple {
                                                 anchors.fill: parent
                                                 color: Common.Config.color.error
                                                 pressX: deleteArea.pressX
@@ -777,7 +777,7 @@ Item {
                         }
                     }
 
-                    HybridRipple {
+                    MK.HybridRipple {
                         anchors.fill: parent
                         color: Common.Config.color.on_primary
                         pressX: sendButtonArea.pressX

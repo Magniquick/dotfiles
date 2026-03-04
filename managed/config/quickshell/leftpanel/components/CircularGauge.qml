@@ -50,7 +50,7 @@ Item {
                     const radius = Math.max(1, (width - strokeWidth * 2) / 2);
                     const startAngle = -Math.PI / 2;
                     const primary = Math.max(0, Math.min(100, animatedValue));
-                    const secondary = Math.max(0, Math.min(100, secondaryValue));
+                    const secondary = Math.max(0, Math.min(100, root.secondaryValue));
                     const endAngle = startAngle + (Math.PI * 2 * primary / 100);
                     const secondaryEndAngle = startAngle + (Math.PI * 2 * secondary / 100);
 
@@ -63,7 +63,7 @@ Item {
                     ctx.stroke();
 
                     // Value arc
-                    if (secondaryValue >= 0) {
+                    if (root.secondaryValue >= 0) {
                         ctx.strokeStyle = Qt.alpha(root.accent, 0.4);
                         ctx.beginPath();
                         ctx.arc(center, center, radius, startAngle, secondaryEndAngle);

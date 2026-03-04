@@ -11,6 +11,7 @@ import Quickshell.Io
 import ".."
 import "../components"
 import "../../common" as Common
+import "../../common/materialkit" as MK
 
 ModuleContainer {
     id: root
@@ -530,7 +531,7 @@ ModuleContainer {
                                     }
                                 }
 
-                                HybridRipple {
+                                MK.HybridRipple {
                                     anchors.fill: parent
                                     color: connected ? Config.color.on_primary_container : Config.color.on_surface
                                     pressX: rowMouseArea.pressX

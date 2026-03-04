@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -100,7 +101,7 @@ Item {
           cursorShape: Qt.SizeAllCursor
           property real lastX: 0
           property real lastY: 0
-          onPressed: {
+          onPressed: function(mouse) {
             if (!root.popupPosInitialized && root.targetItem && root.hostWindow) {
               const r = root.hostWindow.itemRect(root.targetItem);
               root.popupX = r.x;
@@ -110,7 +111,7 @@ Item {
             lastX = mouse.x;
             lastY = mouse.y;
           }
-          onPositionChanged: {
+          onPositionChanged: function(mouse) {
             if (!(mouse.buttons & Qt.LeftButton))
               return;
             root.popupX += (mouse.x - lastX);
@@ -295,14 +296,14 @@ Item {
                     Layout.fillWidth: true
                     model: ["0", "1", "2", "3", "4", "5", "6", "7"]
                     currentIndex: Math.max(0, Math.min(7, output ? (output.transform || 0) : 0))
-                    onActivated: HyprDisplayConfigState.setField(modelData, "transform", parseInt(model[index]))
+                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "transform", parseInt(model[index]))
                   }
                   Label { text: "VRR"; color: Config.color.on_surface_variant }
                   ComboBox {
                     Layout.fillWidth: true
                     model: ["0", "1", "2"]
                     currentIndex: Math.max(0, Math.min(2, output ? (output.vrr || 0) : 0))
-                    onActivated: HyprDisplayConfigState.setField(modelData, "vrr", parseInt(model[index]))
+                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "vrr", parseInt(model[index]))
                   }
 
                   Label { text: "Mirror"; color: Config.color.on_surface_variant }
@@ -316,7 +317,7 @@ Item {
                     Layout.fillWidth: true
                     model: ["8", "10"]
                     currentIndex: output && Number(output.bitdepth) === 10 ? 1 : 0
-                    onActivated: HyprDisplayConfigState.setField(modelData, "bitdepth", parseInt(model[index]))
+                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "bitdepth", parseInt(model[index]))
                   }
 
                   Label { text: "CM"; color: Config.color.on_surface_variant }
@@ -328,7 +329,7 @@ Item {
                       const idx = model.indexOf(value);
                       return idx >= 0 ? idx : 0;
                     }
-                    onActivated: HyprDisplayConfigState.setField(modelData, "cm", model[index])
+                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "cm", model[index])
                   }
                   Label { text: "SDR Br."; color: Config.color.on_surface_variant }
                   TextField {
