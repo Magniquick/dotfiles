@@ -15,6 +15,7 @@ QtObject {
     readonly property color barPopupBorderColor: color.outline_variant
     readonly property int barHeight: 32
     readonly property int barPadding: space.none
+    readonly property bool barPillShadowsEnabled: true
     readonly property bool enablePrivacyModule: true
     readonly property string fontFamily: "Google Sans"
     readonly property int fontSize: type.bodyMedium.size
@@ -58,6 +59,8 @@ QtObject {
     readonly property bool tooltipPulseAnimationEnabled: false
     readonly property int tooltipRadius: shape.corner.md
     readonly property TypeScale type: TypeScale {}
+    readonly property color urlColor: color.primary
+    readonly property int workspaceDragDwellMs: 300
     readonly property int workspaceHeight: barHeight
     readonly property int workspacePaddingX: space.sm
 }

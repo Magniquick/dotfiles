@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../../common" as Common
 import "../../common/modules/rounded_polygon_qmljs" as RoundedPoly
+import Qcm.Material as MD
 import "../../common/modules/rounded_polygon_qmljs/material-shapes.js" as MaterialShapes
 
 Item {
@@ -21,6 +22,22 @@ Item {
     implicitHeight: composerContainer.implicitHeight
 
     property var pendingAttachments: []
+
+    // Command suggestion state
+    property var suggestionList: []
+    property int selectedSuggestion: -1
+    readonly property var chatCommands: {
+        if (!root.chatSession || !root.chatSession.commandsJson) return [];
+        try { return JSON.parse(root.chatSession.commandsJson); } catch(e) { return []; }
+    }
+
+    function acceptSuggestion(name) {
+        inputEdit.text = name + " ";
+        inputEdit.cursorPosition = inputEdit.text.length;
+        root.suggestionList = [];
+        root.selectedSuggestion = -1;
+        root.focusInput();
+    }
 
     function focusInput() {
         // Avoid forcing focus while the panel window is mid-transition or not visible yet.
@@ -178,21 +195,135 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        implicitHeight: inputContainer.height
+        implicitHeight: suggestionStrip.visible
+            ? (suggestionStrip.implicitHeight + Math.floor(inputWrapper.implicitHeight / 2))
+            : inputWrapper.implicitHeight
 
-        GlowLayer {
-            marginSize: 2
-            focusedOpacity: 0.3
-            unfocusedOpacity: 0.1
-        }
-        GlowLayer {
-            marginSize: 4
-            focusedOpacity: 0.15
-            unfocusedOpacity: 0
+        // ── Command suggestion strip ──────────────────────────────────────
+        Item {
+            id: suggestionStrip
+            visible: root.suggestionList.length > 0
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            implicitHeight: Math.min(suggestionListView.contentHeight + 2, 5 * 40 + 2) + Math.floor(inputWrapper.implicitHeight / 2)
+            Rectangle {
+                anchors.fill: parent
+                color: Common.Config.color.surface_container_high
+                radius: Common.Config.shape.corner.md
+                border.width: 1
+                border.color: Common.Config.color.outline_variant
+
+                ListView {
+                    id: suggestionListView
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    anchors.bottomMargin: Math.floor(inputWrapper.implicitHeight / 2) + 1
+                    clip: true
+                    model: root.suggestionList
+                    spacing: 0
+
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                    Connections {
+                        target: root
+                        function onSelectedSuggestionChanged() {
+                            if (root.selectedSuggestion >= 0)
+                                suggestionListView.positionViewAtIndex(root.selectedSuggestion, ListView.Contain);
+                        }
+                    }
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        required property int index
+
+                        width: ListView.view.width
+                        height: 40
+                        radius: Common.Config.shape.corner.sm
+                        color: index === root.selectedSuggestion
+                            ? Common.Config.color.primary_container
+                            : "transparent"
+
+                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: Common.Config.space.sm
+                            anchors.rightMargin: Common.Config.space.sm
+                            spacing: Common.Config.space.sm
+
+                            Text {
+                                text: modelData.name
+                                color: index === root.selectedSuggestion
+                                    ? Common.Config.color.on_primary_container
+                                    : Common.Config.color.on_surface
+                                font.family: Common.Config.fontFamily
+                                font.pixelSize: Common.Config.type.labelMedium.size
+                                font.weight: Font.Medium
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.description || ""
+                                color: index === root.selectedSuggestion
+                                    ? Qt.alpha(Common.Config.color.on_primary_container, 0.7)
+                                    : Common.Config.color.on_surface_variant
+                                font.family: Common.Config.fontFamily
+                                font.pixelSize: Common.Config.type.labelSmall.size
+                                elide: Text.ElideRight
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                        }
+
+                        HoverHandler {
+                            onHoveredChanged: if (hovered) root.selectedSuggestion = index
+                        }
+
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: suggestionArea.pressX
+                            pressY: suggestionArea.pressY
+                            pressed: suggestionArea.pressed
+                            radius: parent.radius
+                            stateOpacity: 0
+                        }
+                        MouseArea {
+                            id: suggestionArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.acceptSuggestion(modelData.name)
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
+                        }
+                    }
+                }
+            }
         }
 
-        Rectangle {
-            id: inputContainer
+        // ── Input box (glow + container) ──────────────────────────────────
+        Item {
+            id: inputWrapper
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            implicitHeight: inputContainer.height
+
+            GlowLayer {
+                marginSize: 2
+                focusedOpacity: 0.3
+                unfocusedOpacity: 0.1
+            }
+            GlowLayer {
+                marginSize: 4
+                focusedOpacity: 0.15
+                unfocusedOpacity: 0
+            }
+
+            Rectangle {
+                id: inputContainer
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
@@ -311,9 +442,22 @@ Item {
                                                 font.pixelSize: 10
                                             }
 
+                                            HybridRipple {
+                                                anchors.fill: parent
+                                                color: Common.Config.color.error
+                                                pressX: deleteArea.pressX
+                                                pressY: deleteArea.pressY
+                                                pressed: deleteArea.pressed
+                                                radius: parent.radius
+                                                stateOpacity: deleteArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                                            }
                                             MouseArea {
+                                                id: deleteArea
+                                                property real pressX: width / 2
+                                                property real pressY: height / 2
                                                 anchors.fill: parent
                                                 cursorShape: Qt.PointingHandCursor
+                                                hoverEnabled: true
                                                 onClicked: {
                                                     const next = [];
                                                     for (let i = 0; i < root.pendingAttachments.length; i++) {
@@ -322,6 +466,7 @@ Item {
                                                     }
                                                     root.pendingAttachments = next;
                                                 }
+                                                onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                                             }
                                         }
                                     }
@@ -367,7 +512,7 @@ Item {
                             font.pixelSize: Common.Config.type.bodyMedium.size + 1
                             selectionColor: Common.Config.color.primary
                             selectedTextColor: Common.Config.color.on_primary
-                            readOnly: root.busy
+                            readOnly: false
                             cursorVisible: inputEdit.activeFocus && !root.busy
                             focus: false
                             activeFocusOnPress: true
@@ -389,9 +534,41 @@ Item {
                                     else
                                         textFlick.contentY = 0;
                                 });
+
+                                // Command suggestions: show when typing a bare /word with no space yet.
+                                const t = inputEdit.text;
+                                if (t.startsWith("/") && t.indexOf(" ") < 0) {
+                                    const query = t.substring(1).toLowerCase();
+                                    root.suggestionList = root.chatCommands.filter(
+                                        cmd => cmd.name.substring(1).startsWith(query)
+                                    );
+                                    root.selectedSuggestion = root.suggestionList.length > 0 ? 0 : -1;
+                                } else {
+                                    root.suggestionList = [];
+                                    root.selectedSuggestion = -1;
+                                }
                             }
 
                             Keys.onPressed: event => {
+                                // Navigate / accept suggestions.
+                                if (root.suggestionList.length > 0) {
+                                    if (event.key === Qt.Key_Tab) {
+                                        root.acceptSuggestion(root.suggestionList[Math.max(0, root.selectedSuggestion)].name);
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (event.key === Qt.Key_Up) {
+                                        root.selectedSuggestion = Math.max(0, root.selectedSuggestion - 1);
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (event.key === Qt.Key_Down) {
+                                        root.selectedSuggestion = Math.min(root.suggestionList.length - 1, root.selectedSuggestion + 1);
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                }
+
                                 // Prefer image paste over text paste when clipboard contains an image.
                                 if (!root.busy
                                     && ((event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier))
@@ -472,10 +649,12 @@ Item {
                     implicitWidth: 44
                     implicitHeight: 44
                     radius: Common.Config.shape.corner.md
-                    color: root.busy ? Common.Config.color.surface_container_highest : Common.Config.color.primary
+                    color: root.busy
+                        ? (sendButtonArea.containsMouse ? Common.Config.color.error : Qt.alpha(Common.Config.color.error, 0.18))
+                        : Common.Config.color.primary
                     border.width: 1
                     border.color: root.busy
-                        ? Qt.alpha(Common.Config.color.on_surface, 0.10)
+                        ? Qt.alpha(Common.Config.color.error, 0.35)
                         : Qt.alpha(Common.Config.color.on_primary, 0.0)
 
                     scale: sendButtonArea.pressed ? 0.92 : (sendButtonArea.containsMouse ? 1.05 : 1.0)
@@ -563,40 +742,74 @@ Item {
                                 }
                             }
 
-                            // Morph between "send" and "busy" shapes; ShapeCanvas handles morphing
-                            // internally by animating `progress` on roundedPolygon changes.
+                            // Idle: arrow shape. Busy: hidden in favour of stop icon below.
                             RoundedPoly.ShapeCanvas {
                                 id: sendGlyph
                                 anchors.fill: parent
                                 anchors.margins: 10
                                 polygonIsNormalized: true
+                                visible: !root.busy
 
-                                color: root.busy ? Common.Config.color.primary : Common.Config.color.on_primary
+                                color: Common.Config.color.on_primary
                                 borderWidth: 0
                                 borderColor: Qt.alpha(Common.Config.color.on_surface, 0.0)
 
-                                roundedPolygon: root.busy
-                                    ? sendGlyphWrap.busyShapeGetters[sendGlyphWrap.busyShapeIndex]()
-                                    : MaterialShapes.getArrow()
+                                roundedPolygon: MaterialShapes.getArrow()
 
                                 Component.onCompleted: requestPaint()
+                            }
+
+                            // Stop icon shown while a stream is in progress.
+                            Text {
+                                anchors.centerIn: parent
+                                visible: root.busy
+                                text: "\uf04d"
+                                font.family: Common.Config.iconFontFamily
+                                font.pixelSize: 18
+                                color: sendButtonArea.containsMouse
+                                    ? Common.Config.color.on_error
+                                    : Common.Config.color.error
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 120 }
+                                }
                             }
                         }
                     }
 
+                    HybridRipple {
+                        anchors.fill: parent
+                        color: Common.Config.color.on_primary
+                        pressX: sendButtonArea.pressX
+                        pressY: sendButtonArea.pressY
+                        pressed: sendButtonArea.pressed
+                        radius: parent.radius
+                        stateOpacity: 0
+                    }
                     MouseArea {
                         id: sendButtonArea
+                        property real pressX: width / 2
+                        property real pressY: height / 2
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         hoverEnabled: true
-                        enabled: !root.busy
-                        onClicked: root.handleSend()
+                        enabled: true
+                        onClicked: {
+                            if (root.busy) {
+                                if (root.chatSession && root.chatSession.cancel)
+                                    root.chatSession.cancel();
+                            } else {
+                                root.handleSend();
+                            }
+                        }
+                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                     }
                 }
             }
         }
-    }
-    }
+        } // inputWrapper
+    } // composerContainer
+    } // extra closing for composerContainer Item outer wrapper
 
     FontMetrics {
         id: inputMetrics

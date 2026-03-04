@@ -49,15 +49,22 @@ Rectangle {
 
         anchors.fill: parent
     }
-    Rectangle {
+    HybridRipple {
         anchors.fill: parent
-        antialiasing: true
         color: Config.color.on_surface
-        opacity: root.pressed ? Config.state.pressedOpacity : (root.hovered ? Config.state.hoverOpacity : 0)
+        pressX: mouseArea.pressX
+        pressY: mouseArea.pressY
+        pressed: mouseArea.pressed
         radius: root.radius
-        visible: root.enabled
+        stateLayerEnabled: false
+        stateOpacity: 0
     }
     MouseArea {
+        id: mouseArea
+
+        property real pressX: width / 2
+        property real pressY: height / 2
+
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         hoverEnabled: true
@@ -68,7 +75,11 @@ Rectangle {
             root.hovered = false;
             root.pressed = false;
         }
-        onPressed: root.pressed = true
+        onPressed: function(mouse) {
+            pressX = mouse.x;
+            pressY = mouse.y;
+            root.pressed = true;
+        }
         onReleased: root.pressed = false
     }
 }

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "../../common" as Common
+import Qcm.Material as MD
 
 Item {
     id: root
@@ -35,6 +36,7 @@ Item {
 
                 Layout.preferredHeight: 48
                 implicitWidth: tabContent.width
+                clip: true
 
                 Column {
                     id: tabContent
@@ -103,13 +105,26 @@ Item {
                     }
                 }
 
+                HybridRipple {
+                    anchors.fill: parent
+                    color: tabItem.modelData.accent
+                    pressX: tabMouseArea.pressX
+                    pressY: tabMouseArea.pressY
+                    pressed: tabMouseArea.pressed
+                    radius: 0
+                    stateOpacity: 0
+                }
                 MouseArea {
+                    id: tabMouseArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     hoverEnabled: true
                     onClicked: root.tabSelected(tabItem.index)
                     onEntered: tabItem.isHovered = true
                     onExited: tabItem.isHovered = false
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
             }
         }

@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Qcm.Material as MD
 import "../../common" as Common
+import "../../common/components" as CommonComponents
 
 RowLayout {
     id: root
@@ -34,7 +35,7 @@ RowLayout {
     signal closeClicked
 
     readonly property string rawBody: entry && entry.body ? entry.body : ""
-    readonly property var processedContent: preprocessNotification(entry, rawBody, appNameText)
+    readonly property var processedContent: preprocessNotification(entry, rawBody, appNameText, summaryText)
     readonly property bool isWhatsApp: processedContent.isWhatsApp
     readonly property string headerIconText: processedContent.headerIconText
     readonly property color headerIconColor: processedContent.headerIconColor
@@ -60,6 +61,11 @@ RowLayout {
     readonly property string detailSummaryText: root.hasTitle ? root.summaryText : ""
     readonly property bool isBatWatch: (appNameText || "").toLowerCase() === "batwatch"
     readonly property string imageSource: root.isBatWatch ? "" : (entry && entry.notification && entry.notification.image ? entry.notification.image : "")
+    readonly property string resolvedImageSource: {
+        if (root.imageSource.startsWith("image://icon/"))
+            return Quickshell.iconPath(root.imageSource.substring(13), true);
+        return root.imageSource;
+    }
     property bool imageFileExists: true
     readonly property bool inListViewport: {
         const view = ListView.view;
@@ -80,6 +86,9 @@ RowLayout {
     readonly property int _collapsedBodyLines: root.bodyMaxLines
     readonly property int _expandedBodyLines: Math.min(15, Math.max(root.bodyMaxLines, root.bodyHoverMaxLines))
     readonly property bool _hoverExpandActive: root.bodyExpandOnHover && root.bodyHoverActive
+    readonly property bool hasDefaultAction: (root.entry?.notification?.actions ?? []).some(
+        action => (action && action.identifier ? String(action.identifier) : "") === "default"
+    )
 
     onImageSourceChanged: checkImageExistence()
     Component.onCompleted: checkImageExistence()
@@ -146,7 +155,8 @@ RowLayout {
         return text.length > 0 ? text : "Activate";
     }
 
-    function preprocessNotification(currentEntry, bodyText, appName) {
+    function preprocessNotification(currentEntry, bodyText, appName, summary) {
+        const summaryLower = (summary || "").toLowerCase();
         const result = {
             isWhatsApp: false,
             cleanBody: bodyText || "",
@@ -158,7 +168,7 @@ RowLayout {
         if ((appName || "").toLowerCase() === "batwatch") {
             // https://github.com/Magniquick/batmon
             result.headerIconText = "\udb82\udf5f";
-        } else if ((appName || "").toLowerCase() === "openai-codex") {
+        } else if ((appName || "").toLowerCase() === "openai-codex" || summaryLower === "claude code") {
             result.headerIconText = "\uec1e";
         } else if ((appName || "").toLowerCase() === "kitty") {
             result.headerIconText = "\uf489";
@@ -224,7 +234,7 @@ RowLayout {
         lines.push("urgency: " + (currentEntry.urgency || ""));
         lines.push("appIcon: " + (notification.appIcon || ""));
         lines.push("image: " + (notification.image || ""));
-        
+
         if (notification.expireTimeout !== undefined)
             lines.push("expireTimeout: " + notification.expireTimeout);
         if (notification.hints)
@@ -289,7 +299,7 @@ RowLayout {
                         Image {
                             id: leadingIconImage
                             anchors.fill: parent
-                            source: root.imageSource
+                            source: root.resolvedImageSource
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             visible: false
@@ -320,15 +330,8 @@ RowLayout {
                         implicitWidth: 24
                         implicitHeight: 24
                         radius: 12
-                        color: closeArea.containsMouse ? Qt.alpha(Common.Config.color.surface_variant, 0.25) : "transparent"
+                        color: "transparent"
                         visible: root.showCloseButton
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: Common.Config.motion.duration.shortMs
-                                easing.type: Common.Config.motion.easing.standard
-                            }
-                        }
 
                         // Simple built-in ring. Note: its arc radius is hardcoded
                         // internally, so we size it with arcRadius.
@@ -338,7 +341,7 @@ RowLayout {
                             height: parent.height
                             // Button is 24x24; keep the ring tucked in.
                             arcRadius: Math.max(0, (height / 2) - 3)
-                            progress: Math.max(0, Math.min(1, root.autoDismissProgress))
+                            progress: root.autoDismissProgress
                             strokeWidth: 2
                             visible: root.autoDismissRingVisible
                             opacity: root.autoDismissPaused ? 0.45 : 0.85
@@ -349,7 +352,7 @@ RowLayout {
                             text: "\uf00d"
                             color: closeArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface
                             font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 11
+                            font.pointSize: 11
                             font.weight: Font.Bold
                             opacity: 0.95
                             horizontalAlignment: Text.AlignHCenter
@@ -363,12 +366,24 @@ RowLayout {
                             }
                         }
 
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: closeArea.pressX
+                            pressY: closeArea.pressY
+                            pressed: closeArea.pressed
+                            radius: parent.radius
+                            stateOpacity: closeArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
                         MouseArea {
                             id: closeArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: root.closeClicked()
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
 
@@ -376,22 +391,15 @@ RowLayout {
                         implicitWidth: 24
                         implicitHeight: 24
                         radius: 12
-                        color: sourceArea.containsMouse ? Qt.alpha(Common.Config.color.surface_variant, 0.25) : "transparent"
+                        color: "transparent"
                         visible: root.showSourceButton
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: Common.Config.motion.duration.shortMs
-                                easing.type: Common.Config.motion.easing.standard
-                            }
-                        }
 
                         Text {
                             anchors.centerIn: parent
                             text: "\uf121"
                             color: sourceArea.containsMouse ? Common.Config.color.on_surface : Common.Config.color.surface_container_highest
                             font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 11
+                            font.pointSize: 11
 
                             Behavior on color {
                                 ColorAnimation {
@@ -401,12 +409,24 @@ RowLayout {
                             }
                         }
 
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: sourceArea.pressX
+                            pressY: sourceArea.pressY
+                            pressed: sourceArea.pressed
+                            radius: parent.radius
+                            stateOpacity: sourceArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
                         MouseArea {
                             id: sourceArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: root.showSourceDetails = !root.showSourceDetails
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
                 }
@@ -435,7 +455,7 @@ RowLayout {
                     color: Common.Config.color.on_surface
                     wrapMode: TextEdit.Wrap
                     font.family: "JetBrainsMono NFP"
-                    font.pixelSize: 11
+                    font.pointSize: 11
                     readOnly: true
                     selectByMouse: true
                     cursorVisible: true
@@ -449,13 +469,19 @@ RowLayout {
             spacing: 8
             visible: (root.detailSummaryText.length > 0 || root.cleanBody.length > 0) && !root.showSourceDetails
 
-            Text {
+            Item {
                 visible: root.showBodyLeadIcon
-                text: "\uea9c"
-                color: Common.Config.color.primary_fixed_dim
-                font.family: Common.Config.iconFontFamily
-                font.pointSize: 12
+                Layout.preferredWidth: 14
+                Layout.preferredHeight: 14
                 Layout.alignment: Qt.AlignTop
+
+                Text {
+                    anchors.centerIn: parent
+                    text: root.hasDefaultAction ? "󰁜" : "\uea9c"
+                    color: Common.Config.color.primary_fixed_dim
+                    font.family: Common.Config.iconFontFamily
+                    font.pointSize: 12
+                }
             }
 
             ColumnLayout {
@@ -476,7 +502,7 @@ RowLayout {
                     visible: root.detailSummaryText.length > 0
                 }
 
-                Text {
+                CommonComponents.LinkText {
                     id: bodyText
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignBaseline
@@ -495,7 +521,6 @@ RowLayout {
                     font.pointSize: 12
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     visible: root.cleanBody.length > 0
-                    onLinkActivated: link => Qt.openUrlExternally(link)
                 }
 
                 // Hidden measurement text used to decide whether we should show the
@@ -523,7 +548,9 @@ RowLayout {
 
             Repeater {
                 id: actionsRepeater
-                model: root.entry?.notification?.actions ?? []
+                model: (root.entry?.notification?.actions ?? []).filter(
+                    action => (action && action.identifier ? String(action.identifier) : "") !== "default"
+                )
 
                 Item {
                     id: actionWrapper
@@ -536,7 +563,7 @@ RowLayout {
                         id: actionButton
                         anchors.fill: parent
                         radius: 16
-                        color: actionArea.pressed ? Qt.alpha(Common.Config.color.primary, 0.25) : actionArea.containsMouse ? Qt.alpha(Common.Config.color.surface_container_highest, 0.8) : Qt.alpha(Common.Config.color.surface_container_high, 0.6)
+                        color: Qt.alpha(Common.Config.color.surface_container_high, 0.6)
                         border.width: 1
                         border.color: actionArea.containsMouse ? Qt.alpha(Common.Config.color.primary, 0.5) : Qt.alpha(Common.Config.color.outline_variant, 0.3)
                         scale: actionArea.pressed ? 0.96 : 1.0
@@ -593,12 +620,24 @@ RowLayout {
                             }
                         }
 
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: actionArea.pressX
+                            pressY: actionArea.pressY
+                            pressed: actionArea.pressed
+                            radius: parent.radius
+                            stateOpacity: actionArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
                         MouseArea {
                             id: actionArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: actionWrapper.modelData?.invoke()
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
                 }
@@ -624,14 +663,14 @@ RowLayout {
                 Layout.fillWidth: true
                 placeholderText: entry && entry.notification && entry.notification.inlineReplyPlaceholder ? entry.notification.inlineReplyPlaceholder : "Reply"
                 font.family: "Kyok"
-                font.pointSize: 10
+                font.pixelSize: 14
             }
 
             Rectangle {
                 implicitWidth: 28
                 implicitHeight: 28
                 radius: 14
-                color: replyArea.pressed ? Qt.alpha(Common.Config.color.primary, 0.25) : replyArea.containsMouse ? Qt.alpha(Common.Config.color.surface_container_highest, 0.8) : Qt.alpha(Common.Config.color.surface_container_high, 0.6)
+                color: Qt.alpha(Common.Config.color.surface_container_high, 0.6)
                 border.width: 1
                 border.color: replyArea.containsMouse ? Qt.alpha(Common.Config.color.primary, 0.5) : Qt.alpha(Common.Config.color.outline_variant, 0.3)
 
@@ -640,11 +679,22 @@ RowLayout {
                     text: "\uf1d8"
                     color: replyArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface_variant
                     font.family: Common.Config.iconFontFamily
-                    font.pixelSize: 10
+                    font.pointSize: 10
                 }
 
+                HybridRipple {
+                    anchors.fill: parent
+                    color: Common.Config.color.on_surface
+                    pressX: replyArea.pressX
+                    pressY: replyArea.pressY
+                    pressed: replyArea.pressed
+                    radius: parent.radius
+                    stateOpacity: replyArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                }
                 MouseArea {
                     id: replyArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
@@ -655,6 +705,7 @@ RowLayout {
                         entry.notification.sendInlineReply(replyText);
                         inlineReplyField.text = "";
                     }
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
             }
         }

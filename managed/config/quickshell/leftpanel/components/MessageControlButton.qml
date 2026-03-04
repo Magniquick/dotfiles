@@ -1,4 +1,5 @@
 import QtQuick
+import Qcm.Material as MD
 import "../../common" as Common
 
 Rectangle {
@@ -12,8 +13,7 @@ Rectangle {
     width: 24
     height: 24
     radius: 6
-    color: activated ? Qt.alpha(Common.Config.color.primary, 0.25) :
-           mouseArea.containsMouse ? Qt.alpha(Common.Config.color.on_surface, 0.1) : "transparent"
+    color: root.activated ? Qt.alpha(Common.Config.color.primary, 0.25) : "transparent"
 
     opacity: enabled ? 1 : 0.35
     scale: mouseArea.pressed ? 0.92 : 1
@@ -33,11 +33,23 @@ Rectangle {
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
+    HybridRipple {
+        anchors.fill: parent
+        color: Common.Config.color.on_surface
+        pressX: mouseArea.pressX
+        pressY: mouseArea.pressY
+        pressed: mouseArea.pressed
+        radius: parent.radius
+        stateOpacity: mouseArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+    }
     MouseArea {
         id: mouseArea
+        property real pressX: width / 2
+        property real pressY: height / 2
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: if (root.enabled) root.clicked()
+        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
     }
 }

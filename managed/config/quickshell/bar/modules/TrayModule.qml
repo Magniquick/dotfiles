@@ -19,27 +19,13 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
 import Quickshell.Services.SystemTray
+import Qcm.Material as MD
 
 ModuleContainer {
     id: root
 
     readonly property var knownIconExtensions: ["png", "svg", "xpm", "jpg", "jpeg"]
     property var parentWindow
-    readonly property var tray: SystemTray
-    readonly property int trayItemCount: root.getTrayItemCount()
-
-    function getTrayItemCount() {
-        if (!root.tray || !root.tray.items)
-            return 0;
-
-        if (root.tray.items.length !== undefined)
-            return root.tray.items.length;
-        if (root.tray.items.count !== undefined)
-            return root.tray.items.count;
-
-        return 0;
-    }
-
     function iconSource(iconName) {
         if (!iconName)
             return "";
@@ -66,8 +52,8 @@ ModuleContainer {
         return path + "/" + base + ".png";
     }
 
-    backgroundColor: Config.barModuleBackground
-    collapsed: root.trayItemCount === 0
+    backgroundColor: "transparent"
+    collapsed: SystemTray.items.count === 0
     contentSpacing: Config.moduleSpacing
     paddingLeft: Config.modulePaddingX
     paddingRight: Config.modulePaddingX
@@ -75,6 +61,7 @@ ModuleContainer {
     paddingBottom: Config.modulePaddingY
     property var drawerGroup: null
     property bool drawerOpenOnHoverDefault: true
+    property int drawerStickyHolds: 0
 
     function findDrawerGroup() {
         let p = root.parent;
@@ -85,24 +72,41 @@ ModuleContainer {
         }
         return null;
     }
-    function setDrawerSticky(enabled) {
+    function updateDrawerSticky() {
         if (!root.drawerGroup)
             return;
 
-        if (enabled) {
-            root.drawerOpenOnHoverDefault = root.drawerGroup.openOnHover;
+        if (root.drawerStickyHolds > 0) {
             root.drawerGroup.openOnHover = false;
             root.drawerGroup.open = true;
             return;
         }
 
         root.drawerGroup.openOnHover = root.drawerOpenOnHoverDefault;
+        if (root.drawerGroup.openOnHover)
+            root.drawerGroup.open = !!root.drawerGroup.hovered;
+    }
+    function setDrawerSticky(enabled) {
+        if (!root.drawerGroup)
+            return;
+
+        if (enabled) {
+            if (root.drawerStickyHolds === 0)
+                root.drawerOpenOnHoverDefault = root.drawerGroup.openOnHover;
+            root.drawerStickyHolds += 1;
+        } else if (root.drawerStickyHolds > 0) {
+            root.drawerStickyHolds -= 1;
+        }
+
+        root.updateDrawerSticky();
     }
 
     Component.onCompleted: {
         root.drawerGroup = root.findDrawerGroup();
-        if (root.drawerGroup)
+        if (root.drawerGroup) {
             root.drawerOpenOnHoverDefault = root.drawerGroup.openOnHover;
+            root.updateDrawerSticky();
+        }
     }
 
     content: [
@@ -127,7 +131,7 @@ ModuleContainer {
                     spacing: Config.moduleSpacing
 
                     Repeater {
-                        model: root.tray.items
+                        model: SystemTray.items
 
                         delegate: Item {
                             id: trayItem
@@ -143,6 +147,10 @@ ModuleContainer {
                             }
                             HoverHandler {
                                 id: trayHover
+                                onHoveredChanged: {
+                                    if (hovered && menuOpener.menu && (!root.drawerGroup || root.drawerGroup.reveal >= 1))
+                                        trayItem.openTrayMenu();
+                                }
                             }
                             Timer {
                                 id: menuCloseTimer
@@ -229,7 +237,7 @@ ModuleContainer {
                                 }
                             }
                             TooltipPopup {
-                                enabled: (trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || "") !== ""
+                                enabled: !menuPopup.visible && (trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || "") !== ""
                                 open: toolTipArea.containsMouse
                                 targetItem: trayItem
 
@@ -246,8 +254,8 @@ ModuleContainer {
                             PopupWindow {
                                 id: menuPopup
 
-                                readonly property real desiredWidth: menuLayout.implicitWidth + Config.tooltipPadding * 2 + Config.tooltipBorderWidth * 2
-                                readonly property real desiredHeight: menuLayout.implicitHeight + Config.tooltipPadding * 2 + Config.tooltipBorderWidth * 2
+                                readonly property real desiredWidth: menuLayout.implicitWidth + Config.tooltipPadding * 2 + Config.barModuleBorderWidth * 2
+                                readonly property real desiredHeight: menuLayout.implicitHeight + Config.tooltipPadding * 2 + Config.barModuleBorderWidth * 2
 
                                 color: "transparent"
                                 visible: false
@@ -266,6 +274,10 @@ ModuleContainer {
                                         root.setDrawerSticky(false);
                                     }
                                 }
+                                Component.onDestruction: {
+                                    if (menuPopup.visible)
+                                        root.setDrawerSticky(false);
+                                }
 
                                 anchor {
                                     rect.width: implicitWidth
@@ -274,16 +286,16 @@ ModuleContainer {
                                 Rectangle {
                                     id: menuCard
 
-                                    anchors.margins: Config.tooltipBorderWidth
+                                    anchors.margins: Config.barModuleBorderWidth
                                     anchors.fill: parent
                                     antialiasing: true
-                                    border.color: Config.color.outline
-                                    border.width: Config.tooltipBorderWidth
-                                    color: Config.color.surface_container
+                                    border.color: Config.barModuleBorderColor
+                                    border.width: Config.barModuleBorderWidth
+                                    color: Config.barModuleBackground
                                     focus: true
                                     radius: Config.tooltipRadius
-                                    implicitHeight: menuPopup.desiredHeight - Config.tooltipBorderWidth * 2
-                                    implicitWidth: menuPopup.desiredWidth - Config.tooltipBorderWidth * 2
+                                    implicitHeight: menuPopup.desiredHeight - Config.barModuleBorderWidth * 2
+                                    implicitWidth: menuPopup.desiredWidth - Config.barModuleBorderWidth * 2
                                     Keys.onEscapePressed: menuPopup.visible = false
                                     HoverHandler {
                                         id: menuHover
@@ -311,10 +323,14 @@ ModuleContainer {
                                                 implicitWidth: menuEntry.isSeparator ? 1 : (menuContent.implicitWidth + Config.space.sm * 2)
                                                 Layout.preferredWidth: implicitWidth
 
-                                                Rectangle {
+                                                HybridRipple {
                                                     anchors.fill: parent
-                                                    color: menuMouseArea.containsMouse && !menuEntry.disabled ? Qt.alpha(Config.color.on_surface, Config.state.hoverOpacity) : "transparent"
+                                                    color: Config.color.on_surface
+                                                    pressX: menuMouseArea.pressX
+                                                    pressY: menuMouseArea.pressY
+                                                    pressed: menuMouseArea.pressed
                                                     radius: Config.shape.corner.xs
+                                                    stateOpacity: menuMouseArea.containsMouse && !menuEntry.disabled ? Config.state.hoverOpacity : 0
                                                     visible: !menuEntry.isSeparator
                                                 }
                                                 Rectangle {
@@ -357,6 +373,9 @@ ModuleContainer {
                                                 MouseArea {
                                                     id: menuMouseArea
 
+                                                    property real pressX: width / 2
+                                                    property real pressY: height / 2
+
                                                     anchors.fill: parent
                                                     enabled: !menuEntry.isSeparator && !menuEntry.disabled
                                                     hoverEnabled: true
@@ -368,12 +387,13 @@ ModuleContainer {
                                                             return;
                                                         }
 
-                                                        if (menuEntry.modelData.sendTriggered) {
-                                                            menuEntry.modelData.sendTriggered();
-                                                        } else if (menuEntry.modelData.triggered) {
-                                                            menuEntry.modelData.triggered();
-                                                        }
+                                                        const entry = menuEntry.modelData;
                                                         menuPopup.visible = false;
+                                                        Qt.callLater(() => entry.triggered());
+                                                    }
+                                                    onPressed: function(mouse) {
+                                                        pressX = mouse.x;
+                                                        pressY = mouse.y;
                                                     }
                                                 }
                                             }

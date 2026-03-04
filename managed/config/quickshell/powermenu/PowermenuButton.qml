@@ -80,7 +80,26 @@ MD.Pane {
         text: button.icon
         verticalAlignment: Text.AlignVCenter
     }
+    Rectangle {
+        anchors.fill: parent
+        color: "transparent"
+        radius: button.radius
+        clip: true
+
+        HybridRipple {
+            anchors.fill: parent
+            color: button.accent
+            pressX: buttonMouseArea.pressX
+            pressY: buttonMouseArea.pressY
+            pressed: buttonMouseArea.pressed
+            radius: button.radius
+            stateOpacity: 0
+        }
+    }
     MouseArea {
+        id: buttonMouseArea
+        property real pressX: width / 2
+        property real pressY: height / 2
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         hoverEnabled: button.mouseEnabled
@@ -88,6 +107,7 @@ MD.Pane {
         onClicked: button.activated(button.actionName)
         onEntered: button.hoverEntered(button.actionName)
         onExited: button.hoverExited(button.actionName)
+        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
     }
     SequentialAnimation {
         id: revealIn

@@ -69,7 +69,9 @@ import QtQuick.Layouts
 import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
+import Qcm.Material as MD
 import spotifylyrics 1.0
+import "file:/home/magni/.config/quickshell/common/modules/QmlMaterial/qml/component/slider" as QMSlider
 
 ModuleContainer {
     id: root
@@ -80,13 +82,23 @@ ModuleContainer {
     property double _positionBasePreciseSeconds: 0
     property double _positionBaseMs: 0
     property double _positionNowMs: 0
+    property double _pendingSeekTargetSeconds: -1
+    property double _pendingSeekUntilMs: 0
     property var lyricsModel: []
     property int _lastLyricIndex: -2
     property int currentLyricIndex: -1
     property double _lyricsManualUntilMs: 0
     property string _lyricsTrackRef: ""
     readonly property string lyricsEnvFile: Config.envFile
-    readonly property string displaySubtitle: root.trackArtist !== "" ? root.trackArtist : (root.activePlayer ? root.playerTitle : "No active player")
+    readonly property string displaySubtitle: {
+        if (root.trackArtist !== "" && root.trackAlbum !== "")
+            return root.trackArtist + " • " + root.trackAlbum;
+        if (root.trackArtist !== "")
+            return root.trackArtist;
+        if (root.trackAlbum !== "")
+            return root.trackAlbum;
+        return root.activePlayer ? root.playerTitle : "No active player";
+    }
     readonly property string displayTitle: root.trackTitle !== "" ? root.trackTitle : (root.trackFullText !== "" ? root.trackFullText : "Nothing playing")
     property string fallbackText: ""
     readonly property bool hasArt: root.trackArtUrl !== ""
@@ -99,6 +111,7 @@ ModuleContainer {
     readonly property string statusText: root.activePlayer ? root.statusIcon(root.activePlayer.playbackState) : ""
     readonly property string trackArtUrl: root.activePlayer ? root.activePlayer.trackArtUrl : ""
     readonly property string trackArtist: root.activePlayer && root.activePlayer.trackArtist ? root.activePlayer.trackArtist : ""
+    readonly property string trackAlbum: root.activePlayer ? root.albumTitle(root.activePlayer) : ""
     readonly property string trackFullText: root.formatTrackText(root.activePlayer)
     readonly property string trackText: root.clampText(root.trackFullText)
     readonly property string trackTitle: root.activePlayer && root.activePlayer.trackTitle ? root.activePlayer.trackTitle : ""
@@ -309,6 +322,22 @@ ModuleContainer {
         }).join(" - ");
         return artistTitle ? artistTitle : root.fallbackText;
     }
+    function albumTitle(player) {
+        if (!player)
+            return "";
+
+        if (player.trackAlbum && player.trackAlbum !== "")
+            return player.trackAlbum;
+
+        const md = player.metadata || ({});
+        const album = md["xesam:album"];
+        if (typeof album === "string" && album !== "")
+            return album;
+        if (Array.isArray(album) && album.length > 0 && typeof album[0] === "string")
+            return album[0];
+
+        return "";
+    }
     function isIgnoredPlayer(player) {
         if (!player)
             return true;
@@ -383,6 +412,38 @@ ModuleContainer {
         root._positionBaseMs = Date.now();
         root._positionNowMs = root._positionBaseMs;
     }
+    function _startPendingSeek(targetSeconds) {
+        const safeTarget = Math.max(0, Number(targetSeconds) || 0);
+        const now = Date.now();
+        root._pendingSeekTargetSeconds = safeTarget;
+        root._pendingSeekUntilMs = now + 2200;
+        root._positionBasePreciseSeconds = safeTarget;
+        root._positionBaseSeconds = Math.max(0, Math.floor(safeTarget));
+        root._positionBaseMs = now;
+        root._positionNowMs = now;
+    }
+    function _syncPositionBaseWithPendingGuard() {
+        const player = root.activePlayer;
+        if (!player) {
+            root._pendingSeekTargetSeconds = -1;
+            root._pendingSeekUntilMs = 0;
+            root._syncPositionBase();
+            return;
+        }
+
+        const now = Date.now();
+        const currentPos = Math.max(0, Number(player.position) || 0);
+        const hasPendingSeek = root._pendingSeekTargetSeconds >= 0 && now < root._pendingSeekUntilMs;
+        if (hasPendingSeek) {
+            const deltaToTarget = Math.abs(currentPos - root._pendingSeekTargetSeconds);
+            if (deltaToTarget > 1.5)
+                return;
+        }
+
+        root._pendingSeekTargetSeconds = -1;
+        root._pendingSeekUntilMs = 0;
+        root._syncPositionBase();
+    }
     function secondsFromValue(value) {
         if (!isFinite(value))
             return 0;
@@ -409,6 +470,8 @@ ModuleContainer {
             root.activePlayer.togglePlaying();
     }
     onActivePlayerChanged: {
+        root._pendingSeekTargetSeconds = -1;
+        root._pendingSeekUntilMs = 0;
         root._syncPositionBase();
         root._lastLyricIndex = -2;
         root.scheduleLyricsRefresh();
@@ -498,13 +561,13 @@ ModuleContainer {
 
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    Layout.preferredWidth: 280
-                    spacing: Config.space.sm
+                    Layout.preferredWidth: 320
+                    spacing: Config.space.xs
 
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
-                        spacing: Config.space.xs
+                        spacing: Config.space.none
 
                         Flickable {
                             id: titleClip
@@ -513,9 +576,9 @@ ModuleContainer {
                             Layout.minimumWidth: 0
                             boundsBehavior: Flickable.StopAtBounds
                             clip: true
-                            contentHeight: titleText.implicitHeight
+                            contentHeight: titleText.paintedHeight
                             contentWidth: titleText.implicitWidth
-                            implicitHeight: titleText.implicitHeight
+                            implicitHeight: titleText.paintedHeight
                             interactive: false
                             property real scrollDistance: Math.max(0, contentWidth - width)
                             readonly property bool hovered: titleHover.hovered
@@ -547,23 +610,27 @@ ModuleContainer {
                                     && titleClip.scrollDistance > 0
                                     && root.visible
                                     && root.QsWindow.window && root.QsWindow.window.visible
+                                onRunningChanged: {
+                                    if (running)
+                                        titleClip.contentX = 0;
+                                }
 
                                 PauseAnimation {
-                                    duration: 350
+                                    duration: 700
                                 }
                                 NumberAnimation {
-                                    duration: Math.max(1200, titleClip.scrollDistance * 15)
-                                    easing.type: Easing.InOutQuad
+                                    duration: Math.max(1800, titleClip.scrollDistance * 24)
+                                    easing.type: Easing.InOutSine
                                     property: "contentX"
                                     target: titleClip
                                     to: titleClip.scrollDistance
                                 }
                                 PauseAnimation {
-                                    duration: 350
+                                    duration: 550
                                 }
                                 NumberAnimation {
-                                    duration: 500
-                                    easing.type: Easing.OutQuad
+                                    duration: 850
+                                    easing.type: Easing.InOutSine
                                     property: "contentX"
                                     target: titleClip
                                     to: 0
@@ -582,26 +649,49 @@ ModuleContainer {
                     }
                     Item {
                         Layout.fillWidth: true
+                        Layout.topMargin: Config.space.sm
                         implicitHeight: progressSlider.implicitHeight
 
-                        LevelSlider {
+                        QMSlider.SplitLinearSlider {
                             id: progressSlider
 
-                            anchors.fill: parent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Config.space.xs
+                            anchors.rightMargin: Config.space.xs
+                            anchors.verticalCenter: parent.verticalCenter
                             enabled: root.activePlayer && root.activePlayer.canSeek && root.lengthSeconds(root.activePlayer) > 0
+                            trackColor: Config.color.surface_container_highest
                             fillColor: Config.color.primary
-                            maximum: Math.max(1, root.lengthSeconds(root.activePlayer))
-                            minimum: 0
-                            value: root.displayPositionSeconds
+                            dividerColor: Config.color.tertiary
+                            endDotColor: Config.color.tertiary
+                            endDotSize: Math.max(4, Math.round(Config.slider.knobWidth * 0.5))
+                            thickness: Math.max(6, Config.slider.barHeight + 1)
+                            dividerWidth: Math.max(3, Math.round(Config.slider.barHeight * 0.5))
+                            gapMultiplier: 2.4
+                            value: 0
 
-                            // Only seek on drag release, not during drag (prevents multiple in-flight commands)
-                            onDragEnded: value => {
+                            Binding {
+                                target: progressSlider
+                                property: "value"
+                                value: {
+                                    const total = Math.max(1, root.lengthSeconds(root.activePlayer));
+                                    return Math.max(0, Math.min(1, root.displayPositionSeconds / total));
+                                }
+                                when: !progressSlider.dragging
+                            }
+
+                            // Only seek on drag release, not during drag.
+                            onDragEnded: ratio => {
                                 if (!root.activePlayer || !root.activePlayer.canSeek)
                                     return;
+                                const total = Math.max(1, root.lengthSeconds(root.activePlayer));
+                                const value = ratio * total;
                                 // MPRIS seek() uses delta (relative offset), not absolute position
                                 const deltaSeconds = value - root.positionSeconds(root.activePlayer);
                                 if (!isFinite(deltaSeconds) || deltaSeconds === 0)
                                     return;
+                                root._startPendingSeek(value);
                                 root.activePlayer.seek(Math.round(deltaSeconds));
                             }
                         }
@@ -615,7 +705,7 @@ ModuleContainer {
                             radius: Config.shape.corner.xs
                             width: seekPreviewText.implicitWidth + Config.space.sm
                             height: seekPreviewText.implicitHeight + Config.space.xs
-                            x: Math.max(0, Math.min(parent.width - width, progressSlider.hoverRatio * parent.width - width / 2))
+                            x: Math.max(0, Math.min(parent.width - width, progressSlider.x + progressSlider.hoverRatio * progressSlider.width - width / 2))
                             y: -height - Config.space.xs
 
                             Text {
@@ -629,67 +719,122 @@ ModuleContainer {
                         }
                     }
                     RowLayout {
-                        spacing: Config.space.xs
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: Config.space.sm
+                        spacing: Config.space.sm
 
-                        Text {
-                            color: Config.color.on_surface_variant
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.labelSmall.size
-                            text: {
-                                const total = root.lengthSeconds(root.activePlayer);
-                                const elapsed = total > 0 ? root.formatTime(root.displayPositionSeconds) : "--:--";
-                                if (total <= 0)
-                                    return elapsed;
-                                return elapsed + " / " + root.formatTime(total);
+                        MD.IconButton {
+                            id: previousButton
+                            enabled: !!root.activePlayer && root.activePlayer.canGoPrevious
+                            type: MD.Enum.IBtFilledTonal
+                            icon.name: ""
+                            contentItem: Text {
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: Config.iconFontFamily
+                                font.pixelSize: Config.type.titleMedium.size
+                                text: ""
+                                color: previousButton.enabled ? Config.color.on_primary_container : Qt.alpha(Config.color.on_surface, 0.38)
+                            }
+                            background: MD.ElevationRectangle {
+                                implicitWidth: previousButton.implicitBackgroundSize
+                                implicitHeight: previousButton.implicitBackgroundSize
+                                radius: Math.max(height / 2, 0)
+                                color: previousButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
+                                elevation: previousButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevationVisible: true
+
+                                HybridRipple {
+                                    anchors.fill: parent
+                                    radius: Math.max(height / 2, 0)
+                                    pressX: previousButton.pressX
+                                    pressY: previousButton.pressY
+                                    pressed: previousButton.pressed
+                                    stateOpacity: previousButton.down ? Config.state.pressedOpacity : (previousButton.hovered ? Config.state.hoverOpacity : 0)
+                                    color: Config.color.on_primary_container
+                                }
+                            }
+
+                            onClicked: {
+                                if (root.activePlayer && root.activePlayer.canGoPrevious)
+                                    root.activePlayer.previous();
                             }
                         }
-                        // Seek unavailable indicator
-                        Text {
-                            visible: root.activePlayer && !root.activePlayer.canSeek
-                            color: Config.color.on_surface_variant
-                            font.family: Config.iconFontFamily
-                            font.pixelSize: Config.type.labelSmall.size
-                            text: ""
-                            opacity: 0.6
+                        MD.IconButton {
+                            id: playPauseButton
+                            Layout.leftMargin: Config.space.xs
+                            Layout.rightMargin: Config.space.xs
+                            enabled: !!root.activePlayer && root.activePlayer.canTogglePlaying
+                            type: MD.Enum.IBtFilled
+                            icon.name: ""
+                            contentItem: Text {
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: Config.iconFontFamily
+                                font.pixelSize: Config.type.titleMedium.size
+                                text: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing ? "" : ""
+                                color: playPauseButton.enabled ? Config.color.on_primary : Qt.alpha(Config.color.on_surface, 0.38)
+                            }
+                            background: MD.ElevationRectangle {
+                                implicitWidth: playPauseButton.implicitBackgroundSize
+                                implicitHeight: playPauseButton.implicitBackgroundSize
+                                radius: Math.max(height / 2, 0)
+                                color: playPauseButton.enabled ? Config.color.primary : Qt.alpha(Config.color.on_surface, 0.12)
+                                elevation: playPauseButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevationVisible: true
 
-                            ToolTip.visible: seekUnavailableHover.hovered
-                            ToolTip.text: "Seek not supported by this player"
+                                HybridRipple {
+                                    anchors.fill: parent
+                                    radius: Math.max(height / 2, 0)
+                                    pressX: playPauseButton.pressX
+                                    pressY: playPauseButton.pressY
+                                    pressed: playPauseButton.pressed
+                                    stateOpacity: playPauseButton.down ? Config.state.pressedOpacity : (playPauseButton.hovered ? Config.state.hoverOpacity : 0)
+                                    color: Config.color.on_primary
+                                }
+                            }
 
-                            HoverHandler {
-                                id: seekUnavailableHover
+                            onClicked: {
+                                if (root.activePlayer && root.activePlayer.canTogglePlaying)
+                                    root.activePlayer.togglePlaying();
                             }
                         }
-                    }
-                }
-                RowLayout {
-                    Layout.alignment: Qt.AlignVCenter
-                    spacing: Config.space.xs
+                        MD.IconButton {
+                            id: nextButton
+                            enabled: !!root.activePlayer && root.activePlayer.canGoNext
+                            type: MD.Enum.IBtFilledTonal
+                            icon.name: ""
+                            contentItem: Text {
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: Config.iconFontFamily
+                                font.pixelSize: Config.type.titleMedium.size
+                                text: ""
+                                color: nextButton.enabled ? Config.color.on_primary_container : Qt.alpha(Config.color.on_surface, 0.38)
+                            }
+                            background: MD.ElevationRectangle {
+                                implicitWidth: nextButton.implicitBackgroundSize
+                                implicitHeight: nextButton.implicitBackgroundSize
+                                radius: Math.max(height / 2, 0)
+                                color: nextButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
+                                elevation: nextButton.down ? MD.Token.elevation.level1 : MD.Token.elevation.level2
+                                elevationVisible: true
 
-                    ActionIconButton {
-                        enabled: !!root.activePlayer && root.activePlayer.canGoPrevious
-                        icon: ""
+                                HybridRipple {
+                                    anchors.fill: parent
+                                    radius: Math.max(height / 2, 0)
+                                    pressX: nextButton.pressX
+                                    pressY: nextButton.pressY
+                                    pressed: nextButton.pressed
+                                    stateOpacity: nextButton.down ? Config.state.pressedOpacity : (nextButton.hovered ? Config.state.hoverOpacity : 0)
+                                    color: Config.color.on_primary_container
+                                }
+                            }
 
-                        onClicked: {
-                            if (root.activePlayer && root.activePlayer.canGoPrevious)
-                                root.activePlayer.previous();
-                        }
-                    }
-                    ActionIconButton {
-                        enabled: !!root.activePlayer && root.activePlayer.canTogglePlaying
-                        icon: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing ? "" : ""
-
-                        onClicked: {
-                            if (root.activePlayer && root.activePlayer.canTogglePlaying)
-                                root.activePlayer.togglePlaying();
-                        }
-                    }
-                    ActionIconButton {
-                        enabled: !!root.activePlayer && root.activePlayer.canGoNext
-                        icon: ""
-
-                        onClicked: {
-                            if (root.activePlayer && root.activePlayer.canGoNext)
-                                root.activePlayer.next();
+                            onClicked: {
+                                if (root.activePlayer && root.activePlayer.canGoNext)
+                                    root.activePlayer.next();
+                            }
                         }
                     }
                 }
@@ -891,7 +1036,7 @@ ModuleContainer {
     Timer {
         interval: 200
         repeat: true
-        running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
+        running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing && root.QsWindow.window && root.QsWindow.window.visible
 
         onTriggered: {
             root._positionNowMs = Date.now();
@@ -911,7 +1056,7 @@ ModuleContainer {
     Connections {
         target: root.activePlayer
 
-        function onPositionChanged() { root._syncPositionBase(); }
+        function onPositionChanged() { root._syncPositionBaseWithPendingGuard(); }
         function onTrackTitleChanged() { root._syncPositionBase(); root.scheduleLyricsRefresh(); }
         function onTrackArtistChanged() { root._syncPositionBase(); root.scheduleLyricsRefresh(); }
         function onPlaybackStateChanged() { root._syncPositionBase(); }

@@ -15,6 +15,8 @@ Item {
 
     readonly property int popupWidth: 320
     readonly property int popupMaxHeight: 560
+    readonly property int maxNotifications: 50
+    readonly property bool inGroupFocusView: notificationStore.focusedGroupKey.length > 0
     property bool notificationServerActive: false
     property int _notificationStatusFailures: 0
     property int _notificationStatusIntervalMs: 10000
@@ -38,6 +40,7 @@ Item {
         required property int notificationId
         property var notification
         property bool popup: false
+        property bool popupExiting: false
         property bool dismissing: false
         property bool isTransient: notification && notification.hints && notification.hints.transient ? true : false
         property string appName: notification && notification.appName ? notification.appName : ""
@@ -55,12 +58,23 @@ Item {
         }
         property string urgency: notification && notification.urgency ? notification.urgency.toString() : "normal"
         property Timer timer
+        property Timer popupExitTimer
 
         onNotificationChanged: {
             if (!dismissing && notification === null) {
                 notificationStore.dismissNotification(notificationId);
+                return;
+            }
+            if (notification) {
+                notification.closed.connect(function() {
+                    if (!dismissing)
+                        notificationStore.dismissNotification(notificationId);
+                });
             }
         }
+        onTitleChanged: notificationStore.updateGroupedModel()
+        onSummaryChanged: notificationStore.updateGroupedModel()
+        onAppNameChanged: notificationStore.updateGroupedModel()
     }
 
     component NotificationTimeout: Timer {
@@ -82,6 +96,10 @@ Item {
         property alias model: notificationsModel
         property alias popupModel: popupsModel
         property int idOffset: 0
+        property var groupedModel: []
+        property string focusedGroupKey: ""
+        property string focusedGroupTitle: ""
+        property var focusedEntries: []
 
         function findIndexById(model, id) {
             for (let i = 0; i < model.count; i++) {
@@ -138,9 +156,68 @@ Item {
                     "interval": timeout
                 });
             }
+            pruneOldestNotifications();
+        }
+
+        function pruneOldestNotifications() {
+            while (notificationsModel.count > root.maxNotifications) {
+                const oldestIndex = notificationsModel.count - 1;
+                const oldestItem = notificationsModel.get(oldestIndex);
+                if (!oldestItem || !oldestItem.entryObj) {
+                    notificationsModel.remove(oldestIndex);
+                    continue;
+                }
+
+                const oldestId = oldestItem.notificationId;
+                const oldestEntry = oldestItem.entryObj;
+
+                if (oldestEntry.timer) {
+                    oldestEntry.timer.stop();
+                    oldestEntry.timer.destroy();
+                }
+
+                oldestEntry.dismissing = true;
+                requestDismiss(oldestEntry.notification);
+                notificationsModel.remove(oldestIndex);
+
+                const popupIndex = findIndexById(popupsModel, oldestId);
+                if (popupIndex !== -1)
+                    popupsModel.remove(popupIndex);
+
+                oldestEntry.destroy();
+            }
+
+            updateGroupedModel();
         }
 
         function dismissNotification(id) {
+            // If this notification is currently visible as a popup, animate it out
+            // first, then complete the dismissal.
+            const popupIndex = findIndexById(popupsModel, id);
+            if (popupIndex !== -1) {
+                const popupEntry = popupsModel.get(popupIndex).entryObj;
+                if (popupEntry && !popupEntry.popupExiting) {
+                    popupEntry.popupExiting = true;
+                    if (!popupEntry.popupExitTimer) {
+                        popupEntry.popupExitTimer = Qt.createQmlObject(
+                            'import QtQuick; Timer { repeat: false }',
+                            popupEntry,
+                            'PopupExitTimer'
+                        );
+                        popupEntry.popupExitTimer.triggered.connect(function() {
+                            // Complete dismissal after the popup exit motion.
+                            notificationStore.dismissNotificationImmediate(id);
+                        });
+                    }
+                    popupEntry.popupExitTimer.interval = Common.Config.motion.duration.longMs;
+                    popupEntry.popupExitTimer.restart();
+                    return;
+                }
+            }
+            notificationStore.dismissNotificationImmediate(id);
+        }
+
+        function dismissNotificationImmediate(id) {
             const index = findIndexById(notificationsModel, id);
             if (index === -1) {
                 return;
@@ -155,10 +232,10 @@ Item {
             notificationsModel.remove(index);
 
             const popupIndex = findIndexById(popupsModel, id);
-            if (popupIndex !== -1) {
+            if (popupIndex !== -1)
                 popupsModel.remove(popupIndex);
-            }
             entry.destroy();
+            updateGroupedModel();
         }
 
         function dismissAll() {
@@ -177,6 +254,108 @@ Item {
             notificationsModel.clear();
             popupsModel.clear();
             entries.forEach(entry => entry.destroy());
+            groupedModel = [];
+            focusedGroupKey = "";
+            focusedGroupTitle = "";
+            focusedEntries = [];
+        }
+
+        function normalizeGroupKey(text) {
+            const raw = text === undefined || text === null ? "" : String(text);
+            return raw.trim().replace(/\s+/g, " ").toLowerCase();
+        }
+
+        function autoDetectedTitle(entry) {
+            if (!entry)
+                return "Notifications";
+
+            const titleRaw = entry.title === undefined || entry.title === null ? "" : String(entry.title).trim();
+            const title = normalizeGroupKey(titleRaw);
+            if (title.length > 0)
+                return titleRaw;
+
+            const summaryRaw = entry.summary === undefined || entry.summary === null ? "" : String(entry.summary).trim();
+            const summary = normalizeGroupKey(summaryRaw);
+            if (summary.length > 0)
+                return summaryRaw;
+
+            const appNameRaw = entry.appName === undefined || entry.appName === null ? "" : String(entry.appName).trim();
+            const appName = normalizeGroupKey(appNameRaw);
+            if (appName.length > 0)
+                return appNameRaw;
+            return "Notifications";
+        }
+
+        function updateGroupedModel() {
+            const seenKeys = {};
+            const groups = {};
+            const orderedKeys = [];
+
+            for (let i = 0; i < notificationsModel.count; i++) {
+                const item = notificationsModel.get(i);
+                const entry = item ? item.entryObj : null;
+                if (!entry)
+                    continue;
+
+                const detectedTitle = autoDetectedTitle(entry);
+                const key = normalizeGroupKey(detectedTitle);
+
+                if (!seenKeys[key]) {
+                    seenKeys[key] = true;
+                    orderedKeys.push(key);
+                    groups[key] = {
+                        groupKey: key,
+                        title: detectedTitle,
+                        entries: []
+                    };
+                }
+
+                groups[key].entries.push(entry);
+            }
+
+            const nextGroupedModel = [];
+            for (let i = 0; i < orderedKeys.length; i++) {
+                const key = orderedKeys[i];
+                const group = groups[key];
+                nextGroupedModel.push({
+                    groupKey: key,
+                    title: group.title,
+                    count: group.entries.length,
+                    entries: group.entries
+                });
+            }
+
+            groupedModel = nextGroupedModel;
+
+            if (focusedGroupKey.length === 0) {
+                focusedGroupTitle = "";
+                focusedEntries = [];
+                return;
+            }
+
+            const focusedGroup = nextGroupedModel.find(group => group.groupKey === focusedGroupKey);
+            if (!focusedGroup) {
+                focusedGroupKey = "";
+                focusedGroupTitle = "";
+                focusedEntries = [];
+                return;
+            }
+
+            focusedGroupTitle = focusedGroup.title;
+            focusedEntries = focusedGroup.entries;
+        }
+
+        function enterGroupFocus(key) {
+            if (!key || key.length === 0)
+                return;
+            focusedGroupKey = key;
+            updateGroupedModel();
+        }
+
+        function leaveGroupFocus() {
+            focusedGroupKey = "";
+            focusedGroupTitle = "";
+            focusedEntries = [];
         }
 
         function timeoutNotification(id) {
@@ -185,16 +364,36 @@ Item {
                 return;
             }
             const entry = notificationsModel.get(index).entryObj;
-            entry.popup = false;
-
             const popupIndex = findIndexById(popupsModel, id);
-            if (popupIndex !== -1) {
-                popupsModel.remove(popupIndex);
-            }
+            if (popupIndex === -1)
+                return;
 
-            if (entry.isTransient) {
-                dismissNotification(id);
+            if (entry.popupExiting)
+                return;
+
+            entry.popupExiting = true;
+            if (!entry.popupExitTimer) {
+                entry.popupExitTimer = Qt.createQmlObject(
+                    'import QtQuick; Timer { repeat: false }',
+                    entry,
+                    'PopupTimeoutExitTimer'
+                );
+                entry.popupExitTimer.triggered.connect(function() {
+                    // Remove from popup stack after exit animation.
+                    const pi = findIndexById(popupsModel, id);
+                    if (pi !== -1)
+                        popupsModel.remove(pi);
+                    entry.popup = false;
+                    entry.popupExiting = false;
+
+                    // Transient notifications fully disappear after timeout.
+                    if (entry.isTransient) {
+                        notificationStore.dismissNotificationImmediate(id);
+                    }
+                });
             }
+            entry.popupExitTimer.interval = Common.Config.motion.duration.longMs;
+            entry.popupExitTimer.restart();
         }
     }
 
@@ -223,7 +422,7 @@ Item {
                 extraHints: []
                 imageSupported: true
                 inlineReplySupported: true
-                keepOnReload: true
+                keepOnReload: false
                 persistenceSupported: true
 
                 onNotification: notification => {
@@ -316,16 +515,28 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "Notifications"
+                text: root.inGroupFocusView
+                    ? notificationStore.focusedGroupTitle
+                    : "Notifications"
                 color: Common.Config.color.on_surface
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.titleMedium.size
                 font.weight: Common.Config.type.titleMedium.weight
+                elide: Text.ElideRight
+            }
+
+            Components.ActionButton {
+                visible: root.inGroupFocusView
+                label: "Back"
+                icon: "\uf060"
+                onClicked: notificationStore.leaveGroupFocus()
             }
 
             Text {
                 visible: notificationStore.model.count > 0
-                text: notificationStore.model.count.toString()
+                text: root.inGroupFocusView
+                    ? notificationStore.focusedEntries.length.toString()
+                    : notificationStore.model.count.toString()
                 color: Common.Config.color.on_surface_variant
                 font.family: Common.Config.fontFamily
                 font.pixelSize: Common.Config.type.labelMedium.size
@@ -344,7 +555,14 @@ Item {
                 visible: notificationStore.model.count > 0
                 label: "Clear"
                 icon: "\uf1f8"
-                onClicked: notificationStore.dismissAll()
+                onClicked: {
+                    if (root.inGroupFocusView) {
+                        const entries = notificationStore.focusedEntries.slice();
+                        entries.forEach(entry => notificationStore.dismissNotification(entry.notificationId));
+                        return;
+                    }
+                    notificationStore.dismissAll();
+                }
             }
         }
 
@@ -367,7 +585,7 @@ Item {
                 anchors.fill: parent
                 visible: notificationStore.model.count > 0
                 spacing: Common.Config.space.sm
-                model: notificationStore.model
+                model: root.inGroupFocusView ? notificationStore.focusedEntries : notificationStore.groupedModel
                 clip: true
 
                 T.ScrollBar.vertical: MD.ScrollBar {
@@ -380,14 +598,14 @@ Item {
                             property: "opacity"
                             from: 0
                             to: 1
-                            duration: Common.Config.motion.duration.shortMs
+                            duration: 0
                             easing.type: Common.Config.motion.easing.standard
                         }
                         NumberAnimation {
-                            property: "y"
-                            from: 8
+                            property: "x"
+                            from: notificationList.width + (2 * Common.Config.space.sm)
                             to: 0
-                            duration: Common.Config.motion.duration.shortMs
+                            duration: Common.Config.motion.duration.longMs
                             easing.type: Common.Config.motion.easing.standard
                         }
                     }
@@ -398,24 +616,24 @@ Item {
                         NumberAnimation {
                             property: "opacity"
                             to: 0
-                            duration: Common.Config.motion.duration.shortMs
+                            duration: 0
                             easing.type: Common.Config.motion.easing.standard
                         }
                         NumberAnimation {
-                            property: "y"
-                            to: 8
-                            duration: Common.Config.motion.duration.shortMs
+                            property: "x"
+                            to: notificationList.width + (2 * Common.Config.space.sm)
+                            duration: Common.Config.motion.duration.longMs
                             easing.type: Common.Config.motion.easing.standard
                         }
                     }
                 }
 
-                delegate: Components.NotificationCard {
-                    required property var entryObj
-
+                delegate: Loader {
+                    id: delegateLoader
+                    required property var modelData
                     width: ListView.view.width
-                    entry: entryObj
-                    onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
+                    sourceComponent: root.inGroupFocusView ? focusedEntryDelegate : groupedEntryDelegate
+                    onLoaded: item.modelData = Qt.binding(function() { return delegateLoader.modelData; })
                 }
             }
         }
@@ -477,12 +695,129 @@ Item {
         }
     }
 
+    Component {
+        id: groupedEntryDelegate
+
+        Item {
+            id: groupedRoot
+            property var modelData
+            readonly property var group: modelData ?? ({ groupKey: "", title: "Notifications", count: 0, entries: [] })
+
+            width: ListView.view ? ListView.view.width : 0
+            implicitHeight: groupedColumn.implicitHeight
+            height: implicitHeight
+
+            Column {
+                id: groupedColumn
+                width: parent.width
+                spacing: Common.Config.space.xs
+
+                RowLayout {
+                    width: parent.width
+                    spacing: Common.Config.space.sm
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: groupedRoot.group.title
+                        color: Common.Config.color.on_surface_variant
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: Common.Config.type.labelMedium.size
+                        font.weight: Font.Medium
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        visible: groupedRoot.group.count > 1
+                        radius: Common.Config.shape.corner.sm
+                        color: Qt.alpha(Common.Config.color.primary, 0.2)
+                        implicitWidth: groupedCountText.implicitWidth + (Common.Config.space.sm * 2)
+                        implicitHeight: 20
+
+                        Text {
+                            id: groupedCountText
+                            anchors.centerIn: parent
+                            text: groupedRoot.group.count.toString()
+                            color: Common.Config.color.on_surface
+                            font.family: Common.Config.fontFamily
+                            font.pixelSize: Common.Config.type.labelSmall.size
+                            font.weight: Font.Bold
+                        }
+                    }
+
+                    Rectangle {
+                        id: groupedFocusButton
+                        visible: groupedRoot.group.count > 1
+                        implicitWidth: 24
+                        implicitHeight: 24
+                        radius: 12
+                        color: Qt.alpha(Common.Config.color.surface_variant, 0.55)
+                        border.width: 1
+                        border.color: Qt.alpha(Common.Config.color.outline_variant, 0.7)
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: Common.Config.motion.duration.shortMs
+                                easing.type: Common.Config.motion.easing.standard
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\uf054"
+                            color: Common.Config.color.on_surface
+                            font.family: Common.Config.iconFontFamily
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                        }
+
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: groupedFocusArea.pressX
+                            pressY: groupedFocusArea.pressY
+                            pressed: groupedFocusArea.pressed
+                            radius: parent.radius
+                            stateOpacity: groupedFocusArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
+                        MouseArea {
+                            id: groupedFocusArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: notificationStore.enterGroupFocus(groupedRoot.group.groupKey)
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
+                        }
+                    }
+                }
+
+                Components.NotificationCard {
+                    width: groupedColumn.width
+                    entry: groupedRoot.group.entries[0]
+                    onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
+                }
+            }
+        }
+    }
+
+    Component {
+        id: focusedEntryDelegate
+
+        Components.NotificationCard {
+            property var modelData
+            width: ListView.view ? ListView.view.width : 0
+            entry: modelData
+            onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
+        }
+    }
+
     PanelWindow {
         id: popupWindow
         visible: popupContent.opacity > 0.01
         color: "transparent"
         implicitWidth: root.popupWidth
-        implicitHeight: Math.min(root.popupMaxHeight, popupListView.contentHeight + Common.Config.space.md * 2)
+        implicitHeight: Math.min(root.popupMaxHeight, popupFlick.contentHeight + Common.Config.space.md * 2)
         // Keep popups on the same output as the owning right panel window.
         screen: root.QsWindow.window ? root.QsWindow.window.screen : null
 
@@ -502,79 +837,49 @@ Item {
             opacity: root.popupTargetOpacity
             scale: root.popupsVisible ? 1 : 0.98
 
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: Common.Config.motion.duration.shortMs
-                    easing.type: Common.Config.motion.easing.standard
-                }
-            }
-
-            Behavior on scale {
-                NumberAnimation {
-                    duration: Common.Config.motion.duration.shortMs
-                    easing.type: Common.Config.motion.easing.standard
-                }
-            }
-
-            MD.ListView {
-                id: popupListView
+            Flickable {
+                id: popupFlick
                 anchors {
                     top: parent.top
                     right: parent.right
                     left: parent.left
                     margins: Common.Config.space.sm
                 }
-                implicitWidth: parent.width - Common.Config.space.md * 2
-                implicitHeight: Math.min(root.popupMaxHeight, contentHeight)
-                height: implicitHeight
-                spacing: Common.Config.space.sm
-                interactive: popupListView.contentHeight > root.popupMaxHeight
+                contentWidth: width
+                contentHeight: popupColumn.implicitHeight
+                height: Math.min(root.popupMaxHeight, contentHeight)
+                interactive: contentHeight > root.popupMaxHeight
                 clip: true
-                model: notificationStore.popupModel
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                boundsMovement: Flickable.StopAtBounds
 
-                add: Transition {
-                    ParallelAnimation {
-                        NumberAnimation {
-                            property: "opacity"
-                            from: 0
-                            to: 1
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                        NumberAnimation {
-                            property: "y"
-                            from: 8
-                            to: 0
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                    }
-                }
+                Column {
+                    id: popupColumn
+                    width: popupFlick.width
+                    spacing: Common.Config.space.sm
 
-                remove: Transition {
-                    ParallelAnimation {
-                        NumberAnimation {
-                            property: "opacity"
-                            to: 0
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                        NumberAnimation {
-                            property: "y"
-                            to: 8
-                            duration: Common.Config.motion.duration.shortMs
-                            easing.type: Common.Config.motion.easing.standard
-                        }
-                    }
-                }
+	                    Repeater {
+	                        model: notificationStore.popupModel
 
-                delegate: Components.PopupNotification {
-                    required property var entryObj
+	                        Item {
+	                            id: popupDelegate
+	                            required property int notificationId
+	                            required property var entryObj
 
-                    width: ListView.view.width
-                    entry: entryObj
-                    onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
-                }
+	                            width: popupColumn.width
+	                            implicitHeight: popupNotif.implicitHeight
+	                            height: implicitHeight
+
+	                            Components.PopupNotification {
+	                                id: popupNotif
+	                                width: parent.width
+	                                entry: popupDelegate.entryObj
+	                                onDismissRequested: notificationStore.dismissNotification(popupDelegate.notificationId)
+	                            }
+	                        }
+	                    }
+	                }
             }
         }
     }

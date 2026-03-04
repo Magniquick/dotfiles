@@ -1,4 +1,5 @@
 import QtQuick
+import Qcm.Material as MD
 import "../../common" as Common
 
 Rectangle {
@@ -9,7 +10,7 @@ Rectangle {
     signal clicked
 
     radius: Common.Config.shape.corner.sm
-    color: actionArea.pressed ? Qt.alpha(Common.Config.color.surface_variant, 0.35) : actionArea.containsMouse ? Qt.alpha(Common.Config.color.surface_variant, 0.25) : Common.Config.color.surface_variant
+    color: Common.Config.color.surface_variant
     implicitHeight: Common.Config.space.xl
     implicitWidth: contentRow.implicitWidth + Common.Config.space.md * 2
 
@@ -44,11 +45,23 @@ Rectangle {
         }
     }
 
+    HybridRipple {
+        anchors.fill: parent
+        color: Common.Config.color.on_surface
+        pressX: actionArea.pressX
+        pressY: actionArea.pressY
+        pressed: actionArea.pressed
+        radius: parent.radius
+        stateOpacity: actionArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+    }
     MouseArea {
         id: actionArea
+        property real pressX: width / 2
+        property real pressY: height / 2
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
+        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
     }
 }

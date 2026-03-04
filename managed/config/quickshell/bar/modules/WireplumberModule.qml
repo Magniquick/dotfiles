@@ -16,7 +16,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
+import Qcm.Material as MD
 import ".."
 import "../components"
 import "../../common" as Common
@@ -25,19 +27,46 @@ ModuleContainer {
     id: root
 
     property bool debugLogging: false
+    property bool showVirtualIo: false
     property var icons: ["", "", "", ""]
+    // Input UI is normalized to 0..100, mapped onto real 0..20% gain.
+    property real inputMaxVolume: 0.2
     property real maxVolume: 2.0
+    property int maxVisibleAppRows: 4
+    property int maxVisibleDeviceRows: 3
+    property int appRowHeight: 44
+    property int deviceRowHeight: 40
     property bool muted: false
+    property string micMutedIcon: ""
     property string mutedIcon: ""
     property string onScrollDownCommand: "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%-"
     property string onScrollUpCommand: "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%+"
+    readonly property int legacyPanelWidth: 240
+    readonly property int panelWidth: 272
     readonly property bool pipewireReady: root.sink ? root.sink.ready : false
+    readonly property var allAudioNodes: root.pipewireGloballyReady ? Pipewire.nodes : []
+    readonly property var appStreams: root.collectAppStreams(root.allAudioNodes)
+    readonly property var appEntries: root.buildAppEntries(root.appStreams, root.wpctlAppStreams)
+    readonly property bool hasAppSection: root.appEntries.length > 0
+    readonly property bool hasAudioSections: root.hasInputSection || root.hasOutputSection || root.hasAppSection || root.showVirtualIoToggle
+    readonly property bool hasInputSection: root.inputDevices.length > 0
+    readonly property var inputDevices: root.collectInputDevices(root.allAudioNodes)
+    readonly property bool pipewireGloballyReady: Pipewire.ready
+    readonly property bool hasOutputSection: root.outputDevices.length > 0
+    readonly property var outputDevices: root.collectOutputDevices(root.allAudioNodes)
+    readonly property bool showVirtualIoToggle: root.showVirtualIo || root.virtualInputCount > 0 || root.virtualOutputCount > 0 || root.virtualStreamCount > 0
+    readonly property int virtualInputCount: root.countVirtualDevices(root.allAudioNodes, false)
+    readonly property int virtualOutputCount: root.countVirtualDevices(root.allAudioNodes, true)
+    readonly property int virtualStreamCount: root.countVirtualStreams(root.allAudioNodes)
+    readonly property var selectedInput: Pipewire.defaultAudioSource
+    readonly property var selectedOutput: Pipewire.defaultAudioSink
     property var sink: Pipewire.defaultAudioSink
     property var sinkAudio: root.sink ? root.sink.audio : null
     property real sliderValue: 0
     property bool volumeAvailable: false
     property int volumePercent: 0
     property real volumeStep: 0.01
+    property var wpctlAppStreams: []
 
     function activeColor() {
         return (root.muted || root.volumePercent > 100) ? Config.color.error : Config.color.secondary;
@@ -57,6 +86,214 @@ ModuleContainer {
             sum += values[i];
         return values.length > 0 ? sum / values.length : NaN;
     }
+    function nodeMaxVolume(node) {
+        if (!node)
+            return root.maxVolume;
+        return node.isSink ? root.maxVolume : root.inputMaxVolume;
+    }
+    function assignNodeVolume(node, value, maxVolume) {
+        const max = isFinite(maxVolume) ? maxVolume : root.nodeMaxVolume(node);
+        const next = Math.max(0, Math.min(max, value));
+        if (node && node.audio) {
+            node.audio.volume = next;
+            return;
+        }
+        const id = root.nodeId(node);
+        if (id >= 0)
+            Quickshell.execDetached(["wpctl", "set-volume", "-l", String(max), String(id), Math.round(next * 100) + "%"]);
+    }
+    function adjustNodeVolumeByStep(node, directionY) {
+        if (!node)
+            return;
+        const max = root.nodeMaxVolume(node);
+        const step = max / 100;
+        const delta = directionY > 0 ? step : (directionY < 0 ? -step : 0);
+        if (delta === 0)
+            return;
+        if (node.audio) {
+            root.assignNodeVolume(node, node.audio.volume + delta, max);
+            return;
+        }
+        const id = root.nodeId(node);
+        if (id >= 0)
+            Quickshell.execDetached(["wpctl", "set-volume", String(id), delta > 0 ? "1%+" : "1%-"]);
+    }
+    function adjustAppEntryVolumeByStep(entry, directionY) {
+        if (!entry)
+            return;
+        const step = root.maxVolume / 100;
+        const delta = directionY > 0 ? step : (directionY < 0 ? -step : 0);
+        if (delta === 0)
+            return;
+        const current = Math.max(0, Math.min(root.maxVolume, entry.volume));
+        root.setAppEntryVolume(entry, current + delta);
+    }
+    function formatVolumePercent(value, muted, maxVolume) {
+        if (muted)
+            return "M";
+        const max = (isFinite(maxVolume) && maxVolume > 0) ? maxVolume : root.maxVolume;
+        const v = isFinite(value) ? value : 0;
+        const clamped = Math.max(0, Math.min(max, v));
+        return Math.round(clamped * 100).toString();
+    }
+    function buildAppEntries(nativeStreams, fallbackStreams) {
+        const entries = [];
+        const source = nativeStreams.length > 0 ? nativeStreams : fallbackStreams;
+        const mode = nativeStreams.length > 0 ? "native" : "wpctl";
+        for (let i = 0; i < source.length; i++) {
+            const item = source[i];
+            if (!item)
+                continue;
+            if (mode === "native") {
+                const rawPid = item.properties ? item.properties["application.process.id"] : undefined;
+                entries.push({
+                    mode: "native",
+                    node: item,
+                    id: root.nodeId(item),
+                    label: root.nodeLabel(item, "Unknown App"),
+                    muted: !!(item.audio && item.audio.muted),
+                    volume: item.audio ? item.audio.volume : 0,
+                    enabled: !!item.audio,
+                    pid: rawPid !== undefined ? Number(rawPid) : -1
+                });
+            } else {
+                const fallbackId = Number(item.id);
+                const fallbackName = String(item.name || "Unknown App");
+                if (!root.showVirtualIo && root.isVirtualIoLabel(fallbackName))
+                    continue;
+                entries.push({
+                    mode: "wpctl",
+                    node: null,
+                    id: isFinite(fallbackId) ? fallbackId : -1,
+                    label: fallbackName,
+                    muted: !!item.muted,
+                    volume: isFinite(item.volume) ? item.volume : 0,
+                    enabled: isFinite(fallbackId) && fallbackId >= 0
+                });
+            }
+        }
+        return entries;
+    }
+    function collectAppStreams(nodes) {
+        const result = [];
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return result;
+
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.isStream)
+                continue;
+            if (!root.showVirtualIo && root.isVirtualIoNode(node))
+                continue;
+            result.push(node);
+        }
+        return root.sortNodes(result, null);
+    }
+    function countAudioStreams(nodes, requireAudio) {
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return 0;
+        let total = 0;
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.isStream)
+                continue;
+            if (requireAudio && !node.audio)
+                continue;
+            total++;
+        }
+        return total;
+    }
+    function collectInputDevices(nodes) {
+        const result = [];
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return result;
+
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.audio || node.isStream || node.isSink)
+                continue;
+            if (!root.showVirtualIo && root.isVirtualIoNode(node))
+                continue;
+            result.push(node);
+        }
+        return root.sortNodes(result, root.selectedInput);
+    }
+    function collectOutputDevices(nodes) {
+        const result = [];
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return result;
+
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.audio || node.isStream || !node.isSink)
+                continue;
+            if (!root.showVirtualIo && root.isVirtualIoNode(node))
+                continue;
+            result.push(node);
+        }
+        return root.sortNodes(result, root.selectedOutput);
+    }
+    function countVirtualDevices(nodes, sinkDevices) {
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return 0;
+
+        let total = 0;
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.audio || node.isStream)
+                continue;
+            if (!!node.isSink !== !!sinkDevices)
+                continue;
+            if (!root.isVirtualIoNode(node))
+                continue;
+            total++;
+        }
+        return total;
+    }
+    function countVirtualStreams(nodes) {
+        const n = root.modelCount(nodes);
+        if (n === 0)
+            return 0;
+
+        let total = 0;
+        for (let i = 0; i < n; i++) {
+            const node = root.modelAt(nodes, i);
+            if (!node || !node.isStream)
+                continue;
+            if (!root.isVirtualIoNode(node))
+                continue;
+            total++;
+        }
+        return total;
+    }
+    function deviceIsActive(node, selectedNode) {
+        const selectedId = root.nodeId(selectedNode);
+        const nodeId = root.nodeId(node);
+        if (selectedId < 0 || nodeId < 0)
+            return false;
+        return selectedId === nodeId;
+    }
+    function deviceTypeIcon(node, inputSection) {
+        if (inputSection)
+            return "";
+        if (root.deviceIsActive(node, root.selectedOutput))
+            return root.iconForVolume();
+        return "";
+    }
+    function appEntryLabel(entry) {
+        if (!entry)
+            return "";
+        if (entry.label !== undefined && entry.label !== null)
+            return String(entry.label).trim();
+        if (entry.name !== undefined && entry.name !== null)
+            return String(entry.name).trim();
+        return "";
+    }
     function iconForVolume() {
         if (root.muted)
             return root.mutedIcon;
@@ -72,6 +309,79 @@ ModuleContainer {
         if (!root.debugLogging)
             return;
         console.log("WireplumberModule " + new Date().toISOString() + " " + message);
+    }
+    function nodeId(node) {
+        if (!node || node.id === undefined || node.id === null)
+            return -1;
+        const id = Number(node.id);
+        return isFinite(id) ? id : -1;
+    }
+    function nodeLabel(node, fallback) {
+        if (node && node.description && node.description !== "")
+            return String(node.description);
+        if (node && node.name && node.name !== "")
+            return String(node.name);
+        return fallback;
+    }
+    function nodeTypeString(node) {
+        if (!node || node.type === undefined || node.type === null)
+            return "";
+        try {
+            return String(PwNodeType.toString(node.type) || "").toLowerCase();
+        } catch (err) {
+            return String(node.type || "").toLowerCase();
+        }
+    }
+    function isVirtualIoNode(node) {
+        const typeText = root.nodeTypeString(node);
+        const label = root.nodeLabel(node, "").toLowerCase();
+        const name = node && node.name ? String(node.name).toLowerCase() : "";
+        const combined = (label + " " + name).trim();
+
+        if (typeText.indexOf("filter") !== -1 || typeText.indexOf("virtual") !== -1)
+            return true;
+
+        return root.isVirtualIoLabel(combined);
+    }
+    function isVirtualIoLabel(text) {
+        const combined = String(text || "").toLowerCase();
+
+        const virtualKeywords = [
+            "monitor",
+            "loopback",
+            "virtual",
+            "null",
+            "dummy",
+            "audiorelay",
+            "echo-cancel",
+            "simultaneous"
+        ];
+
+        for (let i = 0; i < virtualKeywords.length; i++) {
+            if (combined.indexOf(virtualKeywords[i]) !== -1)
+                return true;
+        }
+        return false;
+    }
+    function modelAt(model, index) {
+        if (!model || index < 0)
+            return null;
+        if (model.values && typeof model.values.length === "number")
+            return model.values[index];
+        if (typeof model.get === "function")
+            return model.get(index);
+        return model[index];
+    }
+    function modelCount(model) {
+        if (!model)
+            return 0;
+        if (model.values && typeof model.values.length === "number")
+            return model.values.length;
+        if (typeof model.count === "number")
+            return model.count;
+        if (typeof model.length === "number")
+            return model.length;
+        return 0;
     }
     function refreshSink() {
         root.logEvent("refreshSink");
@@ -102,6 +412,16 @@ ModuleContainer {
             "@DEFAULT_AUDIO_SINK@",
             percent + "%"
         ]);
+    }
+    function setPreferredInput(node) {
+        if (!node)
+            return;
+        Pipewire.preferredDefaultAudioSource = node;
+    }
+    function setPreferredOutput(node) {
+        if (!node)
+            return;
+        Pipewire.preferredDefaultAudioSink = node;
     }
     function sinkLabel() {
         if (!root.sink)
@@ -135,6 +455,66 @@ ModuleContainer {
         root.sliderValue = Math.max(0, Math.min(root.maxVolume, volume));
         root.logEvent("syncVolume ok percent=" + root.volumePercent + " muted=" + root.muted);
     }
+    function sortNodes(nodes, activeNode) {
+        const selectedId = root.nodeId(activeNode);
+        const sorted = nodes.slice();
+        sorted.sort(function(a, b) {
+            const aId = root.nodeId(a);
+            const bId = root.nodeId(b);
+            const aActive = selectedId >= 0 && aId === selectedId;
+            const bActive = selectedId >= 0 && bId === selectedId;
+            if (aActive !== bActive)
+                return aActive ? -1 : 1;
+
+            const aName = root.nodeLabel(a, "").toLowerCase();
+            const bName = root.nodeLabel(b, "").toLowerCase();
+            if (aName < bName)
+                return -1;
+            if (aName > bName)
+                return 1;
+            return aId - bId;
+        });
+        return sorted;
+    }
+    function setAppEntryVolume(entry, value) {
+        if (!entry)
+            return;
+        if (entry.mode === "native") {
+            root.assignNodeVolume(entry.node, value);
+            return;
+        }
+        if (entry.id < 0)
+            return;
+        const next = Math.max(0, Math.min(root.maxVolume, value));
+        Quickshell.execDetached(["wpctl", "set-volume", "-l", String(root.maxVolume), String(entry.id), Math.round(next * 100) + "%"]);
+        wpctlStreamsRunner.trigger();
+    }
+    function toggleAppEntryMute(entry) {
+        if (!entry)
+            return;
+        if (entry.mode === "native") {
+            root.toggleNodeMute(entry.node);
+            return;
+        }
+        if (entry.id < 0)
+            return;
+        Quickshell.execDetached(["wpctl", "set-mute", String(entry.id), "toggle"]);
+        wpctlStreamsRunner.trigger();
+    }
+    function toggleNodeMute(node) {
+        if (node && node.audio) {
+            node.audio.muted = !node.audio.muted;
+            return;
+        }
+        const id = root.nodeId(node);
+        if (id >= 0)
+            Quickshell.execDetached(["wpctl", "set-mute", String(id), "toggle"]);
+    }
+    function raiseAppEntry(entry) {
+        if (!entry || !(entry.pid > 0))
+            return;
+        Hyprland.dispatch("focuswindow pid:" + entry.pid);
+    }
     function toggleMute() {
         if (root.sinkAudio && root.pipewireReady) {
             root.sinkAudio.muted = !root.sinkAudio.muted;
@@ -145,7 +525,7 @@ ModuleContainer {
 
     tooltipHoverable: true
     tooltipText: ""
-    tooltipTitle: "Volume"
+    tooltipTitle: root.hasAudioSections ? "Audio" : "Volume"
 
     content: [
         IconLabel {
@@ -153,12 +533,141 @@ ModuleContainer {
             text: root.iconForVolume()
         }
     ]
+    Component {
+        id: deviceRowDelegate
+
+        Rectangle {
+            required property var modelData
+
+            readonly property bool _isInput: ListView.view ? ListView.view.isInput : false
+            readonly property bool active: root.deviceIsActive(modelData, _isInput ? root.selectedInput : root.selectedOutput)
+            readonly property bool nodeMuted: !!(modelData && modelData.audio && modelData.audio.muted)
+            readonly property real nodeVolume: modelData && modelData.audio ? modelData.audio.volume : 0
+            readonly property real nodeMax: root.nodeMaxVolume(modelData)
+
+            width: ListView.view.width
+            height: root.deviceRowHeight
+            radius: Config.shape.corner.md
+            color: rowMouseArea.containsMouse ? Qt.alpha(Config.color.surface_variant, 0.5) : (active ? Qt.alpha(Config.color.primary_container, 0.45) : Config.color.surface_container_high)
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Config.space.sm
+                anchors.rightMargin: Config.space.sm
+                spacing: Config.space.sm
+
+                Rectangle {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredHeight: 28
+                    Layout.preferredWidth: 28
+                    color: active ? Qt.alpha(Config.color.primary, 0.75) : Config.color.surface_variant
+                    radius: width / 2
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: Config.color.on_surface
+                        font.family: Config.iconFontFamily
+                        font.pixelSize: Config.type.labelLarge.size
+                        text: _isInput ? (nodeMuted ? root.micMutedIcon : root.deviceTypeIcon(modelData, true)) : root.deviceTypeIcon(modelData, false)
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    color: active ? Config.color.on_primary_container : Config.color.on_surface
+                    elide: Text.ElideRight
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.bodyLarge.size
+                    font.weight: Config.type.bodyLarge.weight
+                    text: root.nodeLabel(modelData, _isInput ? "Unknown Input" : "Unknown Output")
+                }
+                Item {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredHeight: 24
+                    Layout.preferredWidth: 24
+
+                    MD.CircleProgressBar {
+                        anchors.fill: parent
+                        enabled: root.pipewireGloballyReady
+                        from: 0
+                        to: nodeMax
+                        value: nodeVolume
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: active ? Config.color.on_primary_container : Config.color.on_surface
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.labelSmall.size
+                        font.weight: Font.Bold
+                        text: root.formatVolumePercent(nodeVolume, nodeMuted, nodeMax)
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: root.pipewireGloballyReady
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+
+                        onClicked: function() {
+                            root.toggleNodeMute(modelData);
+                        }
+                        onWheel: function(wheel) {
+                            root.adjustNodeVolumeByStep(modelData, wheel.angleDelta.y);
+                            wheel.accepted = true;
+                        }
+                    }
+                }
+            }
+
+            HybridRipple {
+                anchors.fill: parent
+                color: active ? Config.color.on_primary_container : Config.color.on_surface
+                pressX: rowMouseArea.pressX
+                pressY: rowMouseArea.pressY
+                pressed: rowMouseArea.pressed
+                radius: parent.radius
+                stateLayerEnabled: false
+                stateOpacity: 0
+            }
+            MouseArea {
+                id: rowMouseArea
+
+                property real pressX: width / 2
+                property real pressY: height / 2
+
+                anchors.fill: parent
+                enabled: root.pipewireGloballyReady
+                hoverEnabled: true
+                onClicked: function(mouse) {
+                    if (!modelData)
+                        return;
+                    if (mouse.button === Qt.RightButton) {
+                        root.toggleNodeMute(modelData);
+                        return;
+                    }
+                    if (mouse.button === Qt.LeftButton) {
+                        if (_isInput)
+                            root.setPreferredInput(modelData);
+                        else
+                            root.setPreferredOutput(modelData);
+                    }
+                }
+                onPressed: function(mouse) {
+                    pressX = mouse.x;
+                    pressY = mouse.y;
+                }
+                onWheel: function(wheel) {
+                    root.adjustNodeVolumeByStep(modelData, wheel.angleDelta.y);
+                    wheel.accepted = true;
+                }
+            }
+        }
+    }
     tooltipContent: Component {
         ColumnLayout {
-            spacing: Config.space.md
-            width: 240
+            spacing: Config.space.sm
+            width: root.hasAudioSections ? root.panelWidth : root.legacyPanelWidth
 
-            // Header Section
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Config.space.md
@@ -220,71 +729,320 @@ ModuleContainer {
                 }
             }
 
-            // Details Section
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Config.color.outline_variant
+                opacity: 0.9
+                visible: root.hasAudioSections
+            }
+
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
+                visible: root.hasOutputSection
 
-                SectionHeader {
-                    text: "VOLUME DETAILS"
-                }
-                LevelSlider {
+                RowLayout {
                     Layout.fillWidth: true
-                    enabled: root.volumeAvailable
-                    fillColor: root.activeColor()
-                    maximum: root.maxVolume
-                    minimum: 0
-                    value: root.sliderValue
+                    spacing: Config.space.sm
 
-                    onUserChanged: function (value) {
-                        root.sliderValue = value;
-                        root.setVolume(value);
+                    SectionHeader {
+                        text: "OUTPUT"
+                    }
+                    Item {
+                        Layout.fillWidth: true
+                    }
+                    ActionChip {
+                        Layout.alignment: Qt.AlignVCenter
+                        active: root.showVirtualIo
+                        visible: root.showVirtualIoToggle
+                        text: "Virtual I/O " + (root.virtualInputCount + root.virtualOutputCount + root.virtualStreamCount).toString()
+                        onClicked: root.showVirtualIo = !root.showVirtualIo
                     }
                 }
-                InfoRow {
+                Item {
                     Layout.fillWidth: true
-                    label: "Device"
-                    value: root.sinkLabel()
-                    visible: root.sinkLabel() !== ""
+                    Layout.preferredHeight: Math.min(root.maxVisibleDeviceRows, root.outputDevices.length) * root.deviceRowHeight
+
+                    ListView {
+                        property bool isInput: false
+
+                        anchors.fill: parent
+                        clip: true
+                        interactive: count > root.maxVisibleDeviceRows
+                        model: root.outputDevices
+                        spacing: Config.space.xs
+                        delegate: deviceRowDelegate
+                    }
                 }
             }
-            TooltipActionsRow {
-                spacing: Config.space.sm
 
-                ActionChip {
-                    Layout.fillWidth: true
-                    active: root.muted
-                    text: root.muted ? "Unmute" : "Mute"
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Config.color.outline_variant
+                opacity: 0.9
+                visible: root.hasOutputSection && root.hasInputSection
+            }
 
-                    onClicked: root.toggleMute()
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.xs
+                visible: root.hasInputSection
+
+                SectionHeader {
+                    text: "INPUT"
                 }
-                ActionChip {
+                Item {
                     Layout.fillWidth: true
-                    text: "50%"
+                    Layout.preferredHeight: Math.min(root.maxVisibleDeviceRows, root.inputDevices.length) * root.deviceRowHeight
 
-                    onClicked: root.setVolume(0.5)
+                    ListView {
+                        property bool isInput: true
+
+                        anchors.fill: parent
+                        clip: true
+                        interactive: count > root.maxVisibleDeviceRows
+                        model: root.inputDevices
+                        spacing: Config.space.xs
+                        delegate: deviceRowDelegate
+                    }
                 }
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "100%"
+            }
 
-                    onClicked: root.setVolume(1.0)
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Config.color.outline_variant
+                opacity: 0.9
+                visible: (root.hasInputSection || root.hasOutputSection) && root.hasAppSection
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.xs
+                visible: root.hasAppSection
+
+                SectionHeader {
+                    text: "APPLICATIONS"
                 }
-                ActionChip {
+                Item {
                     Layout.fillWidth: true
-                    text: "150%"
-                    visible: root.maxVolume >= 1.5
+                    Layout.preferredHeight: Math.min(root.maxVisibleAppRows, root.appEntries.length) * root.appRowHeight
 
-                    onClicked: root.setVolume(1.5)
+                    ListView {
+                        anchors.fill: parent
+                        clip: true
+                        interactive: count > root.maxVisibleAppRows
+                        model: root.appEntries
+                        spacing: Config.space.xs
+
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property bool appMuted: !!modelData.muted
+                            readonly property bool enabledRow: !!modelData.enabled
+                            readonly property string delegateLabel: root.appEntryLabel(modelData)
+
+                            width: ListView.view.width
+                            height: root.appRowHeight
+                            radius: Config.shape.corner.md
+                            color: appRowHoverArea.containsMouse ? Qt.alpha(Config.color.surface_variant, 0.55) : Config.color.surface_container_high
+                            opacity: enabledRow ? 1 : 0.55
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Config.space.sm
+                                anchors.rightMargin: Config.space.sm
+                                spacing: Config.space.sm
+
+                                Rectangle {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.preferredHeight: 24
+                                    Layout.preferredWidth: 24
+                                    color: Config.color.surface_variant
+                                    radius: Config.shape.corner.sm
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        color: Config.color.on_surface
+                                        font.family: Config.fontFamily
+                                        font.pixelSize: Config.type.labelSmall.size
+                                        font.weight: Font.Bold
+                                        text: {
+                                            const label = String(appNameText.text || "").trim();
+                                            return label.length > 0 ? label.charAt(0).toUpperCase() : "?";
+                                        }
+                                    }
+                                }
+                                Text {
+                                    id: appNameText
+
+                                    Layout.fillWidth: true
+                                    color: Config.color.on_surface
+                                    elide: Text.ElideRight
+                                    font.family: Config.fontFamily
+                                    font.pixelSize: Config.type.bodyMedium.size
+                                    font.weight: Config.type.bodyMedium.weight
+                                    text: delegateLabel
+                                }
+                                Item {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.preferredHeight: 24
+                                    Layout.preferredWidth: 24
+
+                                    MD.CircleProgressBar {
+                                        id: appVolumeCircle
+
+                                        anchors.fill: parent
+                                        enabled: enabledRow
+                                        from: 0
+                                        to: root.maxVolume
+                                        value: enabledRow ? modelData.volume : 0
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        color: Config.color.on_surface
+                                        font.family: Config.fontFamily
+                                        font.pixelSize: Config.type.labelSmall.size
+                                        font.weight: Font.Bold
+                                        text: appMuted ? "M" : Math.round(Math.max(0, Math.min(root.maxVolume, appVolumeCircle.value)) * 100).toString()
+                                    }
+
+                                    MouseArea {
+                                        id: appCircleArea
+
+                                        anchors.fill: parent
+                                        enabled: enabledRow
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        cursorShape: Qt.PointingHandCursor
+
+                                        onClicked: function() {
+                                            root.toggleAppEntryMute(modelData);
+                                        }
+                                        onWheel: function(wheel) {
+                                            root.adjustAppEntryVolumeByStep(modelData, wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.pixelDelta.y);
+                                            wheel.accepted = true;
+                                        }
+                                    }
+                                }
+                            }
+
+                            HybridRipple {
+                                anchors.fill: parent
+                                color: Config.color.on_surface
+                                pressX: appRowHoverArea.pressX
+                                pressY: appRowHoverArea.pressY
+                                pressed: appRowHoverArea.pressed
+                                radius: parent.radius
+                                stateLayerEnabled: false
+                                stateOpacity: 0
+                            }
+                            MouseArea {
+                                id: appRowHoverArea
+
+                                property real pressX: width / 2
+                                property real pressY: height / 2
+
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+
+                                onClicked: root.raiseAppEntry(modelData)
+                                onPressed: function(mouse) {
+                                    pressX = mouse.x;
+                                    pressY = mouse.y;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    Component.onCompleted: root.refreshSink()
+    Component.onCompleted: {
+        root.refreshSink();
+        wpctlStreamsRunner.trigger();
+    }
 
     PwObjectTracker {
-        objects: root.sink ? [root.sink] : []
+        objects: (function() {
+            const objects = [];
+            const seenIds = {};
+            const addNode = function(node) {
+                if (!node)
+                    return;
+                const id = root.nodeId(node);
+                if (id >= 0) {
+                    const key = String(id);
+                    if (seenIds[key])
+                        return;
+                    seenIds[key] = true;
+                } else if (objects.indexOf(node) !== -1) {
+                    return;
+                }
+                objects.push(node);
+            };
+
+            addNode(root.sink);
+            addNode(root.selectedInput);
+            addNode(root.selectedOutput);
+            const allNodesCount = root.modelCount(root.allAudioNodes);
+            for (let i = 0; i < allNodesCount; i++)
+                addNode(root.modelAt(root.allAudioNodes, i));
+            for (let i = 0; i < root.inputDevices.length; i++)
+                addNode(root.inputDevices[i]);
+            for (let i = 0; i < root.outputDevices.length; i++)
+                addNode(root.outputDevices[i]);
+            for (let i = 0; i < root.appStreams.length; i++)
+                addNode(root.appStreams[i]);
+
+            return objects;
+        })()
+    }
+    CommandRunner {
+        id: wpctlStreamsRunner
+
+        enabled: root.tooltipActive && root.appStreams.length === 0
+        intervalMs: 2000
+        timeoutMs: 2500
+        command: [
+            "sh",
+            "-lc",
+            "wpctl status | awk 'BEGIN{in=0} /^ *└─ Streams:/{in=1;next} in&&/^ *[0-9]+\\./{line=$0; if (line ~ />/) next; gsub(/^ +/,\"\",line); id=line; sub(/\\..*/,\"\",id); name=line; sub(/^[0-9]+\\. +/,\"\",name); gsub(/ +$/, \"\", name); if (name!=\"\") print id \"\\t\" name} in&&/^Settings$/{in=0}' | while IFS=$'\\t' read -r id name; do out=$(wpctl get-volume \"$id\" 2>/dev/null || true); vol=$(printf \"%s\" \"$out\" | awk '{for(i=1;i<=NF;i++){if($i ~ /^[0-9.]+$/){print $i; exit}}}'); muted=0; printf \"%s\" \"$out\" | grep -qi \"MUTED\" && muted=1; printf \"%s\\t%s\\t%s\\t%s\\n\" \"$id\" \"$name\" \"${vol:-0}\" \"$muted\"; done"
+        ]
+
+        onRan: function(output) {
+            const lines = output ? output.split("\n") : [];
+            const streams = [];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line === "")
+                    continue;
+                const parts = line.split("\t");
+                if (parts.length < 4)
+                    continue;
+                const id = Number(parts[0]);
+                const name = parts[1];
+                const volume = Number(parts[2]);
+                const muted = parts[3] === "1";
+                if (!isFinite(id))
+                    continue;
+                streams.push({
+                    id: id,
+                    name: name,
+                    volume: isFinite(volume) ? volume : 0,
+                    muted: muted
+                });
+            }
+            root.wpctlAppStreams = streams;
+        }
+        onError: function(errorOutput, exitCode) {
+            root.logEvent("wpctlStreams error code=" + exitCode + " stderr=" + errorOutput);
+        }
+        onTimeout: root.logEvent("wpctlStreams timeout")
     }
     Connections {
         function onDefaultAudioSinkChanged() {
@@ -324,9 +1082,9 @@ ModuleContainer {
         onClicked: root.toggleMute()
         onWheel: function (wheel) {
             if (wheel.angleDelta.y > 0)
-                root.adjustVolume(root.volumeStep);
-            else if (wheel.angleDelta.y < 0)
                 root.adjustVolume(-root.volumeStep);
+            else if (wheel.angleDelta.y < 0)
+                root.adjustVolume(root.volumeStep);
         }
     }
 }

@@ -74,8 +74,7 @@ MD.Card {
                 width: 24
                 height: 20
                 radius: 10
-                color: copyArea.containsMouse ? Qt.alpha(Common.Config.color.on_surface, 0.08) :
-                       copied ? Qt.alpha(Common.Config.color.tertiary, 0.15) : "transparent"
+                color: copyBtn.copied ? Qt.alpha(Common.Config.color.tertiary, 0.15) : "transparent"
 
                 Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -88,8 +87,19 @@ MD.Card {
                     opacity: copyBtn.copied ? 1 : 0.6
                 }
 
+                HybridRipple {
+                    anchors.fill: parent
+                    color: Common.Config.color.on_surface
+                    pressX: copyArea.pressX
+                    pressY: copyArea.pressY
+                    pressed: copyArea.pressed
+                    radius: parent.radius
+                    stateOpacity: copyArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                }
                 MouseArea {
                     id: copyArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
@@ -98,6 +108,7 @@ MD.Card {
                         copyBtn.copied = true
                         copyTimer.restart()
                     }
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
 
                 Timer {

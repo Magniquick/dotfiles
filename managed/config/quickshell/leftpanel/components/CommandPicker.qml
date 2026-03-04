@@ -98,7 +98,7 @@ MD.Card {
                 implicitWidth: 24
                 implicitHeight: 24
                 radius: 12
-                color: closeArea.containsMouse ? Qt.alpha(Common.Config.color.error, 0.2) : "transparent"
+                color: "transparent"
 
                 Text {
                     anchors.centerIn: parent
@@ -108,12 +108,24 @@ MD.Card {
                     font.pixelSize: 14
                 }
 
+                HybridRipple {
+                    anchors.fill: parent
+                    color: Common.Config.color.error
+                    pressX: closeArea.pressX
+                    pressY: closeArea.pressY
+                    pressed: closeArea.pressed
+                    radius: parent.radius
+                    stateOpacity: closeArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                }
                 MouseArea {
                     id: closeArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.dismissed()
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
             }
         }
@@ -167,7 +179,7 @@ MD.Card {
                         Layout.preferredWidth: 24
                         Layout.preferredHeight: 24
                         radius: 12
-                        color: clearArea.containsMouse ? Qt.alpha(Common.Config.color.on_surface, 0.08) : "transparent"
+                        color: "transparent"
                         visible: root.filterText.length > 0
 
                         Text {
@@ -178,8 +190,19 @@ MD.Card {
                             font.pixelSize: 13
                         }
 
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: clearArea.pressX
+                            pressY: clearArea.pressY
+                            pressed: clearArea.pressed
+                            radius: parent.radius
+                            stateOpacity: clearArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
                         MouseArea {
                             id: clearArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
@@ -187,6 +210,7 @@ MD.Card {
                                 root.filterText = "";
                                 filterInput.text = "";
                             }
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
                 }
@@ -210,11 +234,24 @@ MD.Card {
                     font.weight: Font.Bold
                 }
 
+                HybridRipple {
+                    anchors.fill: parent
+                    color: root.showAll ? Common.Config.color.on_primary : Common.Config.color.on_surface
+                    pressX: toggleArea.pressX
+                    pressY: toggleArea.pressY
+                    pressed: toggleArea.pressed
+                    radius: parent.radius
+                    stateOpacity: toggleArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                }
                 MouseArea {
+                    id: toggleArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.showAll = !root.showAll
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                 }
             }
         }
@@ -319,10 +356,23 @@ MD.Card {
 
                 MouseArea {
                     id: optionArea
+                    property real pressX: width / 2
+                    property real pressY: height / 2
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.optionSelected(optionItem.modelData.value)
+                    onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
+                }
+
+                HybridRipple {
+                    anchors.fill: parent
+                    color: Common.Config.color.on_surface
+                    pressX: optionArea.pressX
+                    pressY: optionArea.pressY
+                    pressed: optionArea.pressed
+                    radius: parent.radius
+                    stateOpacity: 0
                 }
             }
         }
