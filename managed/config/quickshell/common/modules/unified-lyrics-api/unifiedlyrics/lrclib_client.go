@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const defaultLrcLibBaseURL = "https://lrclib.net/api/get"
+const (
+	defaultLrcLibBaseURL   = "https://lrclib.net/api/get"
+	defaultLrcLibUserAgent = "quickshell-unified-lyrics-api v1.0.0 (https://github.com/Magniquick/dotfiles/tree/main/managed/config/quickshell/common/modules/unified-lyrics-api)"
+)
 
 type Line struct {
 	StartTimeMs string `json:"startTimeMs"`
@@ -70,6 +73,7 @@ func (c *LrcLibClient) GetLyrics(ctx context.Context, trackName, artistName, alb
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", defaultLrcLibUserAgent)
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err

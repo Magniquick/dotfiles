@@ -200,6 +200,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 ## Testing
 
 **No automated tests.** Manual verification required: run ./qs at repo root with a short timeout and monitor output logs.
+- In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
 
 ## Dependencies
 

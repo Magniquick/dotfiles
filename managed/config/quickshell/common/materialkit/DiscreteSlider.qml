@@ -1,0 +1,187 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import ".." as Common
+
+Item {
+  id: root
+  // TODO: Improve DiscreteSlider interaction/visual polish for better consistency across modules.
+
+  property real minimum: 0
+  property real maximum: 1
+  property int steps: 2
+  property real value: 0
+  property bool enabled: true
+  property bool dragging: mouseArea.pressed
+  property bool hovered: mouseArea.containsMouse
+  property color trackColor: Common.Config.color.surface_container_highest
+  property color fillColor: Common.Config.color.primary
+  property color tickColor: Common.Config.color.on_primary
+  property color tickInactiveColor: Common.Config.color.on_surface_variant
+  property color handleColor: Common.Config.color.primary
+
+  property int handleSize: 12
+  property int trackThickness: 2
+  readonly property int pillWidthIdle: Math.max(4, Math.round(Common.Config.slider.knobWidth * 0.45))
+  readonly property int pillWidthPressed: Math.max(pillWidthIdle + 2, Math.round(Common.Config.slider.knobWidth * 0.65))
+  readonly property int pillHeightIdle: Math.max(handleSize, Math.round(Common.Config.slider.knobSize * 1.05))
+  readonly property int pillHeightPressed: Math.max(pillHeightIdle + 2, Math.round(Common.Config.slider.knobSize * 1.25))
+
+  signal userChanged(real value)
+  signal dragEnded(real value)
+
+  implicitWidth: 220
+  implicitHeight: 24
+  opacity: root.enabled ? 1 : 0.45
+
+  function clamped(v) {
+    return Math.max(root.minimum, Math.min(root.maximum, v));
+  }
+
+  function snapped(v) {
+    if (root.steps <= 1 || root.maximum <= root.minimum)
+      return clamped(v);
+
+    const stepSize = (root.maximum - root.minimum) / (root.steps - 1);
+    if (stepSize <= 0)
+      return root.minimum;
+
+    const snappedValue = Math.round((v - root.minimum) / stepSize) * stepSize + root.minimum;
+    return clamped(snappedValue);
+  }
+
+  function ratioFor(v) {
+    if (root.maximum <= root.minimum)
+      return 0;
+    return (clamped(v) - root.minimum) / (root.maximum - root.minimum);
+  }
+
+  function valueForX(xPos) {
+    if (track.width <= 0)
+      return root.minimum;
+    const ratio = Math.max(0, Math.min(1, (xPos - track.x) / track.width));
+    return root.minimum + ratio * (root.maximum - root.minimum);
+  }
+
+  function setFromX(xPos) {
+    const next = snapped(valueForX(xPos));
+    if (next === root.value)
+      return;
+    root.value = next;
+    root.userChanged(next);
+  }
+
+  Rectangle {
+    id: track
+
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.leftMargin: root.handleSize / 2
+    anchors.rightMargin: root.handleSize / 2
+    anchors.verticalCenter: parent.verticalCenter
+    height: root.trackThickness
+    radius: height / 2
+    color: root.trackColor
+  }
+
+  Rectangle {
+    anchors.left: track.left
+    anchors.verticalCenter: track.verticalCenter
+    width: track.width * root.ratioFor(root.value)
+    height: track.height
+    radius: height / 2
+    color: root.fillColor
+  }
+
+  Repeater {
+    id: tickRepeater
+
+    model: Math.max(0, root.steps)
+
+    delegate: Rectangle {
+      required property int index
+
+      readonly property real tickRatio: tickRepeater.count <= 1 ? 0 : index / (tickRepeater.count - 1)
+      readonly property real activeRatio: root.ratioFor(root.value)
+      width: 2
+      height: 2
+      radius: width / 2
+      color: tickRatio <= activeRatio ? root.tickColor : root.tickInactiveColor
+      y: track.y + (track.height - height) / 2
+      x: track.x + tickRatio * track.width - width / 2
+      opacity: 0.85
+    }
+  }
+
+  Rectangle {
+    id: handle
+
+    width: root.dragging ? root.pillWidthPressed : root.pillWidthIdle
+    height: root.dragging ? root.pillHeightPressed : root.pillHeightIdle
+    radius: width / 2
+    color: root.handleColor
+    x: track.x + root.ratioFor(root.value) * track.width - width / 2
+    y: (root.height - height) / 2
+
+    layer.enabled: true
+    layer.smooth: true
+
+    Rectangle {
+      anchors.centerIn: parent
+      width: parent.width + 10
+      height: width
+      radius: width / 2
+      color: Qt.alpha(root.handleColor, root.dragging ? 0.2 : (root.hovered ? 0.12 : 0))
+
+      Behavior on color {
+        ColorAnimation {
+          duration: Common.Config.motion.duration.shortMs
+          easing.type: Common.Config.motion.easing.standard
+        }
+      }
+    }
+
+    Behavior on x {
+      enabled: !root.dragging
+      NumberAnimation {
+        duration: Common.Config.motion.duration.shortMs
+        easing.type: Common.Config.motion.easing.standard
+      }
+    }
+    Behavior on width {
+      NumberAnimation {
+        duration: Common.Config.motion.duration.shortMs
+        easing.type: Common.Config.motion.easing.standard
+      }
+    }
+    Behavior on height {
+      NumberAnimation {
+        duration: Common.Config.motion.duration.shortMs
+        easing.type: Common.Config.motion.easing.standard
+      }
+    }
+  }
+
+  MouseArea {
+    id: mouseArea
+
+    anchors.fill: parent
+    acceptedButtons: Qt.LeftButton
+    cursorShape: Qt.PointingHandCursor
+    enabled: root.enabled
+    hoverEnabled: true
+
+    onPressed: function(mouse) {
+      root.setFromX(mouse.x);
+    }
+
+    onPositionChanged: function(mouse) {
+      if (!pressed)
+        return;
+      root.setFromX(mouse.x);
+    }
+
+    onReleased: {
+      root.dragEnded(root.value);
+    }
+  }
+}

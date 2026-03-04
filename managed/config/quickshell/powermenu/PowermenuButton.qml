@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
-import "../common/materialkit" as MK
+import "./materialkit" as MK
 import "common" as Common
 
-MK.Pane {
+MK.ElevationRectangle {
     id: button
 
     property color accent: Common.Config.color.error
@@ -22,7 +22,7 @@ MK.Pane {
     signal hoverExited(string actionName)
 
     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-    backgroundColor: "transparent"
+    color: "transparent"
     height: 54
     implicitHeight: height
     implicitWidth: width

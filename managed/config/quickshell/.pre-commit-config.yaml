@@ -15,6 +15,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+
       - id: qmllint
         name: qmllint (qt6, fix all qml)
         entry: bash -lc 'managed/config/quickshell/tools/qmllint.sh --fix $(find . -name "*.qml")'

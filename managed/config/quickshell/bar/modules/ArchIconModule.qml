@@ -26,20 +26,10 @@ ModuleContainer {
         }
     ]
 
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-        onClicked: function (mouse) {
-            if (mouse.button === Qt.RightButton) {
-                Quickshell.execDetached([
-                    Quickshell.shellPath("qs"),
-                    "--standalone",
-                    "powermenu"
-                ]);
-            } else {
-                GlobalState.toggleLeftPanel(root.QsWindow.window ? root.QsWindow.window.screen : null);
-            }
-        }
-    }
+    onClicked: GlobalState.toggleLeftPanel(root.QsWindow.window ? root.QsWindow.window.screen : null)
+    onRightClicked: Quickshell.execDetached([
+            "quickshell",
+            "--path",
+            Quickshell.shellPath("powermenu")
+        ])
 }

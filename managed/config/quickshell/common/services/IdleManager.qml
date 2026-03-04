@@ -10,6 +10,7 @@ Scope {
     property bool enabled: true
     // Honor IdleInhibitor instances (e.g. bar idle inhibit toggle).
     property bool respectInhibitors: true
+    readonly property bool sleepInhibited: Common.GlobalState.idleSleepInhibited
 
     // Display power management.
     property bool monitorSleepEnabled: true
@@ -71,8 +72,26 @@ Scope {
         root.run(root.suspendCommand);
     }
 
+    onSleepInhibitedChanged: {
+        if (sleepInhibited)
+            root.wake();
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: root.enabled && Common.GlobalState.idleSleepInhibited && Common.GlobalState.idleSleepInhibitUntilMs > 0
+
+        onTriggered: {
+            if (Date.now() >= Common.GlobalState.idleSleepInhibitUntilMs) {
+                Common.GlobalState.clearSleepInhibit();
+                root.wake();
+            }
+        }
+    }
+
     IdleMonitor {
-        enabled: root.enabled && root.monitorSleepEnabled && root.monitorSleepTimeoutSec > 0
+        enabled: root.enabled && !root.sleepInhibited && root.monitorSleepEnabled && root.monitorSleepTimeoutSec > 0
         respectInhibitors: root.respectInhibitors
         timeout: root.monitorSleepTimeoutSec
 
@@ -85,7 +104,7 @@ Scope {
     }
 
     IdleMonitor {
-        enabled: root.enabled && root.suspendEnabled && root.dpmsOff && root.suspendTimeoutSec > 0
+        enabled: root.enabled && !root.sleepInhibited && root.suspendEnabled && root.dpmsOff && root.suspendTimeoutSec > 0
         respectInhibitors: root.respectInhibitors
         timeout: root.suspendTimeoutSec
 

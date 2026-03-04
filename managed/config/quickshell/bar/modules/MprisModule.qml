@@ -175,12 +175,8 @@ ModuleContainer {
 
     function updateLyricsModel() {
         if (!root.tooltipActive) {
-            root.lyricsModel = [];
-            root.activeLyricsLines = [];
-            root.activeLyricsSynced = false;
-            root.activeLyricsSource = "";
-            root._lastLyricIndex = -2;
-            root.currentLyricIndex = -1;
+            // Preserve current lyric content while the popup fades out.
+            // Clearing immediately causes a brief "Loading lyrics..." flash on close.
             return;
         }
 

@@ -17,4 +17,5 @@ ElevationRectangle 1.0 ElevationRectangle.qml
 CircleProgressShape 1.0 CircleProgressShape.qml
 CircleProgressBar 1.0 CircleProgressBar.qml
 SplitLinearSlider 1.0 SplitLinearSlider.qml
+DiscreteSlider 1.0 DiscreteSlider.qml
 HybridRipple 1.0 HybridRipple.qml
