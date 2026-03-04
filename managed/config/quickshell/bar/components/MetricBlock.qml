@@ -33,6 +33,26 @@ Rectangle {
     implicitWidth: contentLayout.implicitWidth + root.padding * 2
     radius: Math.max(Config.shape.corner.sm, Config.tooltipRadius - Config.space.xs)
 
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        color: "transparent"
+        height: Math.round(root.padding * 1.6)
+        radius: root.radius
+
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Qt.alpha(Config.color.on_surface, 0.07)
+            }
+            GradientStop {
+                position: 1
+                color: "transparent"
+            }
+        }
+    }
+
     ColumnLayout {
         id: contentLayout
 

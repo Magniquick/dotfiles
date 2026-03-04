@@ -1,6 +1,7 @@
 import ".."
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
@@ -167,9 +168,9 @@ Item {
             }
             implicitWidth: layout.implicitWidth + Config.tooltipPadding * 2
             opacity: popup.reveal
-            scale: 0.96 + (0.04 * popup.reveal)
+            scale: 0.95 + (0.05 * popup.reveal)
             transformOrigin: Item.Top
-            y: Config.motion.distance.medium * (1 - popup.reveal)
+            y: Config.motion.distance.large * (1 - popup.reveal)
 
             Rectangle {
                 id: panel
@@ -179,6 +180,16 @@ Item {
                 clip: true
                 color: Config.barPopupSurface
                 radius: Config.tooltipRadius
+                layer.enabled: popup.visible
+                // qmllint disable unqualified
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowBlur: 0.35
+                    shadowColor: Qt.alpha(Config.color.shadow, 0.35)
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 3
+                }
+                // qmllint enable unqualified
             }
             Rectangle {
                 id: panelBorder
@@ -201,6 +212,15 @@ Item {
                 height: headerRow.visible ? (headerRow.implicitHeight + Config.tooltipPadding) : 0
                 radius: Config.tooltipRadius
             }
+            Rectangle {
+                anchors.left: panel.left
+                anchors.right: panel.right
+                anchors.top: panel.top
+                color: Qt.alpha(Config.color.on_surface, 0.05)
+                height: headerRow.visible ? Math.round(headerRow.implicitHeight + Config.tooltipPadding * 0.8) : 0
+                radius: Config.tooltipRadius
+                visible: headerRow.visible
+            }
             ColumnLayout {
                 id: layout
 
@@ -212,7 +232,8 @@ Item {
                     id: headerRow
 
                     spacing: Config.space.sm
-                    visible: root.title !== "" || root.pinnable
+                    // Global no-op for module popup title header ("Bluetooth", etc).
+                    visible: false
 
                     Rectangle {
                         id: pulse
