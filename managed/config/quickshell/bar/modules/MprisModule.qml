@@ -70,7 +70,7 @@ import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
 import Qcm.Material as MD
-import spotifylyrics 1.0
+import unifiedlyrics 1.0
 import "file:/home/magni/.config/quickshell/common/modules/QmlMaterial/qml/component/slider" as QMSlider
 
 ModuleContainer {
@@ -89,6 +89,10 @@ ModuleContainer {
     property int currentLyricIndex: -1
     property double _lyricsManualUntilMs: 0
     property string _lyricsTrackRef: ""
+    property string _lyricsLookupKey: ""
+    property var activeLyricsLines: []
+    property bool activeLyricsSynced: false
+    property string activeLyricsSource: ""
     readonly property string lyricsEnvFile: Config.envFile
     readonly property string displaySubtitle: {
         if (root.trackArtist !== "" && root.trackAlbum !== "")
@@ -133,45 +137,71 @@ ModuleContainer {
         return root.clampNumber(base + delta, 0, Math.max(0, length));
     }
 
+    function buildLyricsLookupKey(spotifyRef) {
+        const track = root.trackTitle ? String(root.trackTitle).trim() : "";
+        const artist = root.trackArtist ? String(root.trackArtist).trim() : "";
+        const album = root.trackAlbum ? String(root.trackAlbum).trim() : "";
+        const duration = root.lengthSeconds(root.activePlayer);
+        return [spotifyRef || "", track, artist, album, String(duration)].join("\u001F");
+    }
+
+    function chooseLyricsSource() {
+        const lines = lyricsClient.lines || [];
+        if (!lyricsClient.loaded || lines.length === 0)
+            return { source: "", synced: false, lines: [] };
+
+        return {
+            source: lyricsClient.source || "",
+            synced: lyricsClient.syncType === "LINE_SYNCED",
+            lines: lines
+        };
+    }
+
     function updateLyricsModel() {
         if (!root.tooltipActive) {
             root.lyricsModel = [];
+            root.activeLyricsLines = [];
+            root.activeLyricsSynced = false;
+            root.activeLyricsSource = "";
             root._lastLyricIndex = -2;
             root.currentLyricIndex = -1;
             return;
         }
 
         if (!root.activePlayer || !root.hasTrack) {
+            root.activeLyricsLines = [];
+            root.activeLyricsSynced = false;
+            root.activeLyricsSource = "";
             root.lyricsModel = [{ text: "♪", isCurrent: true }];
             root.currentLyricIndex = -1;
             return;
         }
 
-        const trackRef = root.spotifyLyricsTrackRef(root.activePlayer);
-        if (!trackRef) {
-            root.lyricsModel = [{ text: "♪ Lyrics unavailable ♪", isCurrent: true }];
+        const selected = root.chooseLyricsSource();
+        root.activeLyricsLines = selected.lines;
+        root.activeLyricsSynced = selected.synced;
+        root.activeLyricsSource = selected.source;
+        if (!selected.lines || selected.lines.length === 0) {
+            const spotifyRef = root.spotifyLyricsTrackRef(root.activePlayer);
+            const loading = lyricsClient.busy;
+            if (!loading && spotifyRef === "" && root._lyricsLookupKey === "")
+                root.lyricsModel = [{ text: "♪ Lyrics unavailable ♪", isCurrent: true }];
+            else if (!loading && lyricsClient.error !== "")
+                root.lyricsModel = [{ text: "Lyrics unavailable", isCurrent: true }];
+            else
+                root.lyricsModel = [{ text: loading ? "Loading lyrics..." : "♪ No lyrics available ♪", isCurrent: true }];
             root.currentLyricIndex = -1;
             return;
         }
 
-        if (lyricsClient.error && lyricsClient.error !== "") {
-            root.lyricsModel = [{ text: "Lyrics error: " + lyricsClient.error, isCurrent: true }];
+        if (!selected.synced) {
             root.currentLyricIndex = -1;
+            root._lastLyricIndex = -2;
+            root.lyricsModel = [];
             return;
         }
 
-        if (!lyricsClient.loaded) {
-            root.lyricsModel = [{ text: lyricsClient.busy ? "Loading lyrics..." : "♪ No lyrics available ♪", isCurrent: true }];
-            root.currentLyricIndex = -1;
-            return;
-        }
-
-        const lines = lyricsClient.lines;
-        if (!lines || lines.length === 0) {
-            root.lyricsModel = [{ text: "♪ No lyrics available ♪", isCurrent: true }];
-            root.currentLyricIndex = -1;
-            return;
-        }
+        const lines = selected.lines;
 
         // Use millisecond-resolution position to avoid "whole-second" lag.
         const player = root.activePlayer;
@@ -255,23 +285,22 @@ ModuleContainer {
             return;
 
         const ref = root.spotifyLyricsTrackRef(root.activePlayer);
-        if (!ref) {
-            root._lyricsTrackRef = "";
-            root.updateLyricsModel();
-            return;
+        const lookupKey = root.buildLyricsLookupKey(ref);
+        const track = root.trackTitle ? String(root.trackTitle).trim() : "";
+        const artist = root.trackArtist ? String(root.trackArtist).trim() : "";
+        const album = root.trackAlbum ? String(root.trackAlbum).trim() : "";
+        const duration = root.lengthSeconds(root.activePlayer);
+
+        if (lookupKey !== root._lyricsLookupKey || (!lyricsClient.loaded && !lyricsClient.busy)) {
+            root._lyricsLookupKey = lookupKey;
+            root._lyricsTrackRef = ref;
+            lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, duration);
         }
 
-        if (ref === root._lyricsTrackRef && (lyricsClient.loaded || lyricsClient.busy)) {
-            root.updateLyricsModel();
-            return;
-        }
-
-        root._lyricsTrackRef = ref;
-        lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref);
         root.updateLyricsModel();
     }
 
-    SpotifyLyricsClient {
+    UnifiedLyricsClient {
         id: lyricsClient
     }
 
@@ -474,6 +503,8 @@ ModuleContainer {
         root._pendingSeekUntilMs = 0;
         root._syncPositionBase();
         root._lastLyricIndex = -2;
+        root._lyricsTrackRef = "";
+        root._lyricsLookupKey = "";
         root.scheduleLyricsRefresh();
     }
     onDisplayPositionSecondsChanged: root.updateLyricsModel()
@@ -854,7 +885,7 @@ ModuleContainer {
                     anchors.fill: parent
                     anchors.margins: Config.space.md
 
-                    readonly property bool lyricsLoaded: lyricsClient.loaded && lyricsClient.lines && lyricsClient.lines.length > 0
+                    readonly property bool lyricsLoaded: root.activeLyricsLines && root.activeLyricsLines.length > 0
 
                     // Placeholder / error / loading text
                     Text {
@@ -880,7 +911,7 @@ ModuleContainer {
                         clip: true
                         visible: parent.lyricsLoaded
 
-                        model: lyricsClient.lines
+                        model: root.activeLyricsLines
                         spacing: Config.space.xs
                         interactive: true
 
@@ -981,9 +1012,8 @@ ModuleContainer {
                         }
 
                         Connections {
-                            target: lyricsClient
-                            function onLoadedChanged() { lyricsView.followCurrent(); }
-                            function onLinesChanged() { lyricsView.followCurrent(); }
+                            target: root
+                            function onActiveLyricsLinesChanged() { lyricsView.followCurrent(); }
                         }
                     }
                 }

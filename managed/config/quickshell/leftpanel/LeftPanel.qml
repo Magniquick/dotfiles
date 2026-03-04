@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import "../common" as Common
 import "./services" as Services
 import "./views" as Views
-import qsnative
+import qsgo
 
 Item {
     id: root
@@ -26,6 +26,9 @@ Item {
     readonly property string openaiApiKey: envLoader.openaiApiKey
     readonly property string geminiApiKey: envLoader.geminiApiKey
     property string modelId: envLoader.modelId
+
+    readonly property color _linkColor: Common.Config.color.primary
+    on_LinkColorChanged: chatSession.setAppLinkColor(_linkColor)
 
     readonly property string currentProvider: modelId.startsWith("gemini") ? "gemini" : "openai"
     readonly property string activeApiKey: currentProvider === "gemini" ? geminiApiKey : openaiApiKey

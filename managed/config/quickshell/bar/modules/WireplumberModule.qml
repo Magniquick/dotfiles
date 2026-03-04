@@ -10,18 +10,15 @@
  *
  * Dependencies:
  * - Quickshell.Services.Pipewire: Audio sink control
- * - wpctl: Volume adjustment commands
  */
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import Qcm.Material as MD
 import ".."
 import "../components"
-import "../../common" as Common
 
 ModuleContainer {
     id: root
@@ -39,14 +36,12 @@ ModuleContainer {
     property bool muted: false
     property string micMutedIcon: ""
     property string mutedIcon: ""
-    property string onScrollDownCommand: "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%-"
-    property string onScrollUpCommand: "wpctl set-volume -l 2 @DEFAULT_AUDIO_SINK@ 1%+"
     readonly property int legacyPanelWidth: 240
     readonly property int panelWidth: 272
     readonly property bool pipewireReady: root.sink ? root.sink.ready : false
     readonly property var allAudioNodes: root.pipewireGloballyReady ? Pipewire.nodes : []
     readonly property var appStreams: root.collectAppStreams(root.allAudioNodes)
-    readonly property var appEntries: root.buildAppEntries(root.appStreams, root.wpctlAppStreams)
+    readonly property var appEntries: root.buildAppEntries(root.appStreams)
     readonly property bool hasAppSection: root.appEntries.length > 0
     readonly property bool hasAudioSections: root.hasInputSection || root.hasOutputSection || root.hasAppSection || root.showVirtualIoToggle
     readonly property bool hasInputSection: root.inputDevices.length > 0
@@ -66,19 +61,15 @@ ModuleContainer {
     property bool volumeAvailable: false
     property int volumePercent: 0
     property real volumeStep: 0.01
-    property var wpctlAppStreams: []
 
     function activeColor() {
         return (root.muted || root.volumePercent > 100) ? Config.color.error : Config.color.secondary;
     }
     function adjustVolume(delta) {
-        if (root.sinkAudio) {
-            const next = Math.max(0, Math.min(root.maxVolume, root.sinkAudio.volume + delta));
-            root.sinkAudio.volume = next;
+        if (!root.sinkAudio)
             return;
-        }
-        const command = delta > 0 ? root.onScrollUpCommand : root.onScrollDownCommand;
-        Common.ProcessHelper.execDetached(command);
+        const next = Math.max(0, Math.min(root.maxVolume, root.sinkAudio.volume + delta));
+        root.sinkAudio.volume = next;
     }
     function averageVolume(values) {
         let sum = 0;
@@ -94,13 +85,9 @@ ModuleContainer {
     function assignNodeVolume(node, value, maxVolume) {
         const max = isFinite(maxVolume) ? maxVolume : root.nodeMaxVolume(node);
         const next = Math.max(0, Math.min(max, value));
-        if (node && node.audio) {
-            node.audio.volume = next;
+        if (!node || !node.audio)
             return;
-        }
-        const id = root.nodeId(node);
-        if (id >= 0)
-            Quickshell.execDetached(["wpctl", "set-volume", "-l", String(max), String(id), Math.round(next * 100) + "%"]);
+        node.audio.volume = next;
     }
     function adjustNodeVolumeByStep(node, directionY) {
         if (!node)
@@ -110,13 +97,9 @@ ModuleContainer {
         const delta = directionY > 0 ? step : (directionY < 0 ? -step : 0);
         if (delta === 0)
             return;
-        if (node.audio) {
-            root.assignNodeVolume(node, node.audio.volume + delta, max);
+        if (!node.audio)
             return;
-        }
-        const id = root.nodeId(node);
-        if (id >= 0)
-            Quickshell.execDetached(["wpctl", "set-volume", String(id), delta > 0 ? "1%+" : "1%-"]);
+        root.assignNodeVolume(node, node.audio.volume + delta, max);
     }
     function adjustAppEntryVolumeByStep(entry, directionY) {
         if (!entry)
@@ -136,41 +119,22 @@ ModuleContainer {
         const clamped = Math.max(0, Math.min(max, v));
         return Math.round(clamped * 100).toString();
     }
-    function buildAppEntries(nativeStreams, fallbackStreams) {
+    function buildAppEntries(nativeStreams) {
         const entries = [];
-        const source = nativeStreams.length > 0 ? nativeStreams : fallbackStreams;
-        const mode = nativeStreams.length > 0 ? "native" : "wpctl";
-        for (let i = 0; i < source.length; i++) {
-            const item = source[i];
+        for (let i = 0; i < nativeStreams.length; i++) {
+            const item = nativeStreams[i];
             if (!item)
                 continue;
-            if (mode === "native") {
-                const rawPid = item.properties ? item.properties["application.process.id"] : undefined;
-                entries.push({
-                    mode: "native",
-                    node: item,
-                    id: root.nodeId(item),
-                    label: root.nodeLabel(item, "Unknown App"),
-                    muted: !!(item.audio && item.audio.muted),
-                    volume: item.audio ? item.audio.volume : 0,
-                    enabled: !!item.audio,
-                    pid: rawPid !== undefined ? Number(rawPid) : -1
-                });
-            } else {
-                const fallbackId = Number(item.id);
-                const fallbackName = String(item.name || "Unknown App");
-                if (!root.showVirtualIo && root.isVirtualIoLabel(fallbackName))
-                    continue;
-                entries.push({
-                    mode: "wpctl",
-                    node: null,
-                    id: isFinite(fallbackId) ? fallbackId : -1,
-                    label: fallbackName,
-                    muted: !!item.muted,
-                    volume: isFinite(item.volume) ? item.volume : 0,
-                    enabled: isFinite(fallbackId) && fallbackId >= 0
-                });
-            }
+            const rawPid = item.properties ? item.properties["application.process.id"] : undefined;
+            entries.push({
+                node: item,
+                id: root.nodeId(item),
+                label: root.nodeLabel(item, "Unknown App"),
+                muted: !!(item.audio && item.audio.muted),
+                volume: item.audio ? item.audio.volume : 0,
+                enabled: !!item.audio,
+                pid: rawPid !== undefined ? Number(rawPid) : -1
+            });
         }
         return entries;
     }
@@ -399,19 +363,9 @@ ModuleContainer {
     }
     function setVolume(value) {
         const next = Math.max(0, Math.min(root.maxVolume, value));
-        if (root.sinkAudio && root.pipewireReady) {
-            root.sinkAudio.volume = next;
+        if (!root.sinkAudio || !root.pipewireReady)
             return;
-        }
-        const percent = Math.round(next * 100);
-        Quickshell.execDetached([
-            "wpctl",
-            "set-volume",
-            "-l",
-            String(root.maxVolume),
-            "@DEFAULT_AUDIO_SINK@",
-            percent + "%"
-        ]);
+        root.sinkAudio.volume = next;
     }
     function setPreferredInput(node) {
         if (!node)
@@ -477,38 +431,19 @@ ModuleContainer {
         return sorted;
     }
     function setAppEntryVolume(entry, value) {
-        if (!entry)
+        if (!entry || !entry.node)
             return;
-        if (entry.mode === "native") {
-            root.assignNodeVolume(entry.node, value);
-            return;
-        }
-        if (entry.id < 0)
-            return;
-        const next = Math.max(0, Math.min(root.maxVolume, value));
-        Quickshell.execDetached(["wpctl", "set-volume", "-l", String(root.maxVolume), String(entry.id), Math.round(next * 100) + "%"]);
-        wpctlStreamsRunner.trigger();
+        root.assignNodeVolume(entry.node, value);
     }
     function toggleAppEntryMute(entry) {
-        if (!entry)
+        if (!entry || !entry.node)
             return;
-        if (entry.mode === "native") {
-            root.toggleNodeMute(entry.node);
-            return;
-        }
-        if (entry.id < 0)
-            return;
-        Quickshell.execDetached(["wpctl", "set-mute", String(entry.id), "toggle"]);
-        wpctlStreamsRunner.trigger();
+        root.toggleNodeMute(entry.node);
     }
     function toggleNodeMute(node) {
-        if (node && node.audio) {
-            node.audio.muted = !node.audio.muted;
+        if (!node || !node.audio)
             return;
-        }
-        const id = root.nodeId(node);
-        if (id >= 0)
-            Quickshell.execDetached(["wpctl", "set-mute", String(id), "toggle"]);
+        node.audio.muted = !node.audio.muted;
     }
     function raiseAppEntry(entry) {
         if (!entry || !(entry.pid > 0))
@@ -516,11 +451,9 @@ ModuleContainer {
         Hyprland.dispatch("focuswindow pid:" + entry.pid);
     }
     function toggleMute() {
-        if (root.sinkAudio && root.pipewireReady) {
-            root.sinkAudio.muted = !root.sinkAudio.muted;
+        if (!root.sinkAudio || !root.pipewireReady)
             return;
-        }
-        Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]);
+        root.sinkAudio.muted = !root.sinkAudio.muted;
     }
 
     tooltipHoverable: true
@@ -729,14 +662,6 @@ ModuleContainer {
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: Config.color.outline_variant
-                opacity: 0.9
-                visible: root.hasAudioSections
-            }
-
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Config.space.xs
@@ -775,14 +700,6 @@ ModuleContainer {
                         delegate: deviceRowDelegate
                     }
                 }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: Config.color.outline_variant
-                opacity: 0.9
-                visible: root.hasOutputSection && root.hasInputSection
             }
 
             ColumnLayout {
@@ -964,7 +881,6 @@ ModuleContainer {
 
     Component.onCompleted: {
         root.refreshSink();
-        wpctlStreamsRunner.trigger();
     }
 
     PwObjectTracker {
@@ -1001,48 +917,6 @@ ModuleContainer {
 
             return objects;
         })()
-    }
-    CommandRunner {
-        id: wpctlStreamsRunner
-
-        enabled: root.tooltipActive && root.appStreams.length === 0
-        intervalMs: 2000
-        timeoutMs: 2500
-        command: [
-            "sh",
-            "-lc",
-            "wpctl status | awk 'BEGIN{in=0} /^ *└─ Streams:/{in=1;next} in&&/^ *[0-9]+\\./{line=$0; if (line ~ />/) next; gsub(/^ +/,\"\",line); id=line; sub(/\\..*/,\"\",id); name=line; sub(/^[0-9]+\\. +/,\"\",name); gsub(/ +$/, \"\", name); if (name!=\"\") print id \"\\t\" name} in&&/^Settings$/{in=0}' | while IFS=$'\\t' read -r id name; do out=$(wpctl get-volume \"$id\" 2>/dev/null || true); vol=$(printf \"%s\" \"$out\" | awk '{for(i=1;i<=NF;i++){if($i ~ /^[0-9.]+$/){print $i; exit}}}'); muted=0; printf \"%s\" \"$out\" | grep -qi \"MUTED\" && muted=1; printf \"%s\\t%s\\t%s\\t%s\\n\" \"$id\" \"$name\" \"${vol:-0}\" \"$muted\"; done"
-        ]
-
-        onRan: function(output) {
-            const lines = output ? output.split("\n") : [];
-            const streams = [];
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (line === "")
-                    continue;
-                const parts = line.split("\t");
-                if (parts.length < 4)
-                    continue;
-                const id = Number(parts[0]);
-                const name = parts[1];
-                const volume = Number(parts[2]);
-                const muted = parts[3] === "1";
-                if (!isFinite(id))
-                    continue;
-                streams.push({
-                    id: id,
-                    name: name,
-                    volume: isFinite(volume) ? volume : 0,
-                    muted: muted
-                });
-            }
-            root.wpctlAppStreams = streams;
-        }
-        onError: function(errorOutput, exitCode) {
-            root.logEvent("wpctlStreams error code=" + exitCode + " stderr=" + errorOutput);
-        }
-        onTimeout: root.logEvent("wpctlStreams timeout")
     }
     Connections {
         function onDefaultAudioSinkChanged() {

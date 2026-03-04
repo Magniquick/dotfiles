@@ -116,9 +116,9 @@ Item {
         layer.enabled: root.enabled && root.dragging
         // qmllint disable unqualified
         layer.effect: MultiEffect {
+            shadowEnabled: true
             shadowBlur: 0.7
             shadowColor: Qt.alpha(root.fillColor, 0.55)
-            shadowEnabled: true
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0
         }
@@ -165,9 +165,9 @@ Item {
         layer.enabled: root.enabled && (root.dragging || root.hovered)
         // qmllint disable unqualified
         layer.effect: MultiEffect {
+            shadowEnabled: true
             shadowBlur: root.dragging ? 0.9 : 0.35
             shadowColor: root.dragging ? Qt.alpha(root.fillColor, 0.8) : Qt.alpha(Config.color.shadow, 0.4)
-            shadowEnabled: true
             shadowHorizontalOffset: 0
             shadowVerticalOffset: root.dragging ? 0 : 2
 

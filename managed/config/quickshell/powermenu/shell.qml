@@ -7,6 +7,7 @@ ShellRoot {
     id: root
 
     readonly property var colors: Common.Config.color
+    readonly property string lockscreenLauncher: Quickshell.shellPath("../tools/launch-lockscreen.sh")
     property string powermenuHover: ""
     property string powermenuSelection: ""
     property bool powermenuVisible: true
@@ -36,7 +37,7 @@ ShellRoot {
         else if (action === "Hibernate")
             cmd = ["systemctl", "hibernate"];
         else if (action === "Exit")
-            cmd = ["loginctl", "lock-session"];
+            cmd = [root.lockscreenLauncher];
         else if (action === "Windows")
             cmd = ["systemctl", "reboot", "--boot-loader-entry=auto-windows"];
 

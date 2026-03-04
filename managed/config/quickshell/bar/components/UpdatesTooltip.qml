@@ -10,17 +10,27 @@ ColumnLayout {
     property string actionText: ""
     property int count: 0
     readonly property int displayCount: root.count > 0 ? root.count : root.updatesCount
+    property int detailsCount: 0
+    property string errorText: ""
     property bool hasUpdates: false
     property string iconText: ""
     property bool refreshing: false
     readonly property var updateColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary]
-    property var updates: []
-    readonly property int updatesCount: Array.isArray(root.updates) ? root.updates.length : 0
+    property var updatesModel: null
+    readonly property int updatesCount: root.detailsCount > 0 ? root.detailsCount : 0
 
     signal actionRequested
 
     function getUpdateColor(index) {
-        return root.updateColors[index % root.updateColors.length];
+        // In Bound delegates (and during model resets), `index` can be undefined
+        // briefly. Returning a concrete color avoids "Unable to assign [undefined]
+        // to QColor" warnings.
+        const i = Number(index);
+        if (!Number.isFinite(i))
+            return Config.color.primary;
+        if (root.updateColors.length === 0)
+            return Config.color.primary;
+        return root.updateColors[i % root.updateColors.length] ?? Config.color.primary;
     }
 
     Layout.fillWidth: true
@@ -78,13 +88,21 @@ ColumnLayout {
     }
     TooltipCard {
         backgroundColor: Config.color.on_secondary_fixed_variant
-        borderColor: Config.barModuleBorderColor
+        borderColor: Config.color.outline_variant
         outlined: true
         content: [
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Config.space.sm
 
+                Text {
+                    color: Config.color.error
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.bodySmall.size
+                    text: root.errorText
+                    visible: root.errorText !== ""
+                    wrapMode: Text.Wrap
+                }
                 Text {
                     color: Config.color.on_surface_variant
                     font.family: Config.fontFamily
@@ -112,13 +130,17 @@ ColumnLayout {
                         width: listFlick.width
 
                         Repeater {
-                            model: root.updates
+                            model: root.updatesModel
 
                             delegate: RowLayout {
                                 id: updateRow
                                 required property int index
-                                required property var modelData
-                                property color rowColor: root.getUpdateColor(updateRow.index)
+                                // Explicit role bindings are required in `ComponentBehavior: Bound` delegates.
+                                required property string name
+                                required property string old_version
+                                required property string new_version
+                                readonly property string detail: old_version + "  →  " + new_version
+                                property color rowColor: root.getUpdateColor(index)
                                 readonly property int stripeWidth: Config.spaceHalfXs
 
                                 spacing: Config.space.md
@@ -146,7 +168,7 @@ ColumnLayout {
                                         font.family: Config.fontFamily
                                         font.pixelSize: Config.type.bodyMedium.size
                                         font.weight: Font.Medium
-                                        text: updateRow.modelData && updateRow.modelData.name ? String(updateRow.modelData.name) : ""
+                                        text: updateRow.name
                                     }
                                     Text {
                                         Layout.fillWidth: true
@@ -155,7 +177,7 @@ ColumnLayout {
                                         elide: Text.ElideRight
                                         font.family: Config.iconFontFamily
                                         font.pixelSize: Config.type.labelSmall.size
-                                        text: updateRow.modelData && updateRow.modelData.detail ? String(updateRow.modelData.detail) : ""
+                                        text: updateRow.detail
                                         visible: text !== ""
                                         wrapMode: Text.NoWrap
                                     }

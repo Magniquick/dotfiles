@@ -10,7 +10,6 @@ Singleton {
   id: root
 
   property bool debugLogging: false
-  property bool enableEventRefresh: true
   property int eventDebounceMs: 750
 
   property string lastRefreshedLabel: ""
@@ -143,8 +142,8 @@ Singleton {
     command: "systemctl --failed --no-legend --plain --no-pager"
     intervalMs: 0
 
-    onOutputChanged: {
-      root.systemFailedUnits = root.parseFailedUnits(output)
+    onRan: function(commandOutput) {
+      root.systemFailedUnits = root.parseFailedUnits(commandOutput)
       root.systemFailedCount = root.systemFailedUnits.length
       root.lastRefreshedLabel = Qt.formatDateTime(new Date(), "hh:mm ap")
       root.logEvent("systemRunner output=" + root.systemFailedCount)
@@ -157,8 +156,8 @@ Singleton {
     command: "systemctl --user --failed --no-legend --plain --no-pager"
     intervalMs: 0
 
-    onOutputChanged: {
-      root.userFailedUnits = root.parseFailedUnits(output)
+    onRan: function(commandOutput) {
+      root.userFailedUnits = root.parseFailedUnits(commandOutput)
       root.userFailedCount = root.userFailedUnits.length
       root.lastRefreshedLabel = Qt.formatDateTime(new Date(), "hh:mm ap")
       root.logEvent("userRunner output=" + root.userFailedCount)
@@ -169,7 +168,7 @@ Singleton {
     id: systemMonitor
 
     command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-    enabled: root.enableEventRefresh
+    enabled: true
 
     onOutput: data => root.handleMonitorLine("system", data)
   }
@@ -178,7 +177,7 @@ Singleton {
     id: systemPropsMonitor
 
     command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-    enabled: root.enableEventRefresh
+    enabled: true
 
     onOutput: data => root.handlePropsMonitorLine("system", data)
   }
@@ -187,7 +186,7 @@ Singleton {
     id: userMonitor
 
     command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
-    enabled: root.enableEventRefresh
+    enabled: true
 
     onOutput: data => root.handleMonitorLine("user", data)
   }
@@ -196,7 +195,7 @@ Singleton {
     id: userPropsMonitor
 
     command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
-    enabled: root.enableEventRefresh
+    enabled: true
 
     onOutput: data => root.handlePropsMonitorLine("user", data)
   }

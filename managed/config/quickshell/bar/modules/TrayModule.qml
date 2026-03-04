@@ -289,7 +289,7 @@ ModuleContainer {
                                     anchors.margins: Config.barModuleBorderWidth
                                     anchors.fill: parent
                                     antialiasing: true
-                                    border.color: Config.barModuleBorderColor
+                                    border.color: Config.color.outline_variant
                                     border.width: Config.barModuleBorderWidth
                                     color: Config.barModuleBackground
                                     focus: true

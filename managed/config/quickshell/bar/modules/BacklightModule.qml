@@ -4,14 +4,14 @@
  *
  * Features:
  * - Per-screen control (each bar instance controls its own `screen`)
- * - Internal backlight via `qsnative.BacklightProvider` (sysfs + udev, no polling)
+ * - Internal backlight via `qsgo.BacklightProvider` (sysfs + udev, no polling)
  * - External monitors via DDC/CI using `ddcutil` (if installed and detected)
  * - Interactive slider control (1-100%)
  * - Quick preset buttons (20%, 50%, 80%, 100%)
  * - Mouse wheel adjustment support
  *
  * Dependencies:
- * - Internal: `qsnative` module (BacklightProvider) + permission to write `/sys/class/backlight/<device>/brightness`
+ * - Internal: `qsgo` module (BacklightProvider) + permission to write `/sys/class/backlight/<device>/brightness`
  * - External (optional): `ddcutil`
  *
  * Configuration:
@@ -27,6 +27,7 @@ import QtQuick.Layouts
 import Quickshell
 import ".."
 import "../components"
+import "../components/displayconfig" as DisplayConfig
 
 ModuleContainer {
     id: root
@@ -46,6 +47,8 @@ ModuleContainer {
     readonly property string iconText: root.iconForBrightness()
     property var icons: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "󰃚"]
     readonly property int sliderValue: root.brightnessPercent >= 0 ? root.brightnessPercent : 0
+    readonly property bool isHyprlandSession: (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "") !== ""
+    property bool displayConfigOpen: false
     function iconForBrightness() {
         const percent = root.brightnessPercent;
         if (percent < 0)
@@ -60,7 +63,6 @@ ModuleContainer {
         const next = Math.max(1, Math.min(100, percent));
         root.brightnessMonitor.setBrightness(next / 100.0);
     }
-
     tooltipHoverable: true
     tooltipText: ""
     tooltipTitle: "Brightness"
@@ -157,7 +159,23 @@ ModuleContainer {
                     onClicked: root.setBrightness(100)
                 }
             }
+            TooltipActionsRow {
+                spacing: Config.space.sm
+                visible: root.isHyprlandSession
+
+                ActionChip {
+                    Layout.fillWidth: true
+                    text: "Display Config"
+                    onClicked: root.displayConfigOpen = true
+                }
+            }
         }
+    }
+
+    DisplayConfig.DisplayConfigWindow {
+        open: root.displayConfigOpen
+        targetItem: root
+        onOpenChanged: root.displayConfigOpen = open
     }
 
     MouseArea {
@@ -168,9 +186,9 @@ ModuleContainer {
                 return;
             const step = 1;
             if (wheel.angleDelta.y > 0)
-                root.setBrightness(root.brightnessPercent + step);
-            else if (wheel.angleDelta.y < 0)
                 root.setBrightness(root.brightnessPercent - step);
+            else if (wheel.angleDelta.y < 0)
+                root.setBrightness(root.brightnessPercent + step);
         }
     }
 }

@@ -8,7 +8,7 @@ Rectangle {
     property color accentColor: Config.color.primary
     property color backgroundColor: Config.color.on_secondary_fixed_variant
     property int barHeight: Math.max(1, Config.space.xs)
-    property color borderColor: Config.barModuleBorderColor
+    property color borderColor: Config.color.outline_variant
     property int borderWidth: Config.tooltipBorderWidth
     property color chipColor: Config.color.surface_variant
     property string chipText: ""
@@ -32,26 +32,6 @@ Rectangle {
     implicitHeight: contentLayout.implicitHeight + root.padding * 2 + (root.showFill ? root.barHeight + root.gutter : 0)
     implicitWidth: contentLayout.implicitWidth + root.padding * 2
     radius: Math.max(Config.shape.corner.sm, Config.tooltipRadius - Config.space.xs)
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        color: "transparent"
-        height: Math.round(root.padding * 1.6)
-        radius: root.radius
-
-        gradient: Gradient {
-            GradientStop {
-                position: 0
-                color: Qt.alpha(Config.color.on_surface, 0.07)
-            }
-            GradientStop {
-                position: 1
-                color: "transparent"
-            }
-        }
-    }
 
     ColumnLayout {
         id: contentLayout

@@ -3,6 +3,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
+
 - Entry point: `shell.qml` loads `BarWindow.qml` per screen; powermenu lives under `powermenu/` with `shell.qml` → `Powermenu.qml`.
 - Core UI pieces:
   - `components/` (shared building blocks like `ModuleContainer.qml`, `TooltipPopup.qml`, `CommandRunner.qml`, `ActionChip.qml`, `JsonUtils.js`).
@@ -18,18 +19,19 @@
   - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
 - Runtime data sources/services:
   - Brightness:
-    - Internal panel: `qsnative.BacklightProvider` (sysfs + udev, no polling)
+    - Internal panel: `qsgo.BacklightProvider` (sysfs + udev, no polling)
     - External monitors: `ddcutil` via `bar/services/BrightnessService.qml`
   - MPRIS via `Quickshell.Services.Mpris` (ignore `playerctld`).
   - Notifications: `swaync-client -swb`.
   - Systemd failed units: `systemctl --failed` plus `busctl monitor`.
   - Tray: `Quickshell.Services.SystemTray` (right-click opens menu).
   - Arch icon: `waybar/scripts/status.sh` on tooltip hover.
-  - Updates: `qsnative` PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API).
+  - Updates: `qsgo` PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API).
   - Privacy: `pw-dump` + `fuser /dev/video*` for camera on udev video4linux.
   - Network: `nmcli` status/wifi; wired uses `/sys/class/net/<dev>/device/subsystem` to detect USB and `udevadm info` for a human-friendly USB NIC label (underscores → spaces).
 
 ## UI / Design Notes
+
 - Catppuccin-inspired, but aim for intentional, bold layouts; avoid default system fonts—set explicit families in `Config`.
 - Use clear color direction (no purple-by-default bias); prefer gradients/patterns over flat fills when adding backgrounds.
 - Keep animations meaningful (open/close reveals, tooltip fades); avoid noisy micro-motions.
@@ -38,10 +40,12 @@
 - Use `Config.color` / `Config.palette` so modules stay aligned with the shared palette.
 
 ## Build, Test, and Development Commands
+
 - Run bar locally: `quickshell -c bar` (or `qs` here). Powermenu: `quickshell` (or `qs`) from repo root to load `powermenu/shell.qml`.
 - Manual reload: restart `quickshell` after QML changes. No automated tests.
 
 ## Coding Style & Naming Conventions
+
 - QML/JS: 2-space indentation, concise handlers, readable signal scopes.
 - Naming: QML types/IDs `CamelCase`; properties/functions `lowerCamelCase`; constants `UPPER_SNAKE`.
 - Keep powermenu names explicit (e.g., `powermenuVisible`); prefer small, focused components.
@@ -49,8 +53,10 @@
 - Avoid deprecated parameter injection in signal handlers; use `function(args)` handlers.
 
 ## Error Handling Patterns
+
 - **Dependency checking**: Use `DependencyCheck.require(cmd, module, callback)` for PATH commands, `DependencyCheck.requireExecutable(path, module, callback)` for scripts. Sends `notify-send` alert if missing.
-- **CommandRunner**: Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()` signals. Stderr captured in `errorOutput` property.
+- **CommandRunner**: Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()` and `onRan(output)` signals. Stderr captured in `errorOutput` property.
+- **CommandRunner result handling**: Treat `output` as last-successful data; parse results in `onRan(output)`. Do not drive state from `onOutputChanged`.
 - **Process crash recovery**: Long-running monitors use exponential backoff restart:
   - Properties: `monitorRestartAttempts`, `monitorDegraded`
   - Timers: `monitorRestartTimer` (backoff), `monitorBackoffResetTimer` (60s stability reset)
@@ -58,6 +64,7 @@
   - Modules with crash recovery: NetworkModule, NotificationModule, BacklightModule, SystemdFailedModule
 
 ## Testing Guidelines
+
 - Manual checks:
   - `Esc`/`q` close powermenu and it quits on dismiss.
   - Buttons trigger expected system actions.
@@ -66,9 +73,11 @@
   - Network tooltip shows USB NIC model + USB icon when subsystem is `usb`; polling resumes only while tooltip is open.
 
 ## Commit & Pull Request Guidelines
+
 - Commits: short, imperative subjects (e.g., `Tighten esc shortcut`).
 - PRs: describe behavior changes, list manual checks, add screenshots/GIFs for UI changes.
 
 ## Security & Configuration Notes
+
 - System actions use `systemctl`/`loginctl`; review permissions before expanding actions.
 - `WlrLayershell` uses Overlay + Exclusive keyboard focus; validate compositor compatibility when adjusting focus.

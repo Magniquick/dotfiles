@@ -2,6 +2,7 @@
 import QtQuick
 import QtQml
 import Quickshell
+import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
 
@@ -9,9 +10,19 @@ import "bar" as Bar
 import "sysclock" as Clock
 import "leftpanel" as LeftPanel
 import "rightpanel" as RightPanel
+import "common/services" as CommonServices
 
 ShellRoot {
     id: shellRoot
+
+    CommonServices.IdleManager {}
+    IpcHandler {
+        target: "lockscreen"
+
+        function lock() {
+            Quickshell.execDetached([Quickshell.shellPath("tools/launch-lockscreen.sh")]);
+        }
+    }
 
     // Clock.ClockWidget {}
     LoggingCategory {

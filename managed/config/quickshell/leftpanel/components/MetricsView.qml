@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import "../../common" as Common
 import "./" as Components
-import qsnative
+import qsgo
 
 Item {
     id: root
@@ -21,6 +21,8 @@ Item {
 
     readonly property real tempValue: Number(sysInfoProvider.temp || 0)
     readonly property color tempColor: tempValue >= 85 ? Common.Config.color.error : (tempValue >= 75 ? Common.Config.color.secondary : Common.Config.color.tertiary)
+    readonly property real storageActualValue: Number(sysInfoProvider.disk || 0)
+    readonly property real storageWorstValue: sysInfoProvider.disk_btrfs_available ? Number(sysInfoProvider.disk_worst_case || storageActualValue) : storageActualValue
     readonly property int diskWearPct: parseInt(sysInfoProvider.disk_wear || "", 10)
     readonly property color diskHealthColor: {
         const w = diskWearPct, s = (sysInfoProvider.disk_health || "").toLowerCase();
@@ -89,7 +91,8 @@ Item {
                 icon: "\uefc5"
             }
             Components.CircularGauge {
-                value: sysInfoProvider.disk
+                value: root.storageWorstValue
+                secondaryValue: root.storageActualValue
                 accent: root.diskHealthColor
                 label: "Storage"
                 icon: "\udb80\udeca"
@@ -235,6 +238,7 @@ Item {
                         }
                     }
                 }
+
             }
 
             // (Health card removed; footer already reflects health state.)

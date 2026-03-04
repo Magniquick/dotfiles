@@ -57,4 +57,3 @@ Item {
         return mood ? (mood.name || "Assistant") : "Assistant";
     }
 }
-

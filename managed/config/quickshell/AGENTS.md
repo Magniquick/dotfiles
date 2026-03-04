@@ -8,33 +8,22 @@ Custom Quickshell configuration for Wayland/Hyprland featuring a modular status 
 
 ## Documentation
 
-Always use Context7 to look up Quickshell documentation.
+Always use Context7 to look up Quickshell documentation. The Quickshell binary locally tracks the master branch.
 
 ## Build and Run Commands
 
 **Running the shell:**
-- Main shell (bar + panels + clock): `quickshell` (or `qs`) from repo root
-- Bar only: `quickshell -c bar` or `qs -c bar`
-- Left panel only: `quickshell -c leftpanel` or `qs -c leftpanel`
-- Right panel only: `quickshell -c rightpanel` or `qs -c rightpanel`
+
+- Main shell (bar + panels + clock + panels): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
 - HyprQuickshot (screenshot utility): `quickshell -c hyprquickshot -n` (the `-n` prevents multiple instances)
 - Reload: Restart `quickshell` after QML changes (no hot reload)
+- Global config is at `quickshell.conf`
 
-**Building native modules:**
-- qs-native (CXX-Qt QML module):
-  - Configure/build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
-  - QML import path: `~/.config/quickshell/common/modules/qs-native/build/qml` (needs `QML_IMPORT_PATH`)
-  - Quick test: `QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-native/build/qml quickshell`
-  - Systemd: ensure `~/.config/systemd/user/quickshell.service` sets `QML_IMPORT_PATH`
-- spotify-lyrics-api (Go + C++ QML module):
-  - Rebuild helper (recommended): `./tools/rebuild-spotifylyrics.sh`
-  - Why: Go shared-library changes may be skipped by incremental CMake builds; the helper forces a clean rebuild and restarts `quickshell` for the same `-p` path.
-  - Manual equivalent: `rm -rf common/modules/spotify-lyrics-api/build && cmake -S common/modules/spotify-lyrics-api -B common/modules/spotify-lyrics-api/build && cmake --build common/modules/spotify-lyrics-api/build && quickshell -p "$(pwd)" kill`
+**Native modules (Rust/Go/C++):**
 
-**Configuration:**
-- HyprQuickshot saves screenshots to `$HQS_DIR` → `$XDG_SCREENSHOTS_DIR` → `$XDG_PICTURES_DIR/Screenshots` → `$HOME/Pictures/Screenshots` → `$HOME/Pictures`
-- Global config: `quickshell.conf`
+- Build, import-path, and module notes live in `common/modules/AGENTS.md` (and module-specific `common/modules/*/AGENTS.md`).
+- Prefer golang based modules unless asked otherwise.
 
 ## Architecture
 
@@ -51,76 +40,44 @@ Always use Context7 to look up Quickshell documentation.
 
 The bar uses a **modular architecture** with key directories:
 
-1. **`bar/components/`** (~21 files): Reusable UI building blocks
+1. **`bar/components/`** : Reusable UI building blocks
+
    - `ModuleContainer.qml`: Base wrapper for bar modules
    - `TooltipPopup.qml`: Tooltip system with scrolling support (Flickable + ScrollIndicator)
    - `IconTextRow.qml`, `BarLabel.qml`, `ActionChip.qml`: Common UI primitives (ActionChip has flash animation + loading spinner)
    - `JsonUtils.js`: Robust JSON parsing utilities (`safeParse`, `parseObject`, `parseArray`, `formatTooltip`)
    - `CommandRunner.qml`: Process execution helper with stderr capture, timeout, error signals
 
-2. **`bar/`** (singletons in qmldir):
+1. **`bar/`** (singletons in qmldir):
+
    - `Config`: Design tokens (fonts, spacing, colors, slider constants) from `common/Config.qml`
    - `ColorPalette`: Material palette + color roles from `common/ColorPalette.qml` / `common/colors.json`
    - `DependencyCheck`: Centralized dependency checking with notify-send alerts
    - `GlobalState`: Shared runtime state (left/right panel visibility)
 
-3. **`bar/modules/`** (~25 files): Feature modules, organized into groups
+1. **`bar/modules/`** : Feature modules, organized into groups
+
    - **Groups**: `StartMenuGroup`, `WorkspaceGroup`, `ControlsGroup`, `WirelessGroup`, `PanelGroup`
-   - **Individual modules**: `ClockModule`, `MprisModule`, `NetworkModule`, `BatteryModule`, `BacklightModule`, `BluetoothModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `UpdatesModule`, `SystemdFailedModule`, `WireplumberModule`, `PowerProfilesModule`, `SpecialWorkspacesModule`, `ArchIconModule`, `ToDoModule`, etc.
+   - **Individual modules**: `MprisModule`, `NetworkModule`, `BatteryModule`, `BacklightModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `SystemdFailedModule`, `WireplumberModule`, `ToDoModule`, etc.
 
-### Native Rust QML Modules
+### Native Modules (Rust/Go/C++)
 
-- **`common/modules/qs-native`**: CXX-Qt QML plugin (import as `qsnative`)
-  - Build: `cd common/modules/qs-native && cmake -S . -B build && cmake --build build`
-  - Import path: `~/.config/quickshell/common/modules/qs-native/build/qml`
-  - Source layout:
-    - `common/modules/qs-native/src/lib.rs` contains the `#[cxx_qt::bridge]` and the QObject backing structs (`*Rust`), because CXX-Qt generated code needs direct field access for `#[qproperty]`.
-    - Feature code lives in modules under `common/modules/qs-native/src/` (e.g. `ai/`, `ical/`, `todoist/`, `pacman/`, `sysinfo/`, `util/`).
-  - QML types:
-    - `IcalCache`
-      - Invokable: `refreshFromEnv(envFile, days)`
-      - Properties: `status`, `generated_at`, `error`, `events_json`
-      - Notes: Runs in a background thread; cache (ETag + ICS) retained in-memory across refreshes.
-    - `TodoistClient`
-      - Invokables: `listTasks(envFile)`, `listTasklists(envFile)`, `completeTask(envFile, id)`, `deleteTask(envFile, id)`
-      - Properties: `data_json`, `error`, `last_updated`
-      - Notes: All calls are async; `data_json`/`last_updated` update on success.
-    - `SysInfoProvider`
-      - Invokable: `refresh()`
-      - Properties: `cpu`, `mem`, `mem_used`, `mem_total`, `disk`, `disk_health`, `disk_wear`, `temp`, `uptime`,
-        `psi_cpu_some`, `psi_cpu_full`, `psi_mem_some`, `psi_mem_full`, `psi_io_some`, `psi_io_full`, `disk_device`, `error`
-      - Notes: Disk health uses `smartctl` and is cached (6h TTL); CPU usage derived from `/proc/stat` deltas.
-    - `PacmanUpdatesProvider`
-      - Invokables: `refresh(noAur)`, `sync()`
-      - Properties: `updates_count`, `aur_updates_count`, `updates_text`, `aur_updates_text`, `last_checked`, `error`, `has_updates`
-      - Notes: Uses `checkupdates` for repo packages and `pacman -Qm` + AUR RPC for AUR; AUR cached in-memory.
-    - `AiChatSession`
-      - Invokables: `submitInput`, `submitInputWithAttachments`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
-        `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`
-      - Properties: `model_id`, `system_prompt`, `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`, `messages_json`
-      - Notes: `QAbstractListModel` that streams assistant output into the last assistant row.
-    - `AiModelCatalog`
-      - Invokables: `refresh()`
-      - Properties: `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`, `models_json`
-      - Notes: Fetches provider model lists and outputs a merged JSON array for the model picker.
-  - Runtime requirements:
-    - `smartctl` for disk health (optional; shows “Unknown” if unavailable)
-    - `.env` file in `bar/.env` for calendar URLs and Todoist token
-  - All network operations run off the UI thread and queue updates back onto Qt.
+Native module notes live in `common/modules/AGENTS.md` (plus module-specific docs like `common/modules/qs-native/AGENTS.md`).
 
 ### Data Sources & Runtime Integration
 
 Modules integrate with system services via:
+
 - **Quickshell services**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland` (workspaces)
-- **Sysfs/udev**: Internal backlight via `qsnative.BacklightProvider` (sysfs + udev, no polling)
+- **Sysfs/udev**: Internal backlight via `qsgo.BacklightProvider` (sysfs + udev, no polling)
 - **External commands**:
   - `nmcli` for network status/wifi
   - `systemctl --failed` + `busctl monitor` for systemd units
   - `pw-dump` + `fuser /dev/video*` for privacy monitoring (camera/microphone detection)
-  - Updates: `checkupdates` + `pacman -Qm` (via `qsnative` PacmanUpdatesProvider)
-- **Rust helpers**: `qs-native` (calendar + task management via CXX-Qt QML module)
+  - Updates: `checkupdates` + `pacman -Qm` (via `qsgo` PacmanUpdatesProvider)
+- **Native helpers**: see `common/modules/AGENTS.md` (and module-specific docs under `common/modules/`)
 
-However, try to use native quickshell modules if possible.
+However, try to use native quickshell modules if available. If not, fallback to shelling out or implementing a golang based module, based on user input.
 
 ### Styling System
 
@@ -137,17 +94,20 @@ However, try to use native quickshell modules if possible.
 Use semantic roles from `Config.color.*` instead of hardcoding hex values. These are generated by Matugen and mapped to Material roles.
 
 **Primary / Accent**
+
 - `primary`: high-emphasis actions (primary buttons, active toggles)
 - `on_primary`: text/icons on `primary`
 - `primary_container`: selected/tonal fills (chips, highlighted rows)
 - `on_primary_container`: text/icons on `primary_container`
 
 **Secondary / Tertiary**
+
 - `secondary`, `tertiary`: supporting accents (secondary actions, subtle emphasis)
 - `on_secondary`, `on_tertiary`: text/icons on those accents
 - `secondary_container`, `tertiary_container`: softer fills for low-priority highlights
 
 **Surfaces & Backgrounds**
+
 - `background`: app root background
 - `surface`: large surfaces/sheets
 - `surface_container_*`: elevation ladder for cards, popups, dialogs (`low` → `highest`)
@@ -155,21 +115,26 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 - `on_surface_variant`: medium-emphasis text (subtitles, metadata)
 
 **Outlines & Dividers**
+
 - `outline`, `outline_variant`: borders, dividers, input outlines
 
 **Status / Feedback**
+
 - `error`: error states and critical indicators
 - `on_error`: text/icons on error fills
 
 **Inverse roles**
+
 - `inverse_surface`, `inverse_on_surface`, `inverse_primary`: contrast surfaces (snackbars/tooltips or inverted UI)
 
 **Palette notes**
-- `Config.palette.*` is the raw tonal palette; avoid direct use unless implementing custom tone ramps.
+
+- `Config.palette.*` is the raw tonal palette; prefer roles unless implementing custom tone ramps.
 
 ## Coding Conventions
 
 **QML/JS Style:**
+
 - 2-space indentation
 - Concise arrow functions/inline handlers
 - Keep signal handlers readable and scoped
@@ -180,12 +145,14 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 - Keep base colors opaque and apply alpha at use sites; avoid `Qt.alpha(Qt.rgba(..., 1), alpha)` for constants
 
 **Naming:**
+
 - QML types/IDs: `CamelCase` (e.g., `ModuleContainer`, `root`)
 - Properties/functions: `lowerCamelCase` (e.g., `activePlayer`, `displayTitle`)
 - Constants: `UPPER_SNAKE` (e.g., `MAX_LENGTH`)
 - Module-specific names: Explicit prefixes (e.g., `powermenuVisible`, `powermenuHover`)
 
 **Component Design:**
+
 - Prefer small, focused components
 - Shared colors in `Config.color` / `Config.palette`
 - Keep modules self-contained with clear data flow
@@ -193,6 +160,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 ## Error Handling Patterns
 
 **Dependency Checking:**
+
 - Use `DependencyCheck.require(cmd, moduleName, callback)` for PATH commands
 - Use `DependencyCheck.requireExecutable(path, moduleName, callback)` for scripts
 - Notifies user via `notify-send` if dependency missing (once per dep)
@@ -206,12 +174,14 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
   ```
 
 **Process Crash Recovery:**
+
 - Long-running monitors (nmcli, udevadm, busctl) use exponential backoff restart
 - Pattern: `monitorRestartAttempts`, `monitorRestartTimer`, `monitorBackoffResetTimer`
 - Backoff: 1s → 2s → 4s → ... → 30s max, resets after 60s stability
 - Set `monitorDegraded: true` on crash for optional UI indicator
 
 **CommandRunner:**
+
 - Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()` signals
 - Stderr captured in `errorOutput` property
 - Triggers immediately when enabled (no initial interval wait)
@@ -219,26 +189,21 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 ## UI/UX Principles
 
 - **Material-inspired, intentional layouts**: No default system fonts; use explicit `Config` families
+- **Design quality for additions**: Any new UI/feature must follow well thought out UI/UX principles, including complete UX flows (entry points, state transitions, empty/error/loading states, and exit paths).
 - **Color semantics**: Use `Config.color.*` roles (primary/secondary/error/success)
 - **Animations**: Meaningful transitions only (open/close reveals, tooltip fades); avoid noisy micro-motions
   - Always gate animations with visibility checks. Hidden components with `running: true` animations burn idle CPU.
 - **Tooltips**: Anchor above targets, stay unclipped; modules can collapse when empty
 - **Powermenu**: Animates cleanly, retains focus on open, hides on `Esc`/`q`, quits on dismiss
+- **Fallback policy**: Do not add fallback handling for failures or missing functionality unless explicitly requested.
 
 ## Testing
 
-**No automated tests.** Manual verification required:
-
-- Powermenu: `Esc`/`q` close and quit; buttons execute correct actions
-- Bar modules: Layout stable on reload; tooltips anchor correctly; tray right-click menus work
-- Network tooltip: Shows USB NIC model + USB icon when subsystem is `usb`; polling only while tooltip is open
-- Overlay animations: Clean reveals, correct focus behavior
-- **Performance**: Idle CPU should be ~0% with hidden overlays (check with `pidstat`). If high idle CPU, look for unconditional animations.
+**No automated tests.** Manual verification required: run ./qs at repo root with a short timeout and monitor output logs.
 
 ## Dependencies
 
-- **Runtime**: `quickshell`, `hyprland`, `grim`, `imagemagick`, `wl-clipboard`, `nmcli`, `systemctl`, `udevadm`, `pipewire` (`pw-dump`), `wpctl` (optional: `ddcutil` for external monitor brightness)
-- **Build**: `cargo` (for Rust scripts), Qt6 QML modules
+- **Build**: Qt6 QML modules; native module builds may require `cmake`, `cargo`, and/or `go` (see `common/modules/AGENTS.md`)
 - **Versioning**: Track Quickshell `master` branch; when using Context7, target the `master` branch docs.
 
 ## Commit & PR Guidelines
@@ -246,14 +211,8 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 - Commits: short imperative subject (e.g., `Add powermenu action`, `Tighten esc shortcut`); group related edits.
 - PRs: describe behavior changes, mention manual checks performed, and include screenshots/gifs for UI tweaks.
 
-## Security & Configuration Notes
-
-- System actions use `systemctl`/`loginctl`; avoid expanding action lists without reviewing permissions.
-- `WlrLayershell` uses `Overlay` + `Exclusive` keyboard focus; confirm compositor compatibility when adjusting focus settings.
-
 ## Performance Notes
 
 - Animations in hidden windows (`visible: false`) still consume CPU if `running: true`
 - Always gate animation `running` property with window visibility checks
 - Example fix: `running: root.QsWindow.window && root.QsWindow.window.visible`
-- To measure idle CPU after reload: `pid=$(pgrep -n quickshell); sleep 20; pidstat -p "$pid" 1 5 | awk '/Average:/{print $8}'`

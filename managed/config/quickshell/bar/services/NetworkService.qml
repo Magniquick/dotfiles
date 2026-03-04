@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
+import Quickshell.Networking
 import ".."
 import "../components"
 import "network/Parsers.js" as Parsers
@@ -23,6 +24,11 @@ Item {
     property string gateway: ""
     property int signalPercent: 0
     property string ssid: ""
+    property var sourceEntries: []
+    property bool sourceSwitching: false
+    property string sourceSwitchingName: ""
+    property string sourceError: ""
+    readonly property bool nativeNetworkBackend: Networking.backend === NetworkBackendType.NetworkManager
 
     // Ethernet/USB NIC details
     property string ethernetConnection: ""
@@ -36,6 +42,11 @@ Item {
     // Traffic monitoring
     property double rxBytesPerSec: 0
     property double txBytesPerSec: 0
+    property var rxHistory: []
+    property var txHistory: []
+    property real trafficScaleMax: 1024
+    property int trafficHistorySize: 60
+    property real trafficScaleFloor: 1024
     property double lastRxBytes: 0
     property double lastTxBytes: 0
     property double lastTrafficSampleMs: 0
@@ -64,6 +75,7 @@ Item {
         statusRunner.trigger();
         wifiRunner.trigger();
         ipRunner.trigger();
+        root.refreshSources();
         root.readTrafficSample();
         if (root.connectionType === "ethernet" && root.connectionState === "connected") {
             root.subsystemCheckRequested = true;
@@ -71,6 +83,150 @@ Item {
             if (root.ethernetSubsystem === "usb")
                 ethernetDeviceLabelRunner.trigger();
         }
+    }
+
+    function sortSourceEntries(entries) {
+        const sorted = entries.slice();
+        sorted.sort(function(a, b) {
+            if (!!a.active !== !!b.active)
+                return a.active ? -1 : 1;
+            const aName = String(a.name || "").toLowerCase();
+            const bName = String(b.name || "").toLowerCase();
+            if (aName < bName)
+                return -1;
+            if (aName > bName)
+                return 1;
+            return 0;
+        });
+        return sorted;
+    }
+
+    function modelAt(model, index) {
+        if (!model || index < 0)
+            return null;
+        if (model.values && typeof model.values.length === "number")
+            return model.values[index];
+        if (typeof model.get === "function")
+            return model.get(index);
+        return model[index];
+    }
+
+    function modelCount(model) {
+        if (!model)
+            return 0;
+        if (model.values && typeof model.values.length === "number")
+            return model.values.length;
+        if (typeof model.count === "number")
+            return model.count;
+        if (typeof model.length === "number")
+            return model.length;
+        return 0;
+    }
+
+    function collectNativeSourceEntries() {
+        const entries = [];
+        const devices = Networking.devices;
+        const deviceCount = root.modelCount(devices);
+
+        for (let i = 0; i < deviceCount; i++) {
+            const device = root.modelAt(devices, i);
+            if (!device)
+                continue;
+
+            const deviceName = String(device.name || "").trim();
+            const isWifi = device.type === DeviceType.Wifi;
+            if (isWifi) {
+                const networks = device.networks;
+                const networkCount = root.modelCount(networks);
+                for (let j = 0; j < networkCount; j++) {
+                    const network = root.modelAt(networks, j);
+                    if (!network)
+                        continue;
+                    const networkName = String(network.name || "").trim();
+                    if (networkName === "")
+                        continue;
+                    const known = network.known === undefined ? true : !!network.known;
+                    if (!known && !network.connected)
+                        continue;
+                    entries.push({
+                        id: "wifi:" + deviceName + ":" + networkName,
+                        type: "wifi",
+                        name: networkName,
+                        device: deviceName,
+                        active: !!network.connected,
+                        connectable: true,
+                        network
+                    });
+                }
+                continue;
+            }
+
+            if (!!device.connected) {
+                entries.push({
+                    id: "ethernet:" + deviceName,
+                    type: "ethernet",
+                    name: "Wired",
+                    device: deviceName,
+                    active: true,
+                    connectable: false
+                });
+            }
+        }
+
+        return entries;
+    }
+
+    function refreshSources() {
+        if (!root.nativeNetworkBackend) {
+            root.sourceEntries = [];
+            return;
+        }
+
+        const nativeEntries = root.sortSourceEntries(root.collectNativeSourceEntries());
+        root.sourceEntries = nativeEntries;
+        if (root.sourceSwitching && root.sourceSwitchingName !== "") {
+            for (let i = 0; i < nativeEntries.length; i++) {
+                const entry = nativeEntries[i];
+                if (entry && entry.active && String(entry.name || "") === root.sourceSwitchingName) {
+                    root.sourceSwitching = false;
+                    root.sourceSwitchingName = "";
+                    root.sourceError = "";
+                    sourceSwitchTimeoutTimer.stop();
+                    break;
+                }
+            }
+        }
+    }
+
+    function switchSource(source) {
+        const entry = typeof source === "object" ? source : null;
+        const name = entry ? String(entry.name || "").trim() : String(source || "").trim();
+        if (name === "" || root.sourceSwitching)
+            return;
+        if (entry && !!entry.active)
+            return;
+
+        root.sourceSwitching = true;
+        root.sourceSwitchingName = name;
+        root.sourceError = "";
+        sourceSwitchTimeoutTimer.restart();
+
+        if (entry && entry.network && typeof entry.network.connect === "function") {
+            try {
+                entry.network.connect();
+            } catch (err) {
+                root.sourceError = "Unable to switch source";
+                root.sourceSwitching = false;
+                root.sourceSwitchingName = "";
+                sourceSwitchTimeoutTimer.stop();
+            }
+            return;
+        }
+
+        root.sourceError = "Native networking backend unavailable";
+        root.sourceSwitching = false;
+        root.sourceSwitchingName = "";
+        sourceSwitchTimeoutTimer.stop();
     }
 
     function handleNetworkManagerEvent(data) {
@@ -256,6 +412,39 @@ Item {
         root.lastRxBytes = 0;
         root.lastTxBytes = 0;
         root.lastTrafficSampleMs = 0;
+        root.resetTrafficHistory();
+    }
+
+    function resetTrafficHistory() {
+        root.rxHistory = [];
+        root.txHistory = [];
+        root.trafficScaleMax = root.trafficScaleFloor;
+    }
+
+    function pushTrafficSample(rxSample, txSample) {
+        const rx = isFinite(rxSample) && rxSample > 0 ? rxSample : 0;
+        const tx = isFinite(txSample) && txSample > 0 ? txSample : 0;
+
+        const nextRxHistory = root.rxHistory.slice();
+        const nextTxHistory = root.txHistory.slice();
+
+        nextRxHistory.push(rx);
+        nextTxHistory.push(tx);
+
+        if (nextRxHistory.length > root.trafficHistorySize)
+            nextRxHistory.splice(0, nextRxHistory.length - root.trafficHistorySize);
+        if (nextTxHistory.length > root.trafficHistorySize)
+            nextTxHistory.splice(0, nextTxHistory.length - root.trafficHistorySize);
+
+        root.rxHistory = nextRxHistory;
+        root.txHistory = nextTxHistory;
+
+        let peak = root.trafficScaleFloor;
+        for (let i = 0; i < nextRxHistory.length; i++)
+            peak = Math.max(peak, nextRxHistory[i]);
+        for (let j = 0; j < nextTxHistory.length; j++)
+            peak = Math.max(peak, nextTxHistory[j]);
+        root.trafficScaleMax = peak;
     }
 
     function applyEma(previous, sample, alpha) {
@@ -285,10 +474,14 @@ Item {
                 const txInstant = txDelta / deltaSeconds;
                 root.rxBytesPerSec = root.applyEma(root.rxBytesPerSec, rxInstant, root.trafficEmaAlpha);
                 root.txBytesPerSec = root.applyEma(root.txBytesPerSec, txInstant, root.trafficEmaAlpha);
+                root.pushTrafficSample(root.rxBytesPerSec, root.txBytesPerSec);
             } else {
                 root.rxBytesPerSec = 0;
                 root.txBytesPerSec = 0;
+                root.pushTrafficSample(0, 0);
             }
+        } else if (root.lastTrafficSampleMs <= 0) {
+            root.pushTrafficSample(0, 0);
         }
         root.lastRxBytes = rxBytes;
         root.lastTxBytes = txBytes;
@@ -300,6 +493,9 @@ Item {
             root.refreshNetwork();
         } else {
             root.resetTraffic();
+            root.sourceSwitching = false;
+            root.sourceSwitchingName = "";
+            sourceSwitchTimeoutTimer.stop();
         }
     }
 
@@ -316,7 +512,9 @@ Item {
         enabled: root.nmcliAvailable && root.pollingActive
         intervalMs: 10000
 
-        onOutputChanged: root.updateStatus(output)
+        onRan: function(commandOutput) {
+            root.updateStatus(commandOutput);
+        }
     }
 
     CommandRunner {
@@ -328,7 +526,9 @@ Item {
             && (root.needsInitialRefresh || root.connectionType === "wifi")
         intervalMs: 15000
 
-        onOutputChanged: root.updateSignal(output)
+        onRan: function(commandOutput) {
+            root.updateSignal(commandOutput);
+        }
     }
 
     CommandRunner {
@@ -342,7 +542,33 @@ Item {
             && root.deviceName !== ""
         intervalMs: 30000
 
-        onOutputChanged: root.updateIpDetails(output)
+        onRan: function(commandOutput) {
+            root.updateIpDetails(commandOutput);
+        }
+    }
+
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.tooltipActive && root.nativeNetworkBackend
+
+        onTriggered: root.refreshSources()
+    }
+
+    Timer {
+        id: sourceSwitchTimeoutTimer
+
+        interval: 12000
+        running: false
+        repeat: false
+
+        onTriggered: {
+            if (!root.sourceSwitching)
+                return;
+            root.sourceError = "Switch request timed out";
+            root.sourceSwitching = false;
+            root.sourceSwitchingName = "";
+        }
     }
 
     FileView {
@@ -379,7 +605,9 @@ Item {
             && (root.subsystemCheckRequested || root.forceRefreshRequested)
         intervalMs: 0
 
-        onOutputChanged: root.applyEthernetSubsystem(output)
+        onRan: function(commandOutput) {
+            root.applyEthernetSubsystem(commandOutput);
+        }
     }
 
     CommandRunner {
@@ -395,8 +623,8 @@ Item {
             && (root.deviceLabelRequested || root.forceRefreshRequested)
         intervalMs: 0
 
-        onOutputChanged: {
-            const label = (output || "").trim();
+        onRan: function(commandOutput) {
+            const label = (commandOutput || "").trim();
             root.ethernetDeviceLabel = label.replace(/_/g, " ");
             root.deviceLabelRequested = false;
         }

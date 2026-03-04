@@ -9,7 +9,6 @@
  * - iCal cache for calendar events
  *
  * Dependencies:
- * - common/modules/qs-native: CXX-Qt QML module for iCal fetching
  * - common/.env: Environment file with calendar URLs
  */
 pragma ComponentBehavior: Bound
@@ -48,7 +47,7 @@ ModuleContainer {
     tooltipHoverable: true
     tooltipRefreshing: root.refreshing
     tooltipSubtitle: calendarRefreshTime
-    tooltipTitle: "Calendar"
+    tooltipTitle: ""
 
     content: [
         BarLabel {

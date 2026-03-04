@@ -25,6 +25,7 @@ D-Bus NotificationServer
 **NotificationEntry** (inline component): Holds notification state including `notificationId`, `notification` reference, `popup` flag, `timer`, and derived properties (`appName`, `title`, `body`, `urgency`, `iconSource`).
 
 **notificationStore** (QtObject): Central state manager with methods:
+
 - `addNotification(notification)` – Creates entry, starts urgency-based timeout
 - `dismissNotification(id)` – Removes from lists, calls `notification.dismiss()`
 - `dismissAll()` – Clears everything
@@ -33,6 +34,7 @@ D-Bus NotificationServer
 ### Timeout Logic
 
 Urgency-based popup timeouts (matching dunst config):
+
 - Critical: 0 (no timeout)
 - Normal: 8000ms
 - Low: 3000ms
@@ -42,7 +44,7 @@ Notifications can override via `expireTimeout` (-1 = use default, 0 = never, >0 
 ### Dual Window System
 
 1. **Main panel** (420px wide): Full notification list anchored top-right with gaps
-2. **Popup overlay** (320px, max 560px height): Transient popups at `WlrLayer.Overlay`
+1. **Popup overlay** (320px, max 560px height): Transient popups at `WlrLayer.Overlay`
 
 Both windows use separate `WlrLayershell.namespace` values for compositor identification.
 
@@ -58,6 +60,7 @@ components/
 ```
 
 **NotificationContent** handles:
+
 - App-specific icon overrides (WhatsApp, BatWatch, Kitty, OpenAI)
 - WhatsApp link detection → brand color `#25D366`
 - Circular app icon masking via `OpacityMask`

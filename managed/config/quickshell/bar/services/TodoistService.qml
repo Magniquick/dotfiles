@@ -2,9 +2,9 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
-import qsnative
 import "../components/JsonUtils.js" as JsonUtils
 import ".."
+import qsgo
 
 Item {
     id: root
@@ -17,19 +17,45 @@ Item {
     property bool loading: false
     property bool parseError: false
     property string error: ""
-    property bool usingCache: false
+    readonly property bool usingCache: false
 
     function refresh(reason) {
-        if (root.loading)
-            return;
-        root.loading = true;
-        root.parseError = false;
-        root.error = "";
-        todoistClient.listTasks(root.todoistEnvFile);
+        client.refresh();
+    }
+
+    function completeTask(id) {
+        client.action("close", JSON.stringify({ id: String(id) }));
+    }
+
+    function deleteTask(id) {
+        client.action("delete", JSON.stringify({ id: String(id) }));
+    }
+
+    function addTask(content, projectId, description, dueString) {
+        const args = { content: String(content || "") };
+        if (projectId)
+            args.project_id = String(projectId);
+        if (description)
+            args.description = String(description);
+        if (dueString)
+            args.due_string = String(dueString);
+        client.action("add", JSON.stringify(args));
+    }
+
+    function updateTask(id, content, description, dueString) {
+        const args = { id: String(id || "") };
+        if (content)
+            args.content = String(content);
+        if (description)
+            args.description = String(description);
+        if (dueString)
+            args.due_string = String(dueString);
+        client.action("update", JSON.stringify(args));
     }
 
     TodoistClient {
-        id: todoistClient
+        id: client
+        env_file: root.todoistEnvFile
     }
 
     Timer {
@@ -42,34 +68,40 @@ Item {
     }
 
     Connections {
-        target: todoistClient
+        target: client
 
-        function onData_jsonChanged() {
-            const parsed = JsonUtils.parseObject(todoistClient.data_json);
-            if (!parsed) {
-                root.parseError = true;
-                root.error = "Failed to parse data_json payload";
-                root.loading = false;
-                return;
-            }
-
-            root.data = parsed;
-            const updatedAt = todoistClient.last_updated ? new Date(todoistClient.last_updated) : null;
-            if (updatedAt && !isNaN(updatedAt.getTime()))
-                root.lastUpdatedLabel = Qt.formatDateTime(updatedAt, "hh:mm ap");
-            root.parseError = false;
-            root.error = "";
-            root.usingCache = false;
-            root.loading = false;
+        function onLoadingChanged() {
+            root.loading = client.loading;
         }
 
         function onErrorChanged() {
-            const err = todoistClient.error || "";
-            if (err !== "") {
+            root.error = client.error || "";
+            root.parseError = root.error !== "";
+        }
+
+        function onDataChanged() {
+            const parsed = JsonUtils.parseObject(client.data || "");
+            if (!parsed) {
                 root.parseError = true;
-                root.error = err;
+                root.error = "Failed to parse todoist payload";
+                return;
             }
-            root.loading = false;
+            root.data = parsed;
+            root.parseError = false;
+            root.error = "";
+
+            const updatedAt = parsed.last_updated ? new Date(parsed.last_updated) : null;
+            if (updatedAt && !isNaN(updatedAt.getTime()))
+                root.lastUpdatedLabel = Qt.formatDateTime(updatedAt, "hh:mm ap");
+        }
+
+        function onLast_updatedChanged() {
+            const ts = client.last_updated;
+            if (!ts)
+                return;
+            const d = new Date(ts);
+            if (!isNaN(d.getTime()))
+                root.lastUpdatedLabel = Qt.formatDateTime(d, "hh:mm ap");
         }
     }
 }

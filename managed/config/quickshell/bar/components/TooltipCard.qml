@@ -6,7 +6,7 @@ Rectangle {
     id: root
 
     property color backgroundColor: Config.barPopupSurface
-    property color borderColor: Config.barPopupBorderColor
+    property color borderColor: Config.color.outline_variant
     property alias content: contentColumn.data
     property bool outlined: false
     property int padding: Config.space.md

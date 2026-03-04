@@ -27,4 +27,3 @@ QtObject {
         Quickshell.execDetached(normalize(command));
     }
 }
-

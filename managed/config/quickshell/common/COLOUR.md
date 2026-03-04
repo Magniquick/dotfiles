@@ -35,12 +35,12 @@ uv run --with numpy,colour-science,matplotlib,scipy python -c "import colour; pr
 
 ## Process (summary)
 
-1) Convert sRGB to linear RGB.
-2) Simulate deutan using the matrix above.
-3) Compute error: `err = original - simulated`.
-4) Apply correction matrix to error and add back to original.
-5) Clamp to [0, 1] and convert back to sRGB.
-6) Recompute ANSI brights using the OKLCH formula.
+1. Convert sRGB to linear RGB.
+1. Simulate deutan using the matrix above.
+1. Compute error: `err = original - simulated`.
+1. Apply correction matrix to error and add back to original.
+1. Clamp to [0, 1] and convert back to sRGB.
+1. Recompute ANSI brights using the OKLCH formula.
 
 ## Reference Code (Python)
 

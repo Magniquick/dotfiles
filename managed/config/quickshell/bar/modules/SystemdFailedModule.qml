@@ -26,7 +26,6 @@
  * - systemd: System and service manager
  *
  * Configuration:
- * - enableEventRefresh: Enable D-Bus event monitoring (default: true)
  * - eventDebounceMs: Event debounce interval (default: 750ms)
  * - debugLogging: Enable console debug output (default: false)
  *
@@ -65,11 +64,6 @@
  *     debugLogging: true
  * }
  *
- * @example
- * // Disable event monitoring (polling only)
- * SystemdFailedModule {
- *     enableEventRefresh: false
- * }
  */
 pragma ComponentBehavior: Bound
 import ".."
@@ -80,7 +74,6 @@ ModuleContainer {
     id: root
 
     property bool debugLogging: false
-    property bool enableEventRefresh: true
     property int eventDebounceMs: 750
     readonly property int failedCount: SystemdFailedService.failedCount
     readonly property string lastRefreshedLabel: SystemdFailedService.lastRefreshedLabel
@@ -118,11 +111,6 @@ ModuleContainer {
         target: SystemdFailedService
         property: "debugLogging"
         value: root.debugLogging
-    }
-    Binding {
-        target: SystemdFailedService
-        property: "enableEventRefresh"
-        value: root.enableEventRefresh
     }
     Binding {
         target: SystemdFailedService

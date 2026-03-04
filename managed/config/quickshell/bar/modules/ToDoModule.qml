@@ -9,13 +9,14 @@
  * - Refresh button to sync tasks
  *
  * Dependencies:
- * - common/modules/qs-native: CXX-Qt QML module for Todoist API
+ * - tools/todoist-sync.sh: Go Sync API helper launcher
  * - ~/.local/bin/custom/todoist.sh: Todoist launcher script
  */
 pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
+import "../../common" as Common
 
 ModuleContainer {
     id: root
@@ -23,21 +24,9 @@ ModuleContainer {
     property bool dropdownPinned: false
     readonly property int taskCount: {
         const data = TodoistService.data;
-        if (!data)
+        if (!data || !Array.isArray(data.today))
             return 0;
-        let count = 0;
-        if (Array.isArray(data.today))
-            count += data.today.length;
-        const projects = data.projects;
-        if (projects && typeof projects === "object") {
-            const keys = Object.keys(projects);
-            for (let i = 0; i < keys.length; i++) {
-                const list = projects[keys[i]];
-                if (Array.isArray(list))
-                    count += list.length;
-            }
-        }
-        return count;
+        return data.today.length;
     }
     // Intentionally no hover label; keep pill compact.
 
@@ -66,6 +55,9 @@ ModuleContainer {
             }
         }
     ]
+
+    onClicked: Common.ProcessHelper.execDetached(root.tooltipBrowserLink)
+    onRightClicked: TodoistService.refresh("manual")
 
     onTooltipRefreshRequested: TodoistService.refresh("manual")
 

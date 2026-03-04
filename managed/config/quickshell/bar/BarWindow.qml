@@ -31,8 +31,14 @@ PanelWindow {
     Item {
         id: content
 
-        anchors.fill: parent
-        anchors.margins: Config.barPadding
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Config.barPadding
+        anchors.rightMargin: Config.barPadding
+        anchors.topMargin: Config.barPadding
+        anchors.bottomMargin: Config.barPadding + Config.spaceHalfXs
         implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
 
         RowLayout {

@@ -13,9 +13,9 @@ ActionButtonBase {
     implicitHeight: Config.space.xl + Config.space.sm
     implicitWidth: label.implicitWidth + Config.space.xl + (root.loading ? spinner.width + Config.space.sm : 0)
     radius: height / 2
-    inactiveColor: Qt.alpha(Config.color.surface_container_high, 0.92)
-    hoverColor: Config.color.surface_container_highest
-    borderColor: Qt.alpha(Config.color.outline_variant, 0.72)
+    inactiveColor: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.surface_container, 0.22))
+    hoverColor: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.surface_container_high, 0.35))
+    borderColor: Qt.alpha(Config.color.outline_variant, 0.48)
 
     onClicked: {
         flashAnimation.restart();
@@ -31,7 +31,7 @@ ActionButtonBase {
 
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            color: root.active ? Config.color.on_primary_fixed_variant : Config.color.on_surface_variant
+            color: root.active ? Config.color.on_primary_fixed_variant : Config.color.on_surface
             font.family: Config.iconFontFamily
             font.pixelSize: Config.type.labelMedium.size
             opacity: root.loading ? 1 : 0
@@ -60,23 +60,13 @@ ActionButtonBase {
             anchors.left: root.loading ? spinner.right : parent.left
             anchors.leftMargin: root.loading ? Config.space.sm : 0
             anchors.verticalCenter: parent.verticalCenter
-            color: root.active ? Config.color.on_primary_fixed_variant : Config.color.on_surface_variant
+            color: root.active ? Config.color.on_primary_fixed_variant : Config.color.on_surface
             font.family: Config.fontFamily
             font.pixelSize: Config.type.labelMedium.size
             font.weight: Config.type.labelMedium.weight
             text: root.text
         }
     }
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        color: Qt.alpha(Config.color.on_surface, 0.06)
-        height: Math.round(parent.height * 0.42)
-        radius: root.radius
-        visible: true
-    }
-
         Rectangle {
             id: flash
 

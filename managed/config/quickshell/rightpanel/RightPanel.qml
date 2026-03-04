@@ -503,18 +503,52 @@ Item {
         }
 
         RowLayout {
+            id: headerRow
             Layout.fillWidth: true
             spacing: Common.Config.space.sm
 
-            Text {
-                text: "\uf0f3"
-                color: Common.Config.color.primary
-                font.family: Common.Config.iconFontFamily
-                font.pixelSize: 16
+            readonly property int headerNotificationCount: root.inGroupFocusView
+                ? notificationStore.focusedEntries.length
+                : notificationStore.model.count
+
+            Item {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\uf0f3"
+                    color: Common.Config.color.primary
+                    font.family: Common.Config.iconFontFamily
+                    font.pixelSize: 16
+                }
+
+                Rectangle {
+                    visible: headerRow.headerNotificationCount > 1
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.rightMargin: -4
+                    anchors.topMargin: -4
+                    color: Common.Config.color.error
+                    radius: height / 2
+                    implicitHeight: 14
+                    implicitWidth: Math.max(14, badgeText.implicitWidth + 6)
+
+                    Text {
+                        id: badgeText
+                        anchors.centerIn: parent
+                        text: headerRow.headerNotificationCount > 99 ? "99+" : headerRow.headerNotificationCount.toString()
+                        color: Common.Config.color.on_error
+                        font.family: Common.Config.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+                }
             }
 
             Text {
                 Layout.fillWidth: true
+                Layout.rightMargin: Common.Config.space.xl
                 text: root.inGroupFocusView
                     ? notificationStore.focusedGroupTitle
                     : "Notifications"
@@ -532,25 +566,6 @@ Item {
                 onClicked: notificationStore.leaveGroupFocus()
             }
 
-            Text {
-                visible: notificationStore.model.count > 0
-                text: root.inGroupFocusView
-                    ? notificationStore.focusedEntries.length.toString()
-                    : notificationStore.model.count.toString()
-                color: Common.Config.color.on_surface_variant
-                font.family: Common.Config.fontFamily
-                font.pixelSize: Common.Config.type.labelMedium.size
-                font.weight: Common.Config.type.labelMedium.weight
-
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: -Common.Config.space.xs
-                    radius: Common.Config.shape.corner.sm
-                    color: Common.Config.color.surface_variant
-                    z: -1
-                }
-            }
-
             Components.ActionButton {
                 visible: notificationStore.model.count > 0
                 label: "Clear"
@@ -564,6 +579,11 @@ Item {
                     notificationStore.dismissAll();
                 }
             }
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Common.Config.space.sm
         }
 
         Item {
@@ -711,86 +731,6 @@ Item {
                 id: groupedColumn
                 width: parent.width
                 spacing: Common.Config.space.xs
-
-                RowLayout {
-                    width: parent.width
-                    spacing: Common.Config.space.sm
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: groupedRoot.group.title
-                        color: Common.Config.color.on_surface_variant
-                        font.family: Common.Config.fontFamily
-                        font.pixelSize: Common.Config.type.labelMedium.size
-                        font.weight: Font.Medium
-                        elide: Text.ElideRight
-                    }
-
-                    Rectangle {
-                        visible: groupedRoot.group.count > 1
-                        radius: Common.Config.shape.corner.sm
-                        color: Qt.alpha(Common.Config.color.primary, 0.2)
-                        implicitWidth: groupedCountText.implicitWidth + (Common.Config.space.sm * 2)
-                        implicitHeight: 20
-
-                        Text {
-                            id: groupedCountText
-                            anchors.centerIn: parent
-                            text: groupedRoot.group.count.toString()
-                            color: Common.Config.color.on_surface
-                            font.family: Common.Config.fontFamily
-                            font.pixelSize: Common.Config.type.labelSmall.size
-                            font.weight: Font.Bold
-                        }
-                    }
-
-                    Rectangle {
-                        id: groupedFocusButton
-                        visible: groupedRoot.group.count > 1
-                        implicitWidth: 24
-                        implicitHeight: 24
-                        radius: 12
-                        color: Qt.alpha(Common.Config.color.surface_variant, 0.55)
-                        border.width: 1
-                        border.color: Qt.alpha(Common.Config.color.outline_variant, 0.7)
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: Common.Config.motion.duration.shortMs
-                                easing.type: Common.Config.motion.easing.standard
-                            }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "\uf054"
-                            color: Common.Config.color.on_surface
-                            font.family: Common.Config.iconFontFamily
-                            font.pixelSize: 10
-                            font.weight: Font.Bold
-                        }
-
-                        HybridRipple {
-                            anchors.fill: parent
-                            color: Common.Config.color.on_surface
-                            pressX: groupedFocusArea.pressX
-                            pressY: groupedFocusArea.pressY
-                            pressed: groupedFocusArea.pressed
-                            radius: parent.radius
-                            stateOpacity: groupedFocusArea.containsMouse ? Common.Config.state.hoverOpacity : 0
-                        }
-                        MouseArea {
-                            id: groupedFocusArea
-                            property real pressX: width / 2
-                            property real pressY: height / 2
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: notificationStore.enterGroupFocus(groupedRoot.group.groupKey)
-                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
-                        }
-                    }
-                }
 
                 Components.NotificationCard {
                     width: groupedColumn.width

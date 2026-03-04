@@ -5,6 +5,7 @@ import "../../common" as Common
 Item {
     id: root
     property real value: 0
+    property real secondaryValue: -1
     property color accent: Common.Config.color.primary
     property string label: ""
     property string icon: ""
@@ -48,7 +49,10 @@ Item {
                     const center = width / 2;
                     const radius = Math.max(1, (width - strokeWidth * 2) / 2);
                     const startAngle = -Math.PI / 2;
-                    const endAngle = startAngle + (Math.PI * 2 * animatedValue / 100);
+                    const primary = Math.max(0, Math.min(100, animatedValue));
+                    const secondary = Math.max(0, Math.min(100, secondaryValue));
+                    const endAngle = startAngle + (Math.PI * 2 * primary / 100);
+                    const secondaryEndAngle = startAngle + (Math.PI * 2 * secondary / 100);
 
                     // Background track
                     ctx.lineWidth = strokeWidth;
@@ -59,6 +63,13 @@ Item {
                     ctx.stroke();
 
                     // Value arc
+                    if (secondaryValue >= 0) {
+                        ctx.strokeStyle = Qt.alpha(root.accent, 0.4);
+                        ctx.beginPath();
+                        ctx.arc(center, center, radius, startAngle, secondaryEndAngle);
+                        ctx.stroke();
+                    }
+
                     ctx.strokeStyle = root.accent;
                     ctx.beginPath();
                     ctx.arc(center, center, radius, startAngle, endAngle);

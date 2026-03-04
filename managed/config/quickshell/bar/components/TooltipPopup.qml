@@ -180,22 +180,12 @@ Item {
                 clip: true
                 color: Config.barPopupSurface
                 radius: Config.tooltipRadius
-                layer.enabled: popup.visible
-                // qmllint disable unqualified
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowBlur: 0.35
-                    shadowColor: Qt.alpha(Config.color.shadow, 0.35)
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 3
-                }
-                // qmllint enable unqualified
             }
             Rectangle {
                 id: panelBorder
 
                 antialiasing: true
-                border.color: Config.barPopupBorderColor
+                border.color: Config.color.outline_variant
                 border.width: 1
                 color: "transparent"
                 height: Math.max(0, panel.height - 1)
@@ -211,15 +201,6 @@ Item {
                 color: "transparent"
                 height: headerRow.visible ? (headerRow.implicitHeight + Config.tooltipPadding) : 0
                 radius: Config.tooltipRadius
-            }
-            Rectangle {
-                anchors.left: panel.left
-                anchors.right: panel.right
-                anchors.top: panel.top
-                color: Qt.alpha(Config.color.on_surface, 0.05)
-                height: headerRow.visible ? Math.round(headerRow.implicitHeight + Config.tooltipPadding * 0.8) : 0
-                radius: Config.tooltipRadius
-                visible: headerRow.visible
             }
             ColumnLayout {
                 id: layout

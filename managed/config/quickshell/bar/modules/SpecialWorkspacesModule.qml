@@ -63,7 +63,7 @@ Item {
                 dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
                 fontFamily: Config.iconFontFamily
                 fontSize: Config.iconSize
-                hyprland: root.hyprland
+                hypr: root.hyprland
                 label: root.iconFor(workspaceButton.modelData)
                 uniformWidth: false
                 urgent: workspaceButton.modelData.urgent

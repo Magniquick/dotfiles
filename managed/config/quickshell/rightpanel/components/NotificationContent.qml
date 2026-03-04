@@ -23,6 +23,8 @@ RowLayout {
     // expanded (e.g. on hover) by increasing maximumLineCount.
     property int bodyMaxLines: 0
     property bool bodyExpandable: false
+    property bool showBodyChevron: false
+    property bool bodyExpanded: false
     // If enabled, callers can expand the body on hover by setting bodyHoverActive.
     // Expanded previews are still capped for UI stability.
     property bool bodyExpandOnHover: false
@@ -86,6 +88,7 @@ RowLayout {
     readonly property int _collapsedBodyLines: root.bodyMaxLines
     readonly property int _expandedBodyLines: Math.min(15, Math.max(root.bodyMaxLines, root.bodyHoverMaxLines))
     readonly property bool _hoverExpandActive: root.bodyExpandOnHover && root.bodyHoverActive
+    readonly property bool _manualExpandActive: root.bodyExpandable && root.bodyExpanded
     readonly property bool hasDefaultAction: (root.entry?.notification?.actions ?? []).some(
         action => (action && action.identifier ? String(action.identifier) : "") === "default"
     )
@@ -249,7 +252,10 @@ RowLayout {
         return lines.join("\n");
     }
 
-    onEntryChanged: showSourceDetails = false
+    onEntryChanged: {
+        showSourceDetails = false;
+        bodyExpanded = false;
+    }
 
     ColumnLayout {
         Layout.fillWidth: true
@@ -323,6 +329,55 @@ RowLayout {
                                 source: leadingIconImage
                                 maskSource: leadingIconMask
                             }
+                        }
+                    }
+
+                    Rectangle {
+                        implicitWidth: 24
+                        implicitHeight: 24
+                        radius: 12
+                        color: "transparent"
+                        visible: root.showBodyChevron
+                            && root.bodyOverflows
+                            && !root.showSourceDetails
+                            && root.bodyMaxLines > 0
+                            && root.bodyExpandable
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.bodyExpanded ? "\uf077" : "\uf078"
+                            color: chevronArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface
+                            font.family: Common.Config.iconFontFamily
+                            font.pointSize: 9
+                            font.weight: Font.Bold
+                            opacity: 0.95
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: Common.Config.motion.duration.shortMs
+                                    easing.type: Common.Config.motion.easing.standard
+                                }
+                            }
+                        }
+
+                        HybridRipple {
+                            anchors.fill: parent
+                            color: Common.Config.color.on_surface
+                            pressX: chevronArea.pressX
+                            pressY: chevronArea.pressY
+                            pressed: chevronArea.pressed
+                            radius: parent.radius
+                            stateOpacity: chevronArea.containsMouse ? Common.Config.state.hoverOpacity : 0
+                        }
+                        MouseArea {
+                            id: chevronArea
+                            property real pressX: width / 2
+                            property real pressY: height / 2
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.bodyExpanded = !root.bodyExpanded
+                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
 
@@ -509,12 +564,12 @@ RowLayout {
                     text: root.displayBody
                     textFormat: Text.StyledText
                     maximumLineCount: (root.bodyMaxLines > 0 && root.bodyExpandable)
-                        ? (root._hoverExpandActive ? root._expandedBodyLines : root._collapsedBodyLines)
+                        ? ((root._hoverExpandActive || root._manualExpandActive) ? root._expandedBodyLines : root._collapsedBodyLines)
                         : 0
-                    elide: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive)
+                    elide: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive && !root._manualExpandActive)
                         ? Text.ElideRight
                         : Text.ElideNone
-                    clip: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive)
+                    clip: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive && !root._manualExpandActive)
                     color: Common.Config.color.on_surface
                     font.family: "Kyok"
                     font.weight: Font.Medium

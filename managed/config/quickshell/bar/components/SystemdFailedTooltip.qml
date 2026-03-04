@@ -73,7 +73,7 @@ ColumnLayout {
         Layout.fillWidth: true
         // Match the "inner container" styling used by ToDo tooltip.
         backgroundColor: Config.color.on_secondary_fixed_variant
-        borderColor: Config.barModuleBorderColor
+        borderColor: Config.color.outline_variant
         outlined: true
 
         content: [

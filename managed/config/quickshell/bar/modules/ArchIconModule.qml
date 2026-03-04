@@ -33,7 +33,7 @@ ModuleContainer {
         onClicked: function (mouse) {
             if (mouse.button === Qt.RightButton) {
                 Quickshell.execDetached([
-                    Quickshell.shellDir + "/qs",
+                    Quickshell.shellPath("qs"),
                     "--standalone",
                     "powermenu"
                 ]);

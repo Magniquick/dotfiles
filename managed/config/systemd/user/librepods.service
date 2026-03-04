@@ -1,0 +1,15 @@
+[Unit]
+Description=LibrePods (start minimized after GUI startup)
+After=graphical-session.target
+Wants=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/magni/Documents/Appimages/LibrePods
+ExecStart=/home/magni/Documents/Appimages/LibrePods/librepods-x86_64.AppImage --start-minimized
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

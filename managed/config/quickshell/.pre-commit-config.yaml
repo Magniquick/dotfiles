@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  - repo: local
+    hooks:
+      - id: qmllint
+        name: qmllint (qt6)
+        entry: managed/config/quickshell/tools/qmllint.sh
+        language: system
+        files: ^(managed/config/quickshell/)?(shell\.qml|bar/.*\.qml|leftpanel/.*\.qml|rightpanel/.*\.qml|powermenu/.*\.qml|hyprquickshot/(shell\.qml|src/.*\.qml|ui/.*\.qml)|common/(Config|Colors|ColorPalette|GlobalState|MaterialBridge)\.qml|common/services/.*\.qml|sysclock/.*\.qml)$

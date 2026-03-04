@@ -8,6 +8,7 @@ Item {
     property alias drawerContent: drawerRow.data
     property bool drawerLeft: false
     property int duration: Config.motion.duration.medium
+    readonly property bool hovered: hoverHandler.hovered
     property bool open: false
     property bool openOnHover: true
     property real reveal: root.open ? 1 : 0
@@ -63,6 +64,8 @@ Item {
         }
     }
     HoverHandler {
+        id: hoverHandler
+
         onHoveredChanged: {
             if (root.openOnHover)
                 root.open = hovered;

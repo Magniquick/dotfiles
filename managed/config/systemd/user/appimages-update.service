@@ -1,0 +1,9 @@
+[Unit]
+Description=Update AppImages (Twitch Drops Miner + LibrePods)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/magni/Documents/Appimages
+ExecStart=/usr/bin/env bash /home/magni/Documents/Appimages/update_appimages.sh

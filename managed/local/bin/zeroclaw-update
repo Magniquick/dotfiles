@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS:$ARCH" in
+  Linux:x86_64) TARGET="x86_64-unknown-linux-gnu" ;;
+  Linux:aarch64|Linux:arm64) TARGET="aarch64-unknown-linux-gnu" ;;
+  Linux:armv7l|Linux:armv6l) TARGET="armv7-unknown-linux-gnueabihf" ;;
+  Darwin:x86_64) TARGET="x86_64-apple-darwin" ;;
+  Darwin:arm64|Darwin:aarch64) TARGET="aarch64-apple-darwin" ;;
+  *)
+    echo "Unsupported platform: $OS/$ARCH" >&2
+    exit 1
+    ;;
+esac
+
+URL="https://github.com/zeroclaw-labs/zeroclaw/releases/latest/download/zeroclaw-${TARGET}.tar.gz"
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+curl -fsSL "$URL" -o "$TMPDIR/zeroclaw.tgz"
+tar -xzf "$TMPDIR/zeroclaw.tgz" -C "$TMPDIR"
+install -m 0755 "$TMPDIR/zeroclaw" "$HOME/.local/bin/zeroclaw-bin"
+
+echo "Updated zeroclaw-bin at $(date -Is)"
+"$HOME/.local/bin/zeroclaw-bin" --version

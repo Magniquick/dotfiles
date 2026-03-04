@@ -110,6 +110,8 @@ Item {
                 required property string messageId
                 required property string sender
                 required property string body
+                required property string metrics
+                required property string attachments
 
                 width: messageList.width
                 messageIndex: index
@@ -117,6 +119,8 @@ Item {
                 property string _messageId: messageId
                 role: sender
                 content: body
+                metrics: metrics
+                attachments: attachments
                 modelLabel: sender === "assistant" ? root.modelLabel : ""
                 moodIcon: root.moodIcon
                 moodName: root.moodName
@@ -135,6 +139,7 @@ Item {
             }
 
         }
+
     }
 
     Item {

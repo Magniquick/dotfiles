@@ -10,7 +10,7 @@ import "../components"
 ColumnLayout {
     id: root
 
-    property string currentProject: "Inbox"
+    property string currentProject: "Today"
     readonly property bool dropdownActive: projectSelector.popup.visible
     readonly property int iconSlot: Config.space.xxl * 2
     readonly property string lastUpdated: TodoistService.lastUpdatedLabel
@@ -44,8 +44,8 @@ ColumnLayout {
         if (idx !== -1) {
             projectSelector.currentIndex = idx;
         } else {
-            root.currentProject = "Inbox";
-            projectSelector.currentIndex = 0;
+            root.currentProject = "Today";
+            projectSelector.currentIndex = projects.indexOf("Today") !== -1 ? projects.indexOf("Today") : 0;
         }
 
         root.updateTasks();
@@ -347,7 +347,7 @@ ColumnLayout {
     TooltipCard {
         Layout.fillWidth: true
         backgroundColor: Config.color.on_secondary_fixed_variant
-        borderColor: Config.barModuleBorderColor
+        borderColor: Config.color.outline_variant
         outlined: true
 
         content: [
@@ -433,7 +433,7 @@ ColumnLayout {
                                 onClicked: {
                                     taskItem.completing = true;
                                     Qt.callLater(function () {
-                                        todoistClient.completeTask(root.todoistEnvFile, taskItem.modelData.id);
+                                        TodoistService.completeTask(taskItem.modelData.id);
                                         root.refresh();
                                     });
                                 }

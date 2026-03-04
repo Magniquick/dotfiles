@@ -11,10 +11,10 @@ Item {
     property var command: [] // Command to run (string or array of strings)
     property bool enabled: true // Whether the process should be running
     property string processName: (Array.isArray(command) ? command[0] : command) || "Process"
-    
+
     property int restartAttempts: 0
     property bool degraded: false
-    
+
     // Configuration
     property int maxBackoffMs: 30000
     property int baseBackoffMs: 1000
@@ -22,7 +22,7 @@ Item {
 
     signal output(string data)
     signal error(string data)
-    
+
     // Internal state
     property bool _waitingForRestart: false
 
@@ -57,10 +57,10 @@ Item {
         stdout: SplitParser {
             onRead: data => root.output(data)
         }
-        
+
         // Assuming stderr might also be useful, but original code didn't use it.
         // I'll leave stderr alone or expose it if needed. SystemdFailedModule used debug logging but from logic.
-        
+
         // qmllint disable signal-handler-parameters
         onExited: code => {
             // Only handle crash if it was supposed to be running
@@ -72,11 +72,11 @@ Item {
                  const backoff = Math.min(root.maxBackoffMs, root.baseBackoffMs * Math.pow(2, root.restartAttempts));
                  console.warn(`${root.processName}: crashed again (attempt ${root.restartAttempts + 1}), next restart in ${backoff}ms`);
             }
-            
+
             root.degraded = true;
             root.restartAttempts++;
             stabilityTimer.stop();
-            
+
             root._waitingForRestart = true;
             restartTimer.restart();
         }

@@ -1,16 +1,12 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
-import qsnative
+import qsgo
 import ".."
 
 Item {
     id: root
     visible: false
-
-    property bool checkupdatesAvailable: false
-    property bool pacmanAvailable: false
-    readonly property bool moduleAvailable: root.checkupdatesAvailable && root.pacmanAvailable
 
     // Treat as global config. If you need per-screen behavior later, move this
     // into a separate config singleton and have the service bind to it.
@@ -18,15 +14,18 @@ Item {
 
     property int updatesCount: 0
     property int aurUpdatesCount: 0
+    property int itemsCount: 0
     property string updatesText: ""
     property string aurUpdatesText: ""
     property string lastCheckedLabel: ""
     property string error: ""
     property bool refreshing: false
+    readonly property var updatesModel: provider
 
     function markNoUpdates() {
         root.updatesCount = 0;
         root.aurUpdatesCount = 0;
+        root.itemsCount = 0;
         root.updatesText = "";
         root.aurUpdatesText = "";
         root.error = "";
@@ -34,15 +33,11 @@ Item {
     }
 
     function refresh(reason) {
-        if (!root.moduleAvailable)
-            return;
         root.refreshing = true;
         provider.refresh(root.noAur);
     }
 
     function sync() {
-        if (!root.moduleAvailable)
-            return;
         provider.sync();
     }
 
@@ -53,7 +48,7 @@ Item {
     Timer {
         interval: 30000
         repeat: true
-        running: root.moduleAvailable
+        running: true
         triggeredOnStart: true
 
         onTriggered: root.refresh("timer")
@@ -63,7 +58,7 @@ Item {
         // Syncing package DBs is expensive; do it manually or on a long cadence.
         interval: 86400000
         repeat: true
-        running: root.moduleAvailable
+        running: true
         triggeredOnStart: false
 
         onTriggered: root.sync()
@@ -71,12 +66,6 @@ Item {
 
     Component.onCompleted: {
         root.markNoUpdates();
-        DependencyCheck.require("checkupdates", "UpdatesService", function(available) {
-            root.checkupdatesAvailable = available;
-        });
-        DependencyCheck.require("pacman", "UpdatesService", function(available) {
-            root.pacmanAvailable = available;
-        });
     }
 
     Connections {
@@ -87,6 +76,9 @@ Item {
         }
         function onAur_updates_countChanged() {
             root.aurUpdatesCount = provider.aur_updates_count;
+        }
+        function onItems_countChanged() {
+            root.itemsCount = provider.items_count;
         }
         function onUpdates_textChanged() {
             root.updatesText = provider.updates_text;

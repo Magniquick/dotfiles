@@ -10,6 +10,11 @@ import Quickshell.Services.Pipewire
 Singleton {
     id: root
 
+    property bool privacyStdoutLogging: true
+    property bool privacyFileLogging: true
+    property string cameraLogPath: "/tmp/quickshell-privacy-camera.log"
+    property bool _cameraLogInitialized: false
+
     readonly property bool debugPrivacy: {
         const value = Quickshell.env("QS_PRIVACY_DEBUG")
         if (value && value !== "0" && value !== "false") {
@@ -49,55 +54,7 @@ Singleton {
     }
 
     readonly property bool cameraActive: {
-        if (!Pipewire.ready || !Pipewire.nodes?.values) {
-            return false
-        }
-
-        if (root.inotifyAvailable) {
-            return root.v4l2OpenActive
-        }
-
-        const liveVideoNode = root.findLiveVideoStream()
-        if (liveVideoNode) {
-            if (root.debugPrivacy) {
-                console.log("[PrivacyService] camera active via live stream", liveVideoNode.name || "")
-            }
-            return true
-        }
-
-        const linkedVideoSource = root.findLinkedVideoSource()
-        if (linkedVideoSource) {
-            if (root.debugPrivacy) {
-                console.log("[PrivacyService] camera active via linked source", linkedVideoSource.name || "")
-            }
-            return true
-        }
-
-        for (let i = 0; i < Pipewire.nodes.values.length; i++) {
-            const node = Pipewire.nodes.values[i]
-            if (!node || !node.ready) {
-                continue
-            }
-
-            if (node.properties && node.properties["media.class"] === "Stream/Input/Video") {
-                if (node.properties["stream.is-live"] === "true") {
-                    if (root.debugPrivacy) {
-                        console.log("[PrivacyService] camera active via stream", node.name || "", node.properties["application.name"] || "")
-                    }
-                    return true
-                }
-                if (root.stateString(node.state) === "running") {
-                    if (root.debugPrivacy) {
-                        console.log("[PrivacyService] camera active via running stream", node.name || "")
-                    }
-                    return true
-                }
-            }
-        }
-        if (root.debugPrivacy) {
-            console.log("[PrivacyService] camera inactive (no live Stream/Input/Video)")
-        }
-        return false
+        return root.v4l2OpenActive
     }
 
     readonly property bool screensharingActive: {
@@ -136,17 +93,18 @@ Singleton {
 
     readonly property bool anyPrivacyActive: microphoneActive || cameraActive || screensharingActive
 
-    property bool inotifyAvailable: true
-    property bool fuserAvailable: true
     property bool v4l2OpenActive: false
     property string cameraDevice: "/dev/video0"
     property bool probingCamera: false
+    property string fuserProbeStdout: ""
+    property string fuserProbeStderr: ""
+    property string cameraHoldersSummary: ""
 
     Process {
         id: inotifyProcess
 
         command: ["inotifywait", "-m", "-e", "open", "-e", "close", root.cameraDevice]
-        running: root.inotifyAvailable
+        running: true
 
         stdout: SplitParser {
             onRead: data => {
@@ -155,6 +113,7 @@ Singleton {
                 }
                 if (data.indexOf("OPEN") !== -1) {
                     root.v4l2OpenActive = true
+                    root.probeCamera()
                     if (root.debugPrivacy) {
                         console.log("[PrivacyService] inotify OPEN", data.trim())
                     }
@@ -177,11 +136,10 @@ Singleton {
 
         onExited: code => {
             if (code !== 0) {
-                root.inotifyAvailable = false
                 if (root.debugPrivacy) {
                     console.warn("[PrivacyService] inotifywait exited", code)
                 }
-                root.probeCamera()
+                root.v4l2OpenActive = false
             }
         }
     }
@@ -189,11 +147,37 @@ Singleton {
     Process {
         id: fuserProbe
 
-        command: ["fuser", root.cameraDevice]
-        running: root.probingCamera && root.fuserAvailable
+        command: ["fuser", "-v", root.cameraDevice]
+        running: root.probingCamera
+
+        stdout: SplitParser {
+            onRead: data => {
+                if (!data) {
+                    return
+                }
+                root.fuserProbeStdout += data
+            }
+        }
+
+        stderr: SplitParser {
+            onRead: data => {
+                if (!data) {
+                    return
+                }
+                root.fuserProbeStderr += data
+            }
+        }
+
+        onRunningChanged: {
+            if (running) {
+                root.fuserProbeStdout = ""
+                root.fuserProbeStderr = ""
+            }
+        }
 
         onExited: code => {
             root.probingCamera = false
+            root.logFuserCommandSnapshot()
             if (code === 0) {
                 root.v4l2OpenActive = true
                 if (root.debugPrivacy) {
@@ -208,7 +192,7 @@ Singleton {
                 }
                 return
             }
-            root.fuserAvailable = false
+            root.v4l2OpenActive = false
             if (root.debugPrivacy) {
                 console.warn("[PrivacyService] fuser probe failed", code)
             }
@@ -216,14 +200,36 @@ Singleton {
     }
 
     function probeCamera() {
-        if (!root.fuserAvailable || root.probingCamera) {
+        if (root.probingCamera) {
             return
         }
         root.probingCamera = true
     }
 
     Component.onCompleted: {
+        root._cameraLogInitialized = true
         root.probeCamera()
+    }
+
+    onCameraActiveChanged: {
+        if (!root._cameraLogInitialized) {
+            root._cameraLogInitialized = true
+            return
+        }
+
+        const details = root.describeCameraEvidence()
+        const line = `[PrivacyService][${root.nowIso()}] camera ${root.cameraActive ? "ACTIVE" : "INACTIVE"}; ${details}`
+        root.persistCameraLogLine(line)
+        if (root.privacyStdoutLogging) {
+            console.log(line)
+        }
+    }
+
+    FileView {
+        id: cameraLogFile
+        path: root.cameraLogPath
+        blockLoading: true
+        printErrors: false
     }
 
     Timer {
@@ -304,69 +310,6 @@ Singleton {
         }
     }
 
-    function findLiveVideoStream() {
-        for (let i = 0; i < Pipewire.nodes.values.length; i++) {
-            const node = Pipewire.nodes.values[i]
-            if (!node || !node.ready || !node.properties) {
-                continue
-            }
-            if (node.properties["media.class"] !== "Stream/Input/Video") {
-                continue
-            }
-            if (node.properties["stream.is-live"] === "true") {
-                return node
-            }
-            if ((node.state || "").toLowerCase() === "running") {
-                return node
-            }
-        }
-        return null
-    }
-
-    function findLinkedVideoSource() {
-        if (!Pipewire.links?.values) {
-            return null
-        }
-        for (let i = 0; i < Pipewire.nodes.values.length; i++) {
-            const node = Pipewire.nodes.values[i]
-            if (!node || !node.ready || !node.properties) {
-                continue
-            }
-            if (node.properties["media.class"] !== "Video/Source") {
-                continue
-            }
-            if (root.stateString(node.state) === "running") {
-                return node
-            }
-            if (root.hasActiveLink(node)) {
-                return node
-            }
-        }
-        return null
-    }
-
-    function hasActiveLink(node) {
-        if (!Pipewire.links?.values || node.id === undefined || node.id === null) {
-            return false
-        }
-        for (let i = 0; i < Pipewire.links.values.length; i++) {
-            const link = Pipewire.links.values[i]
-            if (!link) {
-                continue
-            }
-            const state = root.stateString(link.state)
-            if (state !== "active") {
-                continue
-            }
-            const outId = link.outputNodeId || link.output_node_id || (link.output && link.output.node && link.output.node.id) || link.output_node || link.outputNode
-            const inId = link.inputNodeId || link.input_node_id || (link.input && link.input.node && link.input.node.id) || link.input_node || link.inputNode
-            if (outId === node.id || inId === node.id) {
-                return true
-            }
-        }
-        return false
-    }
-
     function looksLikeSystemVirtualMic(node) {
         if (!node) {
             return false
@@ -396,6 +339,89 @@ Singleton {
             return value.toLowerCase()
         }
         return String(value).toLowerCase()
+    }
+
+    function nowIso() {
+        return (new Date()).toISOString()
+    }
+
+    function logFuserCommandSnapshot() {
+        const raw = `${root.fuserProbeStdout || ""}\n${root.fuserProbeStderr || ""}`
+        const lines = raw.split("\n")
+        const hits = []
+        for (let i = 0; i < lines.length; i++) {
+            const line = (lines[i] || "").trim()
+            if (!line || line.indexOf(root.cameraDevice) !== -1 || line.indexOf("USER") !== -1) {
+                continue
+            }
+            const tokens = line.split(/\s+/)
+            if (tokens.length < 5) {
+                continue
+            }
+            const pid = tokens[1]
+            const command = tokens[tokens.length - 1]
+            if (/^\d+$/.test(pid)) {
+                hits.push(`${pid}:${command}`)
+            }
+        }
+        root.cameraHoldersSummary = hits.length > 0 ? hits.join(",") : ""
+        if (hits.length > 0) {
+            console.log(`[PrivacyService] ${root.cameraDevice} holders ${hits.join(", ")}`)
+        } else if (root.debugPrivacy) {
+            console.log(`[PrivacyService] ${root.cameraDevice} holders none`)
+        }
+    }
+
+    function persistCameraLogLine(line) {
+        if (!root.privacyFileLogging) {
+            return
+        }
+
+        const prefix = cameraLogFile.text()
+        const separator = prefix && prefix.length > 0 && !prefix.endsWith("\n") ? "\n" : ""
+        cameraLogFile.setText((prefix || "") + separator + line)
+    }
+
+    function describeCameraEvidence() {
+        const parts = []
+        parts.push(`device=${root.cameraDevice}`)
+        parts.push(`v4l2_open=${root.v4l2OpenActive ? "yes" : "no"}`)
+        parts.push(`holders=${root.cameraHoldersSummary !== "" ? root.cameraHoldersSummary : "none"}`)
+
+        if (!Pipewire.ready || !Pipewire.nodes?.values) {
+            parts.push("pipewire=not-ready")
+            return parts.join(" ")
+        }
+
+        const apps = []
+        const streams = []
+        for (let i = 0; i < Pipewire.nodes.values.length; i++) {
+            const node = Pipewire.nodes.values[i]
+            if (!node || !node.ready || !node.properties) {
+                continue
+            }
+            if (node.properties["media.class"] !== "Stream/Input/Video") {
+                continue
+            }
+
+            const app = node.properties["application.name"] || ""
+            if (app && apps.indexOf(app) === -1) {
+                apps.push(app)
+            }
+
+            const state = root.stateString(node.state)
+            const live = node.properties["stream.is-live"] || ""
+            streams.push(`${node.name || "unnamed"}(state=${state},live=${live || "unknown"})`)
+        }
+
+        parts.push(`video_streams=${streams.length}`)
+        if (apps.length > 0) {
+            parts.push(`apps=${apps.join(",")}`)
+        }
+        if (streams.length > 0) {
+            parts.push(`streams=${streams.join(";")}`)
+        }
+        return parts.join(" ")
     }
 
     function getMicrophoneStatus() {

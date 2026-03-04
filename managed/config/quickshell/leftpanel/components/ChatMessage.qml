@@ -20,6 +20,12 @@ Item {
 
     property bool editing: false
     property bool renderMarkdown: true
+    property string metrics: ""
+    property string attachments: ""
+
+    property var attachmentList: {
+        try { return JSON.parse(root.attachments) } catch(e) { return [] }
+    }
 
     signal regenerateRequested()
     signal deleteRequested()
@@ -29,7 +35,44 @@ Item {
     readonly property bool isUser: role === "user"
     readonly property color accentColor: isUser ? Common.Config.color.primary : Common.Config.color.primary
 
-    // Parse content into blocks (text and code)
+    // Streaming fade: when a new block appears (block count increases), fade it in.
+    // We track the last-seen block count separately from the model so the timer only
+    // fires on genuine additions, not on per-token content growth within the same block.
+    property int _streamBlockCount: 0
+    property real _blockFadeOpacity: 1
+
+    onStreamingChanged: {
+        _streamBlockCount = streaming ? 0 : 0;
+        _blockFadeOpacity = 1;
+    }
+
+    onContentBlocksChanged: {
+        if (!root.streaming) return;
+        const n = root.contentBlocks.length;
+        if (n > _streamBlockCount) {
+            _streamBlockCount = n;
+            _blockFadeOpacity = 0;
+            blockFadeTimer.restart();
+        }
+    }
+
+    Timer {
+        id: blockFadeTimer
+        interval: 16
+        onTriggered: root._blockFadeOpacity = 1
+    }
+
+    // Parse content into blocks (text paragraphs and code).
+    // Text sections are split on double-newlines so each paragraph gets its own
+    // block — this lets the streaming fade trigger per paragraph, not just per
+    // code fence.  Handles partial/unclosed fences mid-stream.
+    function textToBlocks(raw) {
+        return raw.split(/\n\n+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 0)
+            .map(s => ({ type: "text", content: s }));
+    }
+
     readonly property var contentBlocks: {
         const blocks = [];
         const text = content;
@@ -40,23 +83,37 @@ Item {
         while ((match = codeBlockRegex.exec(text)) !== null) {
             if (match.index > lastIndex) {
                 const textBefore = text.substring(lastIndex, match.index).trim();
-                if (textBefore) blocks.push({ type: "text", content: textBefore });
+                if (textBefore) blocks.push(...textToBlocks(textBefore));
             }
             blocks.push({
                 type: "code",
                 language: match[1] || "txt",
-                content: match[2].replace(/\n$/, "")
+                content: match[2].replace(/\n$/, ""),
+                completed: true
             });
             lastIndex = match.index + match[0].length;
         }
 
         if (lastIndex < text.length) {
-            const remaining = text.substring(lastIndex).trim();
-            if (remaining) blocks.push({ type: "text", content: remaining });
+            const remaining = text.substring(lastIndex);
+            // Check for an unclosed opening fence (streaming mid-block)
+            const fenceIdx = remaining.search(/```\w*\n/);
+            if (fenceIdx >= 0) {
+                const textBefore = remaining.substring(0, fenceIdx).trim();
+                if (textBefore) blocks.push(...textToBlocks(textBefore));
+                const afterFence = remaining.substring(fenceIdx);
+                const langMatch = afterFence.match(/^```(\w*)\n/);
+                const lang = langMatch ? (langMatch[1] || "txt") : "txt";
+                const codeContent = afterFence.substring(langMatch ? langMatch[0].length : 4).replace(/\n$/, "");
+                blocks.push({ type: "code", language: lang, content: codeContent, completed: false });
+            } else {
+                const trimmed = remaining.trim();
+                if (trimmed) blocks.push(...textToBlocks(trimmed));
+            }
         }
 
         if (blocks.length === 0 && text.trim()) {
-            blocks.push({ type: "text", content: text });
+            blocks.push(...textToBlocks(text));
         }
 
         return blocks;
@@ -114,6 +171,27 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                Rectangle {
+                  visible: root.editing
+                  opacity: root.editing ? 1.0 : 0.0
+                  color: Qt.alpha(Common.Config.color.error, 0.12)
+                  radius: 4
+                  implicitHeight: editLabel.implicitHeight + 8
+                  implicitWidth: editLabel.implicitWidth + 16
+
+                  Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                  Text {
+                    id: editLabel
+                    anchors.centerIn: parent
+                    text: "EDITING"
+                    font.pixelSize: 10
+                    font.family: Common.Config.fontFamily
+                    font.letterSpacing: 0.5
+                    color: Common.Config.color.error
+                  }
+                }
 
                 // Action buttons (appear on hover)
                 Row {
@@ -220,27 +298,10 @@ Item {
                 }
             }
 
-            // While streaming, render the raw text directly (no markdown parsing / code block
-            // splitting) to avoid stutter from rebuilding delegates on every token chunk.
-            TextEdit {
-                Layout.fillWidth: true
-                Layout.topMargin: 2
-                visible: root.streaming && !root.thinking && !root.editing
-                text: root.content
-                textFormat: TextEdit.PlainText
-                color: Common.Config.color.on_surface
-                wrapMode: TextEdit.Wrap
-                font.family: Common.Config.fontFamily
-                font.pixelSize: 13
-                readOnly: true
-                selectByMouse: true
-                cursorVisible: false
-                activeFocusOnPress: false
-            }
-
-            // Content blocks
+            // Content blocks — always live, including during streaming.
+            // contentBlocks handles partial fences so markdown renders cleanly mid-stream.
             Repeater {
-                model: (root.streaming || root.thinking || root.editing || !root.renderMarkdown) ? [] : root.contentBlocks
+                model: (!root.thinking && !root.editing && root.renderMarkdown) ? root.contentBlocks : []
 
                 Loader {
                     required property var modelData
@@ -248,6 +309,13 @@ Item {
 
                     Layout.fillWidth: true
                     Layout.topMargin: index === 0 ? 0 : 1
+
+                    opacity: (root.streaming && index === root.contentBlocks.length - 1)
+                        ? root._blockFadeOpacity : 1
+
+                    Behavior on opacity {
+                        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                    }
 
                     sourceComponent: modelData.type === "code" ? codeBlockComponent : textBlockComponent
 
@@ -263,8 +331,6 @@ Item {
                     Component {
                         id: textBlockComponent
                         TextEdit {
-                            // Treat "soft" newlines as hard breaks for chat rendering:
-                            // many LLMs emit single '\n' for layout, but Markdown collapses them.
                             text: root.renderMarkdown
                                 ? String(modelData.content).replace(/\n/g, "  \n")
                                 : modelData.content
@@ -295,7 +361,7 @@ Item {
             TextEdit {
                 Layout.fillWidth: true
                 Layout.topMargin: 2
-                visible: !root.streaming && !root.thinking && !root.editing && !root.renderMarkdown
+                visible: !root.thinking && !root.editing && !root.renderMarkdown
                 text: root.content
                 textFormat: TextEdit.PlainText
                 color: Common.Config.color.on_surface
@@ -334,6 +400,48 @@ Item {
                         root.editing = false; event.accepted = true
                     }
                 }
+            }
+
+            // Image attachment thumbnails (user messages with attached images)
+            Flow {
+                visible: root.isUser && root.attachmentList.length > 0
+                spacing: 6
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+
+                Repeater {
+                    model: root.attachmentList
+                    Rectangle {
+                        required property var modelData
+                        width: 80; height: 80; radius: 6; clip: true
+                        color: Common.Config.color.surface_container_highest
+
+                        Image {
+                            anchors.fill: parent
+                            source: modelData.b64 ? "data:" + modelData.mime + ";base64," + modelData.b64 : ""
+                            fillMode: Image.PreserveAspectCrop
+                        }
+                    }
+                }
+            }
+
+            // Per-message stream metrics (assistant messages, shown after streaming completes)
+            Text {
+                property var metricsData: {
+                    try { return JSON.parse(root.metrics) } catch(e) { return {} }
+                }
+                property int metricsTokens: metricsData.output_tokens || 0
+                property int metricsTtft: metricsData.ttft_ms || 0
+
+                visible: root.isAssistant && root.done && !root.thinking && metricsTokens > 0
+                text: metricsTtft > 0
+                    ? metricsTtft + "ms ttft  ·  " + metricsTokens + " tok"
+                    : metricsTokens + " tok"
+                color: Common.Config.color.on_surface_variant
+                opacity: 0.45
+                font.pixelSize: 10
+                font.family: Common.Config.fontFamily
+                Layout.topMargin: 4
             }
         }
     }

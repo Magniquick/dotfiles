@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export ZEROCLAW_WORKSPACE="$HOME/.config/zeroclaw/workspace"
+exec "$HOME/.local/bin/zeroclaw-bin" --config-dir "$HOME/.config/zeroclaw/.zeroclaw" "$@"

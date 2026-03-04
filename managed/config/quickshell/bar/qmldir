@@ -11,3 +11,6 @@ singleton TodoistService 1.0 services/TodoistService.qml
 singleton CalendarService 1.0 services/CalendarService.qml
 singleton BrightnessService 1.0 services/BrightnessService.qml
 singleton NetworkService 1.0 services/NetworkService.qml
+singleton HyprDisplayService 1.0 services/HyprDisplayService.qml
+singleton HyprDisplayProfilesService 1.0 services/HyprDisplayProfilesService.qml
+singleton HyprDisplayConfigState 1.0 services/HyprDisplayConfigState.qml

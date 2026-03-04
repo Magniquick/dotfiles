@@ -1,4 +1,5 @@
 import QtQuick
+import Qcm.Material as MD
 import "../../common" as Common
 
 Item {
@@ -17,6 +18,7 @@ Item {
             left: parent.left
             right: parent.right
         }
+        elevation: MD.Token.elevation.level1
         onClicked: root.dismissRequested()
 
         NotificationContent {
@@ -29,7 +31,10 @@ Item {
             entry: root.entry
             showCloseButton: true
             showSourceButton: true
+            showBodyChevron: true
             showBodyLeadIcon: false
+            bodyMaxLines: 3
+            bodyExpandable: true
             onCloseClicked: root.dismissRequested()
         }
     }

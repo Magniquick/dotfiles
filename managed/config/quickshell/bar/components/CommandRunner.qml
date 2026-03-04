@@ -6,6 +6,12 @@ import "../../common" as Common
 Item {
     id: root
 
+    // Public contract:
+    // - output is the last successful command stdout (trimmed).
+    // - output is never cleared on trigger, so consumers can render stable
+    //   last-known data while a refresh is in-flight.
+    // - consume success via onRan(output); use onError/onTimeout for failures.
+
     // String uses `sh -c` for backward-compat. Prefer passing an argv array.
     property var command: ""
     property bool enabled: true
@@ -31,7 +37,6 @@ Item {
         if (Array.isArray(command) && command.length === 0)
             return;
 
-        root.output = "";
         root.errorOutput = "";
         root._pendingStdout = "";
 

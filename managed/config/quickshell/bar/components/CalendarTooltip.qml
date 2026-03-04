@@ -48,15 +48,16 @@ Item {
             return;
         }
 
-        if (payload.status) {
-            calendar.calendarStatus = payload.status;
-            calendar.calendarGeneratedAt = payload.generatedAt || "";
-            calendar.eventsByDay = payload.eventsByDay || ({});
-        } else {
-            calendar.calendarStatus = "legacy";
+        if (!payload.status || typeof payload.eventsByDay !== "object") {
+            calendar.eventsByDay = ({});
+            calendar.calendarStatus = "error";
             calendar.calendarGeneratedAt = "";
-            calendar.eventsByDay = payload.eventsByDay || payload || ({});
+            return;
         }
+
+        calendar.calendarStatus = payload.status;
+        calendar.calendarGeneratedAt = payload.generatedAt || "";
+        calendar.eventsByDay = payload.eventsByDay || ({});
     }
     function dayKey(date) {
         if (!date)

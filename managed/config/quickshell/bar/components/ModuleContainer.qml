@@ -1,7 +1,9 @@
 pragma ComponentBehavior: Bound
 import ".."
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
+import "../../common/components" as CommonComponents
 
 Rectangle {
     id: root
@@ -14,7 +16,7 @@ Rectangle {
     readonly property int contentImplicitWidth: contentRow.implicitWidth + root.paddingLeft + root.paddingRight
     property int contentSpacing: Config.moduleSpacing
     readonly property bool hovered: hoverHandler.hovered
-    property int marginBottom: 0
+    property int marginBottom: Config.spaceHalfXs
     property int marginLeft: Config.moduleMarginX
     property int marginRight: Config.moduleMarginX
     property int marginTop: Config.outerGaps
@@ -41,6 +43,7 @@ Rectangle {
 
     signal tooltipRefreshRequested
     signal clicked
+    signal rightClicked
 
     Layout.bottomMargin: root.marginBottom
     Layout.leftMargin: root.marginLeft
@@ -49,11 +52,20 @@ Rectangle {
     antialiasing: true
     color: root.surfaceColor
     border.width: root.backgroundTransparent ? 0 : Config.barModuleBorderWidth
-    border.color: root.backgroundTransparent ? "transparent" : Config.barModuleBorderColor
+    border.color: root.backgroundTransparent ? "transparent" : Config.color.outline_variant
     radius: Math.min(width, height) / 2
     implicitHeight: root.collapsed ? 0 : Math.round(root.contentImplicitHeight)
     implicitWidth: root.collapsed ? 0 : Math.round(root.contentImplicitWidth)
     visible: !root.collapsed
+    layer.enabled: Config.barPillShadowsEnabled && !root.backgroundTransparent && root.visible
+    layer.effect: MultiEffect {
+        autoPaddingEnabled: true
+        shadowEnabled: true
+        shadowBlur: 0.25
+        shadowColor: Qt.alpha(Config.color.shadow, 0.38)
+        shadowHorizontalOffset: 0
+        shadowVerticalOffset: 2
+    }
 
     Behavior on color {
         ColorAnimation {
@@ -61,7 +73,6 @@ Rectangle {
             easing.type: Config.motion.easing.standard
         }
     }
-
     RowLayout {
         id: contentRow
 
@@ -103,12 +114,19 @@ Rectangle {
         id: hoverHandler
     }
     TapHandler {
+        acceptedButtons: Qt.LeftButton
+        gesturePolicy: TapHandler.ReleaseWithinBounds
         onTapped: root.clicked()
+    }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: root.rightClicked()
     }
     Component {
         id: defaultTooltipContent
 
-        Text {
+        CommonComponents.LinkText {
             color: Config.color.on_surface
             font.family: Config.fontFamily
             font.pixelSize: Config.type.bodyMedium.size

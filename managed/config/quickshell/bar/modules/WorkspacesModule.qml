@@ -43,7 +43,7 @@ Item {
                 dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
                 fontFamily: Config.fontFamily
                 fontSize: Config.fontSize
-                hyprland: root.hyprland
+                hypr: root.hyprland
                 label: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
                 urgent: workspaceButton.modelData.urgent
                 visible: workspaceButton.modelData.id >= 0 && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
