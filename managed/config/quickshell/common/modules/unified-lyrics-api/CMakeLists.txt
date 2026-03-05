@@ -6,8 +6,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
+
 find_package(Qt6 REQUIRED COMPONENTS Core Qml Concurrent)
 find_program(GO_EXECUTABLE go REQUIRED)
+set(UNIFIEDLYRICS_GO_BUILD_FLAGS "-trimpath" "-ldflags=-s -w")
+set(UNIFIEDLYRICS_CGO_CFLAGS "-O3")
+set(UNIFIEDLYRICS_CGO_CXXFLAGS "-O3")
+if(QS_NATIVE_CPU)
+    list(APPEND UNIFIEDLYRICS_CGO_CFLAGS "-march=native" "-mtune=native")
+    list(APPEND UNIFIEDLYRICS_CGO_CXXFLAGS "-march=native" "-mtune=native")
+endif()
+string(JOIN " " UNIFIEDLYRICS_CGO_CFLAGS_STR ${UNIFIEDLYRICS_CGO_CFLAGS})
+string(JOIN " " UNIFIEDLYRICS_CGO_CXXFLAGS_STR ${UNIFIEDLYRICS_CGO_CXXFLAGS})
 
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/unifiedlyrics")
 set(UNIFIED_LYRICS_GO_LIB "${QML_MODULE_DIR}/libunifiedlyrics_go.so")
@@ -15,7 +30,10 @@ set(UNIFIED_LYRICS_GO_LIB "${QML_MODULE_DIR}/libunifiedlyrics_go.so")
 add_custom_command(
     OUTPUT "${UNIFIED_LYRICS_GO_LIB}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${QML_MODULE_DIR}"
-    COMMAND "${GO_EXECUTABLE}" build -buildmode=c-shared -o "${UNIFIED_LYRICS_GO_LIB}" ./capi
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "CGO_CFLAGS=${UNIFIEDLYRICS_CGO_CFLAGS_STR}"
+        "CGO_CXXFLAGS=${UNIFIEDLYRICS_CGO_CXXFLAGS_STR}"
+        "${GO_EXECUTABLE}" build -buildmode=c-shared ${UNIFIEDLYRICS_GO_BUILD_FLAGS} -o "${UNIFIED_LYRICS_GO_LIB}" ./capi
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
     COMMENT "Building unified-lyrics Go shared library"
 )
@@ -35,6 +53,10 @@ set_target_properties(unifiedlyrics_plugin
 target_include_directories(unifiedlyrics_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
 )
+
+if(QS_NATIVE_CPU)
+    target_compile_options(unifiedlyrics_plugin PRIVATE -march=native -mtune=native)
+endif()
 
 add_dependencies(unifiedlyrics_plugin unifiedlyrics_go_lib)
 

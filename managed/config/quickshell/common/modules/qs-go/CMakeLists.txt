@@ -6,10 +6,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml)
 
 # Build the Go shared library once and keep it next to the QML module output.
 find_program(GO_EXECUTABLE go REQUIRED)
+set(QSGO_GO_BUILD_FLAGS "-trimpath" "-ldflags=-s -w")
+set(QSGO_CGO_CFLAGS "-O3")
+set(QSGO_CGO_CXXFLAGS "-O3")
+if(QS_NATIVE_CPU)
+    list(APPEND QSGO_CGO_CFLAGS "-march=native" "-mtune=native")
+    list(APPEND QSGO_CGO_CXXFLAGS "-march=native" "-mtune=native")
+endif()
+string(JOIN " " QSGO_CGO_CFLAGS_STR ${QSGO_CGO_CFLAGS})
+string(JOIN " " QSGO_CGO_CXXFLAGS_STR ${QSGO_CGO_CXXFLAGS})
 
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/qsgo")
 set(QSGO_GO_LIB "${QML_MODULE_DIR}/libqsgo_go.so")
@@ -22,7 +37,10 @@ file(GLOB_RECURSE QSGO_GO_SOURCES
 add_custom_command(
     OUTPUT "${QSGO_GO_LIB}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${QML_MODULE_DIR}"
-    COMMAND "${GO_EXECUTABLE}" build -buildmode=c-shared -o "${QSGO_GO_LIB}" ./capi
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "CGO_CFLAGS=${QSGO_CGO_CFLAGS_STR}"
+        "CGO_CXXFLAGS=${QSGO_CGO_CXXFLAGS_STR}"
+        "${GO_EXECUTABLE}" build -buildmode=c-shared ${QSGO_GO_BUILD_FLAGS} -o "${QSGO_GO_LIB}" ./capi
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
     DEPENDS ${QSGO_GO_SOURCES}
     COMMENT "Building qs-go Go shared library"
@@ -49,6 +67,10 @@ set_target_properties(qsgo_plugin
 target_include_directories(qsgo_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
 )
+
+if(QS_NATIVE_CPU)
+    target_compile_options(qsgo_plugin PRIVATE -march=native -mtune=native)
+endif()
 
 add_dependencies(qsgo_plugin qsgo_go_lib)
 

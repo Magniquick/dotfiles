@@ -23,7 +23,7 @@ if [[ -f "$BUILD_DIR/CMakeCache.txt" ]]; then
   fi
 fi
 
-cmake -S "$MODULE_DIR" -B "$BUILD_DIR" -G Ninja
+cmake -S "$MODULE_DIR" -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build "$BUILD_DIR"
 
 echo "QML2_IMPORT_PATH=$BUILD_DIR/qml"

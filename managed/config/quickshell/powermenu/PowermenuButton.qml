@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import "./materialkit" as MK
+import "common/materialkit" as MK
 import "common" as Common
 
 MK.ElevationRectangle {

@@ -171,6 +171,7 @@ void QsGoAiSession::regenerate(const QString& messageId)
   if (userIdx < 0) return;
 
   const QString userText = m_messages.at(userIdx).body;
+  const QString userAttachments = m_messages.at(userIdx).attachments;
 
   // Remove from userIdx onwards.
   beginRemoveRows({}, userIdx, m_messages.size() - 1);
@@ -178,7 +179,7 @@ void QsGoAiSession::regenerate(const QString& messageId)
     m_messages.removeLast();
   endRemoveRows();
 
-  startStream(userText, QString());
+  startStream(userText, userAttachments);
 }
 
 void QsGoAiSession::deleteMessage(const QString& messageId)
@@ -443,6 +444,17 @@ QString QsGoAiSession::buildHistoryJson() const
     QJsonObject obj;
     obj[QStringLiteral("sender")] = msg.sender;
     obj[QStringLiteral("body")]   = msg.body;
+    const QString attachments = msg.attachments.trimmed();
+    if (!attachments.isEmpty()) {
+      const QJsonDocument doc = QJsonDocument::fromJson(attachments.toUtf8());
+      if (!doc.isNull()) {
+        if (doc.isArray()) {
+          obj[QStringLiteral("attachments")] = doc.array();
+        } else if (doc.isObject()) {
+          obj[QStringLiteral("attachments")] = QJsonArray{doc.object()};
+        }
+      }
+    }
     arr.append(obj);
   }
   return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));

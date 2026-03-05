@@ -3,6 +3,8 @@ import QtQuick.Shapes
 
 Shape {
   id: root
+  asynchronous: false
+  preferredRendererType: Shape.CurveRenderer
 
   property real progress: 0
   property real arcRadius: Math.max(0, Math.min(width, height) / 2 - strokeWidth)

@@ -201,6 +201,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 **No automated tests.** Manual verification required: run ./qs at repo root with a short timeout and monitor output logs.
 - In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
+- **Lockscreen safety**: Never terminate/kill a running lockscreen instance unless authentication has succeeded and the session unlock path is executing. Do not use timeout/force-kill smoke tests (`timeout ... quickshell --path lockscreen`) against active lock sessions, as this can leave Hyprland in an invalid lock state.
 
 ## Dependencies
 

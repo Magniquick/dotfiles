@@ -21,7 +21,7 @@ Item {
 
   CircleProgressShape {
     anchors.fill: parent
-    arcRadius: Math.max(0, Math.min(width, height) / 2 - 3)
+    arcRadius: Math.max(0, Math.min(width, height) / 2 - root.strokeWidth / 2 - 1)
     progress: root.progress
     strokeWidth: root.strokeWidth
     strokeColor: root.strokeColor

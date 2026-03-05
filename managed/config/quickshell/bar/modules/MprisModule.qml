@@ -89,9 +89,15 @@ ModuleContainer {
     property double _lyricsManualUntilMs: 0
     property string _lyricsTrackRef: ""
     property string _lyricsLookupKey: ""
+    property string _lyricsRequestKey: ""
+    property var _lyricsMissingLookupKeys: ({})
     property var activeLyricsLines: []
     property bool activeLyricsSynced: false
     property string activeLyricsSource: ""
+    readonly property bool hasLyrics: activeLyricsLines && activeLyricsLines.length > 0
+    property bool _lyricsPanelStickyVisible: false
+    readonly property bool shouldShowLyricsPanel: hasLyrics || (_lyricsPanelStickyVisible && lyricsClient.busy)
+    property real lyricsPanelReveal: shouldShowLyricsPanel ? 1 : 0
     readonly property string lyricsEnvFile: Config.envFile
     readonly property string displaySubtitle: {
         if (root.trackArtist !== "" && root.trackAlbum !== "")
@@ -162,6 +168,9 @@ ModuleContainer {
     }
 
     function chooseLyricsSource() {
+        if (root.hasNoLyricsForKey(root._lyricsLookupKey))
+            return { source: "", synced: false, lines: [] };
+
         const lines = lyricsClient.lines || [];
         if (!lyricsClient.loaded || lines.length === 0)
             return { source: "", synced: false, lines: [] };
@@ -171,6 +180,63 @@ ModuleContainer {
             synced: lyricsClient.syncType === "LINE_SYNCED",
             lines: lines
         };
+    }
+
+    function hasNoLyricsForKey(key) {
+        if (!key)
+            return false;
+        return root._lyricsMissingLookupKeys[key] === true;
+    }
+
+    function rememberNoLyricsForKey(key) {
+        if (!key)
+            return;
+        if (root._lyricsMissingLookupKeys[key] === true)
+            return;
+        const next = Object.assign({}, root._lyricsMissingLookupKeys);
+        next[key] = true;
+        root._lyricsMissingLookupKeys = next;
+    }
+
+    function clearNoLyricsForKey(key) {
+        if (!key)
+            return;
+        if (root._lyricsMissingLookupKeys[key] !== true)
+            return;
+        const next = Object.assign({}, root._lyricsMissingLookupKeys);
+        delete next[key];
+        root._lyricsMissingLookupKeys = next;
+    }
+
+    function isNoLyricsError(errorText) {
+        const msg = errorText ? String(errorText).toLowerCase() : "";
+        if (msg === "")
+            return false;
+        if (msg.indexOf("no lyrics") >= 0)
+            return true;
+        if (msg.indexOf("lyrics not found") >= 0)
+            return true;
+        if (msg.indexOf("spotify and lrclib failed") >= 0)
+            return true;
+        return false;
+    }
+
+    function lyricsSourceIcon(source) {
+        const value = source ? String(source).toLowerCase() : "";
+        if (value.indexOf("spotify") === 0)
+            return "";
+        if (value.indexOf("lrclib") === 0)
+            return "";
+        return "";
+    }
+
+    function lyricsSourceLabel(source) {
+        const value = source ? String(source).toLowerCase() : "";
+        if (value.indexOf("spotify") === 0)
+            return "Spotify";
+        if (value.indexOf("lrclib") === 0)
+            return "LRCLIB";
+        return "";
     }
 
     function updateLyricsModel() {
@@ -302,10 +368,19 @@ ModuleContainer {
         const artist = root.trackArtist ? String(root.trackArtist).trim() : "";
         const album = root.trackAlbum ? String(root.trackAlbum).trim() : "";
         const lengthMicros = root.lengthMicrosForLyrics(root.activePlayer);
+        const keyChanged = lookupKey !== root._lyricsLookupKey;
+        root._lyricsLookupKey = lookupKey;
+        root._lyricsTrackRef = ref;
 
-        if (lookupKey !== root._lyricsLookupKey || (!lyricsClient.loaded && !lyricsClient.busy)) {
-            root._lyricsLookupKey = lookupKey;
-            root._lyricsTrackRef = ref;
+        if (root.hasNoLyricsForKey(lookupKey)) {
+            root._lyricsPanelStickyVisible = false;
+            root._lastLyricIndex = -2;
+            root.updateLyricsModel();
+            return;
+        }
+
+        if (keyChanged || (!lyricsClient.loaded && !lyricsClient.busy)) {
+            root._lyricsRequestKey = lookupKey;
             lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, lengthMicros);
         }
 
@@ -499,6 +574,13 @@ ModuleContainer {
             return "";
 
         return "";
+    }
+
+    Behavior on lyricsPanelReveal {
+        NumberAnimation {
+            duration: Config.motion.duration.short
+            easing.type: Easing.OutCubic
+        }
     }
 
     collapsed: !root.activePlayer || !root.hasContent
@@ -886,23 +968,35 @@ ModuleContainer {
             Rectangle {
                 Layout.fillWidth: true
                 // 3 visible lyric rows + vertical padding.
-                Layout.preferredHeight: Config.type.bodyLarge.size * 3 + Config.space.md * 4
+                Layout.preferredHeight: (Config.type.bodyLarge.size * 3 + Config.space.md * 4) * root.lyricsPanelReveal
+                Layout.minimumHeight: 0
+                Layout.maximumHeight: Config.type.bodyLarge.size * 3 + Config.space.md * 4
                 border.color: Qt.alpha(Config.color.outline_variant, 0.55)
                 border.width: 1
                 clip: true
                 color: Qt.alpha(Config.color.surface_container_highest, 0.45)
+                opacity: root.lyricsPanelReveal
                 radius: Config.shape.corner.md
+                visible: root.lyricsPanelReveal > 0.001
 
                 Item {
+                    id: lyricsPane
+
                     anchors.fill: parent
                     anchors.margins: Config.space.md
 
                     readonly property bool lyricsLoaded: root.activeLyricsLines && root.activeLyricsLines.length > 0
+                    readonly property string sourceIcon: root.lyricsSourceIcon(root.activeLyricsSource)
+                    readonly property string sourceLabel: root.lyricsSourceLabel(root.activeLyricsSource)
+
+                    HoverHandler {
+                        id: lyricsHover
+                    }
 
                     // Placeholder / error / loading text
                     Text {
                         anchors.centerIn: parent
-                        visible: !parent.lyricsLoaded
+                        visible: !lyricsPane.lyricsLoaded
                         color: Config.color.on_surface_variant
                         font.family: Config.fontFamily
                         font.pixelSize: Config.type.bodyMedium.size
@@ -913,15 +1007,15 @@ ModuleContainer {
                         opacity: 0.8
                         text: (root.lyricsModel && root.lyricsModel.length > 0) ? root.lyricsModel[0].text : "Loading lyrics..."
                         wrapMode: Text.WordWrap
-                        width: parent.width
+                        width: lyricsPane.width
                     }
 
                     ListView {
                         id: lyricsView
 
-                        anchors.fill: parent
+                        anchors.fill: lyricsPane
                         clip: true
-                        visible: parent.lyricsLoaded
+                        visible: lyricsPane.lyricsLoaded
 
                         model: root.activeLyricsLines
                         spacing: Config.space.xs
@@ -1028,6 +1122,92 @@ ModuleContainer {
                             function onActiveLyricsLinesChanged() { lyricsView.followCurrent(); }
                         }
                     }
+
+                    Item {
+                        id: sourceBadgeHitbox
+
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: Math.max(14, sourceBadge.implicitHeight)
+                        visible: sourceBadge.text !== "" && root.tooltipActive
+                        width: Math.max(14, sourceBadge.implicitWidth)
+
+                        property bool hovered: sourceBadgeMouse.containsMouse
+
+                        Text {
+                            id: sourceBadge
+
+                            anchors.centerIn: parent
+                            color: Config.color.on_surface_variant
+                            font.family: Config.iconFontFamily
+                            font.pixelSize: Math.max(10, Config.type.labelSmall.size)
+                            font.weight: Font.Normal
+                            opacity: lyricsHover.hovered ? 0.42 : 0.0
+                            text: lyricsPane.sourceIcon
+
+                            Behavior on opacity {
+                                enabled: root.tooltipActive
+                                NumberAnimation {
+                                    duration: Config.motion.duration.short
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: sourceBadgeMouse
+
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                        }
+                    }
+
+                    Rectangle {
+                        id: sourceInfoPill
+
+                        readonly property bool shown: root.tooltipActive && sourceBadgeHitbox.visible && sourceBadgeHitbox.hovered && lyricsPane.sourceLabel !== ""
+
+                        anchors.verticalCenter: sourceBadgeHitbox.verticalCenter
+                        anchors.right: sourceBadgeHitbox.left
+                        anchors.rightMargin: Config.space.xs
+                        color: Qt.alpha(Config.color.surface_container_highest, 0.92)
+                        border.color: Qt.alpha(Config.color.outline_variant, 0.45)
+                        border.width: 1
+                        height: sourceInfoLabel.implicitHeight + Config.space.xs * 2
+                        opacity: shown ? 1 : 0
+                        radius: Config.shape.corner.sm
+                        visible: opacity > 0
+                        width: sourceInfoLabel.implicitWidth + Config.space.sm * 2
+                        x: shown ? 0 : -Math.max(8, Config.space.sm + 2)
+
+                        Text {
+                            id: sourceInfoLabel
+
+                            anchors.centerIn: parent
+                            color: Config.color.on_surface_variant
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Normal
+                            text: "Lyrics from " + lyricsPane.sourceLabel
+                        }
+
+                        Behavior on opacity {
+                            enabled: root.tooltipActive
+                            NumberAnimation {
+                                duration: Config.motion.duration.short
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+
+                        Behavior on x {
+                            enabled: root.tooltipActive
+                            NumberAnimation {
+                                duration: Config.motion.duration.short
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1089,10 +1269,36 @@ ModuleContainer {
     Connections {
         target: lyricsClient
 
-        function onLoadedChanged() { root._lastLyricIndex = -2; root.updateLyricsModel(); }
+        function onLoadedChanged() {
+            const resolvedKey = root._lyricsRequestKey !== "" ? root._lyricsRequestKey : root._lyricsLookupKey;
+            if (lyricsClient.loaded) {
+                root.clearNoLyricsForKey(resolvedKey);
+                const lines = lyricsClient.lines || [];
+                root._lyricsPanelStickyVisible = lines.length > 0;
+            }
+            root._lyricsRequestKey = "";
+            root._lastLyricIndex = -2;
+            root.updateLyricsModel();
+        }
         function onLinesChanged() { root._lastLyricIndex = -2; root.updateLyricsModel(); }
-        function onErrorChanged() { root.updateLyricsModel(); }
-        function onBusyChanged() { root.updateLyricsModel(); }
+        function onErrorChanged() {
+            const resolvedKey = root._lyricsRequestKey !== "" ? root._lyricsRequestKey : root._lyricsLookupKey;
+            if (!lyricsClient.busy && !lyricsClient.loaded && root.isNoLyricsError(lyricsClient.error)) {
+                root.rememberNoLyricsForKey(resolvedKey);
+                root._lyricsPanelStickyVisible = false;
+            }
+            root.updateLyricsModel();
+        }
+        function onBusyChanged() {
+            const resolvedKey = root._lyricsRequestKey !== "" ? root._lyricsRequestKey : root._lyricsLookupKey;
+            if (!lyricsClient.busy && !lyricsClient.loaded && root.isNoLyricsError(lyricsClient.error)) {
+                root.rememberNoLyricsForKey(resolvedKey);
+                root._lyricsPanelStickyVisible = false;
+            }
+            if (!lyricsClient.busy)
+                root._lyricsRequestKey = "";
+            root.updateLyricsModel();
+        }
     }
 
     Connections {

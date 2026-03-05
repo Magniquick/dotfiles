@@ -1,10 +1,9 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -12,11 +11,14 @@ import (
 
 // ModelOption represents a single model in the picker.
 type ModelOption struct {
-	Value       string `json:"value"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	Provider    string `json:"provider"`
-	Recommended bool   `json:"recommended"`
+	Value           string `json:"value"`
+	Label           string `json:"label"`
+	Description     string `json:"description"`
+	Provider        string `json:"provider"`
+	Recommended     bool   `json:"recommended"`
+	Attachments     string `json:"attachments,omitempty"` // unknown|supported|unsupported
+	MaxInputTokens  int    `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
 }
 
 // ModelsOutput is the JSON payload returned by RefreshModels.
@@ -28,16 +30,41 @@ type ModelsOutput struct {
 
 // Pinned models always appear in the picker (even if the API doesn't return them).
 var pinnedModels = []ModelOption{
-	{Value: "gemini-2.0-flash", Label: "Gemini 2.0 Flash", Provider: "gemini", Recommended: true,
-		Description: "Google's fast multimodal model"},
-	{Value: "gemini-2.5-flash", Label: "Gemini 2.5 Flash", Provider: "gemini", Recommended: true,
-		Description: "Google's latest flash model"},
-	{Value: "gpt-4o", Label: "GPT-4o", Provider: "openai", Recommended: true,
-		Description: "OpenAI's flagship multimodal model"},
-	{Value: "gpt-4o-mini", Label: "GPT-4o Mini", Provider: "openai", Recommended: true,
-		Description: "Fast, affordable GPT-4o variant"},
-	{Value: "o3-mini", Label: "o3-mini", Provider: "openai", Recommended: true,
-		Description: "OpenAI reasoning model"},
+	{
+		Value:       "gemini-2.0-flash",
+		Label:       "Gemini 2.0 Flash",
+		Provider:    "gemini",
+		Recommended: true,
+		Description: "Google's fast multimodal model",
+	},
+	{
+		Value:       "gemini-2.5-flash",
+		Label:       "Gemini 2.5 Flash",
+		Provider:    "gemini",
+		Recommended: true,
+		Description: "Google's latest flash model",
+	},
+	{
+		Value:       "gpt-4o",
+		Label:       "GPT-4o",
+		Provider:    "openai",
+		Recommended: true,
+		Description: "OpenAI's flagship multimodal model",
+	},
+	{
+		Value:       "gpt-4o-mini",
+		Label:       "GPT-4o Mini",
+		Provider:    "openai",
+		Recommended: true,
+		Description: "Fast, affordable GPT-4o variant",
+	},
+	{
+		Value:       "o3-mini",
+		Label:       "o3-mini",
+		Provider:    "openai",
+		Recommended: true,
+		Description: "OpenAI reasoning model",
+	},
 }
 
 // openAIModelAllowlist filters to only show relevant chat models.
@@ -52,7 +79,6 @@ func openAIModelAllowed(id string) bool {
 	return false
 }
 
-// Cache
 var (
 	catalogMu       sync.Mutex
 	catalogCache    []ModelOption
@@ -71,6 +97,10 @@ func RefreshModels(openaiKey, geminiKey, baseURL string) string {
 	catalogMu.Lock()
 	defer catalogMu.Unlock()
 
+	openaiKey = strings.TrimSpace(openaiKey)
+	geminiKey = strings.TrimSpace(geminiKey)
+	baseURL = strings.TrimSpace(baseURL)
+
 	keyHash := modelsCacheKey(openaiKey, geminiKey, baseURL)
 	if len(catalogCache) > 0 && time.Since(catalogCachedAt) < catalogTTL && catalogKeyHash == keyHash {
 		b, _ := json.Marshal(ModelsOutput{
@@ -80,9 +110,8 @@ func RefreshModels(openaiKey, geminiKey, baseURL string) string {
 		return string(b)
 	}
 
-	if strings.TrimSpace(openaiKey) == "" && strings.TrimSpace(geminiKey) == "" {
-		models := make([]ModelOption, len(pinnedModels))
-		copy(models, pinnedModels)
+	if openaiKey == "" && geminiKey == "" {
+		models := withPinnedAndCapabilities(nil)
 		b, _ := json.Marshal(ModelsOutput{
 			Models: models,
 			Status: "No API keys (static list)",
@@ -90,38 +119,19 @@ func RefreshModels(openaiKey, geminiKey, baseURL string) string {
 		return string(b)
 	}
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
 	byValue := make(map[string]ModelOption)
 	var errs []string
 
-	// OpenAI
-	if strings.TrimSpace(openaiKey) != "" {
-		ids, err := fetchOpenAIModels(client, strings.TrimSpace(openaiKey), strings.TrimSpace(baseURL))
+	if openaiKey != "" {
+		req := providerRequest{OpenAIKey: openaiKey, BaseURL: baseURL}
+		list, err := (openAIProvider{}).ListModels(ctx, req)
 		if err != nil {
 			errs = append(errs, "OpenAI: "+err.Error())
 		} else {
-			for _, id := range ids {
-				if id == "" || !openAIModelAllowed(id) {
-					continue
-				}
-				if _, exists := byValue[id]; !exists {
-					byValue[id] = ModelOption{
-						Value:    id,
-						Label:    id,
-						Provider: "openai",
-					}
-				}
-			}
-		}
-	}
-
-	// Gemini
-	if strings.TrimSpace(geminiKey) != "" {
-		models, err := fetchGeminiModels(client, strings.TrimSpace(geminiKey))
-		if err != nil {
-			errs = append(errs, "Gemini: "+err.Error())
-		} else {
-			for _, m := range models {
+			for _, m := range list {
 				if _, exists := byValue[m.Value]; !exists {
 					byValue[m.Value] = m
 				}
@@ -129,19 +139,25 @@ func RefreshModels(openaiKey, geminiKey, baseURL string) string {
 		}
 	}
 
-	// Ensure pinned models are always present
-	for _, pm := range pinnedModels {
-		if _, exists := byValue[pm.Value]; !exists {
-			byValue[pm.Value] = pm
+	if geminiKey != "" {
+		req := providerRequest{GeminiKey: geminiKey}
+		list, err := (geminiProvider{}).ListModels(ctx, req)
+		if err != nil {
+			errs = append(errs, "Gemini: "+err.Error())
+		} else {
+			for _, m := range list {
+				if _, exists := byValue[m.Value]; !exists {
+					byValue[m.Value] = m
+				}
+			}
 		}
 	}
 
-	// Build sorted list (pinned first, then alphabetical)
-	var models []ModelOption
+	models := make([]ModelOption, 0, len(byValue))
 	for _, m := range byValue {
 		models = append(models, m)
 	}
-	applyPinnedOrder(models)
+	models = withPinnedAndCapabilities(models)
 
 	status := "Ready"
 	var errStr string
@@ -168,118 +184,62 @@ func RefreshModels(openaiKey, geminiKey, baseURL string) string {
 	return string(b)
 }
 
-func fetchOpenAIModels(client *http.Client, apiKey, baseURL string) ([]string, error) {
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	baseURL = strings.TrimSuffix(baseURL, "/")
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/models", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, extractErrorMessage(body))
+func withPinnedAndCapabilities(models []ModelOption) []ModelOption {
+	byValue := map[string]ModelOption{}
+	for _, m := range models {
+		byValue[m.Value] = m
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-
-	ids := make([]string, 0, len(result.Data))
-	for _, m := range result.Data {
-		ids = append(ids, strings.TrimSpace(m.ID))
-	}
-	return ids, nil
-}
-
-func fetchGeminiModels(client *http.Client, apiKey string) ([]ModelOption, error) {
-	url := "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, extractErrorMessage(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Models []struct {
-			Name                       string   `json:"name"`
-			DisplayName                string   `json:"displayName"`
-			Description                string   `json:"description"`
-			SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-
-	var models []ModelOption
-	for _, m := range result.Models {
-		id := strings.TrimPrefix(m.Name, "models/")
-		if !strings.HasPrefix(id, "gemini-") {
-			continue
+	for _, pm := range pinnedModels {
+		if _, exists := byValue[pm.Value]; !exists {
+			byValue[pm.Value] = pm
 		}
+	}
 
-		supportsChat := false
-		for _, method := range m.SupportedGenerationMethods {
-			if method == "generateContent" {
-				supportsChat = true
-				break
+	var caps map[string]modelCapability
+	if catalog, err := loadCapabilityCatalog(); err == nil && catalog != nil {
+		caps = catalog.Models
+	}
+
+	out := make([]ModelOption, 0, len(byValue))
+	for _, m := range byValue {
+		if cap, ok := caps[m.Value]; ok && cap.Provider == m.Provider {
+			if m.Attachments == "" {
+				m.Attachments = string(cap.Attachments)
+			}
+			if m.MaxInputTokens == 0 {
+				m.MaxInputTokens = cap.MaxInputTokens
+			}
+			if m.MaxOutputTokens == 0 {
+				m.MaxOutputTokens = cap.MaxOutputTokens
 			}
 		}
-		if !supportsChat {
-			continue
+		if m.Attachments == "" {
+			m.Attachments = string(AttachmentSupportUnknown)
 		}
-
-		label := strings.TrimSpace(m.DisplayName)
-		if label == "" {
-			label = id
+		if isPinned(m.Value) {
+			m.Recommended = true
 		}
-		models = append(models, ModelOption{
-			Value:       id,
-			Label:       label,
-			Description: strings.TrimSpace(m.Description),
-			Provider:    "gemini",
-		})
+		out = append(out, m)
 	}
-	return models, nil
+	applyPinnedOrder(out)
+	return out
+}
+
+func isPinned(value string) bool {
+	for _, p := range pinnedModels {
+		if p.Value == value {
+			return true
+		}
+	}
+	return false
 }
 
 func applyPinnedOrder(models []ModelOption) {
-	pinnedSet := make(map[string]bool)
-	for _, p := range pinnedModels {
-		pinnedSet[p.Value] = true
-	}
-	// Mark recommended for pinned
+	// Keep stable-enough ordering by pinning recommendation only;
+	// QML picker currently doesn't require strict sort.
 	for i := range models {
-		if pinnedSet[models[i].Value] {
+		if isPinned(models[i].Value) {
 			models[i].Recommended = true
 		}
 	}

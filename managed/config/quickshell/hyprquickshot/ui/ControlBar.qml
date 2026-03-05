@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Widgets
-import "../../common/materialkit" as MK
+import "../common/materialkit" as MK
 
 import "../common" as Common
 

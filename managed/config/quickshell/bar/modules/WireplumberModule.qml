@@ -515,8 +515,8 @@ ModuleContainer {
                 }
                 Item {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredHeight: 24
-                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 26
+                    Layout.preferredWidth: 26
 
                     MK.CircleProgressBar {
                         anchors.fill: parent
@@ -601,64 +601,38 @@ ModuleContainer {
             spacing: Config.space.sm
             width: root.hasAudioSections ? root.panelWidth : root.legacyPanelWidth
 
+            TooltipHeader {
+                icon: root.iconForVolume()
+                iconColor: root.activeColor()
+                subtitle: root.volumeAvailable ? (root.muted ? "Muted" : root.volumePercent + "%") : "Unavailable"
+                title: "Volume"
+            }
+
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Config.space.md
+                spacing: Config.space.none
+                visible: root.volumePercent > 100 && !root.muted
 
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.activeColor()
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.iconForVolume()
-                    }
-                }
-                ColumnLayout {
-                    spacing: Config.space.none
-
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineSmall.size
-                        font.weight: Font.Bold
-                        text: "Volume"
-                    }
-                    RowLayout {
-                        spacing: Config.space.xs
-
-                        Text {
-                            color: Config.color.on_surface_variant
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.labelMedium.size
-                            text: root.volumeAvailable ? (root.muted ? "Muted" : root.volumePercent + "%") : "Unavailable"
-                        }
-                        Rectangle {
-                            Layout.preferredHeight: boostedLabel.implicitHeight + Config.spaceHalfXs
-                            Layout.preferredWidth: boostedLabel.implicitWidth + Config.space.sm
-                            color: Config.color.secondary
-                            radius: Config.shape.corner.xs
-                            visible: root.volumePercent > 100 && !root.muted
-
-                            Text {
-                                id: boostedLabel
-
-                                anchors.centerIn: parent
-                                color: Config.color.surface_container
-                                font.family: Config.fontFamily
-                                font.pixelSize: Config.type.labelSmall.size
-                                font.weight: Font.Black
-                                text: "BOOSTED"
-                            }
-                        }
-                    }
-                }
                 Item {
                     Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: boostedLabel.implicitHeight + Config.spaceHalfXs
+                    Layout.preferredWidth: boostedLabel.implicitWidth + Config.space.sm
+                    color: Config.color.secondary
+                    radius: Config.shape.corner.xs
+
+                    Text {
+                        id: boostedLabel
+
+                        anchors.centerIn: parent
+                        color: Config.color.surface_container
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.labelSmall.size
+                        font.weight: Font.Black
+                        text: "BOOSTED"
+                    }
                 }
             }
 
@@ -804,8 +778,8 @@ ModuleContainer {
                                 }
                                 Item {
                                     Layout.alignment: Qt.AlignVCenter
-                                    Layout.preferredHeight: 24
-                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 26
+                                    Layout.preferredWidth: 26
 
                                     MK.CircleProgressBar {
                                         id: appVolumeCircle

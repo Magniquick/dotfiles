@@ -6,11 +6,14 @@ Scope {
     id: root
 
     signal unlocked
+    signal failed
 
     property string currentText: ""
     property bool unlockInProgress: false
+    property bool showPassword: false
     property bool showFailure: false
     property string lastMessage: ""
+    property bool accountLocked: false
 
     onCurrentTextChanged: showFailure = false
 
@@ -34,6 +37,21 @@ Scope {
         config: "login"
         user: Quickshell.env("USER")
 
+        onMessageChanged: {
+            if (!message || message.length === 0)
+                return;
+
+            if (message.startsWith("The account is locked")) {
+                root.lastMessage = message;
+                root.accountLocked = true;
+            } else if (root.lastMessage.length > 0 && message.endsWith(" left to unlock)")) {
+                root.lastMessage += "\n" + message;
+                root.accountLocked = true;
+            } else if (message.toLowerCase().startsWith("password:") && !root.accountLocked) {
+                root.accountLocked = false;
+            }
+        }
+
         onPamMessage: {
             if (responseRequired)
                 respond(root.currentText);
@@ -44,6 +62,7 @@ Scope {
                 root.currentText = "";
                 root.showFailure = false;
                 root.lastMessage = "";
+                root.accountLocked = false;
                 root.unlockInProgress = false;
                 root.unlocked();
                 return;
@@ -53,6 +72,7 @@ Scope {
             root.showFailure = true;
             root.lastMessage = message || "Authentication failed";
             root.unlockInProgress = false;
+            root.failed();
         }
 
         onError: function(error) {
@@ -60,6 +80,7 @@ Scope {
             root.showFailure = true;
             root.lastMessage = "PAM error: " + error;
             root.unlockInProgress = false;
+            root.failed();
         }
     }
 }
