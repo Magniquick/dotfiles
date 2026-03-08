@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/managed/config/quickshell/common/modules/qs-go"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "go"
+
+  - package-ecosystem: "gomod"
+    directory: "/managed/config/quickshell/common/modules/spotify-lyrics-api"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "go"
+
+  - package-ecosystem: "gomod"
+    directory: "/managed/config/quickshell/common/modules/unified-lyrics-api"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "go"
