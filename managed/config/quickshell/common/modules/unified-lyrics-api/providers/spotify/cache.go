@@ -1,13 +1,45 @@
-package spotifylyrics
+package spotify
 
 import (
 	"encoding/json"
 	"time"
+
+	"unified-lyrics-api/cache"
 )
+
+const providerName = "spotify"
 
 type lyricsCache struct {
 	SavedAt int64           `json:"savedAt"`
 	Body    json.RawMessage `json:"body"`
+}
+
+func tokenCacheKey(spdc string) string {
+	return cache.ProviderTokenKey(providerName, spdc)
+}
+
+func secretCacheKey(secretURL string) string {
+	return cache.ProviderSecretKey(providerName, secretURL)
+}
+
+func lyricsCacheKey(trackID string) string {
+	return cache.ProviderLyricsKey(providerName, trackID)
+}
+
+func cacheEntryPath(cacheDir, logicalKey string) string {
+	return cache.EntryPath(cacheDir, logicalKey)
+}
+
+func readCachePayload(cacheDir, logicalKey string) (json.RawMessage, int64, error) {
+	return cache.ReadPayload(cacheDir, logicalKey)
+}
+
+func writeCachePayload(cacheDir, logicalKey string, payload []byte) error {
+	return cache.WritePayload(cacheDir, logicalKey, payload)
+}
+
+func deleteCachePayload(cacheDir, logicalKey string) {
+	cache.DeletePayload(cacheDir, logicalKey)
 }
 
 func readLyricsCache(cacheDir, cacheKey string, ttl time.Duration) (*LyricsResponse, bool) {
@@ -27,7 +59,6 @@ func readLyricsCache(cacheDir, cacheKey string, ttl time.Duration) (*LyricsRespo
 	if len(lc.Body) == 0 {
 		return nil, false
 	}
-	// Envelope time is authoritative and avoids trusting stale legacy payload fields.
 	if savedAt <= 0 || time.Since(time.Unix(savedAt, 0)) > ttl {
 		return nil, false
 	}

@@ -1,4 +1,4 @@
-package spotifylyrics
+package spotify
 
 import (
 	"context"
@@ -11,14 +11,10 @@ import (
 )
 
 func TestFetchLatestSecret_TransformsAndSelectsLatest(t *testing.T) {
-	// Minimal dict with 2 versions; upstream picks the *last key* in JSON order.
-	// This is the "encoded" secret: for i=0, decode does b ^ 9.
-	// For plaintext 'A' (65), encoded is 65 ^ 9 = 72.
 	encodedV1 := []int{72}
-	encodedV2 := []int{73} // plaintext 'B' (66): 66 ^ 9 = 75, so this isn't 'B'; we'll compute expected below.
+	encodedV2 := []int{73}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Put version "1" last to ensure we follow object order.
 		_, _ = fmt.Fprintf(w, `{"2":%v,"1":%v}`, encodedV2, encodedV1)
 	}))
 	defer srv.Close()
@@ -34,7 +30,6 @@ func TestFetchLatestSecret_TransformsAndSelectsLatest(t *testing.T) {
 		t.Fatalf("ver: got %q want %q", ver, "1")
 	}
 
-	// Decode expected for i=0: x ^ 9.
 	want := fmt.Sprintf("%d", encodedV1[0]^9)
 	if secret != want {
 		t.Fatalf("secret: got %q want %q", secret, want)

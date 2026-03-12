@@ -1,4 +1,4 @@
-package spotifylyrics
+package spotify
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"unified-lyrics-api/cache"
 )
 
 func TestLyricsCache_Roundtrip(t *testing.T) {
@@ -18,7 +20,6 @@ func TestLyricsCache_Roundtrip(t *testing.T) {
 		t.Fatalf("writeLyricsCache: %v", err)
 	}
 
-	// Ensure file exists where we expect it.
 	if _, err := os.Stat(cacheEntryPath(dir, key)); err != nil {
 		t.Fatalf("cache file missing: %v", err)
 	}
@@ -40,7 +41,6 @@ func TestLyricsCache_TTLExpiry(t *testing.T) {
 	trackID := "5f8eCNwTlr0RJopE9vQ6mB"
 	key := lyricsCacheKey(trackID)
 
-	// Write an envelope with an old timestamp.
 	payload, err := json.Marshal(lyricsCache{
 		SavedAt: 1,
 		Body:    json.RawMessage(`{"lyrics":{"syncType":"LINE_SYNCED","lines":[{"startTimeMs":"1000","words":"hello","syllables":[],"endTimeMs":"2000"}]}}`),
@@ -48,7 +48,7 @@ func TestLyricsCache_TTLExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	old, err := json.Marshal(cacheEnvelope{
+	old, err := json.Marshal(cache.Envelope{
 		Key:     key,
 		SavedAt: 1,
 		Payload: payload,

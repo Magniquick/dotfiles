@@ -1,4 +1,4 @@
-package spotifylyrics
+package spotify
 
 import (
 	"bytes"
@@ -12,8 +12,6 @@ import (
 )
 
 const defaultSecretDictURL = "https://github.com/xyloflake/spot-secrets-go/blob/main/secrets/secretDict.json?raw=true"
-
-type secretDict map[string][]int
 
 type secretCache struct {
 	ETag    string `json:"etag"`
@@ -53,7 +51,6 @@ func decodeSecretDictOrdered(body []byte) ([]secretDictEntry, error) {
 		out = append(out, secretDictEntry{Version: k, Encoded: encoded})
 	}
 
-	// Consume closing '}'
 	if _, err := dec.Token(); err != nil {
 		return nil, err
 	}
@@ -128,7 +125,6 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDi
 			return "", "", err
 		}
 		if cacheDir != "" && cacheKey != "" {
-			// Best-effort cache write.
 			_ = writeSecretCache(cacheDir, cacheKey, resp.Header.Get("ETag"), body)
 		}
 	}
@@ -141,8 +137,6 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDi
 		return "", "", fmt.Errorf("secretDict.json was empty")
 	}
 
-	// Upstream PHP uses array_key_last(json_decode(..., true)), which effectively
-	// selects the last key in the JSON object order.
 	latest := entries[len(entries)-1]
 	if latest.Version == "" {
 		return "", "", fmt.Errorf("secretDict.json: last key was empty")
@@ -150,10 +144,7 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDi
 	if len(latest.Encoded) == 0 {
 		return "", "", fmt.Errorf("secret for version %s was empty", latest.Version)
 	}
-	// Match upstream PHP logic:
-	// - XOR-decode ints
-	// - then implode() them with "" separator, which produces a decimal string
-	//   (e.g., [65,66] => "6566"), not a byte string.
+
 	var bld strings.Builder
 	for i, ch := range latest.Encoded {
 		decoded := ch ^ ((i % 33) + 9)

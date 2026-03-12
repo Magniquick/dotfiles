@@ -6,7 +6,16 @@ package main
 
 typedef struct {
 	char *startTimeMs;
+	char *endTimeMs;
+	char *text;
+} UnifiedLyricsSegment;
+
+typedef struct {
+	char *startTimeMs;
+	char *endTimeMs;
 	char *words;
+	UnifiedLyricsSegment *segments;
+	size_t segmentCount;
 } UnifiedLyricsLine;
 
 typedef struct {
@@ -30,7 +39,7 @@ import (
 	"unified-lyrics-api/unifiedlyrics"
 )
 
-var sharedClient = unifiedlyrics.New(os.Getenv("UNIFIED_LYRICS_SPOTIFY_CACHE_DIR"))
+var sharedClient = unifiedlyrics.New(os.Getenv("UNIFIED_LYRICS_CACHE_DIR"))
 
 func cString(s string) *C.char {
 	if s == "" {
@@ -60,11 +69,34 @@ func freeLines(lines *C.UnifiedLyricsLine, count C.size_t) {
 		if arr[i].startTimeMs != nil {
 			C.free(unsafe.Pointer(arr[i].startTimeMs))
 		}
+		if arr[i].endTimeMs != nil {
+			C.free(unsafe.Pointer(arr[i].endTimeMs))
+		}
 		if arr[i].words != nil {
 			C.free(unsafe.Pointer(arr[i].words))
 		}
+		freeSegments(arr[i].segments, arr[i].segmentCount)
 	}
 	C.free(unsafe.Pointer(lines))
+}
+
+func freeSegments(segments *C.UnifiedLyricsSegment, count C.size_t) {
+	if segments == nil {
+		return
+	}
+	arr := unsafe.Slice(segments, int(count))
+	for i := range arr {
+		if arr[i].startTimeMs != nil {
+			C.free(unsafe.Pointer(arr[i].startTimeMs))
+		}
+		if arr[i].endTimeMs != nil {
+			C.free(unsafe.Pointer(arr[i].endTimeMs))
+		}
+		if arr[i].text != nil {
+			C.free(unsafe.Pointer(arr[i].text))
+		}
+	}
+	C.free(unsafe.Pointer(segments))
 }
 
 //export UnifiedLyrics_GetLyrics
@@ -114,7 +146,25 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	arr := unsafe.Slice(lines, len(res.Lines))
 	for i := range res.Lines {
 		arr[i].startTimeMs = cString(res.Lines[i].StartTimeMs)
+		arr[i].endTimeMs = cString(res.Lines[i].EndTimeMs)
 		arr[i].words = cString(res.Lines[i].Words)
+		if len(res.Lines[i].Segments) > 0 {
+			segmentSize := C.size_t(unsafe.Sizeof(C.UnifiedLyricsSegment{}))
+			segments := (*C.UnifiedLyricsSegment)(C.calloc(C.size_t(len(res.Lines[i].Segments)), segmentSize))
+			if segments == nil {
+				setErrorResult(out, "failed to allocate lyrics segments")
+				freeLines(lines, C.size_t(i+1))
+				return out
+			}
+			segmentArr := unsafe.Slice(segments, len(res.Lines[i].Segments))
+			for j := range res.Lines[i].Segments {
+				segmentArr[j].startTimeMs = cString(res.Lines[i].Segments[j].StartTimeMs)
+				segmentArr[j].endTimeMs = cString(res.Lines[i].Segments[j].EndTimeMs)
+				segmentArr[j].text = cString(res.Lines[i].Segments[j].Text)
+			}
+			arr[i].segments = segments
+			arr[i].segmentCount = C.size_t(len(res.Lines[i].Segments))
+		}
 	}
 	out.lines = lines
 	out.lineCount = C.size_t(len(res.Lines))

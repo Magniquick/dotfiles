@@ -1,4 +1,4 @@
-package spotifylyrics
+package spotify
 
 import (
 	"crypto/hmac"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 )
 
-// generateTOTP returns a 6-digit RFC 6238 TOTP code using HMAC-SHA1 and a 30s period.
 func generateTOTP(serverTimeSeconds int64, secret string) (string, error) {
 	if serverTimeSeconds <= 0 {
 		return "", fmt.Errorf("invalid server time %d", serverTimeSeconds)
@@ -19,7 +18,6 @@ func generateTOTP(serverTimeSeconds int64, secret string) (string, error) {
 	counter := uint64(serverTimeSeconds / period)
 
 	var buf [8]byte
-	// Token generation for Spotify expects big-endian counter bytes.
 	binary.BigEndian.PutUint64(buf[:], counter)
 
 	mac := hmac.New(sha1.New, []byte(secret))

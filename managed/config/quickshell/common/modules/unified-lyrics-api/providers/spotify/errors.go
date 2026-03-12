@@ -1,9 +1,7 @@
-package spotifylyrics
+package spotify
 
 import "fmt"
 
-// Error represents an error returned while interacting with Spotify endpoints
-// or while preparing requests (token, secrets, parsing, etc).
 type Error struct {
 	Status  int
 	Message string

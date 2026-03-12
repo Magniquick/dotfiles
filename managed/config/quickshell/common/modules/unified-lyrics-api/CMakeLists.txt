@@ -26,6 +26,9 @@ string(JOIN " " UNIFIEDLYRICS_CGO_CXXFLAGS_STR ${UNIFIEDLYRICS_CGO_CXXFLAGS})
 
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/unifiedlyrics")
 set(UNIFIED_LYRICS_GO_LIB "${QML_MODULE_DIR}/libunifiedlyrics_go.so")
+file(GLOB_RECURSE UNIFIEDLYRICS_GO_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_LIST_DIR}/*.go"
+)
 
 add_custom_command(
     OUTPUT "${UNIFIED_LYRICS_GO_LIB}"
@@ -34,6 +37,7 @@ add_custom_command(
         "CGO_CFLAGS=${UNIFIEDLYRICS_CGO_CFLAGS_STR}"
         "CGO_CXXFLAGS=${UNIFIEDLYRICS_CGO_CXXFLAGS_STR}"
         "${GO_EXECUTABLE}" build -buildmode=c-shared ${UNIFIEDLYRICS_GO_BUILD_FLAGS} -o "${UNIFIED_LYRICS_GO_LIB}" ./capi
+    DEPENDS ${UNIFIEDLYRICS_GO_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
     COMMENT "Building unified-lyrics Go shared library"
 )
@@ -52,6 +56,7 @@ set_target_properties(unifiedlyrics_plugin
 
 target_include_directories(unifiedlyrics_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
+    "${QML_MODULE_DIR}"
 )
 
 if(QS_NATIVE_CPU)

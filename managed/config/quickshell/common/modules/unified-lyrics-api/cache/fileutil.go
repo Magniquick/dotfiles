@@ -1,4 +1,4 @@
-package spotifylyrics
+package cache
 
 import (
 	"fmt"

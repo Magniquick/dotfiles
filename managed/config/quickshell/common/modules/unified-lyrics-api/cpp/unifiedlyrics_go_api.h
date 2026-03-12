@@ -8,7 +8,16 @@ extern "C" {
 
 typedef struct {
   char *startTimeMs;
+  char *endTimeMs;
+  char *text;
+} UnifiedLyricsSegment;
+
+typedef struct {
+  char *startTimeMs;
+  char *endTimeMs;
   char *words;
+  UnifiedLyricsSegment *segments;
+  size_t segmentCount;
 } UnifiedLyricsLine;
 
 typedef struct {

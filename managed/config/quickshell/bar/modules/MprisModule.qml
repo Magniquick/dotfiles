@@ -177,7 +177,7 @@ ModuleContainer {
 
         return {
             source: lyricsClient.source || "",
-            synced: lyricsClient.syncType === "LINE_SYNCED",
+            synced: lyricsClient.syncType === "LINE_SYNCED" || lyricsClient.syncType === "WORD_SYNCED",
             lines: lines
         };
     }
@@ -225,6 +225,8 @@ ModuleContainer {
         const value = source ? String(source).toLowerCase() : "";
         if (value.indexOf("spotify") === 0)
             return "";
+        if (value.indexOf("netease") === 0)
+            return "󰋋";
         if (value.indexOf("lrclib") === 0)
             return "";
         return "";
@@ -234,6 +236,8 @@ ModuleContainer {
         const value = source ? String(source).toLowerCase() : "";
         if (value.indexOf("spotify") === 0)
             return "Spotify";
+        if (value.indexOf("netease") === 0)
+            return "NetEase";
         if (value.indexOf("lrclib") === 0)
             return "LRCLIB";
         return "";
@@ -313,6 +317,154 @@ ModuleContainer {
         // Keep the old placeholder model for error/loading states; the UI reads
         // lyricsClient.lines for the scrollable view when loaded.
         root.lyricsModel = [];
+    }
+
+    function currentLyricsPositionMs() {
+        const player = root.activePlayer;
+        const playing = player && player.playbackState === MprisPlaybackState.Playing;
+        const baseMs = root._positionBaseMs;
+        const basePosSec = root._positionBasePreciseSeconds;
+        const nowMs = root._positionNowMs > 0 ? root._positionNowMs : Date.now();
+        const deltaMs = (playing && baseMs > 0) ? Math.max(0, nowMs - baseMs) : 0;
+        return Math.max(0, Math.floor(basePosSec * 1000 + deltaMs));
+    }
+
+    function lyricLineWords(lineData) {
+        if (lineData && lineData.words !== undefined)
+            return String(lineData.words || "");
+        if (lineData && lineData["words"] !== undefined)
+            return String(lineData["words"] || "");
+        return "";
+    }
+
+    function lyricLineSegments(lineData) {
+        if (!lineData)
+            return [];
+        if (lineData.segments && typeof lineData.segments.length === "number")
+            return lineData.segments;
+        if (lineData["segments"] && typeof lineData["segments"].length === "number")
+            return lineData["segments"];
+        return [];
+    }
+
+    function lyricSegmentRows(segments, maxWidth) {
+        const rows = [];
+        if (!segments || typeof segments.length !== "number")
+            return rows;
+
+        const widthLimit = Math.max(1, Math.floor(Number(maxWidth) || 0));
+        let currentRow = [];
+        let currentWidth = 0;
+
+        for (let i = 0; i < segments.length; ++i) {
+            const segment = segments[i] || ({});
+            const text = segment.text !== undefined ? String(segment.text || "") : "";
+            if (text === "")
+                continue;
+
+            const segmentWidth = Math.ceil(lyricSegmentMetrics.advanceWidth(text));
+            if (currentRow.length > 0 && currentWidth + segmentWidth > widthLimit) {
+                rows.push(currentRow);
+                currentRow = [];
+                currentWidth = 0;
+            }
+
+            currentRow.push(segment);
+            currentWidth += segmentWidth;
+        }
+
+        if (currentRow.length > 0)
+            rows.push(currentRow);
+        return rows;
+    }
+
+    function lyricRowText(rowSegments) {
+        if (!rowSegments || typeof rowSegments.length !== "number")
+            return "";
+        let text = "";
+        for (let i = 0; i < rowSegments.length; ++i) {
+            const segment = rowSegments[i] || ({});
+            if (segment.text !== undefined)
+                text += String(segment.text || "");
+        }
+        return text;
+    }
+
+    function lyricCharProgress(segment, posMs) {
+        if (!segment)
+            return 0;
+        const text = segment.text !== undefined ? String(segment.text || "") : "";
+        if (text.length === 0)
+            return 0;
+        const start = Number(segment.startTimeMs);
+        const end = Number(segment.endTimeMs);
+        if (!isFinite(start))
+            return 0;
+        if (!isFinite(end) || end <= start)
+            return posMs >= start ? text.length : 0;
+        if (posMs <= start)
+            return 0;
+        if (posMs >= end)
+            return text.length;
+        return Math.max(0, Math.min(text.length, (posMs - start) / (end - start) * text.length));
+    }
+
+    function lyricSegmentSplit(text, progressChars) {
+        const source = String(text || "");
+        if (source === "")
+            return { done: "", pending: "" };
+
+        const clamped = Math.max(0, Math.min(source.length, progressChars));
+        const whole = Math.floor(clamped);
+        const fractional = clamped - whole;
+        let doneText = source.slice(0, whole);
+        let pendingText = source.slice(whole);
+
+        if (fractional > 0 && whole < source.length) {
+            doneText += source.charAt(whole);
+            pendingText = source.slice(whole + 1);
+        }
+
+        return {
+            done: doneText,
+            pending: pendingText
+        };
+    }
+
+    function lyricPlayedWidth(rowSegments, posMs) {
+        if (!rowSegments || typeof rowSegments.length !== "number")
+            return 0;
+
+        let width = 0;
+        for (let i = 0; i < rowSegments.length; ++i) {
+            const segment = rowSegments[i] || ({});
+            const text = segment.text !== undefined ? String(segment.text || "") : "";
+            if (text === "")
+                continue;
+
+            const progressChars = root.lyricCharProgress(segment, posMs);
+            if (progressChars <= 0)
+                break;
+
+            if (progressChars >= text.length) {
+                width += lyricSegmentMetrics.advanceWidth(text);
+                continue;
+            }
+
+            const split = root.lyricSegmentSplit(text, progressChars);
+            width += lyricSegmentMetrics.advanceWidth(split.done);
+            break;
+        }
+
+        return width;
+    }
+
+    FontMetrics {
+        id: lyricSegmentMetrics
+
+        font.family: Config.fontFamily
+        font.pixelSize: Config.type.bodyLarge.size
+        font.weight: Font.DemiBold
     }
 
     function spotifyLyricsTrackRef(player) {
@@ -578,7 +730,7 @@ ModuleContainer {
 
     Behavior on lyricsPanelReveal {
         NumberAnimation {
-            duration: Config.motion.duration.short
+            duration: Config.motion.duration.shortMs
             easing.type: Easing.OutCubic
         }
     }
@@ -1025,17 +1177,6 @@ ModuleContainer {
                         topMargin: Math.round(height * 0.28)
                         bottomMargin: topMargin
 
-                        Behavior on contentY {
-                            enabled: root.tooltipActive
-                                && Date.now() > root._lyricsManualUntilMs
-                                && !lyricsView.dragging
-                                && !lyricsView.moving
-                            NumberAnimation {
-                                duration: Config.motion.duration.medium
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
                         onMovementStarted: root._lyricsManualUntilMs = Date.now() + 1500
                         onMovementEnded: root._lyricsManualUntilMs = Date.now() + 700
 
@@ -1044,52 +1185,126 @@ ModuleContainer {
                             visible: active
                         }
 
-                        delegate: Text {
+                        delegate: Item {
+                            id: delegateRoot
+
                             required property var modelData
                             required property int index
 
-                            readonly property string words: {
-                                // modelData is a QVariantMap from C++.
-                                if (modelData && modelData.words !== undefined)
-                                    return String(modelData.words || "");
-                                if (modelData && modelData["words"] !== undefined)
-                                    return String(modelData["words"] || "");
-                                return "";
-                            }
-
+                            readonly property string words: root.lyricLineWords(modelData)
                             readonly property bool isCurrent: index === root.currentLyricIndex
+                            readonly property var segments: root.lyricLineSegments(modelData)
+                            readonly property bool useSegmentFlow: isCurrent && segments.length > 0
+                            readonly property double renderTick: root._positionNowMs
+                            readonly property int currentLinePosMs: {
+                                const _tick = renderTick;
+                                return root.currentLyricsPositionMs();
+                            }
+                            readonly property var segmentRows: root.lyricSegmentRows(segments, width)
 
-                            color: isCurrent ? Config.color.on_surface : Config.color.on_surface_variant
-                            elide: Text.ElideRight
-                            font.family: Config.fontFamily
-                            font.pixelSize: isCurrent ? Config.type.bodyLarge.size : Config.type.bodyMedium.size
-                            font.weight: isCurrent ? Font.DemiBold : Font.Normal
-                            horizontalAlignment: Text.AlignHCenter
-                            lineHeight: 1.1
-                            lineHeightMode: Text.ProportionalHeight
-                            maximumLineCount: 2
-                            opacity: isCurrent ? 1.0 : 0.55
-                            text: words !== "" ? words : "♪"
-                            wrapMode: Text.WordWrap
+                            implicitWidth: ListView.view ? ListView.view.width : 0
+                            implicitHeight: useSegmentFlow ? segmentRowsColumn.implicitHeight : fallbackText.implicitHeight
                             width: ListView.view ? ListView.view.width : parent.width
+                            height: implicitHeight
 
-                            Behavior on opacity {
-                                enabled: root.tooltipActive
-                                NumberAnimation {
-                                    duration: Config.motion.duration.medium
-                                    easing.type: Easing.OutCubic
-                                }
+                            Text {
+                                id: fallbackText
+
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: !parent.useSegmentFlow
+                                width: parent.width
+                                color: Config.color.on_surface_variant
+                                font.family: Config.fontFamily
+                                font.pixelSize: parent.isCurrent ? Config.type.bodyLarge.size : Config.type.bodyMedium.size
+                                font.weight: parent.isCurrent ? Font.DemiBold : Font.Normal
+                                horizontalAlignment: Text.AlignHCenter
+                                lineHeight: 1.1
+                                lineHeightMode: Text.ProportionalHeight
+                                maximumLineCount: 2
+                                opacity: parent.isCurrent ? 1.0 : 0.55
+                                text: parent.words !== "" ? parent.words : "♪"
+                                wrapMode: Text.WordWrap
                             }
-                            Behavior on font.pixelSize {
-                                enabled: root.tooltipActive
-                                NumberAnimation {
-                                    duration: Config.motion.duration.medium
-                                    easing.type: Easing.OutCubic
+
+                            Column {
+                                id: segmentRowsColumn
+
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: parent.useSegmentFlow
+                                width: parent.width
+                                spacing: 0
+
+                                Repeater {
+                                    model: segmentRowsColumn.visible ? delegateRoot.segmentRows : []
+
+                                    delegate: Item {
+                                        id: rowDelegate
+
+                                        required property var modelData
+                                        readonly property var rowSegments: modelData
+                                        readonly property string rowText: root.lyricRowText(rowSegments)
+                                        readonly property real rowTextWidth: lyricSegmentMetrics.advanceWidth(rowText)
+                                        readonly property real playedWidth: {
+                                            const _tick = delegateRoot.renderTick;
+                                            return root.lyricPlayedWidth(rowSegments, delegateRoot.currentLinePosMs);
+                                        }
+                                        implicitWidth: rowTextWidth
+                                        implicitHeight: rowTextItem.implicitHeight
+                                        width: segmentRowsColumn.width
+                                        height: implicitHeight
+
+                                        Item {
+                                            id: rowContent
+
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            width: rowDelegate.rowTextWidth
+                                            height: rowTextItem.implicitHeight
+
+                                            Text {
+                                                id: rowTextItem
+
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                color: Qt.alpha(Config.color.on_surface, 0.42)
+                                                font.family: Config.fontFamily
+                                                font.pixelSize: Config.type.bodyLarge.size
+                                                font.weight: Font.DemiBold
+                                                lineHeight: 1.1
+                                                lineHeightMode: Text.ProportionalHeight
+                                                text: rowDelegate.rowText
+                                            }
+
+                                            Item {
+                                                id: playedOverlay
+
+                                                anchors.left: rowTextItem.left
+                                                anchors.top: rowTextItem.top
+                                                width: Math.max(0, Math.min(rowDelegate.rowTextWidth, rowDelegate.playedWidth))
+                                                height: rowTextItem.implicitHeight
+                                                clip: true
+
+                                                Behavior on width {
+                                                    enabled: root.tooltipActive
+                                                    NumberAnimation {
+                                                        duration: 48
+                                                        easing.type: Easing.Linear
+                                                    }
+                                                }
+
+                                                Text {
+                                                    anchors.left: parent.left
+                                                    anchors.top: parent.top
+                                                    color: Config.color.primary
+                                                    font.family: Config.fontFamily
+                                                    font.pixelSize: Config.type.bodyLarge.size
+                                                    font.weight: Font.DemiBold
+                                                    lineHeight: 1.1
+                                                    lineHeightMode: Text.ProportionalHeight
+                                                    text: rowDelegate.rowText
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                            }
-                            Behavior on color {
-                                enabled: root.tooltipActive
-                                ColorAnimation { duration: Config.motion.duration.medium }
                             }
                         }
 
@@ -1148,7 +1363,7 @@ ModuleContainer {
                             Behavior on opacity {
                                 enabled: root.tooltipActive
                                 NumberAnimation {
-                                    duration: Config.motion.duration.short
+                                    duration: Config.motion.duration.shortMs
                                     easing.type: Easing.OutCubic
                                 }
                             }
@@ -1195,7 +1410,7 @@ ModuleContainer {
                         Behavior on opacity {
                             enabled: root.tooltipActive
                             NumberAnimation {
-                                duration: Config.motion.duration.short
+                                duration: Config.motion.duration.shortMs
                                 easing.type: Easing.OutCubic
                             }
                         }
@@ -1203,7 +1418,7 @@ ModuleContainer {
                         Behavior on x {
                             enabled: root.tooltipActive
                             NumberAnimation {
-                                duration: Config.motion.duration.short
+                                duration: Config.motion.duration.shortMs
                                 easing.type: Easing.OutCubic
                             }
                         }
@@ -1272,6 +1487,12 @@ ModuleContainer {
         function onLoadedChanged() {
             const resolvedKey = root._lyricsRequestKey !== "" ? root._lyricsRequestKey : root._lyricsLookupKey;
             if (lyricsClient.loaded) {
+                console.log("[MprisModule] lyrics loaded",
+                            "lookupKey=" + resolvedKey,
+                            "source=" + String(lyricsClient.source || ""),
+                            "provider=" + String((lyricsClient.metadata || {}).provider || ""),
+                            "syncType=" + String(lyricsClient.syncType || ""),
+                            "lines=" + String((lyricsClient.lines || []).length));
                 root.clearNoLyricsForKey(resolvedKey);
                 const lines = lyricsClient.lines || [];
                 root._lyricsPanelStickyVisible = lines.length > 0;

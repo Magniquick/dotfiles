@@ -4,20 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 
-	"spotify-lyrics-api/spotifylyrics"
+	"unified-lyrics-api/cache"
+	"unified-lyrics-api/internal/lyricsprovider"
+	"unified-lyrics-api/providers/lrclib"
+	"unified-lyrics-api/providers/netease"
+	"unified-lyrics-api/providers/spotify"
 )
 
-type Request struct {
-	SPDC            string
-	SpotifyTrackRef string
-	TrackName       string
-	ArtistName      string
-	AlbumName       string
-	LengthMicros    string
-}
+type Request = lyricsprovider.Request
+
+type Line = lyricsprovider.Line
 
 type Result struct {
 	Source   string         `json:"source"`
@@ -31,12 +31,22 @@ type ResultMetadata struct {
 }
 
 type Client struct {
-	spotifyCacheDir string
+	cacheDir  string
+	providers []lyricsprovider.Provider
 }
 
-func New(spotifyCacheDir string) *Client {
+func New(cacheDir string) *Client {
+	cacheDir = strings.TrimSpace(cacheDir)
+	if cacheDir == "" {
+		cacheDir = cache.DefaultDir()
+	}
 	return &Client{
-		spotifyCacheDir: strings.TrimSpace(spotifyCacheDir),
+		cacheDir: cacheDir,
+		providers: []lyricsprovider.Provider{
+			spotify.New(cacheDir),
+			netease.New(cacheDir),
+			lrclib.New(),
+		},
 	}
 }
 
@@ -44,111 +54,71 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	if c == nil {
 		return nil, errors.New("nil client")
 	}
+
 	tuple := identityTuple(req)
 	if tuple != "" {
-		key := spotifylyrics.FinalLyricsCacheKey(tuple)
-		if payload, _, err := spotifylyrics.ReadUnifiedCachePayload(c.spotifyCacheDir, key); err == nil {
+		key := cache.FinalLyricsKey(tuple)
+		if payload, _, err := cache.ReadPayload(c.cacheDir, key); err == nil {
 			var cached finalLyricsCachePayload
 			if json.Unmarshal(payload, &cached) == nil && len(cached.Result.Lines) > 0 {
+				log.Printf("unifiedlyrics: cache hit tuple=%q source=%s provider=%s sync=%s lines=%d", tuple, cached.Result.Source, cached.Result.Metadata.Provider, cached.Result.SyncType, len(cached.Result.Lines))
 				return cloneResult(&cached.Result), nil
 			}
 		}
 	}
 
-	var spotifyOut *Result
-	var lrclibOut *Result
-	var spotifyErr error
-	var lrclibErr error
-
-	spdc := strings.TrimSpace(req.SPDC)
-	spotifyRef := strings.TrimSpace(req.SpotifyTrackRef)
-	if spdc != "" && spotifyRef != "" {
-		sc, err := spotifylyrics.NewWithCacheDir(spdc, c.spotifyCacheDir)
-		if err == nil {
-			lr, err := sc.GetLyricsFromURL(ctx, spotifyRef)
-			if err == nil && lr != nil && len(lr.Lyrics.Lines) > 0 {
-				lines := make([]Line, 0, len(lr.Lyrics.Lines))
-				for _, ln := range lr.Lyrics.Lines {
-					lines = append(lines, Line{
-						StartTimeMs: strings.TrimSpace(ln.StartTimeMs),
-						Words:       ln.Words,
-					})
-				}
-				syncType := strings.TrimSpace(lr.Lyrics.SyncType)
-				spotifyOut = newResult("spotify_normal", syncType, lines)
-				if strings.EqualFold(syncType, "LINE_SYNCED") {
-					spotifyOut.Source = "spotify_synced"
-					return spotifyOut, nil
-				}
-			}
-			if err != nil {
-				spotifyErr = err
-			}
-		} else {
-			spotifyErr = err
+	var best *Result
+	bestRank := 0
+	var providerErrs []string
+	for _, provider := range c.providers {
+		if !provider.Supports(req) {
+			log.Printf("unifiedlyrics: skip provider=%s unsupported track=%q artist=%q album=%q spotifyRef=%t", provider.Name(), req.TrackName, req.ArtistName, req.AlbumName, strings.TrimSpace(req.SpotifyTrackRef) != "")
+			continue
 		}
-	}
-
-	track := strings.TrimSpace(req.TrackName)
-	artist := strings.TrimSpace(req.ArtistName)
-	album := strings.TrimSpace(req.AlbumName)
-	durationSeconds := durationSecondsFromMicros(req.LengthMicros)
-	if track != "" && artist != "" {
-		lc := NewLrcLibClient()
-		lr, err := lc.GetLyrics(ctx, track, artist, album, durationSeconds)
-		if err == nil && lr != nil && len(lr.Lines) > 0 {
-			syncType := strings.TrimSpace(lr.SyncType)
-			lrclibOut = newResult("lrclib_normal", syncType, lr.Lines)
-			if strings.EqualFold(syncType, "LINE_SYNCED") {
-				lrclibOut.Source = "lrclib_synced"
-				return lrclibOut, nil
-			}
-		}
+		out, err := provider.Fetch(ctx, req)
 		if err != nil {
-			lrclibErr = err
+			log.Printf("unifiedlyrics: provider=%s error=%v track=%q artist=%q album=%q", provider.Name(), err, req.TrackName, req.ArtistName, req.AlbumName)
+			providerErrs = append(providerErrs, provider.Name())
+			continue
+		}
+		if out == nil || len(out.Lines) == 0 {
+			log.Printf("unifiedlyrics: provider=%s empty result", provider.Name())
+			continue
+		}
+
+		result := newResult(out.Provider, out.SyncType, out.Lines)
+		rank := lyricsprovider.RankSyncType(strings.TrimSpace(out.SyncType))
+		log.Printf("unifiedlyrics: candidate provider=%s source=%s sync=%s rank=%d lines=%d", out.Provider, result.Source, out.SyncType, rank, len(out.Lines))
+		if best == nil || rank > bestRank {
+			best = result
+			bestRank = rank
+			log.Printf("unifiedlyrics: selected provider=%s source=%s sync=%s rank=%d", best.Metadata.Provider, best.Source, best.SyncType, bestRank)
+			if bestRank >= lyricsprovider.RankSyncType(lyricsprovider.SyncTypeWord) {
+				break
+			}
 		}
 	}
 
-	if spotifyOut != nil {
-		c.writeFinalCache(tuple, spotifyOut)
-		return spotifyOut, nil
+	if best != nil {
+		log.Printf("unifiedlyrics: final source=%s provider=%s sync=%s lines=%d", best.Source, best.Metadata.Provider, best.SyncType, len(best.Lines))
+		c.writeFinalCache(tuple, best)
+		return best, nil
 	}
-	if lrclibOut != nil {
-		c.writeFinalCache(tuple, lrclibOut)
-		return lrclibOut, nil
+	if len(providerErrs) > 1 {
+		return nil, errors.New(strings.Join(providerErrs, " and ") + " failed")
 	}
-
-	if spotifyErr != nil && lrclibErr != nil {
-		return nil, errors.New("spotify and lrclib failed")
-	}
-	if spotifyErr != nil {
-		return nil, spotifyErr
-	}
-	if lrclibErr != nil {
-		return nil, lrclibErr
+	if len(providerErrs) == 1 {
+		return nil, errors.New(providerErrs[0] + " failed")
 	}
 	return nil, errors.New("no lyrics available")
 }
 
-func providerFromSource(source string) string {
-	switch {
-	case strings.HasPrefix(source, "spotify_"):
-		return "spotify"
-	case strings.HasPrefix(source, "lrclib_"):
-		return "lrclib"
-	default:
-		return ""
-	}
-}
-
-func newResult(source, syncType string, lines []Line) *Result {
+func newResult(provider, syncType string, lines []Line) *Result {
 	return &Result{
-		Source:   source,
+		Source:   lyricsprovider.SourceFor(provider, strings.TrimSpace(syncType)),
 		SyncType: syncType,
 		Lines:    cloneLines(lines),
-		Metadata: ResultMetadata{
-			Provider: providerFromSource(source),
-		},
+		Metadata: ResultMetadata{Provider: provider},
 	}
 }
 
@@ -157,7 +127,23 @@ func cloneLines(lines []Line) []Line {
 		return []Line{}
 	}
 	out := make([]Line, len(lines))
-	copy(out, lines)
+	for i := range lines {
+		out[i] = Line{
+			StartTimeMs: lines[i].StartTimeMs,
+			EndTimeMs:   lines[i].EndTimeMs,
+			Words:       lines[i].Words,
+			Segments:    cloneSegments(lines[i].Segments),
+		}
+	}
+	return out
+}
+
+func cloneSegments(segments []lyricsprovider.Segment) []lyricsprovider.Segment {
+	if len(segments) == 0 {
+		return nil
+	}
+	out := make([]lyricsprovider.Segment, len(segments))
+	copy(out, segments)
 	return out
 }
 
@@ -200,23 +186,11 @@ func normalizeLengthMicros(lengthMicros string) string {
 	return strconv.FormatInt(v, 10)
 }
 
-func durationSecondsFromMicros(lengthMicros string) int {
-	s := normalizeLengthMicros(lengthMicros)
-	if s == "" {
-		return 0
-	}
-	us, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || us <= 0 {
-		return 0
-	}
-	return int(us / 1_000_000)
-}
-
 func (c *Client) writeFinalCache(tuple string, result *Result) {
 	if strings.TrimSpace(tuple) == "" || result == nil || len(result.Lines) == 0 {
 		return
 	}
-	key := spotifylyrics.FinalLyricsCacheKey(tuple)
+	key := cache.FinalLyricsKey(tuple)
 	payload := finalLyricsCachePayload{
 		Result:        *cloneResult(result),
 		IdentityTuple: tuple,
@@ -225,5 +199,5 @@ func (c *Client) writeFinalCache(tuple string, result *Result) {
 	if err != nil {
 		return
 	}
-	_ = spotifylyrics.WriteUnifiedCachePayload(c.spotifyCacheDir, key, b)
+	_ = cache.WritePayload(c.cacheDir, key, b)
 }

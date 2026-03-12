@@ -5,7 +5,7 @@
 #include <QtGlobal>
 #include <QtConcurrent/QtConcurrent>
 
-#include "unifiedlyrics_go_api.h"
+#include "libunifiedlyrics_go.h"
 
 namespace {
 
@@ -50,6 +50,8 @@ UnifiedLyricsClient::UnifiedLyricsClient(QObject *parent)
     }
 
     if (out.error) {
+      qWarning().noquote() << "UnifiedLyricsClient backend error"
+                           << "message=" << (out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
       setError(out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
       setStatus(QStringLiteral("Error"));
       setBusy(false);
@@ -61,6 +63,11 @@ UnifiedLyricsClient::UnifiedLyricsClient(QObject *parent)
     setSyncType(out.syncType);
     setMetadata(QVariantMap{{QStringLiteral("provider"), out.provider}});
     setLines(out.lines);
+    qInfo().noquote() << "UnifiedLyricsClient loaded"
+                      << "source=" << out.source
+                      << "provider=" << out.provider
+                      << "syncType=" << out.syncType
+                      << "lines=" << out.lines.size();
 
     setStatus(QStringLiteral("OK"));
     setBusy(false);
@@ -187,6 +194,13 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
   }
 
   const QString spdc = extractSpDcFromEnvFile(envFile, nullptr);
+  qInfo().noquote() << "UnifiedLyricsClient refresh"
+                    << "track=" << trackName.trimmed()
+                    << "artist=" << artistName.trimmed()
+                    << "album=" << albumName.trimmed()
+                    << "spotifyRef=" << spotifyTrackRef.trimmed()
+                    << "lengthMicros=" << lengthMicros.trimmed()
+                    << "hasSPDC=" << !spdc.trimmed().isEmpty();
 
   setBusy(true);
   setLoaded(false);
@@ -215,12 +229,12 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
                                          albumUtf8,
                                          lengthMicrosUtf8]() -> UnifiedLyricsBackendResult {
     UnifiedLyricsBackendResult result;
-    UnifiedLyricsResult *out = UnifiedLyrics_GetLyrics(spdcUtf8.constData(),
-                                                       spotifyRefUtf8.constData(),
-                                                       trackUtf8.constData(),
-                                                       artistUtf8.constData(),
-                                                       albumUtf8.constData(),
-                                                       lengthMicrosUtf8.constData());
+    UnifiedLyricsResult *out = UnifiedLyrics_GetLyrics(const_cast<char *>(spdcUtf8.constData()),
+                                                       const_cast<char *>(spotifyRefUtf8.constData()),
+                                                       const_cast<char *>(trackUtf8.constData()),
+                                                       const_cast<char *>(artistUtf8.constData()),
+                                                       const_cast<char *>(albumUtf8.constData()),
+                                                       const_cast<char *>(lengthMicrosUtf8.constData()));
     if (!out)
       return result;
 
@@ -240,7 +254,19 @@ bool UnifiedLyricsClient::refreshFromEnv(const QString &envFile,
       const UnifiedLyricsLine &ln = out->lines[i];
       QVariantMap row;
       row.insert(QStringLiteral("startTimeMs"), ln.startTimeMs ? QString::fromUtf8(ln.startTimeMs) : QString());
+      row.insert(QStringLiteral("endTimeMs"), ln.endTimeMs ? QString::fromUtf8(ln.endTimeMs) : QString());
       row.insert(QStringLiteral("words"), ln.words ? QString::fromUtf8(ln.words) : QString());
+      QVariantList segments;
+      segments.reserve(static_cast<int>(ln.segmentCount));
+      for (size_t j = 0; j < ln.segmentCount; ++j) {
+        const UnifiedLyricsSegment &segment = ln.segments[j];
+        QVariantMap segmentMap;
+        segmentMap.insert(QStringLiteral("startTimeMs"), segment.startTimeMs ? QString::fromUtf8(segment.startTimeMs) : QString());
+        segmentMap.insert(QStringLiteral("endTimeMs"), segment.endTimeMs ? QString::fromUtf8(segment.endTimeMs) : QString());
+        segmentMap.insert(QStringLiteral("text"), segment.text ? QString::fromUtf8(segment.text) : QString());
+        segments.push_back(segmentMap);
+      }
+      row.insert(QStringLiteral("segments"), segments);
       result.lines.push_back(row);
     }
 

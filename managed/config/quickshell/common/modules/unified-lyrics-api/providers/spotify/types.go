@@ -1,19 +1,15 @@
-package spotifylyrics
+package spotify
 
 type serverTimeResponse struct {
 	ServerTime int64 `json:"serverTime"`
 }
 
-// TokenResponse is the JSON returned by https://open.spotify.com/api/token.
-// We keep fields that this project needs.
 type TokenResponse struct {
 	AccessToken                      string `json:"accessToken"`
 	AccessTokenExpirationTimestampMs int64  `json:"accessTokenExpirationTimestampMs"`
 	IsAnonymous                      bool   `json:"isAnonymous"`
 }
 
-// LyricsResponse matches the shape returned by the lyrics endpoint:
-// https://spclient.wg.spotify.com/color-lyrics/v2/track/{id}?format=json&market=from_token
 type LyricsResponse struct {
 	Lyrics Lyrics `json:"lyrics"`
 }

@@ -1,4 +1,4 @@
-package spotifylyrics
+package spotify
 
 import (
 	"strings"
@@ -30,13 +30,13 @@ func TestCacheKeys_AreDeterministic(t *testing.T) {
 }
 
 func TestCacheKeys_AreVersionedAndNamespaced(t *testing.T) {
-	if !strings.HasPrefix(tokenCacheKey("x"), cacheKeyPrefix+":token:") {
+	if !strings.HasPrefix(tokenCacheKey("x"), "unifiedlyrics:v1:spotify_token:") {
 		t.Fatalf("unexpected token key prefix")
 	}
-	if !strings.HasPrefix(secretCacheKey("https://example.com"), cacheKeyPrefix+":secret_dict:") {
+	if !strings.HasPrefix(secretCacheKey("https://example.com"), "unifiedlyrics:v1:spotify_secret_dict:") {
 		t.Fatalf("unexpected secret key prefix")
 	}
-	if !strings.HasPrefix(lyricsCacheKey("y"), cacheKeyPrefix+":lyrics:") {
+	if !strings.HasPrefix(lyricsCacheKey("y"), "unifiedlyrics:v1:spotify_lyrics:") {
 		t.Fatalf("unexpected lyrics key prefix")
 	}
 }
