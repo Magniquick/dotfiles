@@ -12,6 +12,8 @@ import "../components"
 import QtQuick
 
 ModuleContainer {
+    id: root
+
     property var screen
 
     backgroundColor: Config.barModuleBackground
@@ -32,6 +34,13 @@ ModuleContainer {
         },
         BacklightModule {
             screen: root.screen
+            backgroundColor: "transparent"
+            marginBottom: 0
+            marginLeft: 0
+            marginRight: 0
+            marginTop: 0
+        },
+        ScreenRecordingModule {
             backgroundColor: "transparent"
             marginBottom: 0
             marginLeft: 0

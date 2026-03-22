@@ -5,7 +5,6 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
 import qs.bar
-import "../../../common" as Common
 import ".."
 
 Item {
@@ -37,9 +36,11 @@ Item {
     implicitHeight: 680
 
     anchor {
+      // qmllint disable missing-type
       adjustment: PopupAdjustment.SlideX | PopupAdjustment.ResizeX
       edges: Edges.Top
       gravity: Edges.Bottom
+      // qmllint enable missing-type
       rect.height: 0
       rect.width: (root.targetItem && root.hostWindow) ? root.targetItem.width : 0
       rect.x: root.popupPosInitialized
@@ -210,6 +211,7 @@ Item {
           Repeater {
             model: root.outputNames()
             delegate: Rectangle {
+              id: outputCard
               required property string modelData
               readonly property var output: HyprDisplayConfigState.getOutput(modelData)
               Layout.fillWidth: true
@@ -228,7 +230,7 @@ Item {
                 RowLayout {
                   Layout.fillWidth: true
                   Text {
-                    text: output ? output.name : modelData
+                    text: outputCard.output ? outputCard.output.name : outputCard.modelData
                     color: Config.color.on_surface
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.titleSmall.size
@@ -237,8 +239,8 @@ Item {
                   Item { Layout.fillWidth: true }
                   CheckBox {
                     text: "Disabled"
-                    checked: output ? !!output.disabled : false
-                    onToggled: HyprDisplayConfigState.setField(modelData, "disabled", checked)
+                    checked: outputCard.output ? !!outputCard.output.disabled : false
+                    onToggled: HyprDisplayConfigState.setField(outputCard.modelData, "disabled", checked)
                   }
                 }
 
@@ -251,8 +253,8 @@ Item {
                   Label { text: "Mode"; color: Config.color.on_surface_variant }
                   TextField {
                     Layout.fillWidth: true
-                    text: output && output.mode ? String(output.mode) : "preferred"
-                    onEditingFinished: HyprDisplayConfigState.setField(modelData, "mode", text.trim() || "preferred")
+                    text: outputCard.output && outputCard.output.mode ? String(outputCard.output.mode) : "preferred"
+                    onEditingFinished: HyprDisplayConfigState.setField(outputCard.modelData, "mode", text.trim() || "preferred")
                   }
 
                   Label { text: "Scale"; color: Config.color.on_surface_variant }
@@ -260,11 +262,11 @@ Item {
                     Layout.fillWidth: true
                     from: 25
                     to: 400
-                    value: output ? Math.round((output.scale || 1) * 100) : 100
+                    value: outputCard.output ? Math.round((outputCard.output.scale || 1) * 100) : 100
                     onValueChanged: {
                       if (!activeFocus)
                         return;
-                      HyprDisplayConfigState.setField(modelData, "scale", value / 100.0);
+                      HyprDisplayConfigState.setField(outputCard.modelData, "scale", value / 100.0);
                     }
                   }
 
@@ -272,22 +274,22 @@ Item {
                   SpinBox {
                     Layout.fillWidth: true
                     from: -20000; to: 20000
-                    value: output ? (output.x || 0) : 0
+                    value: outputCard.output ? (outputCard.output.x || 0) : 0
                     onValueChanged: {
                       if (!activeFocus)
                         return;
-                      HyprDisplayConfigState.setField(modelData, "x", value);
+                      HyprDisplayConfigState.setField(outputCard.modelData, "x", value);
                     }
                   }
                   Label { text: "Y"; color: Config.color.on_surface_variant }
                   SpinBox {
                     Layout.fillWidth: true
                     from: -20000; to: 20000
-                    value: output ? (output.y || 0) : 0
+                    value: outputCard.output ? (outputCard.output.y || 0) : 0
                     onValueChanged: {
                       if (!activeFocus)
                         return;
-                      HyprDisplayConfigState.setField(modelData, "y", value);
+                      HyprDisplayConfigState.setField(outputCard.modelData, "y", value);
                     }
                   }
 
@@ -295,29 +297,29 @@ Item {
                   ComboBox {
                     Layout.fillWidth: true
                     model: ["0", "1", "2", "3", "4", "5", "6", "7"]
-                    currentIndex: Math.max(0, Math.min(7, output ? (output.transform || 0) : 0))
-                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "transform", parseInt(model[index]))
+                    currentIndex: Math.max(0, Math.min(7, outputCard.output ? (outputCard.output.transform || 0) : 0))
+                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "transform", parseInt(model[index]))
                   }
                   Label { text: "VRR"; color: Config.color.on_surface_variant }
                   ComboBox {
                     Layout.fillWidth: true
                     model: ["0", "1", "2"]
-                    currentIndex: Math.max(0, Math.min(2, output ? (output.vrr || 0) : 0))
-                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "vrr", parseInt(model[index]))
+                    currentIndex: Math.max(0, Math.min(2, outputCard.output ? (outputCard.output.vrr || 0) : 0))
+                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "vrr", parseInt(model[index]))
                   }
 
                   Label { text: "Mirror"; color: Config.color.on_surface_variant }
                   TextField {
                     Layout.fillWidth: true
-                    text: output && output.mirror ? String(output.mirror) : ""
-                    onEditingFinished: HyprDisplayConfigState.setField(modelData, "mirror", text.trim())
+                    text: outputCard.output && outputCard.output.mirror ? String(outputCard.output.mirror) : ""
+                    onEditingFinished: HyprDisplayConfigState.setField(outputCard.modelData, "mirror", text.trim())
                   }
                   Label { text: "Bitdepth"; color: Config.color.on_surface_variant }
                   ComboBox {
                     Layout.fillWidth: true
                     model: ["8", "10"]
-                    currentIndex: output && Number(output.bitdepth) === 10 ? 1 : 0
-                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "bitdepth", parseInt(model[index]))
+                    currentIndex: outputCard.output && Number(outputCard.output.bitdepth) === 10 ? 1 : 0
+                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "bitdepth", parseInt(model[index]))
                   }
 
                   Label { text: "CM"; color: Config.color.on_surface_variant }
@@ -325,31 +327,31 @@ Item {
                     Layout.fillWidth: true
                     model: ["auto", "wide", "dcip3", "dp3", "adobe", "edid", "hdr", "hdredid"]
                     currentIndex: {
-                      const value = output && output.cm ? String(output.cm) : "auto";
+                      const value = outputCard.output && outputCard.output.cm ? String(outputCard.output.cm) : "auto";
                       const idx = model.indexOf(value);
                       return idx >= 0 ? idx : 0;
                     }
-                    onActivated: (index) => HyprDisplayConfigState.setField(modelData, "cm", model[index])
+                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "cm", model[index])
                   }
                   Label { text: "SDR Br."; color: Config.color.on_surface_variant }
                   TextField {
                     Layout.fillWidth: true
-                    text: output ? String(output.sdrbrightness || 1.0) : "1.0"
+                    text: outputCard.output ? String(outputCard.output.sdrbrightness || 1.0) : "1.0"
                     onEditingFinished: {
                       const n = parseFloat(text);
                       if (isFinite(n))
-                        HyprDisplayConfigState.setField(modelData, "sdrbrightness", Math.max(0.1, Math.min(5.0, n)));
+                        HyprDisplayConfigState.setField(outputCard.modelData, "sdrbrightness", Math.max(0.1, Math.min(5.0, n)));
                     }
                   }
 
                   Label { text: "SDR Sat."; color: Config.color.on_surface_variant }
                   TextField {
                     Layout.fillWidth: true
-                    text: output ? String(output.sdrsaturation || 1.0) : "1.0"
+                    text: outputCard.output ? String(outputCard.output.sdrsaturation || 1.0) : "1.0"
                     onEditingFinished: {
                       const n = parseFloat(text);
                       if (isFinite(n))
-                        HyprDisplayConfigState.setField(modelData, "sdrsaturation", Math.max(0.0, Math.min(3.0, n)));
+                        HyprDisplayConfigState.setField(outputCard.modelData, "sdrsaturation", Math.max(0.0, Math.min(3.0, n)));
                     }
                   }
                 }

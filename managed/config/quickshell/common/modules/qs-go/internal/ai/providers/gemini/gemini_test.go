@@ -1,17 +1,19 @@
-package ai
+package gemini
 
 import (
 	"encoding/base64"
 	"testing"
+
+	"qs-go/internal/ai/shared"
 )
 
-func TestBuildGeminiPayloadEncodesAttachment(t *testing.T) {
+func TestBuildPayloadEncodesAttachment(t *testing.T) {
 	png := []byte{0x89, 0x50, 0x4e, 0x47}
-	payload, err := buildGeminiPayload(
+	payload, err := buildPayload(
 		"system",
 		nil,
 		"hello",
-		[]Attachment{
+		[]shared.Attachment{
 			{MIME: "image/png", B64: base64.StdEncoding.EncodeToString(png)},
 		},
 	)

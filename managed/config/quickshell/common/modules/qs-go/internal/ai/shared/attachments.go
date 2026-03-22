@@ -1,4 +1,4 @@
-package ai
+package shared
 
 import (
 	"encoding/base64"
@@ -9,31 +9,31 @@ import (
 	"strings"
 )
 
-type binaryAttachment struct {
+type BinaryAttachment struct {
 	MIME string
 	Data []byte
 }
 
-func decodeAttachmentBinary(a Attachment) (binaryAttachment, bool) {
+func DecodeAttachmentBinary(a Attachment) (BinaryAttachment, bool) {
 	mimeType := strings.TrimSpace(a.MIME)
 	if b64 := strings.TrimSpace(a.B64); b64 != "" {
 		raw, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil || len(raw) == 0 {
-			return binaryAttachment{}, false
+			return BinaryAttachment{}, false
 		}
 		if mimeType == "" {
-			mimeType = sniffMIME(raw, "application/octet-stream")
+			mimeType = SniffMIME(raw, "application/octet-stream")
 		}
-		return binaryAttachment{MIME: mimeType, Data: raw}, true
+		return BinaryAttachment{MIME: mimeType, Data: raw}, true
 	}
 
 	path := strings.TrimSpace(a.Path)
 	if path == "" {
-		return binaryAttachment{}, false
+		return BinaryAttachment{}, false
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil || len(raw) == 0 {
-		return binaryAttachment{}, false
+		return BinaryAttachment{}, false
 	}
 
 	if mimeType == "" {
@@ -41,13 +41,13 @@ func decodeAttachmentBinary(a Attachment) (binaryAttachment, bool) {
 			mimeType = mime.TypeByExtension(ext)
 		}
 		if mimeType == "" {
-			mimeType = sniffMIME(raw, "application/octet-stream")
+			mimeType = SniffMIME(raw, "application/octet-stream")
 		}
 	}
-	return binaryAttachment{MIME: mimeType, Data: raw}, true
+	return BinaryAttachment{MIME: mimeType, Data: raw}, true
 }
 
-func sniffMIME(data []byte, fallback string) string {
+func SniffMIME(data []byte, fallback string) string {
 	detected := http.DetectContentType(data)
 	if detected == "application/octet-stream" && fallback != "" {
 		return fallback

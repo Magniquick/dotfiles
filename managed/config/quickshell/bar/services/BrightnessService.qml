@@ -6,7 +6,6 @@ import Quickshell
 import Quickshell.Io
 import qsgo
 
-import "../components"
 import "../../common" as Common
 
 Item {
@@ -340,20 +339,24 @@ Item {
         if (running)
           monitor._ddcGetRunning = true;
       }
+      // qmllint disable signal-handler-parameters
       onExited: (exitCode, exitStatus) => {
         // Make running edge-triggered for repeated refreshes.
         if (monitor.ddcGetProc.running)
           monitor.ddcGetProc.running = false;
       }
+      // qmllint enable signal-handler-parameters
     }
 
     readonly property Process ddcSetProc: Process {
       running: false
+      // qmllint disable signal-handler-parameters
       onExited: (exitCode, exitStatus) => {
         monitor._ddcSetRunning = false;
         // Refresh after setting to sync with actual device state.
         monitor.refresh();
       }
+      // qmllint enable signal-handler-parameters
     }
   }
 }

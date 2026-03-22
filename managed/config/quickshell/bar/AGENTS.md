@@ -22,7 +22,6 @@
     - Internal panel: `qsgo.BacklightProvider` (sysfs + udev, no polling)
     - External monitors: `ddcutil` via `bar/services/BrightnessService.qml`
   - MPRIS via `Quickshell.Services.Mpris` (ignore `playerctld`).
-  - Notifications: `swaync-client -swb`.
   - Systemd failed units: `systemctl --failed` plus `busctl monitor`.
   - Tray: `Quickshell.Services.SystemTray` (right-click opens menu).
   - Arch icon: `waybar/scripts/status.sh` on tooltip hover.

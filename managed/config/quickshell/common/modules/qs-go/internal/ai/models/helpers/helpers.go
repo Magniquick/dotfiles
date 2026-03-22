@@ -1,4 +1,4 @@
-package ai
+package helpers
 
 import (
 	"encoding/json"
@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"qs-go/internal/ai/shared"
 )
 
 const (
@@ -19,32 +21,25 @@ const (
 	liteLLMRefreshTTL     = 6 * time.Hour
 )
 
-// AttachmentSupport is cached attachment capability for a model.
-type AttachmentSupport string
-
-const (
-	AttachmentSupportUnknown     AttachmentSupport = "unknown"
-	AttachmentSupportSupported   AttachmentSupport = "supported"
-	AttachmentSupportUnsupported AttachmentSupport = "unsupported"
-)
-
-type modelCapability struct {
-	Provider        string            `json:"provider"`
-	Attachments     AttachmentSupport `json:"attachments"`
-	MaxInputTokens  int               `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens int               `json:"max_output_tokens,omitempty"`
-}
-
-type liteLLMCacheEnvelope struct {
-	Version   int                        `json:"version"`
-	FetchedAt int64                      `json:"fetched_at"`
-	ETag      string                     `json:"etag,omitempty"`
-	Models    map[string]modelCapability `json:"models"`
+type cacheEnvelope struct {
+	Version   int                                 `json:"version"`
+	FetchedAt int64                               `json:"fetched_at"`
+	ETag      string                              `json:"etag,omitempty"`
+	Models    map[string]shared.ModelCapabilities `json:"models"`
 }
 
 var liteLLMMu sync.Mutex
 
-func capabilityCatalogPath() string {
+func Query(canonicalModelID string) (shared.ModelCapabilities, bool) {
+	catalog, err := loadCatalog()
+	if err != nil {
+		return shared.ModelCapabilities{}, false
+	}
+	value, ok := catalog.Models[strings.TrimSpace(canonicalModelID)]
+	return value, ok
+}
+
+func CatalogPath() string {
 	base, err := os.UserCacheDir()
 	if err != nil || strings.TrimSpace(base) == "" {
 		base = filepath.Join(os.TempDir(), "quickshell")
@@ -52,29 +47,17 @@ func capabilityCatalogPath() string {
 	return filepath.Join(base, "quickshell", "qs-go", "ai_model_caps.json")
 }
 
-func getModelCapability(provider, model string) (modelCapability, bool) {
-	catalog, err := loadCapabilityCatalog()
-	if err != nil {
-		return modelCapability{}, false
-	}
-	cap, ok := catalog.Models[strings.TrimSpace(model)]
-	if !ok || cap.Provider != provider {
-		return modelCapability{}, false
-	}
-	return cap, true
-}
-
-func loadCapabilityCatalog() (*liteLLMCacheEnvelope, error) {
+func loadCatalog() (*cacheEnvelope, error) {
 	liteLLMMu.Lock()
 	defer liteLLMMu.Unlock()
 
-	cachePath := capabilityCatalogPath()
-	env, err := readCapabilityCatalog(cachePath)
+	cachePath := CatalogPath()
+	env, err := readCatalog(cachePath)
 	if err == nil && time.Since(time.Unix(env.FetchedAt, 0)) < liteLLMRefreshTTL {
 		return env, nil
 	}
 
-	next, refreshErr := refreshCapabilityCatalog(cachePath, env)
+	next, refreshErr := refreshCatalog(cachePath, env)
 	if refreshErr == nil {
 		return next, nil
 	}
@@ -84,12 +67,12 @@ func loadCapabilityCatalog() (*liteLLMCacheEnvelope, error) {
 	return nil, refreshErr
 }
 
-func readCapabilityCatalog(cachePath string) (*liteLLMCacheEnvelope, error) {
+func readCatalog(cachePath string) (*cacheEnvelope, error) {
 	b, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, err
 	}
-	var env liteLLMCacheEnvelope
+	var env cacheEnvelope
 	if err := json.Unmarshal(b, &env); err != nil {
 		return nil, err
 	}
@@ -97,12 +80,12 @@ func readCapabilityCatalog(cachePath string) (*liteLLMCacheEnvelope, error) {
 		return nil, fmt.Errorf("cache version mismatch")
 	}
 	if env.Models == nil {
-		env.Models = map[string]modelCapability{}
+		env.Models = map[string]shared.ModelCapabilities{}
 	}
 	return &env, nil
 }
 
-func refreshCapabilityCatalog(cachePath string, current *liteLLMCacheEnvelope) (*liteLLMCacheEnvelope, error) {
+func refreshCatalog(cachePath string, current *cacheEnvelope) (*cacheEnvelope, error) {
 	req, err := http.NewRequest(http.MethodGet, liteLLMCatalogURL, nil)
 	if err != nil {
 		return nil, err
@@ -123,7 +106,7 @@ func refreshCapabilityCatalog(cachePath string, current *liteLLMCacheEnvelope) (
 			return nil, fmt.Errorf("received 304 without existing cache")
 		}
 		current.FetchedAt = time.Now().Unix()
-		if err := writeCapabilityCatalog(cachePath, current); err != nil {
+		if err := writeCatalog(cachePath, current); err != nil {
 			return nil, err
 		}
 		return current, nil
@@ -136,73 +119,58 @@ func refreshCapabilityCatalog(cachePath string, current *liteLLMCacheEnvelope) (
 		if err != nil {
 			return nil, err
 		}
-		next := &liteLLMCacheEnvelope{
+		next := &cacheEnvelope{
 			Version:   liteLLMCatalogVersion,
 			FetchedAt: time.Now().Unix(),
 			ETag:      strings.TrimSpace(resp.Header.Get("ETag")),
 			Models:    models,
 		}
-		if err := writeCapabilityCatalog(cachePath, next); err != nil {
+		if err := writeCatalog(cachePath, next); err != nil {
 			return nil, err
 		}
 		return next, nil
 	default:
 		raw, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, extractErrorMessage(raw))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, shared.ExtractErrorMessage(raw))
 	}
 }
 
-func normalizeLiteLLMCapabilities(raw []byte) (map[string]modelCapability, error) {
+func normalizeLiteLLMCapabilities(raw []byte) (map[string]shared.ModelCapabilities, error) {
 	var payload map[string]map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, err
 	}
 
-	out := make(map[string]modelCapability)
+	out := make(map[string]shared.ModelCapabilities)
 	for model, spec := range payload {
 		if model == "sample_spec" {
 			continue
 		}
 		provider := normalizeProvider(stringField(spec, "litellm_provider"))
-		if provider == "" || strings.TrimSpace(stringField(spec, "mode")) != "chat" {
+		rawModelID := normalizeRawModelID(provider, model)
+		if provider == "" || rawModelID == "" || strings.TrimSpace(stringField(spec, "mode")) != "chat" {
 			continue
 		}
 
-		attachments := AttachmentSupportUnsupported
-		if boolField(spec, "supports_vision") || provider == "gemini" {
-			attachments = AttachmentSupportSupported
-		}
-
-		maxInput := intField(spec, "max_input_tokens")
-		maxOutput := intField(spec, "max_output_tokens")
-		if maxInput == 0 {
-			maxInput = intField(spec, "max_tokens")
-		}
-		if maxOutput == 0 {
-			maxOutput = intField(spec, "max_tokens")
-		}
-
-		out[model] = modelCapability{
-			Provider:        provider,
-			Attachments:     attachments,
-			MaxInputTokens:  maxInput,
-			MaxOutputTokens: maxOutput,
-		}
-		if alias := providerAlias(provider, model); alias != "" {
-			if _, exists := out[alias]; !exists {
-				out[alias] = out[model]
-			}
+		canonicalID := provider + "/" + rawModelID
+		out[canonicalID] = shared.ModelCapabilities{
+			SupportsImages:     boolField(spec, "supports_vision") || provider == "gemini",
+			SupportsTools:      boolField(spec, "supports_function_calling"),
+			SupportsReasoning:  strings.HasPrefix(rawModelID, "o") || boolField(spec, "supports_reasoning"),
+			SupportsMultimodal: boolField(spec, "supports_vision") || provider == "gemini",
+			MaxInputTokens:     firstInt(intField(spec, "max_input_tokens"), intField(spec, "max_tokens")),
+			MaxOutputTokens:    firstInt(intField(spec, "max_output_tokens"), intField(spec, "max_tokens")),
 		}
 	}
 	return out, nil
 }
 
-func providerAlias(provider, model string) string {
+func normalizeRawModelID(provider, model string) string {
 	prefix := provider + "/"
 	if strings.HasPrefix(model, prefix) {
 		return strings.TrimPrefix(model, prefix)
 	}
-	return ""
+	return strings.TrimSpace(model)
 }
 
 func stringField(m map[string]any, key string) string {
@@ -260,7 +228,7 @@ func normalizeProvider(provider string) string {
 	}
 }
 
-func writeCapabilityCatalog(path string, env *liteLLMCacheEnvelope) error {
+func writeCatalog(path string, env *cacheEnvelope) error {
 	if env == nil {
 		return fmt.Errorf("nil capability catalog")
 	}
@@ -279,28 +247,32 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	tmp, err := os.CreateTemp(dir, "tmp-*")
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer func() {
-		_ = os.Remove(tmpName)
-	}()
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
+	defer os.Remove(tmpName)
+
 	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
+		tmp.Close()
 		return err
 	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+func firstInt(values ...int) int {
+	for _, value := range values {
+		if value > 0 {
+			return value
+		}
+	}
+	return 0
 }

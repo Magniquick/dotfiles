@@ -23,7 +23,7 @@ ModuleContainer {
 
     property bool dropdownPinned: false
     readonly property int taskCount: {
-        const data = TodoistService.data;
+        const data = TodoistService.payload;
         if (!data || !Array.isArray(data.today))
             return 0;
         return data.today.length;

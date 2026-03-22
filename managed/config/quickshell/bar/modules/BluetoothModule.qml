@@ -5,7 +5,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import Quickshell.Bluetooth
 import Quickshell.Io
 import ".."
@@ -537,7 +536,9 @@ ModuleContainer {
             }
         }
 
+        // qmllint disable signal-handler-parameters
         onExited: code => root.logDebug("scan probe exited code=" + code)
+        // qmllint enable signal-handler-parameters
     }
 
     ProcessMonitor {
@@ -864,24 +865,6 @@ ModuleContainer {
                     spacing: Config.space.xs
                     visible: root.deviceSnapshot.length > 0
 
-                    Component {
-                        id: deviceDelegate
-
-                        SystemListRow {
-                            required property var modelData
-
-                            readonly property var device: modelData
-                            readonly property bool connected: !!(device && device.connected)
-
-                            active: connected
-                            rowHeight: menu.rowHeight
-                            leadingIcon: root.deviceTypeIcon(device)
-                            title: root.deviceLabel(device)
-                            trailingIcon: connected ? "󰅖" : "󰐕"
-                            onClicked: root.toggleDeviceConnection(device)
-                        }
-                    }
-
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.bottomMargin: Config.space.xs
@@ -953,7 +936,10 @@ ModuleContainer {
                             interactive: menu.pairedDevices.length > menu.maxVisibleRows
                             model: menu.pairedDevices
                             spacing: Config.space.xs
-                            delegate: deviceDelegate
+                            delegate: BluetoothDeviceRow {
+                                moduleRoot: root
+                                rowHeight: menu.rowHeight
+                            }
                         }
                     }
 
@@ -972,7 +958,10 @@ ModuleContainer {
                             interactive: menu.unpairedDevices.length > menu.maxVisibleRows
                             model: menu.unpairedDevices
                             spacing: Config.space.xs
-                            delegate: deviceDelegate
+                            delegate: BluetoothDeviceRow {
+                                moduleRoot: root
+                                rowHeight: menu.rowHeight
+                            }
                         }
                     }
                 }

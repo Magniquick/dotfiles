@@ -16,7 +16,7 @@ Item {
     readonly property int maxLines: 5
     readonly property int maxInputHeight: Math.ceil(inputMetrics.lineSpacing * root.maxLines) + inputEdit.topPadding + inputEdit.bottomPadding
 
-    signal send(string text, string attachmentsJson)
+    signal send(string text, var attachments)
     signal commandTriggered(string command)
 
     implicitHeight: composerContainer.implicitHeight
@@ -27,8 +27,7 @@ Item {
     property var suggestionList: []
     property int selectedSuggestion: -1
     readonly property var chatCommands: {
-        if (!root.chatSession || !root.chatSession.commandsJson) return [];
-        try { return JSON.parse(root.chatSession.commandsJson); } catch(e) { return []; }
+        return root.chatSession && root.chatSession.commands ? root.chatSession.commands : [];
     }
 
     function acceptSuggestion(name) {
@@ -40,10 +39,7 @@ Item {
     }
 
     function focusInput() {
-        // Avoid forcing focus while the panel window is mid-transition or not visible yet.
         if (!root.visible)
-            return;
-        if (root.QsWindow && root.QsWindow.window && !root.QsWindow.window.visible)
             return;
         inputEdit.forceActiveFocus();
     }
@@ -87,22 +83,9 @@ Item {
         if (!root.chatSession || !root.chatSession.pasteImageFromClipboard)
             return false;
 
-        const json = String(root.chatSession.pasteImageFromClipboard() || "").trim();
-        if (!json)
+        const items = root.chatSession.pasteImageFromClipboard();
+        if (!items || !items.length)
             return false;
-
-        let parsed = null;
-        try {
-            parsed = JSON.parse(json);
-        } catch (e) {
-            parsed = null;
-        }
-
-        if (!parsed)
-            return false;
-
-        // Normalize to array in case the backend returns a single object.
-        const items = Array.isArray(parsed) ? parsed : [parsed];
         for (let i = 0; i < items.length; i++) {
             const a = items[i] || {};
             // Only accept things we can render or send.
@@ -117,21 +100,9 @@ Item {
         if (!root.chatSession || !root.chatSession.pasteAttachmentFromClipboard)
             return false;
 
-        const json = String(root.chatSession.pasteAttachmentFromClipboard() || "").trim();
-        if (!json)
+        const items = root.chatSession.pasteAttachmentFromClipboard();
+        if (!items || !items.length)
             return false;
-
-        let parsed = null;
-        try {
-            parsed = JSON.parse(json);
-        } catch (e) {
-            parsed = null;
-        }
-
-        if (!parsed)
-            return false;
-
-        const items = Array.isArray(parsed) ? parsed : [parsed];
         for (let i = 0; i < items.length; i++) {
             const a = items[i] || {};
             if (!a.path && !a.b64)
@@ -149,7 +120,7 @@ Item {
         if (text.startsWith("/")) {
             root.commandTriggered(text);
         } else {
-            root.send(text, JSON.stringify(root.pendingAttachments || []));
+            root.send(text, (root.pendingAttachments || []).slice());
             root.pendingAttachments = [];
         }
 
@@ -234,6 +205,7 @@ Item {
                     }
 
                     delegate: Rectangle {
+                        id: suggestionDelegate
                         required property var modelData
                         required property int index
 
@@ -253,8 +225,8 @@ Item {
                             spacing: Common.Config.space.sm
 
                             Text {
-                                text: modelData.name
-                                color: index === root.selectedSuggestion
+                                text: suggestionDelegate.modelData.name
+                                color: suggestionDelegate.index === root.selectedSuggestion
                                     ? Common.Config.color.on_primary_container
                                     : Common.Config.color.on_surface
                                 font.family: Common.Config.fontFamily
@@ -265,8 +237,8 @@ Item {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: modelData.description || ""
-                                color: index === root.selectedSuggestion
+                                text: suggestionDelegate.modelData.description || ""
+                                color: suggestionDelegate.index === root.selectedSuggestion
                                     ? Qt.alpha(Common.Config.color.on_primary_container, 0.7)
                                     : Common.Config.color.on_surface_variant
                                 font.family: Common.Config.fontFamily
@@ -277,7 +249,7 @@ Item {
                         }
 
                         HoverHandler {
-                            onHoveredChanged: if (hovered) root.selectedSuggestion = index
+                            onHoveredChanged: if (hovered) root.selectedSuggestion = suggestionDelegate.index
                         }
 
                         MK.HybridRipple {
@@ -295,7 +267,7 @@ Item {
                             property real pressY: height / 2
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.acceptSuggestion(modelData.name)
+                            onClicked: root.acceptSuggestion(suggestionDelegate.modelData.name)
                             onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
                         }
                     }
@@ -371,6 +343,7 @@ Item {
                             Repeater {
                                 model: root.pendingAttachments
                                 delegate: Item {
+                                    id: attachmentDelegate
                                     required property var modelData
                                     required property int index
 
@@ -388,16 +361,16 @@ Item {
                                         Image {
                                             anchors.fill: parent
                                             anchors.margins: 4
-                                            source: root.attachmentSource(modelData)
+                                            source: root.attachmentSource(attachmentDelegate.modelData)
                                             fillMode: Image.PreserveAspectCrop
                                             asynchronous: true
                                             cache: false
-                                            visible: !root.isPdfAttachment(modelData)
+                                            visible: !root.isPdfAttachment(attachmentDelegate.modelData)
                                         }
 
                                         Item {
                                             anchors.fill: parent
-                                            visible: root.isPdfAttachment(modelData)
+                                            visible: root.isPdfAttachment(attachmentDelegate.modelData)
 
                                             Text {
                                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -413,7 +386,7 @@ Item {
                                                 anchors.right: parent.right
                                                 anchors.bottom: parent.bottom
                                                 anchors.margins: 4
-                                                text: root.attachmentLabel(modelData)
+                                                text: root.attachmentLabel(attachmentDelegate.modelData)
                                                 elide: Text.ElideRight
                                                 maximumLineCount: 1
                                                 color: Common.Config.color.on_surface_variant
@@ -461,7 +434,7 @@ Item {
                                                 onClicked: {
                                                     const next = [];
                                                     for (let i = 0; i < root.pendingAttachments.length; i++) {
-                                                        if (i !== index)
+                                                        if (i !== attachmentDelegate.index)
                                                             next.push(root.pendingAttachments[i]);
                                                     }
                                                     root.pendingAttachments = next;
@@ -552,7 +525,8 @@ Item {
                             Keys.onPressed: event => {
                                 // Navigate / accept suggestions.
                                 if (root.suggestionList.length > 0) {
-                                    if (event.key === Qt.Key_Tab) {
+                                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                            && !(event.modifiers & Qt.ShiftModifier)) {
                                         root.acceptSuggestion(root.suggestionList[Math.max(0, root.selectedSuggestion)].name);
                                         event.accepted = true;
                                         return;
@@ -582,7 +556,8 @@ Item {
                                         return;
                                     }
                                 }
-                                if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) {
+                                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                        && !(event.modifiers & Qt.ShiftModifier)) {
                                     root.handleSend();
                                     event.accepted = true;
                                 }
@@ -681,9 +656,7 @@ Item {
                             id: sendGlyphWrap
                             anchors.fill: parent
 
-                            // Keep animations off when the window isn't visible (idle CPU).
                             readonly property bool animOk: root.visible
-                                && (!root.QsWindow || !root.QsWindow.window || root.QsWindow.window.visible)
 
                             // While generating, keep morphing between a small set of shapes.
                             // When idle, show a stable "send" glyph.

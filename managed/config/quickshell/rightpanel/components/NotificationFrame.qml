@@ -17,7 +17,7 @@ Item {
     // Strict parity with bar module borders.
     property color frameBorderColor: Qt.alpha(Common.Config.color.outline_variant, 0.6)
     // Conventional "card" depth. Tuned by callers (list vs popup).
-    property int elevation: MK.Token.elevation.level1
+    property int elevation: 1
 
     default property alias contentData: contentHost.data
 

@@ -1,6 +1,7 @@
 #include "QsGoAiSession.h"
 #include "qsgo_go_api.h"
 
+#include <algorithm>
 #include <QBuffer>
 #include <QClipboard>
 #include <QGuiApplication>
@@ -12,6 +13,7 @@
 #include <QJsonObject>
 #include <QMetaObject>
 #include <QMimeData>
+#include <QThreadPool>
 #include <QUuid>
 
 // ── QAbstractListModel ────────────────────────────────────────────────────────
@@ -19,7 +21,7 @@
 QsGoAiSession::QsGoAiSession(QObject* parent) : QAbstractListModel(parent) {}
 
 void QsGoAiSession::setAppLinkColor(const QColor& color) {
-QPalette pal = QGuiApplication::palette();
+  QPalette pal = QGuiApplication::palette();
     pal.setColor(QPalette::Link, color);
     QGuiApplication::setPalette(pal);
 }
@@ -66,14 +68,16 @@ void QsGoAiSession::setModelId(const QString& v)
 void QsGoAiSession::setSystemPrompt(const QString& v)
 { if (v != m_systemPrompt) { m_systemPrompt = v; emit systemPromptChanged(); } }
 
-void QsGoAiSession::setOpenaiApiKey(const QString& v)
-{ if (v != m_openaiApiKey) { m_openaiApiKey = v; emit openaiApiKeyChanged(); } }
+void QsGoAiSession::setProviderConfig(const QVariantMap& v)
+{ if (v != m_providerConfig) { m_providerConfig = v; emit providerConfigChanged(); } }
 
-void QsGoAiSession::setGeminiApiKey(const QString& v)
-{ if (v != m_geminiApiKey) { m_geminiApiKey = v; emit geminiApiKeyChanged(); } }
-
-void QsGoAiSession::setOpenaiBaseUrl(const QString& v)
-{ if (v != m_openaiBaseUrl) { m_openaiBaseUrl = v; emit openaiBaseUrlChanged(); } }
+void QsGoAiSession::setMcpConfig(const QVariantList& v)
+{
+  if (v == m_mcpConfig) return;
+  m_mcpConfig = v;
+  emit mcpConfigChanged();
+  refreshMcpStateAsync();
+}
 
 void QsGoAiSession::setBusy(bool v)
 { if (v != m_busy) { m_busy = v; emit busyChanged(); } }
@@ -96,24 +100,27 @@ void QsGoAiSession::submitInput(const QString& text)
     return;
   }
   if (m_busy) return;
-  startStream(trimmed, QString());
+  startStream(trimmed, QVariantList{});
 }
 
-void QsGoAiSession::submitInputWithAttachments(const QString& text, const QString& attachmentsJson)
+void QsGoAiSession::submitInputWithAttachments(const QString& text, const QVariantList& attachments)
 {
   if (m_busy) return;
-  startStream(text.trimmed(), attachmentsJson);
+  startStream(text.trimmed(), attachments);
 }
 
-void QsGoAiSession::startStream(const QString& text, const QString& attachmentsJson)
+void QsGoAiSession::startStream(const QString& text, const QVariantList& attachments)
 {
   // Build history from current messages BEFORE appending new ones.
   const QString histJson = buildHistoryJson();
+  const QByteArray providerConfigJson = buildProviderConfigJson();
+  const QByteArray mcpConfigJson = buildMcpConfigJson();
+  const QByteArray attachmentsJson = QJsonDocument::fromVariant(attachments).toJson(QJsonDocument::Compact);
 
   // Append user message.
   const int userRow = m_messages.size();
   beginInsertRows({}, userRow, userRow);
-  m_messages.append({ QUuid::createUuid().toString(QUuid::WithoutBraces), "user", text, "chat", QString(), attachmentsJson });
+  m_messages.append({ QUuid::createUuid().toString(QUuid::WithoutBraces), "user", text, "chat", QVariantMap{}, attachments });
   endInsertRows();
 
   // Append empty assistant message (filled by tokens).
@@ -130,13 +137,12 @@ void QsGoAiSession::startStream(const QString& text, const QString& attachmentsJ
 
   m_sessionId = QsGo_AiChat_Stream(
     m_modelId.toUtf8().constData(),
-    m_openaiApiKey.toUtf8().constData(),
-    m_geminiApiKey.toUtf8().constData(),
-    m_openaiBaseUrl.toUtf8().constData(),
+    providerConfigJson.constData(),
+    mcpConfigJson.constData(),
     m_systemPrompt.toUtf8().constData(),
     histJson.toUtf8().constData(),
     text.toUtf8().constData(),
-    attachmentsJson.toUtf8().constData(),
+    attachmentsJson.constData(),
     &QsGoAiSession::tokenCallback,
     this
   );
@@ -171,7 +177,7 @@ void QsGoAiSession::regenerate(const QString& messageId)
   if (userIdx < 0) return;
 
   const QString userText = m_messages.at(userIdx).body;
-  const QString userAttachments = m_messages.at(userIdx).attachments;
+  const QVariantList userAttachments = m_messages.at(userIdx).attachments;
 
   // Remove from userIdx onwards.
   beginRemoveRows({}, userIdx, m_messages.size() - 1);
@@ -236,14 +242,14 @@ QString QsGoAiSession::copyAllText() const
   return parts.join(QStringLiteral("\n\n"));
 }
 
-QString QsGoAiSession::pasteImageFromClipboard()
+QVariantList QsGoAiSession::pasteImageFromClipboard()
 {
   const QClipboard* cb = QGuiApplication::clipboard();
   const QMimeData* mime = cb->mimeData();
-  if (!mime || !mime->hasImage()) return QString();
+  if (!mime || !mime->hasImage()) return {};
 
   const QImage img = cb->image();
-  if (img.isNull()) return QString();
+  if (img.isNull()) return {};
 
   QByteArray ba;
   QBuffer buf(&ba);
@@ -251,51 +257,49 @@ QString QsGoAiSession::pasteImageFromClipboard()
   img.save(&buf, "PNG");
   buf.close();
 
-  const QString b64 = QString::fromLatin1(ba.toBase64());
-  QJsonObject obj;
-  obj[QStringLiteral("mime")] = QStringLiteral("image/png");
-  obj[QStringLiteral("b64")]  = b64;
-  QJsonArray arr;
-  arr.append(obj);
-  return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+  return QVariantList{
+    QVariantMap{
+      { QStringLiteral("mime"), QStringLiteral("image/png") },
+      { QStringLiteral("b64"), QString::fromLatin1(ba.toBase64()) },
+    }
+  };
 }
 
-QString QsGoAiSession::pasteAttachmentFromClipboard()
+QVariantList QsGoAiSession::pasteAttachmentFromClipboard()
 {
   const QClipboard* cb = QGuiApplication::clipboard();
   const QMimeData* mime = cb->mimeData();
-  if (!mime) return QString();
+  if (!mime) return {};
 
   if (mime->hasUrls()) {
-    QJsonArray arr;
+    QVariantList out;
     for (const QUrl& url : mime->urls()) {
       if (!url.isLocalFile()) continue;
-      QJsonObject obj;
-      obj[QStringLiteral("path")] = url.toLocalFile();
-      arr.append(obj);
+      out.append(QVariantMap{
+        { QStringLiteral("path"), url.toLocalFile() }
+      });
     }
-    if (!arr.isEmpty())
-      return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    if (!out.isEmpty())
+      return out;
   }
-  return QString();
+  return {};
 }
 
 // ── Command catalog ───────────────────────────────────────────────────────────
 
-QString QsGoAiSession::commandsJson() const
+QVariantList QsGoAiSession::commands() const
 {
-  static const QString json = QStringLiteral(
-    "["
-    "{\"name\":\"/model\",\"description\":\"Change model\"},"
-    "{\"name\":\"/mood\",\"description\":\"Change mood / persona\"},"
-    "{\"name\":\"/clear\",\"description\":\"Clear chat history\"},"
-    "{\"name\":\"/copy\",\"description\":\"Copy all messages to clipboard\"},"
-    "{\"name\":\"/status\",\"description\":\"Show model & connection info\"},"
-    "{\"name\":\"/debug\",\"description\":\"Show detailed session diagnostics\"},"
-    "{\"name\":\"/help\",\"description\":\"Show available commands\"}"
-    "]"
-  );
-  return json;
+  return QVariantList{
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/model") }, { QStringLiteral("description"), QStringLiteral("Change model") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/mood") }, { QStringLiteral("description"), QStringLiteral("Change mood / persona") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/clear") }, { QStringLiteral("description"), QStringLiteral("Clear chat history") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/copy") }, { QStringLiteral("description"), QStringLiteral("Copy all messages to clipboard") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/status") }, { QStringLiteral("description"), QStringLiteral("Show model & connection info") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/mcp") }, { QStringLiteral("description"), QStringLiteral("Show MCP server and tool status") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/mcp add") }, { QStringLiteral("description"), QStringLiteral("Add a new MCP server") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/debug") }, { QStringLiteral("description"), QStringLiteral("Show detailed session diagnostics") }},
+    QVariantMap{{ QStringLiteral("name"), QStringLiteral("/help") }, { QStringLiteral("description"), QStringLiteral("Show available commands") }},
+  };
 }
 
 // ── Slash commands ────────────────────────────────────────────────────────────
@@ -325,16 +329,47 @@ void QsGoAiSession::handleSlashCommand(const QString& cmd)
       "| `/clear` | Clear chat history |\n"
       "| `/copy` | Copy all messages to clipboard |\n"
       "| `/status` | Show model & connection info |\n"
+      "| `/mcp` | Show MCP server and tool status |\n"
+      "| `/mcp add` | Add a new MCP server |\n"
       "| `/debug` | Show detailed session diagnostics |\n"
       "| `/help` | Show this message |"
     ));
+  } else if (cmd == QStringLiteral("/mcp add")) {
+    emit openMcpAddRequested();
+  } else if (cmd.startsWith(QStringLiteral("/mcp add "))) {
+    appendInfo(QStringLiteral(
+      "`/mcp add` opens the add-server form.\n\n"
+      "Auth tokens and custom headers still need to be edited manually in `leftpanel/mcp_servers.json`."
+    ));
+  } else if (cmd == QStringLiteral("/mcp")) {
+    const int connectedCount = std::count_if(m_mcpServers.cbegin(), m_mcpServers.cend(), [](const QVariant& value) {
+      return value.toMap().value(QStringLiteral("connected")).toBool();
+    });
+    appendInfo(QStringLiteral(
+      "**MCP**\n\n"
+      "- **Servers:** %1 total  •  %2 connected\n"
+      "- **Tools:** %3\n"
+      "- **Prompts:** %4\n"
+      "- **Resources:** %5\n"
+      "- **Status:** %6%7"
+    ).arg(m_mcpServers.size())
+     .arg(connectedCount)
+     .arg(m_mcpTools.size())
+     .arg(m_mcpPrompts.size())
+     .arg(m_mcpResources.size())
+     .arg(m_mcpStatus.isEmpty() ? QStringLiteral("(unknown)") : m_mcpStatus)
+     .arg(m_mcpError.isEmpty() ? QString() : QStringLiteral("\n- **Error:** %1").arg(m_mcpError)));
   } else if (cmd == QStringLiteral("/status")) {
-    const QString provider = m_modelId.startsWith(QStringLiteral("gemini")) ? QStringLiteral("Gemini") : QStringLiteral("OpenAI");
-    const bool hasKey = m_modelId.startsWith(QStringLiteral("gemini"))
-      ? !m_geminiApiKey.isEmpty()
-      : !m_openaiApiKey.isEmpty();
+    const QString providerId = activeProviderId();
+    const QString provider = providerId.isEmpty()
+      ? QStringLiteral("(unknown)")
+      : (providerId.left(1).toUpper() + providerId.mid(1));
+    const QVariantMap config = activeProviderConfig();
+    const bool hasKey = !config.value(QStringLiteral("api_key")).toString().isEmpty();
     const QString keyStatus = hasKey ? QStringLiteral("✓ set") : QStringLiteral("✗ not set");
-    const QString baseUrl = m_openaiBaseUrl.isEmpty() ? QStringLiteral("(default)") : m_openaiBaseUrl;
+    const QString baseUrl = config.value(QStringLiteral("base_url")).toString().isEmpty()
+      ? QStringLiteral("(default)")
+      : config.value(QStringLiteral("base_url")).toString();
     const QString prompt = m_systemPrompt.isEmpty()
       ? QStringLiteral("(none)")
       : (m_systemPrompt.length() > 120 ? m_systemPrompt.left(120) + QStringLiteral("…") : m_systemPrompt);
@@ -343,21 +378,29 @@ void QsGoAiSession::handleSlashCommand(const QString& cmd)
       "- **Model:** %1\n"
       "- **Provider:** %2  •  API key: %3\n"
       "- **Base URL:** %4\n"
-      "- **Mood prompt:** %5"
+      "- **MCP:** %5 servers  •  %6 tools\n"
+      "- **Mood prompt:** %7"
     ).arg(m_modelId.isEmpty() ? QStringLiteral("(none)") : m_modelId)
-     .arg(provider).arg(keyStatus).arg(baseUrl).arg(prompt));
+     .arg(provider).arg(keyStatus).arg(baseUrl)
+     .arg(m_mcpServers.size()).arg(m_mcpTools.size()).arg(prompt));
   } else if (cmd == QStringLiteral("/debug")) {
-    const QString provider = m_modelId.startsWith(QStringLiteral("gemini")) ? QStringLiteral("Gemini") : QStringLiteral("OpenAI");
-    const QString& activeKey = m_modelId.startsWith(QStringLiteral("gemini")) ? m_geminiApiKey : m_openaiApiKey;
+    const QString providerId = activeProviderId();
+    const QString provider = providerId.isEmpty()
+      ? QStringLiteral("(unknown)")
+      : (providerId.left(1).toUpper() + providerId.mid(1));
+    const QVariantMap activeConfig = activeProviderConfig();
+    const QString activeKey = activeConfig.value(QStringLiteral("api_key")).toString();
     const QString keyPreview = activeKey.isEmpty()
       ? QStringLiteral("✗ not set")
       : QStringLiteral("✓ %1…").arg(activeKey.left(8));
-    const QString geminiKeyPreview = m_geminiApiKey.isEmpty()
+    const QVariantMap geminiConfig = m_providerConfig.value(QStringLiteral("gemini")).toMap();
+    const QVariantMap openaiConfig = m_providerConfig.value(QStringLiteral("openai")).toMap();
+    const QString geminiKeyPreview = geminiConfig.value(QStringLiteral("api_key")).toString().isEmpty()
       ? QStringLiteral("✗ not set")
-      : QStringLiteral("✓ %1…").arg(m_geminiApiKey.left(8));
-    const QString openaiKeyPreview = m_openaiApiKey.isEmpty()
+      : QStringLiteral("✓ %1…").arg(geminiConfig.value(QStringLiteral("api_key")).toString().left(8));
+    const QString openaiKeyPreview = openaiConfig.value(QStringLiteral("api_key")).toString().isEmpty()
       ? QStringLiteral("✗ not set")
-      : QStringLiteral("✓ %1…").arg(m_openaiApiKey.left(8));
+      : QStringLiteral("✓ %1…").arg(openaiConfig.value(QStringLiteral("api_key")).toString().left(8));
     int chatCount = 0, infoCount = 0;
     for (const Message& msg : m_messages) {
       if (msg.kind == QStringLiteral("chat")) ++chatCount;
@@ -366,7 +409,9 @@ void QsGoAiSession::handleSlashCommand(const QString& cmd)
     const QString prompt = m_systemPrompt.isEmpty()
       ? QStringLiteral("(none)")
       : (m_systemPrompt.length() > 80 ? m_systemPrompt.left(80) + QStringLiteral("…") : m_systemPrompt);
-    const QString baseUrl = m_openaiBaseUrl.isEmpty() ? QStringLiteral("(default)") : m_openaiBaseUrl;
+    const QString baseUrl = activeConfig.value(QStringLiteral("base_url")).toString().isEmpty()
+      ? QStringLiteral("(default)")
+      : activeConfig.value(QStringLiteral("base_url")).toString();
 
     // Pull last-stream metrics from Go.
     QString metricsSection = QStringLiteral("*(no stream yet)*");
@@ -413,17 +458,20 @@ void QsGoAiSession::handleSlashCommand(const QString& cmd)
       "- Active key: %3\n"
       "- Gemini key: %4\n"
       "- OpenAI key: %5\n"
-      "- Base URL: %6\n\n"
+      "- Base URL: %6\n"
+      "- MCP status: %7  •  Servers: %8  •  Tools: %9\n\n"
       "**Session**\n"
-      "- Messages: %7 chat + %8 info\n"
-      "- Busy: %9  •  Session ID: %10\n\n"
+      "- Messages: %10 chat + %11 info\n"
+      "- Busy: %12  •  Session ID: %13\n\n"
       "**Last stream**\n"
-      "%11\n\n"
+      "%14\n\n"
       "**System prompt**\n"
-      "%12"
+      "%15"
     ).arg(m_modelId.isEmpty() ? QStringLiteral("(none)") : m_modelId)
      .arg(provider).arg(keyPreview)
      .arg(geminiKeyPreview).arg(openaiKeyPreview).arg(baseUrl)
+     .arg(m_mcpStatus.isEmpty() ? QStringLiteral("(unknown)") : m_mcpStatus)
+     .arg(m_mcpServers.size()).arg(m_mcpTools.size())
      .arg(chatCount).arg(infoCount)
      .arg(m_busy ? QStringLiteral("yes") : QStringLiteral("no"))
      .arg(m_sessionId)
@@ -444,20 +492,97 @@ QString QsGoAiSession::buildHistoryJson() const
     QJsonObject obj;
     obj[QStringLiteral("sender")] = msg.sender;
     obj[QStringLiteral("body")]   = msg.body;
-    const QString attachments = msg.attachments.trimmed();
-    if (!attachments.isEmpty()) {
-      const QJsonDocument doc = QJsonDocument::fromJson(attachments.toUtf8());
-      if (!doc.isNull()) {
-        if (doc.isArray()) {
-          obj[QStringLiteral("attachments")] = doc.array();
-        } else if (doc.isObject()) {
-          obj[QStringLiteral("attachments")] = QJsonArray{doc.object()};
-        }
-      }
+    if (!msg.attachments.isEmpty()) {
+      obj[QStringLiteral("attachments")] = QJsonArray::fromVariantList(msg.attachments);
     }
     arr.append(obj);
   }
   return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
+QByteArray QsGoAiSession::buildProviderConfigJson() const
+{
+  return QJsonDocument::fromVariant(m_providerConfig).toJson(QJsonDocument::Compact);
+}
+
+QByteArray QsGoAiSession::buildMcpConfigJson() const
+{
+  return QJsonDocument::fromVariant(m_mcpConfig).toJson(QJsonDocument::Compact);
+}
+
+bool QsGoAiSession::refreshMcp()
+{
+  refreshMcpStateAsync();
+  return true;
+}
+
+void QsGoAiSession::refreshMcpStateAsync()
+{
+  const QByteArray mcpConfigJson = buildMcpConfigJson();
+  QThreadPool::globalInstance()->start([this, mcpConfigJson]() {
+    char* raw = QsGo_AiMcp_Refresh(mcpConfigJson.constData());
+    QByteArray json(raw);
+    QsGo_Free(raw);
+
+    QMetaObject::invokeMethod(this, [this, json]() {
+      const QJsonDocument doc = QJsonDocument::fromJson(json);
+      if (!doc.isObject()) {
+        m_mcpStatus = QStringLiteral("error");
+        m_mcpError = QStringLiteral("Invalid MCP response");
+        emit mcpStateChanged();
+        return;
+      }
+      const QJsonObject obj = doc.object();
+      m_mcpServers = obj.value(QLatin1String("servers")).toArray().toVariantList();
+      m_mcpTools = obj.value(QLatin1String("tools")).toArray().toVariantList();
+      m_mcpPrompts = obj.value(QLatin1String("prompts")).toArray().toVariantList();
+      m_mcpResources = obj.value(QLatin1String("resources")).toArray().toVariantList();
+      m_mcpStatus = obj.value(QLatin1String("status")).toString();
+      m_mcpError = obj.value(QLatin1String("error")).toString();
+      emit mcpStateChanged();
+    }, Qt::QueuedConnection);
+  });
+}
+
+QVariantMap QsGoAiSession::getMcpPrompt(const QString& serverId, const QString& promptName, const QVariantMap& arguments)
+{
+  const QByteArray mcpConfigJson = buildMcpConfigJson();
+  const QByteArray argsJson = QJsonDocument::fromVariant(arguments).toJson(QJsonDocument::Compact);
+  char* raw = QsGo_AiMcp_GetPrompt(
+    mcpConfigJson.constData(),
+    serverId.toUtf8().constData(),
+    promptName.toUtf8().constData(),
+    argsJson.constData()
+  );
+  const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
+  QsGo_Free(raw);
+  return doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
+}
+
+QVariantMap QsGoAiSession::readMcpResource(const QString& serverId, const QString& uri)
+{
+  const QByteArray mcpConfigJson = buildMcpConfigJson();
+  char* raw = QsGo_AiMcp_ReadResource(
+    mcpConfigJson.constData(),
+    serverId.toUtf8().constData(),
+    uri.toUtf8().constData()
+  );
+  const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
+  QsGo_Free(raw);
+  return doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
+}
+
+QString QsGoAiSession::activeProviderId() const
+{
+  const int slash = m_modelId.indexOf(QLatin1Char('/'));
+  if (slash <= 0)
+    return QString();
+  return m_modelId.left(slash);
+}
+
+QVariantMap QsGoAiSession::activeProviderConfig() const
+{
+  return m_providerConfig.value(activeProviderId()).toMap();
 }
 
 int QsGoAiSession::indexOfMessage(const QString& id) const
@@ -486,7 +611,8 @@ void QsGoAiSession::tokenCallback(void* ctx, const char* token, int done)
       if (!self->m_messages.isEmpty() && self->m_messages.last().sender == QStringLiteral("assistant")) {
         char* raw = QsGo_AiChat_LastMetrics();
         if (raw) {
-          self->m_messages.last().metrics = QString::fromUtf8(raw);
+          const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
+          self->m_messages.last().metrics = doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
           QsGo_Free(raw);
           const int row = self->m_messages.size() - 1;
           const QModelIndex idx = self->index(row, 0);

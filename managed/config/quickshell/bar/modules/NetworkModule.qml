@@ -5,11 +5,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import ".."
 import "../components"
 import "../../common" as Common
-import "../../common/materialkit" as MK
 
 ModuleContainer {
     id: root
@@ -140,123 +138,6 @@ ModuleContainer {
             text: root.connectionIcon()
         }
     ]
-
-    Component {
-        id: sourceRowDelegate
-
-        Rectangle {
-            required property var modelData
-
-            readonly property bool active: !!modelData && !!modelData.active
-            readonly property string sourceName: modelData ? String(modelData.name || "") : ""
-            readonly property string sourceType: modelData ? String(modelData.type || "") : ""
-            readonly property string sourceDevice: modelData ? String(modelData.device || "") : ""
-            readonly property bool connectable: modelData ? !!modelData.connectable : false
-            readonly property bool switching: root.sourceSwitching && root.sourceSwitchingName === sourceName
-
-            Layout.fillWidth: true
-            Layout.preferredHeight: root.sourceRowHeight
-            radius: Config.shape.corner.md
-            color: rowMouseArea.containsMouse
-                ? Qt.alpha(Config.color.surface_variant, 0.45)
-                : (active ? Qt.alpha(Config.color.primary_container, 0.45) : Config.color.surface_container_high)
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Config.space.sm
-                anchors.rightMargin: Config.space.sm
-                spacing: Config.space.sm
-
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredHeight: 28
-                    Layout.preferredWidth: 28
-                    color: active ? Qt.alpha(Config.color.primary, 0.7) : Config.color.surface_variant
-                    radius: width / 2
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: active ? Config.color.on_primary : Config.color.on_surface
-                        font.family: Config.iconFontFamily
-                        font.pixelSize: Config.type.labelLarge.size
-                        text: root.sourceIcon(sourceType)
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.space.none
-
-                    Text {
-                        Layout.fillWidth: true
-                        color: active ? Config.color.on_primary_container : Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.bodyLarge.size
-                        font.weight: Config.type.bodyLarge.weight
-                        text: sourceName !== "" ? sourceName : root.sourceTypeLabel(sourceType)
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface_variant
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: sourceDevice !== "" ? (root.sourceTypeLabel(sourceType) + " • " + sourceDevice) : root.sourceTypeLabel(sourceType)
-                    }
-                }
-
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredHeight: activeLabel.implicitHeight + Config.spaceHalfXs
-                    Layout.preferredWidth: activeLabel.implicitWidth + Config.space.sm
-                    color: switching ? Qt.alpha(Config.color.secondary, 0.95) : Qt.alpha(Config.color.tertiary, 0.9)
-                    radius: Config.shape.corner.sm
-                    visible: switching
-
-                    Text {
-                        id: activeLabel
-
-                        anchors.centerIn: parent
-                        color: switching ? Config.color.on_secondary : Config.color.on_tertiary
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelSmall.size
-                        font.weight: Font.Bold
-                        text: "SWITCHING"
-                    }
-                }
-            }
-
-            MK.HybridRipple {
-                anchors.fill: parent
-                color: active ? Config.color.on_primary_container : Config.color.on_surface
-                pressX: rowMouseArea.pressX
-                pressY: rowMouseArea.pressY
-                pressed: rowMouseArea.pressed
-                radius: parent.radius
-                stateLayerEnabled: false
-                stateOpacity: 0
-            }
-
-            MouseArea {
-                id: rowMouseArea
-
-                property real pressX: width / 2
-                property real pressY: height / 2
-
-                anchors.fill: parent
-                enabled: connectable && !active && !root.sourceSwitching
-                hoverEnabled: true
-                onClicked: function() {
-                    NetworkService.switchSource(modelData);
-                }
-                onPressed: function(mouse) {
-                    pressX = mouse.x;
-                    pressY = mouse.y;
-                }
-            }
-        }
-    }
 
     tooltipContent: Component {
         ColumnLayout {
@@ -450,7 +331,10 @@ ModuleContainer {
 
                             Repeater {
                                 model: root.sourceEntries
-                                delegate: sourceRowDelegate
+                                delegate: NetworkSourceRow {
+                                    moduleRoot: root
+                                    rowHeight: root.sourceRowHeight
+                                }
                             }
                         }
 

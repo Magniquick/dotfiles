@@ -3,7 +3,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import "../../common/materialkit" as MK
 import "../../common" as Common
 
 Item {
@@ -20,12 +19,10 @@ Item {
 
     property bool editing: false
     property bool renderMarkdown: true
-    property string metrics: ""
-    property string attachments: ""
+    property var metrics: ({})
+    property var attachments: []
 
-    property var attachmentList: {
-        try { return JSON.parse(root.attachments) } catch(e) { return [] }
-    }
+    property var attachmentList: Array.isArray(root.attachments) ? root.attachments : []
 
     signal regenerateRequested()
     signal deleteRequested()
@@ -286,7 +283,7 @@ Item {
                                 color: Common.Config.color.primary
 
                                 SequentialAnimation on opacity {
-                                    running: root.thinking && root.visible && root.QsWindow.window && root.QsWindow.window.visible
+                                    running: root.thinking && root.visible
                                     loops: Animation.Infinite
                                     PauseAnimation { duration: typingDot.index * 200 }
                                     NumberAnimation { to: 0.2; duration: 400 }
@@ -304,6 +301,7 @@ Item {
                 model: (!root.thinking && !root.editing && root.renderMarkdown) ? root.contentBlocks : []
 
                 Loader {
+                    id: contentBlockLoader
                     required property var modelData
                     required property int index
 
@@ -322,8 +320,8 @@ Item {
                     Component {
                         id: codeBlockComponent
                         MessageCodeBlock {
-                            code: modelData.content
-                            language: modelData.language
+                            code: contentBlockLoader.modelData.content
+                            language: contentBlockLoader.modelData.language
                             editing: false
                         }
                     }
@@ -332,8 +330,8 @@ Item {
                         id: textBlockComponent
                         TextEdit {
                             text: root.renderMarkdown
-                                ? String(modelData.content).replace(/\n/g, "  \n")
-                                : modelData.content
+                                ? String(contentBlockLoader.modelData.content).replace(/\n/g, "  \n")
+                                : contentBlockLoader.modelData.content
                             textFormat: root.renderMarkdown ? TextEdit.MarkdownText : TextEdit.PlainText
                             color: Common.Config.color.on_surface
                             wrapMode: TextEdit.Wrap
@@ -412,13 +410,14 @@ Item {
                 Repeater {
                     model: root.attachmentList
                     Rectangle {
+                        id: attachmentPreview
                         required property var modelData
                         width: 80; height: 80; radius: 6; clip: true
                         color: Common.Config.color.surface_container_highest
 
                         Image {
                             anchors.fill: parent
-                            source: modelData.b64 ? "data:" + modelData.mime + ";base64," + modelData.b64 : ""
+                            source: attachmentPreview.modelData.b64 ? "data:" + attachmentPreview.modelData.mime + ";base64," + attachmentPreview.modelData.b64 : ""
                             fillMode: Image.PreserveAspectCrop
                         }
                     }
@@ -427,11 +426,9 @@ Item {
 
             // Per-message stream metrics (assistant messages, shown after streaming completes)
             Text {
-                property var metricsData: {
-                    try { return JSON.parse(root.metrics) } catch(e) { return {} }
-                }
+                property var metricsData: root.metrics || ({})
                 property int metricsTokens: metricsData.output_tokens || 0
-                property int metricsTtft: metricsData.ttft_ms || 0
+                property int metricsTtft: metricsData.ttf_ms || 0
 
                 visible: root.isAssistant && root.done && !root.thinking && metricsTokens > 0
                 text: metricsTtft > 0

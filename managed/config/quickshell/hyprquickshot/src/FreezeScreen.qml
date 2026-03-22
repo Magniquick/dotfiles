@@ -1,12 +1,12 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 
 PanelWindow {
     id: root
 
     property real freezeOpacity: 1
+    property var captureProvider: null
     property url frozenFrame: ""
     property int frozenFrameAttempts: 0
     property bool initialFrozenGrabPending: true
@@ -14,6 +14,7 @@ PanelWindow {
     default property alias overlayContent: overlayContainer.data
     property alias overlayRoot: overlayContainer
     property string pendingGrabScreenName: ""
+    property string pendingGrabRequestId: ""
     property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     property bool screenFrozen: true
     property bool surfaceTransparencyActive: false
@@ -40,15 +41,15 @@ PanelWindow {
             root.surfaceTransparencyActive = false;
             return;
         }
-        if (grimCapture.running)
+        if (!root.captureProvider)
             return;
 
         frozenFrameAttempts += 1;
-        console.log("[freeze] capturing frame with grim, attempt", frozenFrameAttempts);
-        // Hide window for capture, then wait a frame before starting grim.
+        console.log("[freeze] capturing frame natively, attempt", frozenFrameAttempts);
+        // Hide the overlay window, then wait a frame before starting native capture.
         root.surfaceTransparencyActive = true;
         root.pendingGrabScreenName = root.targetScreen.name;
-        delayedGrimStart.restart();
+        delayedCaptureStart.restart();
     }
     function freezeLater() {
         screenFrozen = true;
@@ -72,6 +73,7 @@ PanelWindow {
 
         console.log("[freeze] unfreezing now");
         screenFrozen = false;
+        pendingGrabRequestId = "";
         frozenFrame = "";
         clearCaptureTimers();
         frozenFrameAttempts = 0;
@@ -106,6 +108,7 @@ PanelWindow {
     }
     onTargetScreenChanged: {
         console.log("[freeze] target screen changed; resetting attempts and clearing frame");
+        pendingGrabRequestId = "";
         frozenFrameAttempts = 0;
         frozenFrame = "";
         initialFrozenGrabPending = true;
@@ -154,48 +157,30 @@ PanelWindow {
             }
         }
     }
-    Process {
-        id: grimCapture
-
-        property string stderrText: ""
-        property string stdoutText: ""
-
-        running: false
-
-        stderr: StdioCollector {
-            onStreamFinished: grimCapture.stderrText = this.text
+    Connections {
+        target: root.captureProvider
+        function onRequestFinished(requestId, filePath) {
+            if (requestId !== root.pendingGrabRequestId)
+                return;
+            const path = `file://${filePath}`;
+            console.log("[freeze] native capture success, setting frame:", path);
+            root.pendingGrabRequestId = "";
+            root.frozenFrame = "";
+            root.frozenFrame = path;
+            root.frozenFrameAttempts = 0;
+            root.initialFrozenGrabPending = false;
+            root.surfaceTransparencyActive = false;
         }
-        stdout: StdioCollector {
-            onStreamFinished: grimCapture.stdoutText = this.text
-        }
-
-        // qmllint disable signal-handler-parameters
-        onExited: exitCode => {
-            console.log("[freeze] grim exited with code", exitCode);
-            if (exitCode === 0) {
-                const path = `file://${root.runtimeDir}/hyprquickshot_frozen_${root.targetScreen.name}.png`;
-                console.log("[freeze] grim success, setting frame:", path);
-                // Force reload if same path
-                root.frozenFrame = "";
-                root.frozenFrame = path;
-                root.frozenFrameAttempts = 0;
-                root.initialFrozenGrabPending = false;
-                root.surfaceTransparencyActive = false;
+        function onRequestFailed(requestId, error) {
+            if (requestId !== root.pendingGrabRequestId)
+                return;
+            console.log("[freeze] native capture failed:", error);
+            root.pendingGrabRequestId = "";
+            if (root.frozenFrameAttempts < 3) {
+                retryFreezeGrab.start();
             } else {
-                console.log("[freeze] grim failed:", grimCapture.stderrText);
-                if (root.frozenFrameAttempts < 3) {
-                    retryFreezeGrab.start();
-                } else {
-                    console.log("[freeze] giving up after grim failures");
-                    root.surfaceTransparencyActive = false;
-                }
-            }
-        }
-        // qmllint enable signal-handler-parameters
-        onRunningChanged: {
-            if (running) {
-                grimCapture.stdoutText = "";
-                grimCapture.stderrText = "";
+                console.log("[freeze] giving up after native capture failures");
+                root.surfaceTransparencyActive = false;
             }
         }
     }
@@ -261,7 +246,7 @@ PanelWindow {
         }
     }
     Timer {
-        id: delayedGrimStart
+        id: delayedCaptureStart
 
         interval: 32
         repeat: false
@@ -274,15 +259,12 @@ PanelWindow {
             if (!root.targetScreen)
                 return;
 
-            if (grimCapture.running)
-                return;
-
             if (root.pendingGrabScreenName === "")
                 return;
 
             const path = `${root.runtimeDir}/hyprquickshot_frozen_${root.pendingGrabScreenName}.png`;
-            grimCapture.command = ["grim", "-o", root.pendingGrabScreenName, path];
-            grimCapture.running = true;
+            root.pendingGrabRequestId = `freeze-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+            root.captureProvider.captureOutput(root.pendingGrabRequestId, root.pendingGrabScreenName, path, false);
         }
     }
 }

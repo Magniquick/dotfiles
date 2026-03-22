@@ -13,7 +13,7 @@ Item {
     readonly property string todoistEnvFile: Config.envFile
     readonly property string todoistCachePath: Quickshell.cachePath("todoist/tasks_cache.json")
 
-    property var data: ({})
+    property var payload: ({})
     property string lastUpdatedLabel: ""
     property bool loading: false
     property bool parseError: false
@@ -59,8 +59,8 @@ Item {
 
     TodoistClient {
         id: client
-        env_file: root.todoistEnvFile
-        cache_path: root.todoistCachePath
+        env_file: String(root.todoistEnvFile)
+        cache_path: String(root.todoistCachePath)
         prefer_cache: true
     }
 
@@ -93,7 +93,7 @@ Item {
                 console.log("[TodoistService] parse error: invalid payload");
                 return;
             }
-            root.data = parsed;
+            root.payload = parsed;
             root.usingCache = parsed.using_cache === true;
             root.error = parsed.error ? String(parsed.error) : "";
             root.parseError = root.error !== "";

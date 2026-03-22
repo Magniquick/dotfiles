@@ -14,26 +14,31 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import Quickshell
 
 ModuleContainer {
     id: root
 
-    property color iconColor: Config.color.primary
+    property bool dndEnabled: GlobalState.notificationDnd
+    property color iconColor: root.dndEnabled ? Config.color.on_secondary_container : Config.color.primary
 
-    tooltipText: "Click to open notifications"
+    backgroundColor: root.dndEnabled ? Config.color.secondary_container : Config.barModuleBackground
+
+    tooltipText: {
+        const count = GlobalState.notificationCount;
+        if (count === 1)
+            return "1 notification";
+        return count + " notifications";
+    }
     tooltipTitle: "Notifications"
 
     content: [
         IconLabel {
             color: root.iconColor
             font.pixelSize: Config.iconSize + Config.spaceHalfXs
-            text: "󱅫"
+            text: root.dndEnabled ? "󰂛" : "󱅫"
         }
     ]
 
-    MouseArea {
-        anchors.fill: parent
-        onClicked: GlobalState.toggleRightPanel(root.QsWindow.window ? root.QsWindow.window.screen : null)
-    }
+    onClicked: GlobalState.toggleRightPanel()
+    onRightClicked: GlobalState.toggleNotificationDnd()
 }

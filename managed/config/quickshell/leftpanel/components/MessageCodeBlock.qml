@@ -71,8 +71,8 @@ MK.Card {
             Rectangle {
                 id: copyBtn
                 property bool copied: false
-                width: 24
-                height: 20
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 20
                 radius: 10
                 color: copyBtn.copied ? Qt.alpha(Common.Config.color.tertiary, 0.15) : "transparent"
 
@@ -136,8 +136,10 @@ MK.Card {
                     model: Math.max(1, root.code.split("\n").length)
                     Text {
                         required property int index
+                        // qmllint disable Quick.layout-positioning
                         width: 24
                         height: 18
+                        // qmllint enable Quick.layout-positioning
                         horizontalAlignment: Text.AlignRight
                         verticalAlignment: Text.AlignVCenter
                         text: index + 1
@@ -153,7 +155,7 @@ MK.Card {
             Rectangle {
                 Layout.fillHeight: true
                 Layout.rightMargin: Common.Config.space.sm
-                width: 1
+                Layout.preferredWidth: 1
                 color: Qt.alpha(Common.Config.color.on_surface, 0.05)
             }
 

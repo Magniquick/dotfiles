@@ -8,7 +8,8 @@ Custom Quickshell configuration for Wayland/Hyprland featuring a modular status 
 
 ## Documentation
 
-Always use Context7 to look up Quickshell documentation. The Quickshell binary locally tracks the master branch.
+Use Context7 to look up Quickshell documentation as needed (e.g: when debugging complex issues or when implementing new features).
+The Quickshell binary locally tracks the master branch.
 
 ## Build and Run Commands
 
@@ -16,7 +17,7 @@ Always use Context7 to look up Quickshell documentation. The Quickshell binary l
 
 - Main shell (bar + panels + clock + panels): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
-- HyprQuickshot (screenshot utility): `quickshell -c hyprquickshot -n` (the `-n` prevents multiple instances)
+- HyprQuickshot (screenshot utility): run the main shell with `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
 - Reload: Restart `quickshell` after QML changes (no hot reload)
 - Global config is at `quickshell.conf`
 
@@ -34,7 +35,7 @@ Always use Context7 to look up Quickshell documentation. The Quickshell binary l
 - **Left panel** (`leftpanel/shell.qml` → `leftpanel/LeftPanel.qml`): Left-side overlay panel
 - **Right panel** (`rightpanel/shell.qml` → `rightpanel/RightPanel.qml`): Right-side overlay panel
 - **Powermenu** (`powermenu/shell.qml` → `powermenu/Powermenu.qml`): Overlay with system actions (poweroff/reboot/lock/hibernate/suspend/windows/etc)
-- **HyprQuickshot** (`hyprquickshot/shell.qml`): Screenshot tool with region/window/monitor selection
+- **HyprQuickshot** (`hyprquickshot/HyprQuickshot.qml`): Screenshot tool with region/window/monitor selection
 
 ### Module System
 

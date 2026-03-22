@@ -1,4 +1,4 @@
-package ai
+package helpers
 
 import "testing"
 
@@ -34,16 +34,16 @@ func TestNormalizeLiteLLMCapabilities(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got := models["gpt-4o"].Attachments; got != AttachmentSupportSupported {
-		t.Fatalf("expected gpt-4o supported, got %q", got)
+	if !models["openai/gpt-4o"].SupportsImages {
+		t.Fatal("expected openai/gpt-4o image support")
 	}
-	if got := models["gpt-4.1"].Attachments; got != AttachmentSupportUnsupported {
-		t.Fatalf("expected gpt-4.1 unsupported, got %q", got)
+	if models["openai/gpt-4.1"].SupportsImages {
+		t.Fatal("expected openai/gpt-4.1 to have image support disabled")
 	}
-	if got := models["gemini-2.5-flash"].Attachments; got != AttachmentSupportSupported {
-		t.Fatalf("expected gemini-2.5-flash supported, got %q", got)
+	if !models["gemini/gemini-2.5-flash"].SupportsImages {
+		t.Fatal("expected gemini/gemini-2.5-flash image support")
 	}
-	if _, ok := models["text-embedding-3-large"]; ok {
+	if _, ok := models["openai/text-embedding-3-large"]; ok {
 		t.Fatal("embedding model should not be included")
 	}
 }

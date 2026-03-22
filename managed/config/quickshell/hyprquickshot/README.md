@@ -54,26 +54,22 @@ git clone https://github.com/jamdon2/hyprquickshot ~/.config/quickshell/hyprquic
 
 ## Usage
 
-Now you're ready to launch HyprQuickshot from your terminal, or add it to your Hyprland config.
+Now you're ready to start the main shell and trigger HyprQuickshot from a keybind or IPC.
 
 ```bash
-quickshell -c hyprquickshot -n
+./qs
 ```
-
-> If you've installed package using nix flake, you should use `hyprquickshot` command instead.
-
-You can remove the `-n` if you want to allow multiple instances of HyprQuickshot to be open (like wanting to screenshot HyprQuickshot for whatever reason).
 
 Add this line to your `hyprland.conf` to bind HyprQuickshot to the Print Screen button on your keyboard.
 
 ```hypr
-bind = , Print, exec, quickshell -c hyprquickshot -n
+bind = , Print, exec, qs ipc call hyprquickshot open
 ```
 
 Or this to bind it to Meta + Shift + A
 
 ```hypr
-bind = $mainMod+SHIFT, A, exec, quickshell -c hyprquickshot -n
+bind = $mainMod+SHIFT, A, exec, qs ipc call hyprquickshot open
 ```
 
 ## Configuration

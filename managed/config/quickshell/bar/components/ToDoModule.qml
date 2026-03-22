@@ -3,7 +3,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
-import Quickshell
 import ".."
 import "../components"
 
@@ -114,7 +113,7 @@ ColumnLayout {
         target: TodoistService
 
         function onDataChanged() {
-            root.applyTodoistData(TodoistService.data, TodoistService.usingCache);
+            root.applyTodoistData(TodoistService.payload, TodoistService.usingCache);
         }
     }
 

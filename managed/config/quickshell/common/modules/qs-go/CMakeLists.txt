@@ -16,6 +16,11 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml)
 
 # Build the Go shared library once and keep it next to the QML module output.
 find_program(GO_EXECUTABLE go REQUIRED)
+if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
+    set(QMLPLUGINDUMP_EXECUTABLE "/usr/lib/qt6/bin/qmlplugindump")
+else()
+    find_program(QMLPLUGINDUMP_EXECUTABLE qmlplugindump REQUIRED)
+endif()
 set(QSGO_GO_BUILD_FLAGS "-trimpath" "-ldflags=-s -w")
 set(QSGO_CGO_CFLAGS "-O3")
 set(QSGO_CGO_CXXFLAGS "-O3")
@@ -86,13 +91,30 @@ set_target_properties(qsgo_plugin PROPERTIES
     INSTALL_RPATH "$ORIGIN"
 )
 
-# Copy qmldir into the build output so `QML_IMPORT_PATH=.../build/qml` works.
+add_custom_command(
+    OUTPUT "${QML_MODULE_DIR}/types.qmltypes"
+    COMMAND "${CMAKE_COMMAND}"
+        -DQMLPLUGINDUMP_EXECUTABLE="${QMLPLUGINDUMP_EXECUTABLE}"
+        -DMODULE_URI=qsgo
+        -DMODULE_VERSION=1.0
+        -DIMPORT_ROOT="${CMAKE_CURRENT_BINARY_DIR}/qml"
+        -DOUTPUT_QMLTYPES="${QML_MODULE_DIR}/types.qmltypes"
+        -DQML_IMPORT_PATH_VALUE="/usr/lib/qt6/qml:${CMAKE_CURRENT_BINARY_DIR}/qml"
+        -P "${CMAKE_CURRENT_LIST_DIR}/../cmake/generate_qmltypes_with_qmlplugindump.cmake"
+    DEPENDS qsgo_plugin "${CMAKE_CURRENT_LIST_DIR}/qml/qsgo/qmldir"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+    COMMENT "Generating qsgo qmltypes"
+)
+add_custom_target(qsgo_qmltypes ALL DEPENDS "${QML_MODULE_DIR}/types.qmltypes")
+
+# Copy qmldir into the build output so `QML_IMPORT_PATH=.../build/qml` works,
+# and advertise the generated qmltypes metadata there.
 add_custom_command(
     OUTPUT "${QML_MODULE_DIR}/qmldir"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_CURRENT_LIST_DIR}/qml/qsgo/qmldir"
-        "${QML_MODULE_DIR}/qmldir"
-    DEPENDS "${CMAKE_CURRENT_LIST_DIR}/qml/qsgo/qmldir"
+    COMMAND "${CMAKE_COMMAND}"
+        -DINPUT_QMLDIR="${CMAKE_CURRENT_LIST_DIR}/qml/qsgo/qmldir"
+        -DOUTPUT_QMLDIR="${QML_MODULE_DIR}/qmldir"
+        -P "${CMAKE_CURRENT_LIST_DIR}/../cmake/write_qmldir_with_typeinfo.cmake"
+    DEPENDS "${CMAKE_CURRENT_LIST_DIR}/qml/qsgo/qmldir" qsgo_qmltypes
 )
 add_custom_target(qsgo_qmldir ALL DEPENDS "${QML_MODULE_DIR}/qmldir")
-add_dependencies(qsgo_qmldir qsgo_plugin)

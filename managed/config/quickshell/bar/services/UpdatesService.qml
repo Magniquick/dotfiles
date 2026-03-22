@@ -2,7 +2,6 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import qsgo
-import ".."
 
 Item {
     id: root

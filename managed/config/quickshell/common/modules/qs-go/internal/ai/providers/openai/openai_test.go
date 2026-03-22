@@ -1,20 +1,22 @@
-package ai
+package openai
 
 import (
 	"encoding/base64"
 	"strings"
 	"testing"
+
+	"qs-go/internal/ai/shared"
 )
 
-func TestBuildOpenAIContentPartsImageAttachment(t *testing.T) {
+func TestBuildContentPartsImageAttachment(t *testing.T) {
 	img := []byte{0x89, 0x50, 0x4e, 0x47}
-	attachments := []Attachment{
+	attachments := []shared.Attachment{
 		{
 			MIME: "image/png",
 			B64:  base64.StdEncoding.EncodeToString(img),
 		},
 	}
-	parts, err := buildOpenAIContentParts("hello", attachments)
+	parts, err := buildContentParts("hello", attachments)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -29,15 +31,15 @@ func TestBuildOpenAIContentPartsImageAttachment(t *testing.T) {
 	}
 }
 
-func TestBuildOpenAIContentPartsRejectNonImage(t *testing.T) {
+func TestBuildContentPartsRejectNonImage(t *testing.T) {
 	txt := []byte("hello")
-	attachments := []Attachment{
+	attachments := []shared.Attachment{
 		{
 			MIME: "text/plain",
 			B64:  base64.StdEncoding.EncodeToString(txt),
 		},
 	}
-	_, err := buildOpenAIContentParts("hi", attachments)
+	_, err := buildContentParts("hi", attachments)
 	if err == nil {
 		t.Fatal("expected error for non-image attachment")
 	}

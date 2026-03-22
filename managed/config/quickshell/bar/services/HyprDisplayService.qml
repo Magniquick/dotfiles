@@ -1,7 +1,6 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
-import QtCore
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -281,11 +280,13 @@ Item {
         }
       }
     }
+    // qmllint disable signal-handler-parameters
     onExited: code => {
       if (code !== 0)
         root.lastError = "hyprctl monitors failed";
       root.loading = false;
     }
+    // qmllint enable signal-handler-parameters
   }
 
   Process {
@@ -302,10 +303,12 @@ Item {
         root.dataChanged();
       }
     }
+    // qmllint disable signal-handler-parameters
     onExited: code => {
       if (code !== 0)
         root.lastError = "Failed to read monitors.conf";
     }
+    // qmllint enable signal-handler-parameters
   }
 
   Process {
@@ -316,6 +319,7 @@ Item {
       id: writeApplyErr
       waitForEnd: true
     }
+    // qmllint disable signal-handler-parameters
     onExited: code => {
       root.applying = false;
       if (code === 0) {
@@ -326,5 +330,6 @@ Item {
         root.applyFinished(false, root.lastError);
       }
     }
+    // qmllint enable signal-handler-parameters
   }
 }

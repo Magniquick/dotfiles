@@ -60,7 +60,6 @@
  * }
  */
 pragma ComponentBehavior: Bound
-import Quickshell
 import ".."
 import "../components"
 import QtQuick
@@ -886,7 +885,6 @@ ModuleContainer {
                                 running: titleClip.hovered
                                     && titleClip.scrollDistance > 0
                                     && root.visible
-                                    && root.QsWindow.window && root.QsWindow.window.visible
                                 onRunningChanged: {
                                     if (running)
                                         titleClip.contentX = 0;
@@ -1018,7 +1016,7 @@ ModuleContainer {
                                 implicitHeight: previousButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: previousButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: previousButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
+                                elevation: previousButton.down ? 1 : 2
                                 elevationVisible: true
 
                                 MK.HybridRipple {
@@ -1057,7 +1055,7 @@ ModuleContainer {
                                 implicitHeight: playPauseButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: playPauseButton.enabled ? Config.color.primary : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: playPauseButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
+                                elevation: playPauseButton.down ? 1 : 2
                                 elevationVisible: true
 
                                 MK.HybridRipple {
@@ -1094,7 +1092,7 @@ ModuleContainer {
                                 implicitHeight: nextButton.implicitBackgroundSize
                                 radius: Math.max(height / 2, 0)
                                 color: nextButton.enabled ? Config.color.primary_container : Qt.alpha(Config.color.on_surface, 0.12)
-                                elevation: nextButton.down ? MK.Token.elevation.level1 : MK.Token.elevation.level2
+                                elevation: nextButton.down ? 1 : 2
                                 elevationVisible: true
 
                                 MK.HybridRipple {
@@ -1194,7 +1192,8 @@ ModuleContainer {
                             readonly property string words: root.lyricLineWords(modelData)
                             readonly property bool isCurrent: index === root.currentLyricIndex
                             readonly property var segments: root.lyricLineSegments(modelData)
-                            readonly property bool useSegmentFlow: isCurrent && segments.length > 0
+                            readonly property bool hasWordSegments: segments.length > 0
+                            property real currentness: isCurrent ? 1 : 0
                             readonly property double renderTick: root._positionNowMs
                             readonly property int currentLinePosMs: {
                                 const _tick = renderTick;
@@ -1203,39 +1202,74 @@ ModuleContainer {
                             readonly property var segmentRows: root.lyricSegmentRows(segments, width)
 
                             implicitWidth: ListView.view ? ListView.view.width : 0
-                            implicitHeight: useSegmentFlow ? segmentRowsColumn.implicitHeight : fallbackText.implicitHeight
+                            implicitHeight: hasWordSegments
+                                ? Math.max(fallbackText.implicitHeight, segmentRowsColumn.implicitHeight)
+                                : fallbackText.implicitHeight
                             width: ListView.view ? ListView.view.width : parent.width
                             height: implicitHeight
+
+                            Behavior on currentness {
+                                enabled: root.tooltipActive
+                                NumberAnimation {
+                                    duration: Config.motion.duration.shortMs
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
 
                             Text {
                                 id: fallbackText
 
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                visible: !parent.useSegmentFlow
+                                visible: opacity > 0.001
                                 width: parent.width
                                 color: Config.color.on_surface_variant
                                 font.family: Config.fontFamily
-                                font.pixelSize: parent.isCurrent ? Config.type.bodyLarge.size : Config.type.bodyMedium.size
-                                font.weight: parent.isCurrent ? Font.DemiBold : Font.Normal
+                                font.pixelSize: Config.type.bodyMedium.size + (Config.type.bodyLarge.size - Config.type.bodyMedium.size) * parent.currentness
+                                font.weight: parent.currentness >= 0.5 ? Font.DemiBold : Font.Normal
                                 horizontalAlignment: Text.AlignHCenter
                                 lineHeight: 1.1
                                 lineHeightMode: Text.ProportionalHeight
                                 maximumLineCount: 2
-                                opacity: parent.isCurrent ? 1.0 : 0.55
+                                opacity: parent.hasWordSegments ? (1 - parent.currentness) : (0.55 + 0.45 * parent.currentness)
                                 text: parent.words !== "" ? parent.words : "♪"
                                 wrapMode: Text.WordWrap
+
+                                Behavior on opacity {
+                                    enabled: root.tooltipActive
+                                    NumberAnimation {
+                                        duration: Config.motion.duration.shortMs
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
+
+                                Behavior on font.pixelSize {
+                                    enabled: root.tooltipActive
+                                    NumberAnimation {
+                                        duration: Config.motion.duration.shortMs
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
                             }
 
                             Column {
                                 id: segmentRowsColumn
 
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                visible: parent.useSegmentFlow
+                                visible: opacity > 0.001
                                 width: parent.width
                                 spacing: 0
+                                opacity: parent.hasWordSegments ? parent.currentness : 0
+
+                                Behavior on opacity {
+                                    enabled: root.tooltipActive
+                                    NumberAnimation {
+                                        duration: Config.motion.duration.shortMs
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
 
                                 Repeater {
-                                    model: segmentRowsColumn.visible ? delegateRoot.segmentRows : []
+                                    model: delegateRoot.hasWordSegments ? delegateRoot.segmentRows : []
 
                                     delegate: Item {
                                         id: rowDelegate
@@ -1473,7 +1507,7 @@ ModuleContainer {
     Timer {
         interval: 200
         repeat: true
-        running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing && root.QsWindow.window && root.QsWindow.window.visible
+        running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing && root.visible
 
         onTriggered: {
             root._positionNowMs = Date.now();

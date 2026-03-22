@@ -46,7 +46,7 @@ ModuleContainer {
     Timer {
         interval: 1000
         repeat: true
-        running: root.tooltipActive && root.inhibitEnabled && GlobalState.idleSleepInhibitUntilMs > 0 && root.visible && root.QsWindow.window && root.QsWindow.window.visible
+        running: root.tooltipActive && root.inhibitEnabled && GlobalState.idleSleepInhibitUntilMs > 0 && root.visible
 
         onTriggered: root.nowMs = Date.now()
     }

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import Quickshell.Widgets
 import "../common/materialkit" as MK
 
@@ -15,11 +14,23 @@ WrapperRectangle {
     required property bool screenFrozen
     required property bool saveToDisk
     required property bool recordMode
+    required property string audioMode
+    required property bool windowModeAvailable
+    required property bool windowModeLoading
 
+    signal audioModeSelected(string mode)
     signal modeSelected(string mode)
     signal screenFrozenToggled(bool frozen)
     signal saveToDiskToggled(bool enabled)
     signal recordRequested
+
+    function audioModeGlyph(mode) {
+        if (mode === "defaultMic")
+            return "";
+        if (mode === "off")
+            return "";
+        return "";
+    }
 
     color: Qt.alpha(root.colors.surface, 0.93)
     margin: 8
@@ -55,9 +66,12 @@ WrapperRectangle {
                 delegate: MK.Button {
                     id: modeButton
                     required property var modelData
+                    readonly property bool isWindowMode: modeButton.modelData.mode === "window"
 
+                    enabled: true
                     implicitHeight: 48
                     implicitWidth: 48
+                    opacity: 1
 
                     background: Rectangle {
                         color: {
@@ -81,8 +95,18 @@ WrapperRectangle {
                             anchors.centerIn: parent
                             fillMode: Image.PreserveAspectFit
                             height: 24
+                            visible: !(modeButton.isWindowMode && root.windowModeLoading)
                             width: 24
                             source: Qt.resolvedUrl(`../icons/${modeButton.modelData.icon}.svg`)
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            color: root.colors.on_surface
+                            font.family: Common.Config.iconFontFamily
+                            font.pixelSize: 22
+                            text: ""
+                            visible: modeButton.isWindowMode && root.windowModeLoading
                         }
                     }
 
@@ -179,6 +203,62 @@ WrapperRectangle {
                 }
 
                 onClicked: root.saveToDiskToggled(!root.saveToDisk)
+            }
+
+            MK.Button {
+                id: audioButton
+
+                Accessible.name: "Recording audio mode"
+                checkable: false
+                enabled: root.recordingState !== "countdown" && root.recordingState !== "recording"
+                implicitHeight: 48
+                implicitWidth: 56
+
+                background: Rectangle {
+                    color: {
+                        if (root.audioMode !== "off")
+                            return Qt.alpha(root.colors.primary, 0.5);
+                        if (audioButton.hovered)
+                            return Qt.alpha(root.colors.surface_container_high, 0.5);
+                        return Qt.alpha(root.colors.surface_container, 0.5);
+                    }
+                    radius: 8
+
+                    Behavior on color {
+                        ColorAnimation { duration: 100 }
+                    }
+                }
+
+                contentItem: Item {
+                    anchors.fill: parent
+
+                    Image {
+                        anchors.centerIn: parent
+                        fillMode: Image.PreserveAspectFit
+                        height: 22
+                        source: Qt.resolvedUrl("../icons/screen.svg")
+                        visible: root.audioMode === "monitor"
+                        width: 22
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        color: root.colors.on_surface
+                        font.family: Common.Config.iconFontFamily
+                        font.pixelSize: 22
+                        text: root.audioModeGlyph(root.audioMode)
+                        visible: root.audioMode !== "monitor"
+                    }
+                }
+
+                onClicked: {
+                    if (root.audioMode === "off")
+                        root.audioModeSelected("monitor");
+                    else if (root.audioMode === "monitor")
+                        root.audioModeSelected("defaultMic");
+                    else
+                        root.audioModeSelected("off");
+                }
             }
 
             MK.Button {

@@ -23,6 +23,7 @@ Item {
     property bool cancelPending: false
     readonly property bool selecting: mouseArea.pressed || targetWidth > 0 || targetHeight > 0 || selectionWidth > 0 || selectionHeight > 0
 
+    signal clicked(real x, real y)
     signal regionSelected(real x, real y, real width, real height)
 
     function resetSelection() {
@@ -44,6 +45,22 @@ Item {
     function cancelSelection() {
         cancelPending = !!(mouseArea && mouseArea.pressed);
         resetSelection();
+    }
+    function setSelectionRect(x, y, width, height) {
+        root.suppressAnimation = true;
+        root.renderTick += 1;
+        root.startPos = Qt.point(x, y);
+        root.targetX = x;
+        root.targetY = y;
+        root.targetWidth = width;
+        root.targetHeight = height;
+        root.selectionX = x;
+        root.selectionY = y;
+        root.selectionWidth = width;
+        root.selectionHeight = height;
+        Qt.callLater(() => {
+            root.suppressAnimation = false;
+        });
     }
 
     Behavior on selectionHeight {
@@ -141,6 +158,10 @@ Item {
             const regionWidth = Math.round(root.selectionWidth);
             const regionHeight = Math.round(root.selectionHeight);
             root.resetSelection();
+            if (regionWidth <= 0 || regionHeight <= 0) {
+                root.clicked(regionX, regionY);
+                return;
+            }
             root.regionSelected(regionX, regionY, regionWidth, regionHeight);
         }
 

@@ -5,7 +5,6 @@ This directory contains native/QML modules consumed by the Quickshell config (Wa
 ## Project Structure
 
 - `qs-go/`: Go → CGO → C++ Qt plugin (import: `qsgo`). **Primary native module.**
-- `spotify-lyrics-api/`: Go helper package for Spotify lyrics (backend dependency of unified module).
 - `unified-lyrics-api/`: Go helper + C++ QML plugin with transparent Spotify/LRCLIB fallback.
 - `../materialkit/`: Local MaterialKit QML primitives (Pane/Card/Button/IconButton/Slider/Progress/Ripple).
 - `rounded-polygon-qmljs/`: JS/QML shape helpers (vendored).
@@ -18,7 +17,7 @@ From the Quickshell config root:
 
 - Run main shell: `./qs`
 - Run a config: `quickshell -c powermenu` (or `./qs -c powermenu`)
-- HyprQuickshot: `quickshell -c hyprquickshot -n`
+- HyprQuickshot: run `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
 
 Build native modules:
 
@@ -45,6 +44,11 @@ Source layout:
 - `cpp/qsgo_go_api.h`: C header consumed by C++ Qt classes
 - `cpp/qsgo_plugin.cpp`: `QQmlExtensionPlugin` registering all types as `qsgo 1.0`
 - `internal/sysinfo/`, `internal/backlight/`, `internal/pacman/`, `internal/ical/`, `internal/ai/`, `internal/todoist/`
+- AI-specific layout:
+  - `internal/ai/providers/`: self-contained inference providers; each provider implements the shared provider interface and owns its HTTP/payload logic
+  - `internal/ai/models/helpers/`: shared model capability enrichment and cache helpers keyed by canonical `provider/model` ids
+  - `internal/ai/shared/`: provider-agnostic request/response/domain structs shared by providers and the AI entrypoints
+  - `internal/ai/mcp/`: MCP 2025-11-25 client runtime built on `github.com/modelcontextprotocol/go-sdk` for HTTP servers, typed server/tool/prompt/resource snapshots, and tool execution
 
 QML types (all in `import qsgo`):
 
@@ -57,13 +61,23 @@ QML types (all in `import qsgo`):
   - Properties: `available`, `brightness_percent`, `device`, `error`
 - `AiChatSession`
   - Invokables: `submitInput`, `submitInputWithAttachments`, `cancel`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
-    `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`
-  - Properties: `model_id`, `system_prompt`, `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`
+    `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`, `refreshMcp`, `getMcpPrompt`, `readMcpResource`
+  - Properties: `model_id`, `system_prompt`, `provider_config`, `mcp_config`, `busy`, `status`, `error`, `commands`,
+    `mcp_servers`, `mcp_tools`, `mcp_prompts`, `mcp_resources`, `mcp_status`, `mcp_error`
   - Signals: `streamDone`, `openModelPickerRequested`, `openMoodPickerRequested`, `scrollToEndRequested`, `copyAllRequested(text)`
-  - Notes: `QAbstractListModel`; roles: `messageId`, `sender`, `body`, `kind`
+  - Notes:
+    - `QAbstractListModel`; roles: `messageId`, `sender`, `body`, `kind`, `metrics`, `attachments`
+    - `model_id` is canonical `provider/model` form, for example `openai/gpt-4o`
+    - `provider_config` is a typed `QVariantMap` keyed by provider name; do not add provider-specific top-level properties back
+    - `mcp_config` is a typed `QVariantList` of MCP server definitions; the runtime returns typed `mcp_servers`, `mcp_tools`, `mcp_prompts`, and `mcp_resources`
+    - slash-command helpers now include `/mcp add`, which opens a QML wizard and persists a minimal MCP server entry into `leftpanel/mcp_servers.json`
+    - structured QML-facing data must use Qt native types (`QVariantMap`, `QVariantList`, model roles), not JSON strings
 - `AiModelCatalog`
   - Invokable: `refresh()`
-  - Properties: `openai_api_key`, `gemini_api_key`, `openai_base_url`, `busy`, `status`, `error`, `models_json`
+  - Properties: `provider_config`, `busy`, `status`, `error`, `providers`
+  - Notes:
+    - `providers` is a typed `QVariantList` of provider entries, each containing provider metadata, `recommended_models`, and `models`
+    - catalog entries expose canonical model ids plus raw provider model ids and structured capability metadata
 - `PacmanUpdatesProvider`
   - Invokables: `refresh(noAur)`, `sync()`
   - Properties: `updates_count`, `aur_updates_count`, `items_count`, `updates_text`, `aur_updates_text`, `last_checked`, `has_updates`, `error`
@@ -83,6 +97,16 @@ Runtime requirements:
 - `.env` file referenced by `Config.envFile` for calendar URLs and Todoist token
 
 All network operations run off the UI thread and queue updates back onto Qt via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`.
+
+AI architecture notes:
+
+- Provider selection is registry-based, not hardcoded by model-name prefix.
+- Providers must remain self-contained under `internal/ai/providers/<name>/`.
+- Shared enrichment logic belongs in `internal/ai/models/helpers/` or `internal/ai/shared/`, not inside a provider package.
+- MCP server config is separate from provider config and is consumed as typed Qt data from the left panel.
+- MCP support currently targets remote HTTP servers with static auth headers / bearer tokens.
+- Chat streams temporarily install MCP sampling/elicitation handlers onto the shared runtime so server-initiated sampling can reuse the active provider/model.
+- When extending the catalog or chat surface, prefer Qt-native structured data at the C++/QML boundary and keep any unavoidable JSON confined to the Go/C ABI layer.
 
 ## Coding Style & Naming
 

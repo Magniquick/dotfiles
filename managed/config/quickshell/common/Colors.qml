@@ -8,20 +8,22 @@ import Quickshell.Io
 Singleton {
     property alias color: jsonAdapter.color
     property alias palette: jsonAdapter.palette
+
     FileView {
         path: Qt.resolvedUrl("colors.json")
         watchChanges: true
-        adapter: jsonAdapter
 
         onFileChanged: reload()
         onAdapterUpdated: writeAdapter()
 
+        // qmllint disable unresolved-type
         JsonAdapter {
             id: jsonAdapter
 
             readonly property Color color: Color {}
             readonly property Palette palette: Palette {}
         }
+        // qmllint enable unresolved-type
     }
 
     component Color: JsonObject {

@@ -1,7 +1,6 @@
 import ".."
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window

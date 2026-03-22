@@ -11,10 +11,16 @@ PanelWindow {
     right: true
   }
 
+  // qmllint disable unresolved-type
+  // qmllint disable missing-property
+  // qmllint disable unqualified
   margins {
     top: 28
     right: 28
   }
+  // qmllint enable unqualified
+  // qmllint enable missing-property
+  // qmllint enable unresolved-type
 
   implicitWidth: 460
   implicitHeight: 520

@@ -38,7 +38,7 @@ Item {
 
     signal closeRequested
     signal tabSelected(int index)
-    signal sendRequested(string text, string attachmentsJson)
+    signal sendRequested(string text, var attachments)
     signal commandTriggered(string command)
     signal regenerateRequested(string messageId)
     signal deleteRequested(string messageId)
@@ -128,8 +128,8 @@ Item {
                     moodIcon: root.moodIcon
                     moodName: root.moodName
                     connectionOnline: root.connectionOnline
-                    onSendRequested: function(text, attachmentsJson) {
-                        root.sendRequested(text, attachmentsJson)
+                    onSendRequested: function(text, attachments) {
+                        root.sendRequested(text, attachments)
                     }
                     onCommandTriggered: command => root.commandTriggered(command)
                     onRegenerateRequested: messageId => root.regenerateRequested(messageId)

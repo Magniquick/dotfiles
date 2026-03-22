@@ -15,7 +15,6 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import Quickshell
 import "../../common" as Common
 
 ModuleContainer {

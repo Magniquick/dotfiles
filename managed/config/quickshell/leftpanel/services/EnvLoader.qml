@@ -38,6 +38,27 @@ Item {
 
     readonly property string openaiApiKey: envVars["OPENAI_API_KEY"] || ""
     readonly property string geminiApiKey: envVars["GEMINI_API_KEY"] || ""
+    readonly property string openaiBaseUrl: envVars["OPENAI_BASE_URL"] || ""
+
+    function canonicalModelId(rawId) {
+        const trimmed = String(rawId || "").trim();
+        if (!trimmed)
+            return "gemini/gemini-2.5-flash";
+        if (trimmed.indexOf("/") !== -1)
+            return trimmed;
+        return trimmed.startsWith("gemini-") ? ("gemini/" + trimmed) : ("openai/" + trimmed);
+    }
+
+    readonly property var providerConfig: ({
+        openai: {
+            api_key: openaiApiKey,
+            base_url: openaiBaseUrl
+        },
+        gemini: {
+            api_key: geminiApiKey
+        }
+    })
+
     // Default model when OPENAI_MODEL is not set in the shared env file.
-    readonly property string modelId: envVars["OPENAI_MODEL"] || "gemini-2.5-flash-lite"
+    readonly property string modelId: canonicalModelId(envVars["OPENAI_MODEL"] || "gemini/gemini-2.5-flash")
 }

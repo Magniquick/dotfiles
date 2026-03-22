@@ -54,7 +54,7 @@ Singleton {
     }
 
     readonly property bool cameraActive: {
-        return root.v4l2OpenActive
+        return root.cameraHolderApps.length > 0
     }
 
     readonly property bool screensharingActive: {
@@ -93,12 +93,28 @@ Singleton {
 
     readonly property bool anyPrivacyActive: microphoneActive || cameraActive || screensharingActive
 
-    property bool v4l2OpenActive: false
     property string cameraDevice: "/dev/video0"
+    property bool cameraOpenSeen: false
+    property bool cameraPendingConfirmation: false
     property bool probingCamera: false
-    property string fuserProbeStdout: ""
-    property string fuserProbeStderr: ""
+    property bool queuedCameraProbe: false
+    property string holderProbeStdout: ""
+    property string holderProbeStderr: ""
+    property var cameraHolderApps: []
     property string cameraHoldersSummary: ""
+    property string cameraAppsSummary: ""
+    property int cameraRetryAttempt: 0
+    readonly property int maxCameraRetryAttempts: 3
+    readonly property int cameraRetryIntervalMs: 150
+    readonly property string cameraActivationState: {
+        if (root.cameraActive) {
+            return "confirmed"
+        }
+        if (root.cameraPendingConfirmation || root.probingCamera || cameraRetryTimer.running) {
+            return "pending"
+        }
+        return "inactive"
+    }
 
     Process {
         id: inotifyProcess
@@ -112,13 +128,12 @@ Singleton {
                     return
                 }
                 if (data.indexOf("OPEN") !== -1) {
-                    root.v4l2OpenActive = true
-                    root.probeCamera()
+                    root.onCameraOpenEvent(data.trim())
                     if (root.debugPrivacy) {
                         console.log("[PrivacyService] inotify OPEN", data.trim())
                     }
                 } else if (data.indexOf("CLOSE") !== -1) {
-                    root.probeCamera()
+                    root.onCameraCloseEvent(data.trim())
                     if (root.debugPrivacy) {
                         console.log("[PrivacyService] inotify CLOSE", data.trim())
                     }
@@ -134,20 +149,32 @@ Singleton {
             }
         }
 
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             if (code !== 0) {
                 if (root.debugPrivacy) {
                     console.warn("[PrivacyService] inotifywait exited", code)
                 }
-                root.v4l2OpenActive = false
+                root.cameraOpenSeen = false
+                root.cameraPendingConfirmation = false
+                root.cameraRetryAttempt = 0
+                cameraRetryTimer.stop()
+                root.applyCameraHolderState([], [])
             }
         }
+        // qmllint enable signal-handler-parameters
     }
 
     Process {
-        id: fuserProbe
+        id: holderProbe
 
-        command: ["fuser", "-v", root.cameraDevice]
+        command: [
+            "sh",
+            "-c",
+            "device=\"$1\"; find /proc/[0-9]*/fd -lname \"$device\" 2>/dev/null | cut -d/ -f3 | sort -u | xargs -r ps -o pid=,comm= -p",
+            "privacy-camera-holders",
+            root.cameraDevice
+        ]
         running: root.probingCamera
 
         stdout: SplitParser {
@@ -155,7 +182,7 @@ Singleton {
                 if (!data) {
                     return
                 }
-                root.fuserProbeStdout += data
+                root.holderProbeStdout += data
             }
         }
 
@@ -164,51 +191,72 @@ Singleton {
                 if (!data) {
                     return
                 }
-                root.fuserProbeStderr += data
+                root.holderProbeStderr += data
             }
         }
 
         onRunningChanged: {
             if (running) {
-                root.fuserProbeStdout = ""
-                root.fuserProbeStderr = ""
+                root.holderProbeStdout = ""
+                root.holderProbeStderr = ""
             }
         }
 
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             root.probingCamera = false
-            root.logFuserCommandSnapshot()
-            if (code === 0) {
-                root.v4l2OpenActive = true
-                if (root.debugPrivacy) {
-                    console.log("[PrivacyService] fuser probe active")
-                }
+            if (code !== 0 && root.debugPrivacy) {
+                console.warn("[PrivacyService] holder probe exited", code)
+            }
+            root.handleCameraProbeResults()
+            if (root.queuedCameraProbe) {
+                root.queuedCameraProbe = false
+                root.probingCamera = true
+            }
+        }
+        // qmllint enable signal-handler-parameters
+    }
+
+    Timer {
+        id: cameraRetryTimer
+
+        interval: root.cameraRetryIntervalMs
+        repeat: false
+        onTriggered: {
+            if (!root.cameraPendingConfirmation) {
                 return
             }
-            if (code === 1) {
-                root.v4l2OpenActive = false
-                if (root.debugPrivacy) {
-                    console.log("[PrivacyService] fuser probe inactive")
-                }
-                return
-            }
-            root.v4l2OpenActive = false
-            if (root.debugPrivacy) {
-                console.warn("[PrivacyService] fuser probe failed", code)
-            }
+            root.queueCameraProbe()
         }
     }
 
-    function probeCamera() {
+    function queueCameraProbe() {
         if (root.probingCamera) {
+            root.queuedCameraProbe = true
             return
         }
         root.probingCamera = true
     }
 
+    function onCameraOpenEvent() {
+        root.cameraOpenSeen = true
+        root.cameraPendingConfirmation = true
+        root.cameraRetryAttempt = 0
+        cameraRetryTimer.stop()
+        root.queueCameraProbe()
+    }
+
+    function onCameraCloseEvent() {
+        root.cameraOpenSeen = false
+        root.cameraPendingConfirmation = false
+        root.cameraRetryAttempt = 0
+        cameraRetryTimer.stop()
+        root.queueCameraProbe()
+    }
+
     Component.onCompleted: {
         root._cameraLogInitialized = true
-        root.probeCamera()
+        root.queueCameraProbe()
     }
 
     onCameraActiveChanged: {
@@ -345,31 +393,60 @@ Singleton {
         return (new Date()).toISOString()
     }
 
-    function logFuserCommandSnapshot() {
-        const raw = `${root.fuserProbeStdout || ""}\n${root.fuserProbeStderr || ""}`
+    function handleCameraProbeResults() {
+        const raw = `${root.holderProbeStdout || ""}\n${root.holderProbeStderr || ""}`
         const lines = raw.split("\n")
         const hits = []
+        const apps = []
         for (let i = 0; i < lines.length; i++) {
             const line = (lines[i] || "").trim()
-            if (!line || line.indexOf(root.cameraDevice) !== -1 || line.indexOf("USER") !== -1) {
+            if (!line || line.indexOf("PID") === 0) {
                 continue
             }
             const tokens = line.split(/\s+/)
-            if (tokens.length < 5) {
+            if (tokens.length < 2) {
                 continue
             }
-            const pid = tokens[1]
-            const command = tokens[tokens.length - 1]
+            const pid = tokens[0]
+            const command = tokens.slice(1).join(" ")
             if (/^\d+$/.test(pid)) {
                 hits.push(`${pid}:${command}`)
+                if (command && apps.indexOf(command) === -1) {
+                    apps.push(command)
+                }
             }
         }
-        root.cameraHoldersSummary = hits.length > 0 ? hits.join(",") : ""
+
+        root.applyCameraHolderState(hits, apps)
         if (hits.length > 0) {
             console.log(`[PrivacyService] ${root.cameraDevice} holders ${hits.join(", ")}`)
-        } else if (root.debugPrivacy) {
+            root.cameraPendingConfirmation = false
+            root.cameraRetryAttempt = 0
+            cameraRetryTimer.stop()
+            return
+        }
+
+        if (root.cameraPendingConfirmation && root.cameraRetryAttempt < root.maxCameraRetryAttempts) {
+            root.cameraRetryAttempt += 1
+            cameraRetryTimer.restart()
+            if (root.debugPrivacy) {
+                console.log(`[PrivacyService] ${root.cameraDevice} holders none; retry ${root.cameraRetryAttempt}/${root.maxCameraRetryAttempts}`)
+            }
+            return
+        }
+
+        root.cameraPendingConfirmation = false
+        root.cameraRetryAttempt = 0
+        cameraRetryTimer.stop()
+        if (root.debugPrivacy) {
             console.log(`[PrivacyService] ${root.cameraDevice} holders none`)
         }
+    }
+
+    function applyCameraHolderState(hits, apps) {
+        root.cameraHoldersSummary = hits.length > 0 ? hits.join(",") : ""
+        root.cameraAppsSummary = apps.length > 0 ? apps.join(", ") : ""
+        root.cameraHolderApps = apps
     }
 
     function persistCameraLogLine(line) {
@@ -385,8 +462,13 @@ Singleton {
     function describeCameraEvidence() {
         const parts = []
         parts.push(`device=${root.cameraDevice}`)
-        parts.push(`v4l2_open=${root.v4l2OpenActive ? "yes" : "no"}`)
+        parts.push(`open_seen=${root.cameraOpenSeen ? "yes" : "no"}`)
+        parts.push(`activation=${root.cameraActivationState}`)
+        parts.push(`holder_count=${root.cameraHolderApps.length}`)
         parts.push(`holders=${root.cameraHoldersSummary !== "" ? root.cameraHoldersSummary : "none"}`)
+        if (root.cameraAppsSummary !== "") {
+            parts.push(`camera_apps=${root.cameraAppsSummary}`)
+        }
 
         if (!Pipewire.ready || !Pipewire.nodes?.values) {
             parts.push("pipewire=not-ready")

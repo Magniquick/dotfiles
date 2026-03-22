@@ -149,8 +149,8 @@ Item {
       root.setValue(rel);
     }
 
-    onEntered: function(e) {
-      var xPos = (e && e.x !== undefined) ? e.x : mouseX;
+    onEntered: {
+      var xPos = mouseX;
       var rel = xPos / Math.max(1, root.width);
       root.hoverRatio = Math.max(0, Math.min(1, rel));
     }

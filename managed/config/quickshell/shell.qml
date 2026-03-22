@@ -7,8 +7,8 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 
 import "bar" as Bar
-import "sysclock" as Clock
 import "leftpanel" as LeftPanel
+import "overview" as Overview
 import "rightpanel" as RightPanel
 import "common/services" as CommonServices
 
@@ -23,6 +23,39 @@ ShellRoot {
             Quickshell.execDetached([Quickshell.shellPath("tools/launch-lockscreen.sh")]);
         }
     }
+    IpcHandler {
+        target: "hyprquickshot"
+
+        function open() {
+            Bar.GlobalState.setHyprQuickshotVisible(true);
+            if (Bar.GlobalState.hyprQuickshotController && typeof Bar.GlobalState.hyprQuickshotController.activate === "function" && !Bar.GlobalState.hyprQuickshotController.active)
+                Bar.GlobalState.hyprQuickshotController.activate();
+        }
+
+        function toggle() {
+            if (Bar.GlobalState.hyprQuickshotController && typeof Bar.GlobalState.hyprQuickshotController.toggleActive === "function") {
+                Bar.GlobalState.hyprQuickshotController.toggleActive();
+                return;
+            }
+            Bar.GlobalState.toggleHyprQuickshot();
+        }
+
+        function stop() {
+            Bar.GlobalState.stopScreenRecording();
+        }
+
+        function status(): string {
+            return JSON.stringify({
+                active: Bar.GlobalState.screenRecordingActive,
+                audioDevice: Bar.GlobalState.screenRecordingAudioDevice,
+                audioMode: Bar.GlobalState.screenRecordingAudioMode,
+                filePath: Bar.GlobalState.screenRecordingPath,
+                pid: Bar.GlobalState.screenRecordingPid,
+                state: Bar.GlobalState.screenRecordingState,
+                visible: Bar.GlobalState.hyprQuickshotVisible
+            });
+        }
+    }
 
     // Clock.ClockWidget {}
     LoggingCategory {
@@ -32,6 +65,14 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
         delegate: Bar.BarWindow {}
+    }
+    Overview.Overview {}
+    LazyLoader {
+        id: hyprQuickshotLoader
+
+        active: true
+
+        source: Qt.resolvedUrl("hyprquickshot/HyprQuickshot.qml")
     }
 
     // Track left panel visibility with animation state

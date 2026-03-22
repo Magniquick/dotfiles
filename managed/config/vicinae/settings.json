@@ -19,8 +19,12 @@
    },
    "theme": {
       "dark": {
-         "name": "catppuccin-mocha"
+         "name": "catppuccin-mocha",
+         "icon_theme": "Adwaita"
       }
+   },
+   "telemetry": {
+      "system_info": false
    },
    "launcher_window": {
       "opacity": 0.7
@@ -29,14 +33,15 @@
       "@sovereign/store.vicinae.awww-switcher": {
          "preferences": {
             "colorGenTool": "matugen",
+            "gridRows": "4",
             "postProduction": "no",
-            "transitionType": "grow",
+            "showImageDetails": true,
+            "toggleVicinaeSetting": true,
+            "transitionDuration": "3",
+            "transitionFPS": "60",
+            "transitionStep": "90",
+            "transitionType": "random",
             "wallpaperPath": "/home/magni/Pictures/Wallpapers"
-         }
-      },
-      "@sovereign/store.vicinae.hypr-keybinds": {
-         "preferences": {
-            "keybindsConfigPath": "/home/magni/.config/hypr/hyprland/keybinds.conf"
          }
       },
       "applications": {
@@ -63,6 +68,9 @@
          "preferences": {
             "paths": "/home/magni/Documents;/home/magni/Music;/home/magni/Videos;/home/magni/Downloads"
          }
+      },
+      "scripts": {
+         "enabled": false
       }
    }
 }

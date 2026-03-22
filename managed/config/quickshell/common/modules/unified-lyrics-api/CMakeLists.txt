@@ -14,6 +14,11 @@ option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Qml Concurrent)
 find_program(GO_EXECUTABLE go REQUIRED)
+if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
+    set(QMLPLUGINDUMP_EXECUTABLE "/usr/lib/qt6/bin/qmlplugindump")
+else()
+    find_program(QMLPLUGINDUMP_EXECUTABLE qmlplugindump REQUIRED)
+endif()
 set(UNIFIEDLYRICS_GO_BUILD_FLAGS "-trimpath" "-ldflags=-s -w")
 set(UNIFIEDLYRICS_CGO_CFLAGS "-O3")
 set(UNIFIEDLYRICS_CGO_CXXFLAGS "-O3")
@@ -78,11 +83,32 @@ set_target_properties(unifiedlyrics_plugin PROPERTIES
 )
 
 add_custom_command(
-    OUTPUT "${QML_MODULE_DIR}/qmldir"
+    OUTPUT "${QML_MODULE_DIR}/types.qmltypes"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${QML_MODULE_DIR}"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_LIST_DIR}/qml/unifiedlyrics/qmldir"
         "${QML_MODULE_DIR}/qmldir"
-    DEPENDS "${CMAKE_CURRENT_LIST_DIR}/qml/unifiedlyrics/qmldir"
+    COMMAND "${CMAKE_COMMAND}"
+        -DQMLPLUGINDUMP_EXECUTABLE="${QMLPLUGINDUMP_EXECUTABLE}"
+        -DMODULE_URI=unifiedlyrics
+        -DMODULE_VERSION=1.0
+        -DIMPORT_ROOT="${CMAKE_CURRENT_BINARY_DIR}/qml"
+        -DOUTPUT_QMLTYPES="${QML_MODULE_DIR}/types.qmltypes"
+        -DQML_IMPORT_PATH_VALUE="/usr/lib/qt6/qml:${CMAKE_CURRENT_BINARY_DIR}/qml"
+        -P "${CMAKE_CURRENT_LIST_DIR}/../cmake/generate_qmltypes_with_qmlplugindump.cmake"
+    DEPENDS unifiedlyrics_plugin "${CMAKE_CURRENT_LIST_DIR}/qml/unifiedlyrics/qmldir"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+    COMMENT "Generating unifiedlyrics qmltypes"
+)
+add_custom_target(unifiedlyrics_qmltypes ALL DEPENDS "${QML_MODULE_DIR}/types.qmltypes")
+
+add_custom_command(
+    OUTPUT "${QML_MODULE_DIR}/qmldir"
+    COMMAND "${CMAKE_COMMAND}"
+        -DINPUT_QMLDIR="${CMAKE_CURRENT_LIST_DIR}/qml/unifiedlyrics/qmldir"
+        -DOUTPUT_QMLDIR="${QML_MODULE_DIR}/qmldir"
+        -P "${CMAKE_CURRENT_LIST_DIR}/../cmake/write_qmldir_with_typeinfo.cmake"
+    DEPENDS "${CMAKE_CURRENT_LIST_DIR}/qml/unifiedlyrics/qmldir" "${QML_MODULE_DIR}/types.qmltypes"
 )
 add_custom_target(unifiedlyrics_qmldir ALL DEPENDS "${QML_MODULE_DIR}/qmldir")
 add_dependencies(unifiedlyrics_qmldir unifiedlyrics_plugin)

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Quickshell.Hyprland
 
 Item {
     id: root
@@ -9,26 +8,68 @@ Item {
     // Shader customization properties
     property real dimOpacity: 0.6
     property url fragmentShader: Qt.resolvedUrl("../shaders/dimming.frag.qsb")
-    property var monitor: Hyprland.focusedMonitor
+    property real lastMouseX: -1
+    property real lastMouseY: -1
     property real outlineThickness: 2
     property int renderTick: 0
     property real selectionHeight: 0
+    property var selectedTarget: null
     property real selectionWidth: 0
+    property var windowTargets: []
     property real selectionX: 0
     property real selectionY: 0
     property url vertexShader: Qt.resolvedUrl("../shaders/dimming.vert.qsb")
-    property var windows: workspace && workspace.toplevels ? workspace.toplevels : []
-    property var workspace: monitor && monitor.activeWorkspace ? monitor.activeWorkspace : null
 
-    signal checkHover(real mouseX, real mouseY)
-    signal regionSelected(real x, real y, real width, real height)
+    signal windowSelected(var target)
 
-    function resetSelection() {
-        root.renderTick += 1;
+    function clearSelection() {
+        root.selectedTarget = null;
         root.selectionX = 0;
         root.selectionY = 0;
         root.selectionWidth = 0;
         root.selectionHeight = 0;
+    }
+
+    function findTargetAt(mouseX, mouseY) {
+        const targets = Array.isArray(root.windowTargets) ? root.windowTargets : [];
+        let match = null;
+
+        for (let index = 0; index < targets.length; index += 1) {
+            const target = targets[index];
+            if (!target)
+                continue;
+
+            const x = Number(target.x);
+            const y = Number(target.y);
+            const width = Number(target.width);
+            const height = Number(target.height);
+            if (mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height)
+                match = target;
+        }
+
+        return match;
+    }
+
+    function refreshHover() {
+        if (!root.visible || root.lastMouseX < 0 || root.lastMouseY < 0)
+            return;
+
+        const target = root.findTargetAt(root.lastMouseX, root.lastMouseY);
+        if (!target) {
+            root.clearSelection();
+            return;
+        }
+
+        root.selectedTarget = target;
+        root.selectionX = Number(target.x);
+        root.selectionY = Number(target.y);
+        root.selectionWidth = Number(target.width);
+        root.selectionHeight = Number(target.height);
+    }
+
+    function resetSelection() {
+        root.renderTick += 1;
+        root.clearSelection();
     }
 
     Behavior on selectionHeight {
@@ -61,6 +102,11 @@ Item {
         if (visible)
             resetSelection();
     }
+    onWindowTargetsChanged: {
+        root.resetSelection();
+        if (root.visible)
+            Qt.callLater(root.refreshHover);
+    }
 
     // Shader overlay
     ShaderEffect {
@@ -76,34 +122,6 @@ Item {
         vertexShader: root.vertexShader
         z: 0
     }
-    Repeater {
-        model: root.windows
-
-        Item {
-            id: windowItem
-
-            required property var modelData
-
-            Connections {
-                function onCheckHover(mouseX, mouseY) {
-                    const monitorX = root.monitor.lastIpcObject.x;
-                    const monitorY = root.monitor.lastIpcObject.y;
-                    const windowX = windowItem.modelData.lastIpcObject.at[0] - monitorX;
-                    const windowY = windowItem.modelData.lastIpcObject.at[1] - monitorY;
-                    const width = windowItem.modelData.lastIpcObject.size[0];
-                    const height = windowItem.modelData.lastIpcObject.size[1];
-                    if (mouseX >= windowX && mouseX <= windowX + width && mouseY >= windowY && mouseY <= windowY + height) {
-                        root.selectionX = windowX;
-                        root.selectionY = windowY;
-                        root.selectionWidth = width;
-                        root.selectionHeight = height;
-                    }
-                }
-
-                target: root
-            }
-        }
-    }
     MouseArea {
         id: mouseArea
 
@@ -112,17 +130,19 @@ Item {
         z: 3
 
         onPositionChanged: mouse => {
-            root.checkHover(mouse.x, mouse.y);
+            root.lastMouseX = mouse.x;
+            root.lastMouseY = mouse.y;
+            root.refreshHover();
         }
         onReleased: mouse => {
-            if (mouse.x >= root.selectionX && mouse.x <= root.selectionX + root.selectionWidth && mouse.y >= root.selectionY && mouse.y <= root.selectionY + root.selectionHeight) {
-                const regionX = Math.round(root.selectionX);
-                const regionY = Math.round(root.selectionY);
-                const regionWidth = Math.round(root.selectionWidth);
-                const regionHeight = Math.round(root.selectionHeight);
-                root.resetSelection();
-                root.regionSelected(regionX, regionY, regionWidth, regionHeight);
-            }
+            const target = root.selectedTarget;
+            if (!target)
+                return;
+            if (mouse.x < root.selectionX || mouse.x > root.selectionX + root.selectionWidth || mouse.y < root.selectionY || mouse.y > root.selectionY + root.selectionHeight)
+                return;
+
+            root.resetSelection();
+            root.windowSelected(target);
         }
     }
 }

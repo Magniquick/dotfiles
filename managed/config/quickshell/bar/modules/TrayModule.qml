@@ -52,8 +52,16 @@ ModuleContainer {
         return path + "/" + base + ".png";
     }
 
+    function callMenuMethod(menu, methodName) {
+        if (!menu)
+            return;
+        const method = menu[methodName];
+        if (typeof method === "function")
+            method.call(menu);
+    }
+
     backgroundColor: "transparent"
-    collapsed: SystemTray.items.count === 0
+    collapsed: trayRepeater.count === 0
     contentSpacing: Config.moduleSpacing
     paddingLeft: Config.modulePaddingX
     paddingRight: Config.modulePaddingX
@@ -131,6 +139,7 @@ ModuleContainer {
                     spacing: Config.moduleSpacing
 
                     Repeater {
+                        id: trayRepeater
                         model: SystemTray.items
 
                         delegate: Item {
@@ -199,8 +208,8 @@ ModuleContainer {
                                 source: root.iconSource(trayItem.modelData.icon)
                                 // `sourceSize` is in physical pixels; use the DPR of the window this delegate
                                 // is actually rendered in (fixes mixed-DPI setups).
-                                sourceSize.height: Math.round(height * ((trayItem.QsWindow.window && trayItem.QsWindow.window.devicePixelRatio) ? trayItem.QsWindow.window.devicePixelRatio : 1))
-                                sourceSize.width: Math.round(width * ((trayItem.QsWindow.window && trayItem.QsWindow.window.devicePixelRatio) ? trayItem.QsWindow.window.devicePixelRatio : 1))
+                                sourceSize.height: Math.round(height * Screen.devicePixelRatio)
+                                sourceSize.width: Math.round(width * Screen.devicePixelRatio)
                                 width: Config.iconSize + Config.space.xs
                             }
                             MouseArea {
@@ -264,13 +273,11 @@ ModuleContainer {
 
                                 onVisibleChanged: {
                                     if (visible) {
-                                        if (menuOpener.menu && menuOpener.menu.sendOpened)
-                                            menuOpener.menu.sendOpened();
+                                        root.callMenuMethod(menuOpener.menu, "sendOpened");
                                         menuCard.forceActiveFocus();
                                         root.setDrawerSticky(true);
                                     } else {
-                                        if (menuOpener.menu && menuOpener.menu.sendClosed)
-                                            menuOpener.menu.sendClosed();
+                                        root.callMenuMethod(menuOpener.menu, "sendClosed");
                                         root.setDrawerSticky(false);
                                     }
                                 }

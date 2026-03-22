@@ -9,14 +9,13 @@
 
 QsGoAiModels::QsGoAiModels(QObject* parent) : QObject(parent) {}
 
-void QsGoAiModels::setOpenaiApiKey(const QString& v)
-{ if (v != m_openaiApiKey) { m_openaiApiKey = v; emit openaiApiKeyChanged(); } }
-
-void QsGoAiModels::setGeminiApiKey(const QString& v)
-{ if (v != m_geminiApiKey) { m_geminiApiKey = v; emit geminiApiKeyChanged(); } }
-
-void QsGoAiModels::setOpenaiBaseUrl(const QString& v)
-{ if (v != m_openaiBaseUrl) { m_openaiBaseUrl = v; emit openaiBaseUrlChanged(); } }
+void QsGoAiModels::setProviderConfig(const QVariantMap& v)
+{
+  if (v != m_providerConfig) {
+    m_providerConfig = v;
+    emit providerConfigChanged();
+  }
+}
 
 bool QsGoAiModels::refresh()
 {
@@ -26,12 +25,10 @@ bool QsGoAiModels::refresh()
   m_status = QStringLiteral("Loading..."); emit statusChanged();
   m_error = QString(); emit errorChanged();
 
-  const QByteArray ok  = m_openaiApiKey.toUtf8();
-  const QByteArray gk  = m_geminiApiKey.toUtf8();
-  const QByteArray url = m_openaiBaseUrl.toUtf8();
+  const QByteArray configJson = QJsonDocument::fromVariant(m_providerConfig).toJson(QJsonDocument::Compact);
 
-  QThreadPool::globalInstance()->start([this, ok, gk, url]() {
-    char* raw = QsGo_AiModels_Refresh(ok.constData(), gk.constData(), url.constData());
+  QThreadPool::globalInstance()->start([this, configJson]() {
+    char* raw = QsGo_AiModels_Refresh(configJson.constData());
     QByteArray json(raw);
     QsGo_Free(raw);
 
@@ -46,11 +43,8 @@ bool QsGoAiModels::refresh()
       }
       const QJsonObject obj = doc.object();
 
-      // Store the full models array as JSON string for QML consumption.
-      const QJsonValue modelsVal = obj.value(QLatin1String("models"));
-      const QByteArray modelsJson = QJsonDocument(modelsVal.toArray()).toJson(QJsonDocument::Compact);
-      const QString modelsStr = QString::fromUtf8(modelsJson);
-      if (modelsStr != m_modelsJson) { m_modelsJson = modelsStr; emit modelsJsonChanged(); }
+      const QVariantList providers = obj.value(QLatin1String("providers")).toArray().toVariantList();
+      if (providers != m_providers) { m_providers = providers; emit providersChanged(); }
 
       const QString status = obj.value(QLatin1String("status")).toString();
       if (status != m_status) { m_status = status; emit statusChanged(); }

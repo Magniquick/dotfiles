@@ -53,7 +53,7 @@ ModuleContainer {
     id: root
 
     readonly property bool cameraActive: PrivacyService.cameraActive
-    readonly property string cameraApps: root.cameraActive ? "Active" : ""
+    readonly property string cameraApps: root.cameraActive ? (PrivacyService.cameraAppsSummary || "Active") : ""
     property color cameraColor: Config.color.secondary
     property string cameraIcon: ""
     property bool locationActive: false

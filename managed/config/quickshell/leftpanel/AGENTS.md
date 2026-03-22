@@ -23,9 +23,10 @@ quickshell
 ### Main Component
 
 - `LeftPanel.qml` - Core panel logic containing:
-  - Multi-provider AI chat (OpenAI/Gemini) using curl via `Process`
+  - Multi-provider AI chat backed by `qsgo.AiChatSession` / `qsgo.AiModelCatalog`
+  - MCP-backed tool/prompt/resource runtime backed by `AiChatSession.mcp_*`
   - Mood system with configurable system prompts
-  - Slash commands (`/model`, `/mood`, `/clear`, `/help`, `/status`)
+  - Slash commands (`/model`, `/mood`, `/clear`, `/help`, `/status`, `/mcp`, `/mcp add`)
   - Tab navigation between Chat and Metrics views
 
 ### Components (`./components/`)
@@ -46,15 +47,21 @@ quickshell
 ### Data Files
 
 - `./system-prompts/moods.json` - Mood configurations with optional `default_model`
+- `./mcp_servers.json` - MCP HTTP server definitions consumed by `services/McpConfig.qml`
 - `./assets/` - Provider logos (SVG for OpenAI, PNG for Gemini)
 
 ## Key Patterns
 
 ### Adding Models
 
-The model list is provided by `qsgo.AiModelCatalog` (Rust, via `rig`) and exposed to QML as JSON.
+The model list is provided by `qsgo.AiModelCatalog` and exposed to QML as typed provider entries through the `providers` property.
 
-There is no pinned/static model list; models come from the provider list endpoints.
+Catalog shape:
+
+- `providers`: provider-grouped entries with `id`, `label`, `enabled`, `recommended_models`, and `models`
+- each model includes canonical `id` in `provider/model` form, raw provider model id, description, recommendation flag, and structured `capabilities`
+
+Fallback/recommended models are provider-defined in the `qs-go` AI backend, not in left-panel QML.
 
 ### Adding Moods
 
@@ -66,13 +73,43 @@ Add to `./system-prompts/moods.json`:
 
 ### Provider Detection
 
-Models starting with `gemini` use Gemini API, others use OpenAI. Switching models clears chat history.
+Model ids are canonical `provider/model`, for example `openai/gpt-4o` or `gemini/gemini-2.5-flash`.
+
+Provider routing happens inside the `qs-go` provider registry, not in left-panel QML. Switching models still clears chat history.
+
+The panel should treat provider config and catalog data as native QML objects/lists. Do not reintroduce JSON-string parsing for:
+
+- provider config
+- MCP server config
+- model catalogs
+- command lists
+- attachments
+- per-message metrics
+
+`McpConfig.qml` loads `mcp_servers.json` as a typed list and passes it into `AiChatSession.mcp_config`. The session then exposes typed `mcp_servers`, `mcp_tools`, `mcp_prompts`, `mcp_resources`, `mcp_status`, and `mcp_error` properties for the rest of the panel.
+
+`/mcp add` opens an in-panel wizard that appends a minimal server entry to `mcp_servers.json`, generates a unique `id`, and refreshes the live MCP runtime. The wizard only captures URL and optional label; auth and headers remain manual JSON edits.
 
 ### Environment Variables
 
 - `OPENAI_API_KEY` - OpenAI API key
+- `OPENAI_BASE_URL` - Optional OpenAI-compatible base URL override
 - `GEMINI_API_KEY` - Gemini API key
-- `OPENAI_MODEL` - Default model (defaults to `gemini-2.5-flash-lite`)
+- `OPENAI_MODEL` - Default model; may be raw legacy id or canonical `provider/model`
+
+`EnvLoader.qml` normalizes the default model to canonical `provider/model` form and builds the typed `providerConfig` map consumed by `AiChatSession` and `AiModelCatalog`.
+
+### MCP Server Definitions
+
+`leftpanel/mcp_servers.json` is an array of objects with:
+
+- `id`
+- `label`
+- `url`
+- `enabled`
+- `auto_connect`
+- `bearer_token`
+- `headers`
 
 ## Styling
 

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import QtQml
 import QtQuick.Templates as T
 import Quickshell
 import Quickshell.Io
@@ -101,6 +102,10 @@ Item {
         property string focusedGroupTitle: ""
         property var focusedEntries: []
 
+        function syncNotificationCount() {
+            Common.GlobalState.notificationCount = notificationsModel.count;
+        }
+
         function findIndexById(model, id) {
             for (let i = 0; i < model.count; i++) {
                 if (model.get(i).notificationId === id) {
@@ -139,24 +144,44 @@ Item {
                 "entryObj": entry
             });
 
-            entry.popup = true;
-            popupsModel.insert(0, {
-                "notificationId": id,
-                "entryObj": entry
-            });
-            // qmllint disable missing-property
-            const urgencyTimeout = root.getTimeoutForUrgency(entry.urgency);
-            // qmllint enable missing-property
-            // Use notification's timeout if set, otherwise use urgency-based default
-            // expireTimeout: 0 = never, -1 = use default, >0 = use value
-            if (notification.expireTimeout !== 0 && urgencyTimeout !== 0) {
-                const timeout = notification.expireTimeout > 0 ? notification.expireTimeout : urgencyTimeout;
-                entry.timer = notificationTimerComponent.createObject(notificationStore, {
+            if (!Common.GlobalState.notificationDnd) {
+                entry.popup = true;
+                popupsModel.insert(0, {
                     "notificationId": id,
-                    "interval": timeout
+                    "entryObj": entry
                 });
+                // qmllint disable missing-property
+                const urgencyTimeout = root.getTimeoutForUrgency(entry.urgency);
+                // qmllint enable missing-property
+                // Use notification's timeout if set, otherwise use urgency-based default
+                // expireTimeout: 0 = never, -1 = use default, >0 = use value
+                if (notification.expireTimeout !== 0 && urgencyTimeout !== 0) {
+                    const timeout = notification.expireTimeout > 0 ? notification.expireTimeout : urgencyTimeout;
+                    entry.timer = notificationTimerComponent.createObject(notificationStore, {
+                        "notificationId": id,
+                        "interval": timeout
+                    });
+                }
             }
+            syncNotificationCount();
             pruneOldestNotifications();
+        }
+
+        function clearPopups() {
+            const entries = [];
+            for (let i = 0; i < popupsModel.count; i++) {
+                const popupItem = popupsModel.get(i);
+                if (popupItem && popupItem.entryObj)
+                    entries.push(popupItem.entryObj);
+            }
+
+            popupsModel.clear();
+            entries.forEach(entry => {
+                entry.popup = false;
+                entry.popupExiting = false;
+                if (entry.popupExitTimer)
+                    entry.popupExitTimer.stop();
+            });
         }
 
         function pruneOldestNotifications() {
@@ -187,6 +212,7 @@ Item {
                 oldestEntry.destroy();
             }
 
+            syncNotificationCount();
             updateGroupedModel();
         }
 
@@ -235,6 +261,7 @@ Item {
             if (popupIndex !== -1)
                 popupsModel.remove(popupIndex);
             entry.destroy();
+            syncNotificationCount();
             updateGroupedModel();
         }
 
@@ -254,6 +281,7 @@ Item {
             notificationsModel.clear();
             popupsModel.clear();
             entries.forEach(entry => entry.destroy());
+            syncNotificationCount();
             groupedModel = [];
             focusedGroupKey = "";
             focusedGroupTitle = "";
@@ -432,6 +460,15 @@ Item {
         }
     }
 
+    Connections {
+        target: Common.GlobalState
+
+        function onNotificationDndChanged() {
+            if (Common.GlobalState.notificationDnd)
+                notificationStore.clearPopups();
+        }
+    }
+
     Timer {
         id: notificationStatusTimer
         interval: root._notificationStatusIntervalMs
@@ -448,6 +485,7 @@ Item {
     Process {
         id: notificationStatusProcess
         command: ["busctl", "--user", "status", "org.freedesktop.Notifications"]
+        // qmllint disable signal-handler-parameters
         onExited: code => {
             if (code === 0) {
                 root.notificationServerActive = true;
@@ -464,6 +502,7 @@ Item {
             const next = Math.min(300000, 10000 * Math.pow(2, root._notificationStatusFailures));
             root._notificationStatusIntervalMs = Math.round(next);
         }
+        // qmllint enable signal-handler-parameters
     }
 
     MK.Pane {

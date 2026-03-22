@@ -28,10 +28,10 @@ Item {
 
             RowLayout {
                 id: statRow
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.horizontalCenter: root.centerContent ? parent.horizontalCenter : undefined
+                anchors.centerIn: root.centerContent ? parent : undefined
                 anchors.left: root.centerContent ? undefined : parent.left
                 anchors.right: root.centerContent ? undefined : parent.right
+                anchors.verticalCenter: root.centerContent ? undefined : parent.verticalCenter
                 anchors.leftMargin: root.centerContent ? 0 : Common.Config.space.sm
                 anchors.rightMargin: root.centerContent ? 0 : Common.Config.space.sm
                 spacing: Common.Config.space.sm

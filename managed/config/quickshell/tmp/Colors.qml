@@ -13,12 +13,14 @@ Singleton {
 		watchChanges: true
 		onFileChanged: reload()
 
+		// qmllint disable unresolved-type
 		JsonAdapter {
 			id: jsonAdapter
 
 			readonly property Color color: Color {}
 			readonly property Palette palette: Palette {}
 		}
+		// qmllint enable unresolved-type
 	}
 
 	component Color: JsonObject {

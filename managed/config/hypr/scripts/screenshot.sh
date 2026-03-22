@@ -6,5 +6,5 @@
 if pgrep -x '^(hyprlock|rofi)$' >/dev/null 2>&1; then
     grim - | wl-copy
 else
-	"$XDG_CONFIG_HOME/quickshell/qs" --standalone hyprquickshot
+	qs ipc --path "$(realpath "$XDG_CONFIG_HOME/quickshell")" call hyprquickshot open
 fi

@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import "../common" as Common
+import "./components" as Components
 import "./services" as Services
 import "./views" as Views
 import qsgo
@@ -19,23 +19,38 @@ Item {
             panelView.clearTextFocus();
     }
 
+    function setClipboardText(text) {
+        // qmllint disable unqualified
+        Quickshell.clipboardText = text;
+        // qmllint enable unqualified
+    }
+
     Services.EnvLoader {
         id: envLoader
     }
 
-    readonly property string openaiApiKey: envLoader.openaiApiKey
-    readonly property string geminiApiKey: envLoader.geminiApiKey
+    Services.McpConfig {
+        id: mcpConfig
+    }
+
+    readonly property var providerConfig: envLoader.providerConfig
+    readonly property var mcpConfigList: mcpConfig.servers
     property string modelId: envLoader.modelId
 
     readonly property color _linkColor: Common.Config.color.primary
     on_LinkColorChanged: chatSession.setAppLinkColor(_linkColor)
 
-    readonly property string currentProvider: modelId.startsWith("gemini") ? "gemini" : "openai"
-    readonly property string activeApiKey: currentProvider === "gemini" ? geminiApiKey : openaiApiKey
+    readonly property string currentProvider: {
+        const parts = String(modelId || "").split("/");
+        return parts.length > 1 ? parts[0] : "";
+    }
+    readonly property var activeProviderConfig: providerConfig[currentProvider] || ({})
+    readonly property string activeApiKey: activeProviderConfig.api_key || ""
     readonly property bool hasApiKey: activeApiKey.length > 0
 
     property string currentMood: "default"
     property bool showCommandPicker: false
+    property bool showMcpAddDialog: false
     property string activeCommand: ""
 
     // Check if syntax highlighting is available
@@ -53,9 +68,7 @@ Item {
 
     AiModelCatalog {
         id: modelCatalog
-        openai_api_key: root.openaiApiKey
-        gemini_api_key: root.geminiApiKey
-        openai_base_url: "" // future: openrouter/litellm/etc
+        provider_config: root.providerConfig
     }
 
     property var availableModels: []
@@ -73,34 +86,41 @@ Item {
 
     readonly property string currentModelLabel: {
         const model = availableModels.find(m => m.value === modelId);
-        return model ? model.label : modelId;
+        return model ? model.label : (String(modelId || "").split("/").slice(1).join("/") || modelId);
     }
 
     function rebuildAvailableModels() {
-        let parsed = [];
-        try {
-            parsed = JSON.parse(modelCatalog.models_json || "[]");
-        } catch (e) {
-            parsed = [];
-        }
-
         const out = [];
-        for (let i = 0; i < parsed.length; i++) {
-            const m = parsed[i] || {};
-            const value = m.value || "";
-            const provider = m.provider || (value.startsWith("gemini-") ? "gemini" : "openai");
-            out.push({
-                value,
-                label: m.label || value,
-                description: m.description || "",
-                recommended: !!m.recommended,
-                iconImage: provider === "gemini"
-                    ? "./assets/Google_Gemini_icon_2025.svg.png"
-                    : "./assets/OpenAI-white-monoblossom.svg",
-                accent: provider === "gemini"
-                    ? Common.Config.color.primary
-                    : Common.Config.color.tertiary
-            });
+        const providers = modelCatalog.providers || [];
+        for (let i = 0; i < providers.length; i++) {
+            const providerEntry = providers[i] || {};
+            const providerId = String(providerEntry.id || "").trim();
+            const models = providerEntry.models || [];
+            for (let j = 0; j < models.length; j++) {
+                const m = models[j] || {};
+                const value = String(m.id || "").trim();
+                if (!value)
+                    continue;
+                out.push({
+                    value,
+                    label: m.label || m.raw_id || value,
+                    description: m.description || "",
+                    recommended: !!m.recommended,
+                    provider: providerId,
+                    capabilities: m.capabilities || {},
+                    rawId: m.raw_id || "",
+                    providerLabel: providerEntry.label || providerId,
+                    enabled: providerEntry.enabled !== false,
+                    model: m,
+                    providerEntry: providerEntry,
+                    iconImage: providerId === "gemini"
+                        ? "./assets/Google_Gemini_icon_2025.svg.png"
+                        : "./assets/OpenAI-white-monoblossom.svg",
+                    accent: providerId === "gemini"
+                        ? Common.Config.color.primary
+                        : Common.Config.color.tertiary
+                });
+            }
         }
         root.availableModels = out;
     }
@@ -109,33 +129,52 @@ Item {
         Common.GlobalState.leftPanelVisible = false;
     }
 
+    function canonicalModelId(rawId) {
+        const trimmed = String(rawId || "").trim();
+        if (!trimmed)
+            return root.modelId;
+        if (trimmed.indexOf("/") !== -1)
+            return trimmed;
+        const provider = trimmed.startsWith("gemini-") ? "gemini" : "openai";
+        return provider + "/" + trimmed;
+    }
+
     AiChatSession {
         id: chatSession
-        model_id: root.modelId
+        model_id: String(root.modelId)
         system_prompt: root.moodPrompts[root.currentMood] || ""
-        openai_api_key: root.openaiApiKey
-        gemini_api_key: root.geminiApiKey
-        openai_base_url: "" // future: openrouter/litellm/etc
+        provider_config: root.providerConfig
+        mcp_config: root.mcpConfigList
 
         onOpenModelPickerRequested: {
+            root.showMcpAddDialog = false;
             modelCatalog.refresh();
             root.activeCommand = "model";
             root.showCommandPicker = true;
         }
         onOpenMoodPickerRequested: {
+            root.showMcpAddDialog = false;
             root.activeCommand = "mood";
             root.showCommandPicker = true;
         }
+        onOpenMcpAddRequested: {
+            root.showCommandPicker = false;
+            root.showMcpAddDialog = true;
+            Qt.callLater(() => {
+                if (mcpAddDialog && mcpAddDialog.visible && mcpAddDialog.focusPrimaryField)
+                    mcpAddDialog.focusPrimaryField();
+            });
+        }
         onScrollToEndRequested: panelView.scrollToEnd()
         onCopyAllRequested: function(text) {
-            Quickshell.clipboardText = text;
+            root.setClipboardText(text);
         }
     }
 
     Connections {
         target: modelCatalog
 
-        function onModels_jsonChanged() {
+        function onProvidersChanged() {
             root.rebuildAvailableModels();
         }
     }
@@ -168,20 +207,19 @@ Item {
             ? (root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error)
             : (panelView.metricsHealthy ? Common.Config.color.tertiary : Common.Config.color.secondary)
         footerLeftText: panelView.currentTabIndex === 0
-            ? ("MODEL: " + root.modelId.toUpperCase())
+            ? ("MODEL: " + root.currentModelLabel.toUpperCase())
             : ("UPTIME: " + panelView.metricsUptime)
         footerRightText: panelView.currentTabIndex === 0
-            ? ("MOOD: " + root.currentMoodName.toUpperCase())
+            ? ("PROVIDER: " + root.currentProvider.toUpperCase())
             : (panelView.metricsHealthy ? "HEALTH: OK" : "HEALTH: WARN")
 
         onCloseRequested: root.closePanel()
         onTabSelected: index => panelView.currentTabIndex = index
-        onSendRequested: function(text, attachmentsJson) {
-            const trimmed = (attachmentsJson || "").trim();
-            if (!trimmed || trimmed === "[]")
+        onSendRequested: function(text, attachments) {
+            if (!attachments || attachments.length === 0)
                 chatSession.submitInput(text);
             else
-                chatSession.submitInputWithAttachments(text, trimmed);
+                chatSession.submitInputWithAttachments(text, attachments);
         }
         onCommandTriggered: command => chatSession.submitInput(command)
         onRegenerateRequested: messageId => chatSession.regenerate(messageId)
@@ -191,23 +229,77 @@ Item {
         onDismissCommandPickerRequested: root.showCommandPicker = false
 
         onModelSelected: value => {
-            root.modelId = value;
+            root.modelId = root.canonicalModelId(value);
             root.showCommandPicker = false;
         }
 
         onMoodSelected: value => {
             root.currentMood = value;
             const newModel = root.moodModels[value];
-            if (newModel && newModel !== root.modelId)
-                root.modelId = newModel;
+            if (newModel && root.canonicalModelId(newModel) !== root.modelId)
+                root.modelId = root.canonicalModelId(newModel);
             chatSession.appendInfo(`Mood: ${value}`);
             root.showCommandPicker = false;
             panelView.scrollToEnd();
         }
     }
 
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.alpha(Common.Config.color.surface_dim, 0.92)
+        visible: root.showMcpAddDialog
+        z: 10
+
+        MouseArea {
+            id: mcpOverlayDismissArea
+            anchors.fill: parent
+            onClicked: mouse => {
+                if (!mcpAddDialog || !mcpAddDialog.visible) {
+                    root.showMcpAddDialog = false;
+                    return;
+                }
+                const p = mcpAddDialog.mapFromItem(mcpOverlayDismissArea, mouse.x, mouse.y);
+                const inside = p.x >= 0 && p.y >= 0 && p.x <= mcpAddDialog.width && p.y <= mcpAddDialog.height;
+                if (!inside)
+                    root.showMcpAddDialog = false;
+            }
+        }
+
+        Components.McpAddDialog {
+            id: mcpAddDialog
+            anchors.centerIn: parent
+            visible: root.showMcpAddDialog
+
+            onDismissed: {
+                clearForm();
+                root.showMcpAddDialog = false;
+            }
+
+            onSubmitted: function(url, label) {
+                errorText = "";
+                const result = mcpConfig.addServer(url, label);
+                if (!result || !result.ok) {
+                    errorText = result && result.error ? result.error : "Failed to add MCP server.";
+                    return;
+                }
+
+                clearForm();
+                root.showMcpAddDialog = false;
+                chatSession.refreshMcp();
+                const server = result.server || {};
+                const labelText = server.label || server.id || "MCP server";
+                const idText = server.id || "(generated)";
+                chatSession.appendInfo(
+                    `Added MCP server **${labelText}** (\`${idText}\`).\n\n` +
+                    `Advanced auth and custom headers can be edited in \`leftpanel/mcp_servers.json\`.`
+                );
+            }
+        }
+    }
+
     Component.onCompleted: {
         // Avoid forcing a network refresh on startup; open the model picker to refresh when needed.
         root.rebuildAvailableModels();
+        chatSession.refreshMcp();
     }
 }

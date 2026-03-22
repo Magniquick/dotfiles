@@ -26,7 +26,7 @@ ModuleContainer {
         }
     ]
 
-    onClicked: GlobalState.toggleLeftPanel(root.QsWindow.window ? root.QsWindow.window.screen : null)
+    onClicked: GlobalState.toggleLeftPanel()
     onRightClicked: Quickshell.execDetached([
             "quickshell",
             "--path",

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import QtQuick.Templates as T
 import "../../common/materialkit" as MK
@@ -18,7 +17,7 @@ Item {
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
 
-    signal sendRequested(string text, string attachmentsJson)
+    signal sendRequested(string text, var attachments)
     signal commandTriggered(string command)
     signal regenerateRequested(string messageId)
     signal deleteRequested(string messageId)
@@ -110,8 +109,8 @@ Item {
                 required property string messageId
                 required property string sender
                 required property string body
-                required property string metrics
-                required property string attachments
+                required property var metrics
+                required property var attachments
 
                 width: messageList.width
                 messageIndex: index
@@ -162,10 +161,10 @@ Item {
             busy: root.busy
             chatSession: root.chatSession
             placeholderText: root.connectionOnline ? "Message..." : "Offline - use /model to switch"
-            onSend: function(text, attachmentsJson) {
+            onSend: function(text, attachments) {
                 // When we send a message, re-enable following the tail.
                 messageList.autoFollow = true;
-                root.sendRequested(text, attachmentsJson);
+                root.sendRequested(text, attachments);
             }
             onCommandTriggered: command => {
                 messageList.autoFollow = true;

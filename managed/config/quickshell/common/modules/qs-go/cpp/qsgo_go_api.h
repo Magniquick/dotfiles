@@ -36,20 +36,20 @@ char* QsGo_Ical_Refresh(const char* envFile, int days);
 
 /* ---------- AI models ---------- */
 
-char* QsGo_AiModels_Refresh(const char* openaiKey,
-                              const char* geminiKey,
-                              const char* baseURL);
+	char* QsGo_AiModels_Refresh(const char* providerConfigJSON);
+char* QsGo_AiMcp_Refresh(const char* configJSON);
+char* QsGo_AiMcp_GetPrompt(const char* configJSON, const char* serverID, const char* promptName, const char* argsJSON);
+char* QsGo_AiMcp_ReadResource(const char* configJSON, const char* serverID, const char* uri);
 
 /* ---------- AI chat ---------- */
 
 /* Starts a streaming session; returns session id. */
 int   QsGo_AiChat_Stream(const char* modelID,
-                          const char* openaiKey,
-                          const char* geminiKey,
-                          const char* baseURL,
-                          const char* systemPrompt,
-                          const char* historyJSON,
-                          const char* message,
+	                          const char* providerConfigJSON,
+                          const char* mcpConfigJSON,
+	                          const char* systemPrompt,
+	                          const char* historyJSON,
+	                          const char* message,
                           const char* attachmentsJSON,
                           QsGo_TokenFn cb,
                           void* ctx);

@@ -583,7 +583,7 @@ RowLayout {
                 Text {
                     id: bodyMeasure
                     visible: false
-                    width: bodyText.width
+                    Layout.preferredWidth: bodyText.width
                     text: root.displayBody
                     textFormat: Text.StyledText
                     color: "transparent"

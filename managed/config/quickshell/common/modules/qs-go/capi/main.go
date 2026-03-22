@@ -85,23 +85,46 @@ func QsGo_Ical_Refresh(envFile *C.char, days C.int) *C.char {
 // ----- AI models -----
 
 //export QsGo_AiModels_Refresh
-func QsGo_AiModels_Refresh(openaiKey, geminiKey, baseURL *C.char) *C.char {
-	return C.CString(ai.RefreshModels(C.GoString(openaiKey), C.GoString(geminiKey), C.GoString(baseURL)))
+func QsGo_AiModels_Refresh(providerConfigJSON *C.char) *C.char {
+	return C.CString(ai.RefreshCatalog(C.GoString(providerConfigJSON)))
+}
+
+//export QsGo_AiMcp_Refresh
+func QsGo_AiMcp_Refresh(configJSON *C.char) *C.char {
+	return C.CString(ai.RefreshMcp(C.GoString(configJSON)))
+}
+
+//export QsGo_AiMcp_GetPrompt
+func QsGo_AiMcp_GetPrompt(configJSON, serverID, promptName, argsJSON *C.char) *C.char {
+	return C.CString(ai.GetMcpPrompt(
+		C.GoString(configJSON),
+		C.GoString(serverID),
+		C.GoString(promptName),
+		C.GoString(argsJSON),
+	))
+}
+
+//export QsGo_AiMcp_ReadResource
+func QsGo_AiMcp_ReadResource(configJSON, serverID, uri *C.char) *C.char {
+	return C.CString(ai.ReadMcpResource(
+		C.GoString(configJSON),
+		C.GoString(serverID),
+		C.GoString(uri),
+	))
 }
 
 // ----- AI chat -----
 
 //export QsGo_AiChat_Stream
 func QsGo_AiChat_Stream(
-	modelID, openaiKey, geminiKey, baseURL, systemPrompt,
+	modelID, providerConfigJSON, mcpConfigJSON, systemPrompt,
 	historyJSON, message, attachmentsJSON *C.char,
 	cb C.QsGo_TokenFn, ctx unsafe.Pointer,
 ) C.int {
 	id := ai.Stream(
 		C.GoString(modelID),
-		C.GoString(openaiKey),
-		C.GoString(geminiKey),
-		C.GoString(baseURL),
+		C.GoString(providerConfigJSON),
+		C.GoString(mcpConfigJSON),
 		C.GoString(systemPrompt),
 		C.GoString(historyJSON),
 		C.GoString(message),

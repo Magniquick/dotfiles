@@ -3,6 +3,16 @@ pragma Singleton
 import QtQuick
 
 QtObject {
+  component FontToken: QtObject {
+    property string family: "Sans"
+  }
+
+  component FontConfig: QtObject {
+    property FontToken default_font: FontToken {}
+    property string icon_family: "Sans"
+    property string icon_fill_family: "Sans"
+  }
+
   readonly property QtObject elevation: QtObject {
     readonly property int level0: 0
     readonly property int level1: 1
@@ -17,11 +27,5 @@ QtObject {
     property color accentColor: "#000000"
   }
 
-  readonly property QtObject font: QtObject {
-    readonly property QtObject default_font: QtObject {
-      property string family: "Sans"
-    }
-    property string icon_family: "Sans"
-    property string icon_fill_family: "Sans"
-  }
+  readonly property FontConfig font: FontConfig {}
 }
