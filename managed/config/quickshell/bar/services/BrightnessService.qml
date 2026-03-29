@@ -104,6 +104,7 @@ Item {
   Process {
     id: ddcDetectProc
     running: false
+    // External monitors still need ddcutil because Quickshell has no DDC/CI API.
     command: ["ddcutil", "detect", "--brief", "--sleep-multiplier=0.5"]
 
     stdout: StdioCollector {
@@ -321,6 +322,7 @@ Item {
 
     readonly property Process ddcGetProc: Process {
       running: false
+      // External monitors still need ddcutil because Quickshell has no DDC/CI API.
       command: ["ddcutil", "-b", monitor.ddcBusNum, "--sleep-multiplier=0.05", "getvcp", "10", "--brief"]
       stdout: StdioCollector {
         onStreamFinished: {
@@ -350,6 +352,7 @@ Item {
 
     readonly property Process ddcSetProc: Process {
       running: false
+      // External monitors still need ddcutil because Quickshell has no DDC/CI API.
       // qmllint disable signal-handler-parameters
       onExited: (exitCode, exitStatus) => {
         monitor._ddcSetRunning = false;

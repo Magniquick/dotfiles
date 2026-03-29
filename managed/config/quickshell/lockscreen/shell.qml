@@ -6,6 +6,8 @@ import Quickshell.Wayland
 ShellRoot {
     id: root
 
+    Component.onCompleted: console.log("[lockscreen/shell.qml] Root shell loaded");
+
     LockContext {
         id: lockContext
 

@@ -7,7 +7,6 @@
  * - Internal backlight via `qsgo.BacklightProvider` (sysfs + udev, no polling)
  * - External monitors via DDC/CI using `ddcutil` (if installed and detected)
  * - Interactive slider control (1-100%)
- * - Quick preset buttons (20%, 50%, 80%, 100%)
  * - Mouse wheel adjustment support
  *
  * Dependencies:
@@ -129,34 +128,6 @@ ModuleContainer {
                     label: "DDC Bus"
                     value: root.ddcBusNum
                     visible: root.method === "ddc" && root.ddcBusNum !== ""
-                }
-            }
-            TooltipActionsRow {
-                spacing: Config.space.sm
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "20%"
-
-                    onClicked: root.setBrightness(20)
-                }
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "50%"
-
-                    onClicked: root.setBrightness(50)
-                }
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "80%"
-
-                    onClicked: root.setBrightness(80)
-                }
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "100%"
-
-                    onClicked: root.setBrightness(100)
                 }
             }
             TooltipActionsRow {

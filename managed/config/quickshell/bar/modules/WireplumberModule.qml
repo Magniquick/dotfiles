@@ -604,36 +604,12 @@ ModuleContainer {
             TooltipHeader {
                 icon: root.iconForVolume()
                 iconColor: root.activeColor()
-                subtitle: root.volumeAvailable ? (root.muted ? "Muted" : root.volumePercent + "%") : "Unavailable"
+                subtitle: root.volumeAvailable
+                    ? (root.muted
+                        ? "Muted"
+                        : (root.volumePercent + "%" + (root.volumePercent > 100 ? " • Boosted" : "")))
+                    : "Unavailable"
                 title: "Volume"
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Config.space.none
-                visible: root.volumePercent > 100 && !root.muted
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                Rectangle {
-                    Layout.preferredHeight: boostedLabel.implicitHeight + Config.spaceHalfXs
-                    Layout.preferredWidth: boostedLabel.implicitWidth + Config.space.sm
-                    color: Config.color.secondary
-                    radius: Config.shape.corner.xs
-
-                    Text {
-                        id: boostedLabel
-
-                        anchors.centerIn: parent
-                        color: Config.color.surface_container
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelSmall.size
-                        font.weight: Font.Black
-                        text: "BOOSTED"
-                    }
-                }
             }
 
             ColumnLayout {

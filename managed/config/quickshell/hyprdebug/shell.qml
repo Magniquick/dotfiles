@@ -6,7 +6,7 @@ import Quickshell.Hyprland
 ShellRoot {
     id: root
 
-    property int pendingProcesses: 4
+    property int pendingProcesses: 1
 
     function dump(label, value) {
         let text = "";
@@ -42,29 +42,16 @@ ShellRoot {
             root.dump("focusedMonitor", Hyprland.focusedMonitor ? Hyprland.focusedMonitor.lastIpcObject : null);
             root.dump("focusedWorkspace", Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.lastIpcObject : null);
             root.dump("activeToplevel", Hyprland.activeToplevel ? Hyprland.activeToplevel.lastIpcObject : null);
+            root.dump("toplevels", Hyprland.toplevels && Hyprland.toplevels.values
+                ? Hyprland.toplevels.values.map(toplevel => toplevel && toplevel.lastIpcObject ? toplevel.lastIpcObject : null)
+                : []);
+            root.dump("workspaces", Hyprland.workspaces && Hyprland.workspaces.values
+                ? Hyprland.workspaces.values.map(workspace => workspace && workspace.lastIpcObject ? workspace.lastIpcObject : null)
+                : []);
             if (Hyprland.focusedMonitor && Hyprland.focusedMonitor.activeWorkspace)
                 root.dump("focusedMonitor.activeWorkspace.toplevels.length", Hyprland.focusedMonitor.activeWorkspace.toplevels.values.length);
-            clientsProcess.running = true;
             layersProcess.running = true;
-            workspaceProcess.running = true;
-            windowProcess.running = true;
         }
-    }
-
-    Process {
-        id: clientsProcess
-
-        command: ["hyprctl", "clients", "-j"]
-        running: false
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.dump("hyprctl clients", this.text)
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: {
-            root.finishOne();
-        }
-        // qmllint enable signal-handler-parameters
     }
 
     Process {
@@ -83,35 +70,4 @@ ShellRoot {
         // qmllint enable signal-handler-parameters
     }
 
-    Process {
-        id: workspaceProcess
-
-        command: ["hyprctl", "activeworkspace", "-j"]
-        running: false
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.dump("hyprctl activeworkspace", this.text)
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: {
-            root.finishOne();
-        }
-        // qmllint enable signal-handler-parameters
-    }
-
-    Process {
-        id: windowProcess
-
-        command: ["hyprctl", "activewindow", "-j"]
-        running: false
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.dump("hyprctl activewindow", this.text)
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: {
-            root.finishOne();
-        }
-        // qmllint enable signal-handler-parameters
-    }
 }

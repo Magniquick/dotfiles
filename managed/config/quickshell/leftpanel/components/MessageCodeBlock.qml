@@ -12,6 +12,8 @@ MK.Card {
     property string code: ""
     property string language: "txt"
     property bool editing: false
+    readonly property string displayCode: String(root.code || "").replace(/\n+$/, "")
+    readonly property int lineCount: Math.max(1, root.displayCode.split("\n").length)
 
     signal codeEdited(string newCode)
 
@@ -104,7 +106,7 @@ MK.Card {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        Quickshell.clipboardText = root.code
+                        Quickshell.clipboardText = root.displayCode
                         copyBtn.copied = true
                         copyTimer.restart()
                     }
@@ -133,19 +135,15 @@ MK.Card {
                 Layout.rightMargin: Common.Config.space.sm
 
                 Repeater {
-                    model: Math.max(1, root.code.split("\n").length)
+                    model: root.lineCount
                     Text {
                         required property int index
-                        // qmllint disable Quick.layout-positioning
                         width: 24
-                        height: 18
-                        // qmllint enable Quick.layout-positioning
                         horizontalAlignment: Text.AlignRight
-                        verticalAlignment: Text.AlignVCenter
                         text: index + 1
                         color: Common.Config.color.on_surface_variant
-                        font.family: "JetBrainsMono NFP"
-                        font.pixelSize: 12
+                        font.family: codeArea.font.family
+                        font.pixelSize: codeArea.font.pixelSize
                         opacity: 0.3
                     }
                 }
@@ -163,9 +161,10 @@ MK.Card {
             MK.Flickable {
                 id: codeFlick
                 Layout.fillWidth: true
-                implicitHeight: codeArea.implicitHeight
+                Layout.alignment: Qt.AlignTop
+                implicitHeight: codeArea.contentHeight
                 contentWidth: codeArea.implicitWidth
-                contentHeight: codeArea.implicitHeight
+                contentHeight: codeArea.contentHeight
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
@@ -182,6 +181,7 @@ MK.Card {
                 MK.TextEdit {
                     id: codeArea
                     width: Math.max(implicitWidth, codeFlick.width)
+                    height: contentHeight
                     readOnly: !root.editing
                     selectByMouse: true
                     font.family: "JetBrainsMono NFP"
@@ -189,7 +189,7 @@ MK.Card {
                     color: Common.Config.color.on_surface
                     selectionColor: Qt.alpha(Common.Config.color.primary, 0.3)
                     selectedTextColor: Common.Config.color.on_surface
-                    text: root.code
+                    text: root.displayCode
                     wrapMode: TextEdit.NoWrap
 
                     onTextChanged: {

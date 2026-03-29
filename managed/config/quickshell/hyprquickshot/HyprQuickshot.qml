@@ -460,6 +460,8 @@ Src.FreezeScreen {
             stopRecordFlow();
             return;
         }
+        // Quickshell handles capture/view state here, but recording still relies
+        // on wl-screenrec plus pactl for audio source selection.
         const plan = ScreenshotUtils.planRecording({
             audioMode: root.recordAudioMode,
             env: {

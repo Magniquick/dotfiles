@@ -9,8 +9,10 @@ Item {
   id: root
   visible: false
 
-  readonly property string profilesDir: Quickshell.env("HOME") + "/.config/hypr/hyprland/profiles"
+  readonly property string profilesDir: Quickshell.env("HOME") + "/.config/hypr/hyprland/monitor-profiles"
   readonly property string metaPath: profilesDir + "/profiles.json"
+  readonly property string legacyProfilesDir: Quickshell.env("HOME") + "/.config/hypr/hyprland/profiles"
+  readonly property string legacyMetaPath: legacyProfilesDir + "/profiles.json"
 
   property var profiles: ({})
   property string activeProfileId: ""
@@ -18,23 +20,50 @@ Item {
 
   signal changed()
 
+  function slugifyName(name) {
+    const base = String(name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return base || "profile";
+  }
+
   function load() {
-    loadProc.running = true;
+    let t = (metaFile.text() || "").trim();
+    if (!t)
+      t = (legacyMetaFile.text() || "").trim();
+    if (!t) {
+      root.profiles = ({});
+      root.activeProfileId = "";
+      root.changed();
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(t);
+      root.profiles = parsed.profiles || ({});
+      root.activeProfileId = parsed.activeProfileId || "";
+      root.changed();
+    } catch (e) {
+      root.lastError = "Invalid profiles metadata";
+    }
   }
 
   function save() {
     const json = JSON.stringify({
       profiles: root.profiles || {},
       activeProfileId: root.activeProfileId || ""
-    }, null, 2).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\$/g, "\\$").replace(/`/g, "\\`");
-    saveProc.command = ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland/profiles\" && printf \"%s\" \"" + json + "\" > \"$HOME/.config/hypr/hyprland/profiles/profiles.json\""];
-    saveProc.running = true;
+    }, null, 2) + "\n";
+    writeMetaProc.command = ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland/monitor-profiles\" && cat > \"" + root.metaPath + "\" <<'EOF'\n" + json + "EOF"];
+    writeMetaProc.running = true;
   }
 
   function createProfile(name, outputsText) {
-    const id = "profile_" + Date.now();
+    const slug = root.slugifyName(name);
+    const id = slug + "-" + Date.now();
     const file = root.profilesDir + "/" + id + ".conf";
-    writeProfileProc.command = ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland/profiles\" && cat > \"" + file + "\" <<'EOF'\n" + outputsText + "\nEOF"];
+    writeProfileProc.command = ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland/monitor-profiles\" && cat > \"" + file + "\" <<'EOF'\n" + outputsText + "\nEOF"];
     writeProfileProc.running = true;
     const now = Date.now();
     const next = JSON.parse(JSON.stringify(root.profiles));
@@ -73,34 +102,28 @@ Item {
 
   Component.onCompleted: load()
 
-  Process {
-    id: loadProc
-    running: false
-    command: ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland/profiles\" && [ -f \"$HOME/.config/hypr/hyprland/profiles/profiles.json\" ] && cat \"$HOME/.config/hypr/hyprland/profiles/profiles.json\" || true"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        const t = (text || "").trim();
-        if (!t) {
-          root.profiles = ({});
-          root.activeProfileId = "";
-          root.changed();
-          return;
-        }
-        try {
-          const parsed = JSON.parse(t);
-          root.profiles = parsed.profiles || ({});
-          root.activeProfileId = parsed.activeProfileId || "";
-          root.changed();
-        } catch (e) {
-          root.lastError = "Invalid profiles metadata";
-        }
-      }
-    }
+  FileView {
+    id: metaFile
+    path: root.metaPath
+    blockLoading: true
+    blockWrites: true
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
   }
 
-  Process { id: saveProc; running: false; command: [] }
+  FileView {
+    id: legacyMetaFile
+    path: root.legacyMetaPath
+    blockLoading: true
+    blockWrites: true
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+  }
+
   Process { id: writeProfileProc; running: false; command: [] }
+  Process { id: writeMetaProc; running: false; command: [] }
   Process { id: deleteProfileProc; running: false; command: [] }
   Process { id: activateProc; running: false; command: [] }
 }

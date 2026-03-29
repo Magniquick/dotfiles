@@ -139,6 +139,7 @@ Singleton {
   CommandRunner {
     id: systemRunner
 
+    // Quickshell has no built-in systemd failed-unit model on master.
     command: "systemctl --failed --no-legend --plain --no-pager"
     intervalMs: 0
 
@@ -153,6 +154,7 @@ Singleton {
   CommandRunner {
     id: userRunner
 
+    // Quickshell has no built-in systemd failed-unit model on master.
     command: "systemctl --user --failed --no-legend --plain --no-pager"
     intervalMs: 0
 
@@ -167,6 +169,8 @@ Singleton {
   ProcessMonitor {
     id: systemMonitor
 
+    // We still rely on systemd's DBus signals because there is no native
+    // Quickshell monitor for this service domain.
     command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
     enabled: true
 
@@ -176,6 +180,8 @@ Singleton {
   ProcessMonitor {
     id: systemPropsMonitor
 
+    // We still rely on systemd's DBus signals because there is no native
+    // Quickshell monitor for this service domain.
     command: ["dbus-monitor", "--system", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
     enabled: true
 
@@ -185,6 +191,8 @@ Singleton {
   ProcessMonitor {
     id: userMonitor
 
+    // We still rely on systemd's DBus signals because there is no native
+    // Quickshell monitor for this service domain.
     command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',interface='org.freedesktop.systemd1.Manager',member='JobRemoved'"]
     enabled: true
 
@@ -194,6 +202,8 @@ Singleton {
   ProcessMonitor {
     id: userPropsMonitor
 
+    // We still rely on systemd's DBus signals because there is no native
+    // Quickshell monitor for this service domain.
     command: ["dbus-monitor", "--session", "type='signal',sender='org.freedesktop.systemd1',path='/org/freedesktop/systemd1',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.freedesktop.systemd1.Manager'"]
     enabled: true
 

@@ -36,6 +36,8 @@ ModuleContainer {
     property bool detailsExpanded: false
     property string pendingDeviceKey: ""
     property bool pendingConnect: false
+    property var pendingDeviceActions: ({})
+    property int deviceActionTimeoutMs: 12000
     property bool scanActive: false
     property bool moduleScanSession: false
     property bool desiredScanState: false
@@ -229,6 +231,104 @@ ModuleContainer {
         return "";
     }
 
+    function pendingDeviceAction(device) {
+        const key = root.deviceKey(device);
+        if (key.length === 0)
+            return null;
+        return root.pendingDeviceActions[key] || null;
+    }
+
+    function deviceInteractive(device) {
+        if (!device || !root.adapterEnabled)
+            return false;
+        if (root.pendingDeviceAction(device) !== null)
+            return false;
+        const state = device.state;
+        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+            return false;
+        return true;
+    }
+
+    function deviceStatusBadge(device) {
+        if (!device || !root.adapterEnabled)
+            return "";
+        const pending = root.pendingDeviceAction(device);
+        if (pending)
+            return pending.targetConnected ? "CONNECTING" : "DISCONNECTING";
+        const state = device.state;
+        if (state === BluetoothDeviceState.Connecting)
+            return "CONNECTING";
+        if (state === BluetoothDeviceState.Disconnecting)
+            return "DISCONNECTING";
+        if (device.connected)
+            return "CONNECTED";
+        if (device.paired)
+            return "PAIRED";
+        return root.adapterDiscovering ? "NEW" : "";
+    }
+
+    function deviceStatusColor(device) {
+        const pending = root.pendingDeviceAction(device);
+        if (pending)
+            return Qt.alpha(Config.color.secondary, 0.95);
+        const state = device ? device.state : undefined;
+        if (!root.adapterEnabled || state === BluetoothDeviceState.Disconnected)
+            return Qt.alpha(Config.color.surface_variant, 0.95);
+        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+            return Qt.alpha(Config.color.secondary, 0.95);
+        if (device && device.connected)
+            return Qt.alpha(Config.color.tertiary, 0.9);
+        return Qt.alpha(Config.color.surface_variant, 0.95);
+    }
+
+    function deviceStatusTextColor(device) {
+        if (root.pendingDeviceAction(device))
+            return Config.color.on_secondary;
+        const state = device ? device.state : undefined;
+        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+            return Config.color.on_secondary;
+        if (device && device.connected)
+            return Config.color.on_tertiary;
+        return Config.color.on_surface_variant;
+    }
+
+    function deviceTrailingIcon(device) {
+        if (!root.adapterEnabled)
+            return "";
+        const pending = root.pendingDeviceAction(device);
+        if (pending)
+            return pending.targetConnected ? "󱍸" : "󱍹";
+        const state = device ? device.state : undefined;
+        if (state === BluetoothDeviceState.Connecting)
+            return "󱍸";
+        if (state === BluetoothDeviceState.Disconnecting)
+            return "󱍹";
+        return device && device.connected ? "󰅖" : "󰐕";
+    }
+
+    function deviceSubtitle(device) {
+        if (!device)
+            return "";
+
+        const parts = [];
+        const state = device.state;
+        if (!root.adapterEnabled) {
+            parts.push("Adapter disabled");
+        } else if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting) {
+            // The badge already carries the primary transition state.
+        } else if (device.paired) {
+            parts.push("Paired");
+        } else if (root.adapterDiscovering) {
+            parts.push("Available now");
+        }
+
+        const battery = root.deviceBatterySuffix(device, root.deviceBatteryValue(device));
+        if (battery.length > 0)
+            parts.push(battery);
+
+        return parts.join(" • ");
+    }
+
     function statusLabel() {
         if (!root.adapter)
             return "Unavailable";
@@ -288,7 +388,8 @@ ModuleContainer {
     }
 
     function refreshBluetooth() {
-        const list = root.sortedDevices((root.devices || []).filter(device => root.deviceLabel(device).length > 0));
+        const availableDevices = root.adapterEnabled ? (root.devices || []) : [];
+        const list = root.sortedDevices(availableDevices.filter(device => root.deviceLabel(device).length > 0));
         root.deviceSnapshot = list;
 
         root.connectedCount = 0;
@@ -327,6 +428,7 @@ ModuleContainer {
                 root.pendingDeviceKey = "";
         }
 
+        root.updatePendingDeviceActions();
         root.requestScanState();
         root.requestLibrepodsBattery();
     }
@@ -345,6 +447,9 @@ ModuleContainer {
             root.moduleScanSession = false;
             root.desiredScanState = false;
             root.scanActive = false;
+            root.pendingDeviceActions = ({});
+            root.pendingDeviceKey = "";
+            root.showUnpairedDevices = false;
             root.refreshBluetooth();
         }
     }
@@ -372,8 +477,6 @@ ModuleContainer {
         root.adapter.discovering = active;
         root.logDebug("adapter.discovering set to " + active + "; now adapterDiscovering=" + root.adapterDiscovering);
 
-        root.dispatchScanCli(active, "setDiscovery");
-
         refreshTimer.restart();
         scanRefreshTimer.restart();
         scanEnsureTimer.start();
@@ -387,18 +490,6 @@ ModuleContainer {
             + ", scanActive=" + root.scanActive
             + ", adapterDiscovering=" + root.adapterDiscovering + ")");
         root.setDiscovery(!currentlyScanning);
-    }
-
-    function dispatchScanCli(active, source) {
-        const desired = active ? "on" : "off";
-        const adapterId = root.adapter && root.adapter.adapterId ? String(root.adapter.adapterId) : "";
-        const script = adapterId.length > 0
-            ? ("{ echo 'select " + adapterId + "'; echo 'scan " + desired + "'; echo 'quit'; } | bluetoothctl >/dev/null 2>&1")
-            : ("{ echo 'scan " + desired + "'; echo 'quit'; } | bluetoothctl >/dev/null 2>&1");
-
-        root.lastScanSource = source;
-        root.logDebug("scan cli dispatch source=" + source + " command=" + script);
-        Common.ProcessHelper.execDetached(["sh", "-lc", script]);
     }
 
     function parseDiscoveryOwnerLine(line) {
@@ -459,8 +550,7 @@ ModuleContainer {
             return;
 
         const connectTarget = !device.connected;
-        root.pendingDeviceKey = root.deviceKey(device);
-        root.pendingConnect = connectTarget;
+        root.beginPendingDeviceAction(device, connectTarget);
 
         try {
             if (connectTarget)
@@ -468,16 +558,112 @@ ModuleContainer {
             else
                 device.disconnect();
         } catch (error) {
-            try {
-                device.connected = connectTarget;
-            } catch (innerError) {
-            }
+            root.clearPendingDeviceAction(root.deviceKey(device));
+            root.notifyDeviceActionFailure(device, connectTarget, error);
         }
 
-        if (device.address && device.address.length > 0)
-            Common.ProcessHelper.execDetached(["bluetoothctl", connectTarget ? "connect" : "disconnect", device.address]);
-
         refreshTimer.restart();
+    }
+
+    function deviceStateName(device) {
+        if (!device || device.state === undefined)
+            return "";
+
+        return BluetoothDeviceState.toString(device.state);
+    }
+
+    function beginPendingDeviceAction(device, connectTarget) {
+        const key = root.deviceKey(device);
+        if (key.length === 0)
+            return;
+
+        root.pendingDeviceKey = key;
+        root.pendingConnect = connectTarget;
+
+        const actions = Object.assign({}, root.pendingDeviceActions);
+        actions[key] = {
+            targetConnected: connectTarget,
+            startedAt: Date.now(),
+            label: root.deviceLabel(device) || root.adapterName,
+            address: String(device.address || ""),
+            startState: root.deviceStateName(device)
+        };
+        root.pendingDeviceActions = actions;
+        deviceActionTimer.restart();
+    }
+
+    function clearPendingDeviceAction(key) {
+        const actions = Object.assign({}, root.pendingDeviceActions);
+        if (!(key in actions))
+            return;
+
+        delete actions[key];
+        root.pendingDeviceActions = actions;
+
+        if (root.pendingDeviceKey === key)
+            root.pendingDeviceKey = "";
+
+        if (Object.keys(actions).length === 0)
+            deviceActionTimer.stop();
+    }
+
+    function notifyDeviceActionFailure(device, connectTarget, error) {
+        const label = root.deviceLabel(device) || root.adapterName;
+        const actionText = connectTarget ? "connect to" : "disconnect";
+        let detail = "Bluetooth device did not " + actionText + " " + label + ".";
+
+        const errorText = String(error || "").trim();
+        if (errorText.length > 0)
+            detail += " " + errorText;
+
+        Common.ProcessHelper.execDetached(["notify-send",
+            "Bluetooth action failed",
+            detail
+        ]);
+    }
+
+    function updatePendingDeviceActions() {
+        const actions = root.pendingDeviceActions || {};
+        const keys = Object.keys(actions);
+        if (keys.length === 0) {
+            deviceActionTimer.stop();
+            return;
+        }
+
+        const list = root.deviceSnapshot || [];
+        const now = Date.now();
+        let hasPending = false;
+
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const pending = actions[key];
+            if (!pending)
+                continue;
+
+            const device = list.find(candidate => root.deviceKey(candidate) === key);
+            if (device) {
+                const reachedTarget = pending.targetConnected ? !!device.connected : !device.connected;
+                if (reachedTarget) {
+                    root.clearPendingDeviceAction(key);
+                    continue;
+                }
+            }
+
+            if (now - pending.startedAt >= root.deviceActionTimeoutMs) {
+                root.clearPendingDeviceAction(key);
+                root.notifyDeviceActionFailure(device || {
+                    alias: pending.label,
+                    name: pending.label,
+                    address: pending.address
+                }, pending.targetConnected, "");
+                continue;
+            }
+
+            hasPending = true;
+        }
+
+        if (hasPending)
+            deviceActionTimer.restart();
     }
 
     function openSettings() {
@@ -494,6 +680,13 @@ ModuleContainer {
         }
     }
 
+    Timer {
+        id: deviceActionTimer
+        interval: 1000
+        repeat: false
+        onTriggered: root.updatePendingDeviceActions()
+    }
+
     function requestScanState() {
         if (!root.adapterEnabled) {
             root.scanActive = false;
@@ -502,43 +695,10 @@ ModuleContainer {
             root.logDebug("requestScanState skipped (adapter disabled)");
             return;
         }
-        if (scanStateProcess.running) {
-            root.logDebug("requestScanState skipped (probe already running)");
-            return;
-        }
-        root.logDebug("requestScanState starting bluetoothctl show probe");
-        scanStateProcess.running = true;
-    }
-
-    Process {
-        id: scanStateProcess
-        command: ["bluetoothctl", "show"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const match = this.text.match(/Discovering:\s*(yes|no)/i);
-                if (!match) {
-                    root.logDebug("scan probe parse failed; output=" + JSON.stringify(this.text));
-                    return;
-                }
-                root.scanActive = match[1].toLowerCase() === "yes";
-                root.logDebug("scan probe parsed discovering=" + root.scanActive);
-                if (root.scanActive && !root.moduleScanSession && !root.desiredScanState)
-                    root.logDebug("scan appears to be held by another client/session");
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                const err = String(this.text || "").trim();
-                if (err.length > 0)
-                    root.logDebug("scan probe stderr: " + err);
-            }
-        }
-
-        // qmllint disable signal-handler-parameters
-        onExited: code => root.logDebug("scan probe exited code=" + code)
-        // qmllint enable signal-handler-parameters
+        root.scanActive = root.adapterDiscovering;
+        root.logDebug("requestScanState synced from adapter.discovering=" + root.scanActive);
+        if (root.scanActive && !root.moduleScanSession && !root.desiredScanState)
+            root.logDebug("scan appears to be held by another client/session");
     }
 
     ProcessMonitor {
@@ -689,7 +849,6 @@ ModuleContainer {
                 root.adapter.discovering = desired;
             if (!desired)
                 root.logDiscoveryOwner("scanEnsure retry;");
-            root.dispatchScanCli(desired, "ensureTimer");
             root.requestScanState();
         }
     }
@@ -759,6 +918,7 @@ ModuleContainer {
             readonly property int unpairedRowsHeight: unpairedRowsShown > 0
                 ? (unpairedRowsShown * rowHeight) + ((unpairedRowsShown - 1) * Config.space.xs)
                 : 0
+            readonly property bool showDeviceLists: root.adapterEnabled && root.deviceSnapshot.length > 0
 
             spacing: Config.space.md
             width: 276
@@ -863,7 +1023,6 @@ ModuleContainer {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Config.space.xs
-                    visible: root.deviceSnapshot.length > 0
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -890,7 +1049,7 @@ ModuleContainer {
                         Item {
                             Layout.fillHeight: true
                             Layout.preferredWidth: toggleRow.implicitWidth + (Config.space.xs * 2)
-                            visible: menu.unpairedDevices.length > 0
+                            visible: root.adapterEnabled && menu.unpairedDevices.length > 0
 
                             RowLayout {
                                 id: toggleRow
@@ -921,11 +1080,25 @@ ModuleContainer {
                         }
                     }
 
+                    Text {
+                        Layout.fillWidth: true
+                        color: Config.color.on_surface_variant
+                        font.family: Config.fontFamily
+                        font.pixelSize: Config.type.labelMedium.size
+                        text: !root.adapterEnabled
+                            ? "Turn Bluetooth on to discover and connect devices."
+                            : (root.moduleScanSession || root.desiredScanState
+                                ? "Scanning for devices. New devices will appear here."
+                                : "No Bluetooth devices available.")
+                        visible: !menu.showDeviceLists
+                        wrapMode: Text.Wrap
+                    }
+
                     Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: menu.pairedRowsHeight
                         clip: true
-                        visible: menu.pairedRowsShown > 0
+                        visible: menu.showDeviceLists && menu.pairedRowsShown > 0
 
                         ListView {
                             anchors.fill: parent
@@ -947,7 +1120,7 @@ ModuleContainer {
                         Layout.fillWidth: true
                         Layout.preferredHeight: menu.unpairedRowsHeight
                         clip: true
-                        visible: root.showUnpairedDevices && menu.unpairedRowsShown > 0
+                        visible: menu.showDeviceLists && root.showUnpairedDevices && menu.unpairedRowsShown > 0
 
                         ListView {
                             anchors.fill: parent
@@ -995,6 +1168,13 @@ ModuleContainer {
                         Layout.fillWidth: true
                         label: "Scanning"
                         value: root.scanActive ? "Yes" : "No"
+                        visible: !!root.adapter
+                    }
+
+                    InfoRow {
+                        Layout.fillWidth: true
+                        label: "Known Devices"
+                        value: root.adapterEnabled ? root.deviceSnapshot.length.toString() : "0"
                         visible: !!root.adapter
                     }
                 }

@@ -119,6 +119,8 @@ Singleton {
     Process {
         id: inotifyProcess
 
+        // Pipewire covers mic/screencast activity, but camera device-open
+        // events still need a /dev/video watcher for physical camera usage.
         command: ["inotifywait", "-m", "-e", "open", "-e", "close", root.cameraDevice]
         running: true
 
@@ -168,6 +170,8 @@ Singleton {
     Process {
         id: holderProbe
 
+        // Quickshell does not expose the process holding a V4L2 device, so we
+        // still resolve camera owners through /proc and ps when needed.
         command: [
             "sh",
             "-c",

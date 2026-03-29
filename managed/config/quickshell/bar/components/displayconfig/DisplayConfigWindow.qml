@@ -1,11 +1,14 @@
 pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell._Window
+import qs.common.materialkit as MK
 import qs.bar
 import ".."
+import "."
 
 Item {
   id: root
@@ -14,72 +17,91 @@ Item {
   property Item targetItem: null
   readonly property var hostWindow: targetItem ? targetItem.QsWindow.window : null
   property string newProfileName: ""
-  property real popupX: 0
-  property real popupY: 0
-  property bool popupPosInitialized: false
+
+  readonly property var profileIds: Object.keys(HyprDisplayProfilesService.profiles || {})
   readonly property string selectedProfileId: {
-    const ids = Object.keys(HyprDisplayProfilesService.profiles || {});
-    if (profileSelector.currentIndex < 0 || profileSelector.currentIndex >= ids.length)
+    if (profileSelector.currentIndex < 0 || profileSelector.currentIndex >= root.profileIds.length)
       return "";
-    return ids[profileSelector.currentIndex];
+    return root.profileIds[profileSelector.currentIndex];
   }
 
-  function outputNames() {
-    return Object.keys(HyprDisplayConfigState.outputs || {});
+  function profileNameById(id) {
+    return id ? (HyprDisplayProfilesService.profiles[id]?.name || id) : "";
+  }
+
+  function saveProfile() {
+    const name = root.newProfileName.trim();
+    if (!name)
+      return;
+    const managed = HyprDisplayService.generateManagedBlock(HyprDisplayConfigState.buildApplyMap());
+    HyprDisplayProfilesService.createProfile(name, managed);
+    root.newProfileName = "";
   }
 
   PopupWindow {
     id: popup
+
     visible: root.open && root.hostWindow
     color: "transparent"
-    implicitWidth: 900
-    implicitHeight: 680
+    implicitWidth: 980
+    implicitHeight: 760
 
     anchor {
-      // qmllint disable missing-type
-      adjustment: PopupAdjustment.SlideX | PopupAdjustment.ResizeX
+      adjustment: PopupAdjustment.SlideX | PopupAdjustment.SlideY | PopupAdjustment.ResizeX | PopupAdjustment.ResizeY
       edges: Edges.Top
       gravity: Edges.Bottom
-      // qmllint enable missing-type
       rect.height: 0
-      rect.width: (root.targetItem && root.hostWindow) ? root.targetItem.width : 0
-      rect.x: root.popupPosInitialized
-        ? root.popupX
-        : ((root.targetItem && root.hostWindow) ? root.hostWindow.itemRect(root.targetItem).x : 0)
-      rect.y: root.popupPosInitialized
-        ? root.popupY
-        : ((root.targetItem && root.hostWindow) ? (root.hostWindow.itemRect(root.targetItem).y + root.targetItem.height + Config.space.sm) : 0)
+      rect.width: root.targetItem ? root.targetItem.width : 0
+      rect.x: (root.targetItem && root.hostWindow) ? root.hostWindow.itemRect(root.targetItem).x : 0
+      rect.y: (root.targetItem && root.hostWindow) ? (root.hostWindow.itemRect(root.targetItem).y + root.targetItem.height + Config.space.sm) : 0
       window: root.hostWindow
     }
 
     Rectangle {
       anchors.fill: parent
-      color: Config.color.surface_container_high
+      radius: Config.shape.corner.lg
+      color: Config.barPopupSurface
       border.width: 1
-      border.color: Config.color.outline_variant
-      radius: Config.shape.corner.md
+      border.color: Qt.alpha(Config.color.outline_variant, 0.68)
     }
 
     ColumnLayout {
       anchors.fill: parent
-      anchors.margins: Config.space.md
+      anchors.margins: Config.space.lg
       spacing: Config.space.md
 
       RowLayout {
-        id: headerRow
         Layout.fillWidth: true
-        spacing: Config.space.sm
-        Text {
-          text: "Display Configuration"
-          color: Config.color.on_surface
-          font.family: Config.fontFamily
-          font.pixelSize: Config.type.titleMedium.size
-          font.weight: Config.type.titleMedium.weight
+        spacing: Config.space.md
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: Config.space.xs
+
+          Text {
+            color: Config.color.on_surface
+            font.family: Config.fontFamily
+            font.pixelSize: Config.type.titleLarge.size
+            font.weight: Config.type.titleLarge.weight
+            renderType: Text.NativeRendering
+            text: "Display Configuration"
+          }
+
+          Text {
+            color: Config.color.on_surface_variant
+            font.family: Config.fontFamily
+            font.pixelSize: Config.type.bodySmall.size
+            renderType: Text.NativeRendering
+            text: "Arrange monitors, tune Hyprland output settings, and save display profiles."
+          }
         }
-        Item { Layout.fillWidth: true }
+
         ActionChip {
           text: "Refresh"
-          onClicked: HyprDisplayConfigState.refresh()
+          onClicked: {
+            HyprDisplayProfilesService.load();
+            HyprDisplayConfigState.refresh();
+          }
         }
         ActionChip {
           text: "Close"
@@ -87,273 +109,216 @@ Item {
         }
       }
 
-      Item {
+      Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 0
-        z: 10
+        visible: HyprDisplayConfigState.applyError !== "" || HyprDisplayService.lastError !== "" || HyprDisplayProfilesService.lastError !== ""
+        radius: Config.shape.corner.md
+        color: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.error, 0.16))
+        border.width: 1
+        border.color: Qt.alpha(Config.color.error, 0.5)
+        implicitHeight: errorText.implicitHeight + Config.space.md * 2
 
-        MouseArea {
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.top: parent.top
-          height: headerRow.implicitHeight
-          acceptedButtons: Qt.LeftButton
-          hoverEnabled: true
-          cursorShape: Qt.SizeAllCursor
-          property real lastX: 0
-          property real lastY: 0
-          onPressed: function(mouse) {
-            if (!root.popupPosInitialized && root.targetItem && root.hostWindow) {
-              const r = root.hostWindow.itemRect(root.targetItem);
-              root.popupX = r.x;
-              root.popupY = r.y + root.targetItem.height + Config.space.sm;
-              root.popupPosInitialized = true;
-            }
-            lastX = mouse.x;
-            lastY = mouse.y;
-          }
-          onPositionChanged: function(mouse) {
-            if (!(mouse.buttons & Qt.LeftButton))
-              return;
-            root.popupX += (mouse.x - lastX);
-            root.popupY += (mouse.y - lastY);
-            lastX = mouse.x;
-            lastY = mouse.y;
-          }
+        Text {
+          id: errorText
+
+          anchors.fill: parent
+          anchors.margins: Config.space.md
+          color: Config.color.error
+          font.family: Config.fontFamily
+          font.pixelSize: Config.type.bodySmall.size
+          renderType: Text.NativeRendering
+          wrapMode: Text.WordWrap
+          text: HyprDisplayConfigState.applyError || HyprDisplayService.lastError || HyprDisplayProfilesService.lastError
         }
       }
 
-      Text {
-        Layout.fillWidth: true
-        visible: HyprDisplayConfigState.applyError !== "" || HyprDisplayService.lastError !== ""
-        text: HyprDisplayConfigState.applyError !== "" ? HyprDisplayConfigState.applyError : HyprDisplayService.lastError
-        color: Config.color.error
-        font.family: Config.fontFamily
-        font.pixelSize: Config.type.bodySmall.size
-        wrapMode: Text.WordWrap
-      }
+      MK.Flickable {
+        id: contentFlickable
 
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Config.space.sm
-        TextField {
-          id: profileName
-          Layout.fillWidth: true
-          placeholderText: "New profile name"
-          text: root.newProfileName
-          onTextChanged: root.newProfileName = text
-        }
-        ActionChip {
-          text: "Save Profile"
-          onClicked: {
-            const name = root.newProfileName.trim();
-            if (!name)
-              return;
-            const managed = HyprDisplayService.generateManagedBlock(HyprDisplayConfigState.buildApplyMap());
-            HyprDisplayProfilesService.createProfile(name, managed);
-            root.newProfileName = "";
-          }
-        }
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Config.space.sm
-        ComboBox {
-          id: profileSelector
-          Layout.fillWidth: true
-          model: Object.keys(HyprDisplayProfilesService.profiles || {})
-          textRole: ""
-          delegate: ItemDelegate {
-            required property string modelData
-            width: profileSelector.width
-            text: (HyprDisplayProfilesService.profiles[modelData]?.name || modelData) + (HyprDisplayProfilesService.activeProfileId === modelData ? " (active)" : "")
-          }
-          contentItem: Text {
-            text: {
-              const id = root.selectedProfileId;
-              if (!id)
-                return "Select profile";
-              return HyprDisplayProfilesService.profiles[id]?.name || id;
-            }
-            color: Config.color.on_surface
-            font.family: Config.fontFamily
-            verticalAlignment: Text.AlignVCenter
-          }
-        }
-        ActionChip {
-          text: "Activate"
-          onClicked: {
-            const id = root.selectedProfileId;
-            if (id)
-              HyprDisplayProfilesService.activateProfile(id);
-            HyprDisplayConfigState.refresh();
-          }
-        }
-        ActionChip {
-          text: "Delete"
-          onClicked: {
-            const id = root.selectedProfileId;
-            if (id)
-              HyprDisplayProfilesService.deleteProfile(id);
-          }
-        }
-      }
-
-      ScrollView {
         Layout.fillWidth: true
         Layout.fillHeight: true
+        clip: true
+        interactive: !monitorCanvas.dragActive
+        contentWidth: width
+        contentHeight: contentColumn.implicitHeight
 
         ColumnLayout {
-          width: parent.width
+          id: contentColumn
+
+          width: contentFlickable.width
           spacing: Config.space.md
 
-          Repeater {
-            model: root.outputNames()
-            delegate: Rectangle {
-              id: outputCard
-              required property string modelData
-              readonly property var output: HyprDisplayConfigState.getOutput(modelData)
-              Layout.fillWidth: true
-              radius: Config.shape.corner.sm
-              color: Config.color.surface_container
-              border.width: 1
-              border.color: Config.color.outline_variant
-              implicitHeight: body.implicitHeight + Config.space.md * 2
+          Rectangle {
+            Layout.fillWidth: true
+            radius: Config.shape.corner.md
+            color: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.surface_container, 0.48))
+            border.width: 1
+            border.color: Qt.alpha(Config.color.outline_variant, 0.55)
+            implicitHeight: profileColumn.implicitHeight + Config.space.lg * 2
 
-              ColumnLayout {
-                id: body
-                anchors.fill: parent
-                anchors.margins: Config.space.md
-                spacing: Config.space.sm
+            ColumnLayout {
+              id: profileColumn
 
-                RowLayout {
+              anchors.fill: parent
+              anchors.margins: Config.space.lg
+              spacing: Config.space.md
+
+              RowLayout {
+                Layout.fillWidth: true
+
+                ColumnLayout {
                   Layout.fillWidth: true
+                  spacing: Config.space.xs
+
                   Text {
-                    text: outputCard.output ? outputCard.output.name : outputCard.modelData
                     color: Config.color.on_surface
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.titleSmall.size
                     font.weight: Config.type.titleSmall.weight
+                    renderType: Text.NativeRendering
+                    text: "Display Profiles"
                   }
-                  Item { Layout.fillWidth: true }
-                  CheckBox {
-                    text: "Disabled"
-                    checked: outputCard.output ? !!outputCard.output.disabled : false
-                    onToggled: HyprDisplayConfigState.setField(outputCard.modelData, "disabled", checked)
+
+                  Text {
+                    color: Config.color.on_surface_variant
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.bodySmall.size
+                    renderType: Text.NativeRendering
+                    text: "Save and switch between known monitor layouts."
                   }
                 }
 
-                GridLayout {
+                Text {
+                  color: Config.color.primary
+                  font.family: Config.fontFamily
+                  font.pixelSize: Config.type.labelMedium.size
+                  font.weight: Config.type.labelMedium.weight
+                  renderType: Text.NativeRendering
+                  text: {
+                    const id = HyprDisplayProfilesService.activeProfileId;
+                    return id ? ("Active: " + root.profileNameById(id)) : "No active profile";
+                  }
+                }
+              }
+
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.sm
+
+                StyledField {
                   Layout.fillWidth: true
-                  columns: 4
-                  rowSpacing: Config.space.xs
-                  columnSpacing: Config.space.sm
+                  placeholderText: "New profile name"
+                  text: root.newProfileName
+                  onTextChanged: root.newProfileName = text
+                  onAccepted: root.saveProfile()
+                }
 
-                  Label { text: "Mode"; color: Config.color.on_surface_variant }
-                  TextField {
-                    Layout.fillWidth: true
-                    text: outputCard.output && outputCard.output.mode ? String(outputCard.output.mode) : "preferred"
-                    onEditingFinished: HyprDisplayConfigState.setField(outputCard.modelData, "mode", text.trim() || "preferred")
+                ActionChip {
+                  id: saveProfileChip
+
+                  text: "Save Profile"
+                  onClicked: root.saveProfile()
+                }
+              }
+
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.sm
+
+                StyledComboBox {
+                  id: profileSelector
+
+                  Layout.fillWidth: true
+                  model: root.profileIds
+                  currentIndex: Math.max(0, root.profileIds.indexOf(HyprDisplayProfilesService.activeProfileId))
+                  delegate: ItemDelegate {
+                    required property string modelData
+                    width: parent ? parent.width : 260
+                    text: root.profileNameById(modelData) + (HyprDisplayProfilesService.activeProfileId === modelData ? " (active)" : "")
                   }
-
-                  Label { text: "Scale"; color: Config.color.on_surface_variant }
-                  SpinBox {
-                    Layout.fillWidth: true
-                    from: 25
-                    to: 400
-                    value: outputCard.output ? Math.round((outputCard.output.scale || 1) * 100) : 100
-                    onValueChanged: {
-                      if (!activeFocus)
-                        return;
-                      HyprDisplayConfigState.setField(outputCard.modelData, "scale", value / 100.0);
+                  contentItem: Text {
+                    color: Config.color.on_surface
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.bodyMedium.size
+                    elide: Text.ElideRight
+                    text: {
+                      const id = root.selectedProfileId;
+                      return id ? root.profileNameById(id) : "Select profile";
                     }
+                    verticalAlignment: Text.AlignVCenter
                   }
+                }
 
-                  Label { text: "X"; color: Config.color.on_surface_variant }
-                  SpinBox {
-                    Layout.fillWidth: true
-                    from: -20000; to: 20000
-                    value: outputCard.output ? (outputCard.output.x || 0) : 0
-                    onValueChanged: {
-                      if (!activeFocus)
-                        return;
-                      HyprDisplayConfigState.setField(outputCard.modelData, "x", value);
-                    }
+                ActionChip {
+                  text: "Activate"
+                  onClicked: {
+                    if (!root.selectedProfileId)
+                      return;
+                    HyprDisplayProfilesService.activateProfile(root.selectedProfileId);
+                    HyprDisplayConfigState.refresh();
                   }
-                  Label { text: "Y"; color: Config.color.on_surface_variant }
-                  SpinBox {
-                    Layout.fillWidth: true
-                    from: -20000; to: 20000
-                    value: outputCard.output ? (outputCard.output.y || 0) : 0
-                    onValueChanged: {
-                      if (!activeFocus)
-                        return;
-                      HyprDisplayConfigState.setField(outputCard.modelData, "y", value);
-                    }
+                }
+                ActionChip {
+                  text: "Delete"
+                  onClicked: {
+                    if (root.selectedProfileId)
+                      HyprDisplayProfilesService.deleteProfile(root.selectedProfileId);
                   }
+                }
+              }
+            }
+          }
 
-                  Label { text: "Transform"; color: Config.color.on_surface_variant }
-                  ComboBox {
-                    Layout.fillWidth: true
-                    model: ["0", "1", "2", "3", "4", "5", "6", "7"]
-                    currentIndex: Math.max(0, Math.min(7, outputCard.output ? (outputCard.output.transform || 0) : 0))
-                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "transform", parseInt(model[index]))
-                  }
-                  Label { text: "VRR"; color: Config.color.on_surface_variant }
-                  ComboBox {
-                    Layout.fillWidth: true
-                    model: ["0", "1", "2"]
-                    currentIndex: Math.max(0, Math.min(2, outputCard.output ? (outputCard.output.vrr || 0) : 0))
-                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "vrr", parseInt(model[index]))
-                  }
+          Rectangle {
+            Layout.fillWidth: true
+            radius: Config.shape.corner.md
+            color: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.surface_container, 0.48))
+            border.width: 1
+            border.color: Qt.alpha(Config.color.outline_variant, 0.55)
+            implicitHeight: monitorColumn.implicitHeight + Config.space.lg * 2
 
-                  Label { text: "Mirror"; color: Config.color.on_surface_variant }
-                  TextField {
-                    Layout.fillWidth: true
-                    text: outputCard.output && outputCard.output.mirror ? String(outputCard.output.mirror) : ""
-                    onEditingFinished: HyprDisplayConfigState.setField(outputCard.modelData, "mirror", text.trim())
-                  }
-                  Label { text: "Bitdepth"; color: Config.color.on_surface_variant }
-                  ComboBox {
-                    Layout.fillWidth: true
-                    model: ["8", "10"]
-                    currentIndex: outputCard.output && Number(outputCard.output.bitdepth) === 10 ? 1 : 0
-                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "bitdepth", parseInt(model[index]))
-                  }
+            ColumnLayout {
+              id: monitorColumn
 
-                  Label { text: "CM"; color: Config.color.on_surface_variant }
-                  ComboBox {
-                    Layout.fillWidth: true
-                    model: ["auto", "wide", "dcip3", "dp3", "adobe", "edid", "hdr", "hdredid"]
-                    currentIndex: {
-                      const value = outputCard.output && outputCard.output.cm ? String(outputCard.output.cm) : "auto";
-                      const idx = model.indexOf(value);
-                      return idx >= 0 ? idx : 0;
-                    }
-                    onActivated: (index) => HyprDisplayConfigState.setField(outputCard.modelData, "cm", model[index])
-                  }
-                  Label { text: "SDR Br."; color: Config.color.on_surface_variant }
-                  TextField {
-                    Layout.fillWidth: true
-                    text: outputCard.output ? String(outputCard.output.sdrbrightness || 1.0) : "1.0"
-                    onEditingFinished: {
-                      const n = parseFloat(text);
-                      if (isFinite(n))
-                        HyprDisplayConfigState.setField(outputCard.modelData, "sdrbrightness", Math.max(0.1, Math.min(5.0, n)));
-                    }
-                  }
+              anchors.fill: parent
+              anchors.margins: Config.space.lg
+              spacing: Config.space.md
 
-                  Label { text: "SDR Sat."; color: Config.color.on_surface_variant }
-                  TextField {
-                    Layout.fillWidth: true
-                    text: outputCard.output ? String(outputCard.output.sdrsaturation || 1.0) : "1.0"
-                    onEditingFinished: {
-                      const n = parseFloat(text);
-                      if (isFinite(n))
-                        HyprDisplayConfigState.setField(outputCard.modelData, "sdrsaturation", Math.max(0.0, Math.min(3.0, n)));
-                    }
-                  }
+              ColumnLayout {
+                Layout.fillWidth: true
+                  spacing: Config.space.xs
+
+                Text {
+                  color: Config.color.on_surface
+                  font.family: Config.fontFamily
+                  font.pixelSize: Config.type.titleSmall.size
+                  font.weight: Config.type.titleSmall.weight
+                  renderType: Text.NativeRendering
+                  text: "Monitor Configuration"
+                }
+
+                Text {
+                  color: Config.color.on_surface_variant
+                  font.family: Config.fontFamily
+                  font.pixelSize: Config.type.bodySmall.size
+                  renderType: Text.NativeRendering
+                  text: "Drag monitors to reposition them, then fine-tune output settings below."
+                }
+              }
+
+              MonitorCanvas {
+                id: monitorCanvas
+
+                Layout.fillWidth: true
+              }
+
+              Repeater {
+                model: HyprDisplayConfigState.outputNames
+
+                delegate: OutputCard {
+                  required property string modelData
+                  Layout.fillWidth: true
+                  outputName: modelData
                 }
               }
             }
@@ -361,39 +326,52 @@ Item {
         }
       }
 
-      RowLayout {
+      Rectangle {
         Layout.fillWidth: true
-        spacing: Config.space.sm
+        radius: Config.shape.corner.md
+        color: Qt.tint(Config.barPopupSurface, Qt.alpha(Config.color.surface_container_high, 0.56))
+        border.width: 1
+        border.color: Qt.alpha(Config.color.outline_variant, 0.55)
+        implicitHeight: actionRow.implicitHeight + Config.space.md * 2
 
-        Text {
-          Layout.fillWidth: true
-          text: HyprDisplayConfigState.waitingConfirm
-            ? "Applied. Confirm within " + HyprDisplayConfigState.confirmSeconds + "s or changes will revert."
-            : (HyprDisplayConfigState.hasPending ? "Pending changes" : "No pending changes")
-          color: Config.color.on_surface_variant
-          font.family: Config.fontFamily
-          font.pixelSize: Config.type.bodySmall.size
-        }
+        RowLayout {
+          id: actionRow
 
-        ActionChip {
-          text: "Discard"
-          onClicked: HyprDisplayConfigState.clearPending()
-          visible: !HyprDisplayConfigState.waitingConfirm
-        }
-        ActionChip {
-          text: "Apply"
-          onClicked: HyprDisplayConfigState.apply()
-          visible: !HyprDisplayConfigState.waitingConfirm
-        }
-        ActionChip {
-          text: "Confirm"
-          onClicked: HyprDisplayConfigState.confirm()
-          visible: HyprDisplayConfigState.waitingConfirm
-        }
-        ActionChip {
-          text: "Revert"
-          onClicked: HyprDisplayConfigState.revert()
-          visible: HyprDisplayConfigState.waitingConfirm
+          anchors.fill: parent
+          anchors.margins: Config.space.md
+          spacing: Config.space.sm
+
+          Text {
+            Layout.fillWidth: true
+            color: Config.color.on_surface_variant
+            font.family: Config.fontFamily
+            font.pixelSize: Config.type.bodySmall.size
+            renderType: Text.NativeRendering
+            text: HyprDisplayConfigState.waitingConfirm
+              ? ("Confirm changes within " + HyprDisplayConfigState.confirmRemainingSeconds + "s or they will revert automatically.")
+              : (HyprDisplayConfigState.hasPending ? "Pending display changes ready to apply." : "No pending display changes.")
+          }
+
+          ActionChip {
+            text: "Discard"
+            visible: !HyprDisplayConfigState.waitingConfirm
+            onClicked: HyprDisplayConfigState.clearPending()
+          }
+          ActionChip {
+            text: "Apply"
+            visible: !HyprDisplayConfigState.waitingConfirm
+            onClicked: HyprDisplayConfigState.apply()
+          }
+          ActionChip {
+            text: "Keep Changes"
+            visible: HyprDisplayConfigState.waitingConfirm
+            onClicked: HyprDisplayConfigState.confirm()
+          }
+          ActionChip {
+            text: "Revert"
+            visible: HyprDisplayConfigState.waitingConfirm
+            onClicked: HyprDisplayConfigState.revert()
+          }
         }
       }
     }

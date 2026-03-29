@@ -32,6 +32,7 @@
    "providers": {
       "@sovereign/store.vicinae.awww-switcher": {
          "preferences": {
+            "wallpaperPath": "~/Pictures/Wallpapers",
             "colorGenTool": "matugen",
             "gridRows": "4",
             "postProduction": "no",
@@ -40,8 +41,7 @@
             "transitionDuration": "3",
             "transitionFPS": "60",
             "transitionStep": "90",
-            "transitionType": "random",
-            "wallpaperPath": "/home/magni/Pictures/Wallpapers"
+            "transitionType": "random"
          }
       },
       "applications": {

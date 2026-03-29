@@ -4,7 +4,6 @@ import QtQuick.Layouts
 import QtQml
 import QtQuick.Templates as T
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import "../common/materialkit" as MK
@@ -18,9 +17,7 @@ Item {
     readonly property int popupMaxHeight: 560
     readonly property int maxNotifications: 50
     readonly property bool inGroupFocusView: notificationStore.focusedGroupKey.length > 0
-    property bool notificationServerActive: false
-    property int _notificationStatusFailures: 0
-    property int _notificationStatusIntervalMs: 10000
+    readonly property bool notificationServerActive: notificationServerLoader.active
 
     // Timeouts per urgency (matching dunst config)
     readonly property int timeoutLowMs: 3000
@@ -467,42 +464,6 @@ Item {
             if (Common.GlobalState.notificationDnd)
                 notificationStore.clearPopups();
         }
-    }
-
-    Timer {
-        id: notificationStatusTimer
-        interval: root._notificationStatusIntervalMs
-        repeat: true
-        running: true
-        triggeredOnStart: true
-        onTriggered: {
-            if (!notificationStatusProcess.running) {
-                notificationStatusProcess.running = true;
-            }
-        }
-    }
-
-    Process {
-        id: notificationStatusProcess
-        command: ["busctl", "--user", "status", "org.freedesktop.Notifications"]
-        // qmllint disable signal-handler-parameters
-        onExited: code => {
-            if (code === 0) {
-                root.notificationServerActive = true;
-                root._notificationStatusFailures = 0;
-                root._notificationStatusIntervalMs = 10000;
-                return;
-            }
-
-            // Avoid thrashing the NotificationServer Loader if busctl is missing
-            // or the bus is transient. Back off status checks instead.
-            root.notificationServerActive = false;
-            root._notificationStatusFailures += 1;
-
-            const next = Math.min(300000, 10000 * Math.pow(2, root._notificationStatusFailures));
-            root._notificationStatusIntervalMs = Math.round(next);
-        }
-        // qmllint enable signal-handler-parameters
     }
 
     MK.Pane {

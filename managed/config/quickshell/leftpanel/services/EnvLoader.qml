@@ -43,7 +43,7 @@ Item {
     function canonicalModelId(rawId) {
         const trimmed = String(rawId || "").trim();
         if (!trimmed)
-            return "gemini/gemini-2.5-flash";
+            return "gemini/gemini-3.1-flash-lite-preview";
         if (trimmed.indexOf("/") !== -1)
             return trimmed;
         return trimmed.startsWith("gemini-") ? ("gemini/" + trimmed) : ("openai/" + trimmed);
@@ -60,5 +60,5 @@ Item {
     })
 
     // Default model when OPENAI_MODEL is not set in the shared env file.
-    readonly property string modelId: canonicalModelId(envVars["OPENAI_MODEL"] || "gemini/gemini-2.5-flash")
+    readonly property string modelId: canonicalModelId(envVars["OPENAI_MODEL"] || "gemini/gemini-3.1-flash-lite-preview")
 }

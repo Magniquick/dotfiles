@@ -18,18 +18,25 @@ bool QsGoIcal::refreshFromEnv(const QString& envFile, int days)
 
     QMetaObject::invokeMethod(this, [this, json]() {
       const QJsonDocument doc = QJsonDocument::fromJson(json);
-      if (!doc.isObject()) return;
-      const QJsonObject obj = doc.object();
+      if (!doc.isObject()) {
+        const QString err = QStringLiteral("Invalid response");
+        if (err != m_error) {
+          m_error = err;
+          emit errorChanged();
+        }
+        return;
+      }
 
-#define SETSTR(member, sig, key) \
-      { auto v = obj.value(QLatin1String(key)).toString(); if (v != member) { member = v; emit sig(); } }
+      const QString payloadJson = QString::fromUtf8(json);
+      if (payloadJson != m_eventsJson) {
+        m_eventsJson = payloadJson;
+        emit eventsJsonChanged();
+      }
 
-      SETSTR(m_eventsJson,  eventsJsonChanged,  "events_json")
-      SETSTR(m_generatedAt, generatedAtChanged, "generated_at")
-      SETSTR(m_status,      statusChanged,      "status")
-      SETSTR(m_error,       errorChanged,       "error")
-
-#undef SETSTR
+      if (!m_error.isEmpty()) {
+        m_error.clear();
+        emit errorChanged();
+      }
     }, Qt::QueuedConnection);
   });
   return true;

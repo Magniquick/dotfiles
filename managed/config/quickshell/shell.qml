@@ -9,17 +9,21 @@ import Quickshell.Wayland
 import "bar" as Bar
 import "leftpanel" as LeftPanel
 import "overview" as Overview
+import "powermenu" as PowerMenu
 import "rightpanel" as RightPanel
 import "common/services" as CommonServices
 
 ShellRoot {
     id: shellRoot
 
+    readonly property string lockscreenLauncher: Quickshell.shellPath("tools/launch-lockscreen.sh")
+
     CommonServices.IdleManager {}
     IpcHandler {
         target: "lockscreen"
 
         function lock() {
+            console.log("[shell.qml] IPC: lockscreen.lock() called");
             Quickshell.execDetached([Quickshell.shellPath("tools/launch-lockscreen.sh")]);
         }
     }
@@ -57,6 +61,37 @@ ShellRoot {
         }
     }
 
+    function runPowermenuAction(action) {
+        let cmd = [];
+        if (action === "Poweroff")
+            cmd = ["systemctl", "poweroff"];
+        else if (action === "Reboot")
+            cmd = ["systemctl", "reboot"];
+        else if (action === "Suspend")
+            cmd = ["systemctl", "suspend"];
+        else if (action === "Hibernate")
+            cmd = ["systemctl", "hibernate"];
+        else if (action === "Exit")
+            cmd = [shellRoot.lockscreenLauncher];
+        else if (action === "Windows")
+            cmd = ["systemctl", "reboot", "--boot-loader-entry=auto-windows"];
+
+        if (cmd.length === 0)
+            return;
+        Quickshell.execDetached(cmd);
+    }
+
+    function resolvePowermenuScreen() {
+        const monitor = Hyprland.focusedMonitor;
+        if (monitor && monitor.name) {
+            for (const s of Quickshell.screens) {
+                if (s.name === monitor.name)
+                    return s;
+            }
+        }
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
+    }
+
     // Clock.ClockWidget {}
     LoggingCategory {
         defaultLogLevel: LoggingCategory.Critical
@@ -67,6 +102,24 @@ ShellRoot {
         delegate: Bar.BarWindow {}
     }
     Overview.Overview {}
+    PowerMenu.Powermenu {
+        colors: Bar.Config.color
+        hoverAction: Bar.GlobalState.powermenuHover
+        selection: Bar.GlobalState.powermenuSelection
+        targetScreen: shellRoot.resolvePowermenuScreen()
+        visible: Bar.GlobalState.powermenuVisible
+
+        onActionInvoked: actionName => {
+            if (Bar.GlobalState.powermenuSelection === actionName) {
+                Bar.GlobalState.resetPowermenu();
+                shellRoot.runPowermenuAction(actionName);
+            } else {
+                Bar.GlobalState.powermenuSelection = actionName;
+            }
+        }
+        onHoverUpdated: actionName => Bar.GlobalState.powermenuHover = actionName
+        onRequestClose: Bar.GlobalState.resetPowermenu()
+    }
     LazyLoader {
         id: hyprQuickshotLoader
 

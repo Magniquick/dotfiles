@@ -8,7 +8,6 @@
  */
 pragma ComponentBehavior: Bound
 import QtQuick
-import Quickshell
 import ".."
 import "../components"
 
@@ -27,9 +26,5 @@ ModuleContainer {
     ]
 
     onClicked: GlobalState.toggleLeftPanel()
-    onRightClicked: Quickshell.execDetached([
-            "quickshell",
-            "--path",
-            Quickshell.shellPath("powermenu")
-        ])
+    onRightClicked: GlobalState.togglePowermenu()
 }

@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import qsgo
+import "../components/JsonUtils.js" as JsonUtils
 import ".."
 
 Item {
@@ -18,6 +19,24 @@ Item {
     property string error: ""
     property string eventsJson: ""
     property bool refreshing: false
+
+    function applyClientPayload() {
+        root.eventsJson = calendarClient.events_json || "";
+
+        const parsed = JsonUtils.parseObject(root.eventsJson);
+        if (!parsed || typeof parsed !== "object") {
+            root.status = "error";
+            root.generatedAt = "";
+            root.error = calendarClient.error || "Failed to parse calendar payload";
+            root.refreshing = false;
+            return;
+        }
+
+        root.status = parsed.status ? String(parsed.status) : "";
+        root.generatedAt = parsed.generatedAt ? String(parsed.generatedAt) : "";
+        root.error = parsed.error ? String(parsed.error) : (calendarClient.error || "");
+        root.refreshing = false;
+    }
 
     function refresh(reason) {
         root.refreshing = true;
@@ -40,19 +59,13 @@ Item {
     Connections {
         target: calendarClient
 
-        function onStatusChanged() {
-            root.status = calendarClient.status || "";
-            root.refreshing = false;
-        }
-        function onGenerated_atChanged() {
-            root.generatedAt = calendarClient.generated_at || "";
-        }
         function onErrorChanged() {
-            root.error = calendarClient.error || "";
+            if (calendarClient.error)
+                root.error = calendarClient.error;
             root.refreshing = false;
         }
         function onEvents_jsonChanged() {
-            root.eventsJson = calendarClient.events_json || "";
+            root.applyClientPayload();
         }
     }
 }

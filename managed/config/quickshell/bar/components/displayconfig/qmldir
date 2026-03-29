@@ -1,0 +1,5 @@
+MonitorCanvas 1.0 MonitorCanvas.qml
+OutputCard 1.0 OutputCard.qml
+StyledComboBox 1.0 StyledComboBox.qml
+StyledField 1.0 StyledField.qml
+StyledSpinBox 1.0 StyledSpinBox.qml

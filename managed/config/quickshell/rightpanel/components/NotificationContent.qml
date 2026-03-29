@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
-import Quickshell.Io
 import "../../common/materialkit" as MK
 import "../../common" as Common
 import "../../common/components" as CommonComponents
@@ -68,7 +67,6 @@ RowLayout {
             return Quickshell.iconPath(root.imageSource.substring(13), true);
         return root.imageSource;
     }
-    property bool imageFileExists: true
     readonly property bool inListViewport: {
         const view = ListView.view;
         if (!view)
@@ -92,44 +90,6 @@ RowLayout {
     readonly property bool hasDefaultAction: (root.entry?.notification?.actions ?? []).some(
         action => (action && action.identifier ? String(action.identifier) : "") === "default"
     )
-
-    onImageSourceChanged: checkImageExistence()
-    Component.onCompleted: checkImageExistence()
-
-    function checkImageExistence() {
-        if (root.imageSource.length === 0) {
-            root.imageFileExists = false;
-            return;
-        }
-
-        let path = root.imageSource;
-        if (path.startsWith("image://icon/")) {
-            path = path.substring(13);
-        } else if (path.startsWith("file://")) {
-            path = path.substring(7);
-        }
-
-        // If it looks like an absolute path, check it.
-        if (path.startsWith("/")) {
-             fileCheckProcess.pathToCheck = path;
-             fileCheckProcess.running = false;
-             fileCheckProcess.running = true;
-        } else {
-            // Named icon or other resource, assume valid
-            root.imageFileExists = true;
-        }
-    }
-
-    Process {
-        id: fileCheckProcess
-        property string pathToCheck: ""
-        command: ["test", "-f", pathToCheck]
-        // qmllint disable signal-handler-parameters
-        onExited: (code) => {
-            root.imageFileExists = (code === 0);
-        }
-        // qmllint enable signal-handler-parameters
-    }
 
     readonly property color urgencyColor: {
         if (!entry || !entry.urgency)
@@ -300,7 +260,7 @@ RowLayout {
                         height: 32
                         radius: width / 2
                         color: "transparent"
-                        visible: root.imageSource.length > 0 && leadingIconImage.status !== Image.Error && root.imageFileExists
+                        visible: root.imageSource.length > 0 && leadingIconImage.status === Image.Ready
 
                         Image {
                             id: leadingIconImage

@@ -14,6 +14,9 @@ QtObject {
     property int screenRecordingPid: 0
     property string screenRecordingState: "idle"
     property bool leftPanelVisible: false
+    property bool powermenuVisible: false
+    property string powermenuHover: ""
+    property string powermenuSelection: ""
     property bool rightPanelVisible: false
     property bool overviewVisible: false
     property bool idleSleepInhibited: false
@@ -32,6 +35,7 @@ QtObject {
         if (screen) {
             leftPanelScreen = screen;
         }
+        powermenuVisible = false;
         overviewVisible = false;
         leftPanelVisible = !leftPanelVisible;
     }
@@ -40,12 +44,34 @@ QtObject {
         if (screen) {
             rightPanelScreen = screen;
         }
+        powermenuVisible = false;
         overviewVisible = false;
         rightPanelVisible = !rightPanelVisible;
     }
 
     function closeOverview() {
         overviewVisible = false;
+    }
+
+    function resetPowermenu() {
+        powermenuVisible = false;
+        powermenuHover = "";
+        powermenuSelection = "";
+    }
+
+    function openPowermenu() {
+        leftPanelVisible = false;
+        rightPanelVisible = false;
+        overviewVisible = false;
+        powermenuVisible = true;
+    }
+
+    function togglePowermenu() {
+        if (powermenuVisible) {
+            resetPowermenu();
+            return;
+        }
+        openPowermenu();
     }
 
     function openOverview(screen) {

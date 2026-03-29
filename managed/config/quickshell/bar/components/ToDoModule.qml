@@ -16,6 +16,7 @@ ColumnLayout {
     readonly property bool loading: TodoistService.loading
     readonly property int minorSpace: Config.spaceHalfXs
     readonly property bool parseError: TodoistService.parseError
+    readonly property var servicePayload: TodoistService.payload
     property var rawData: ({})
     readonly property var taskColors: [Config.color.tertiary, Config.color.secondary, Config.color.tertiary, Config.color.primary, Config.color.secondary, Config.color.tertiary]
     property var tasks: []
@@ -80,7 +81,10 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Config.space.sm
 
-    Component.onCompleted: root.refresh()
+    Component.onCompleted: {
+        root.applyTodoistData(TodoistService.payload, TodoistService.usingCache);
+        root.refresh();
+    }
     onVisibleChanged: {
         if (!visible && projectSelector.popup.visible)
             projectSelector.popup.close();
@@ -109,12 +113,8 @@ ColumnLayout {
                 root.scheduleProjectSelectorClose();
         }
     }
-    Connections {
-        target: TodoistService
-
-        function onDataChanged() {
-            root.applyTodoistData(TodoistService.payload, TodoistService.usingCache);
-        }
+    onServicePayloadChanged: {
+        root.applyTodoistData(root.servicePayload, TodoistService.usingCache);
     }
 
     // Hero Section (Battery Style)

@@ -3,15 +3,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
-import ".."
 import "../components"
 import "network/Parsers.js" as Parsers
 
 Item {
     id: root
     visible: false
-
-    property bool nmcliAvailable: false
 
     property int tooltipUserCount: 0
     readonly property bool tooltipActive: root.tooltipUserCount > 0
@@ -29,15 +26,15 @@ Item {
     property string sourceSwitchingName: ""
     property string sourceError: ""
     readonly property bool nativeNetworkBackend: Networking.backend === NetworkBackendType.NetworkManager
+    readonly property var connectedDevice: root.findConnectedDevice()
+    readonly property var connectedWifiNetwork: root.findConnectedWifiNetwork()
 
     // Ethernet/USB NIC details
-    property string ethernetConnection: ""
     property string ethernetSubsystem: ""
     property string ethernetDeviceLabel: ""
     property string lastEthernetDevice: ""
     property bool subsystemCheckRequested: false
     property bool deviceLabelRequested: false
-    property bool forceRefreshRequested: false
 
     // Traffic monitoring
     property double rxBytesPerSec: 0
@@ -50,18 +47,10 @@ Item {
     property double lastRxBytes: 0
     property double lastTxBytes: 0
     property double lastTrafficSampleMs: 0
-    // Traffic sampling can be triggered by multiple paths (initial refresh + nmcli status output + timer).
+    // Traffic sampling can be triggered by multiple paths (initial refresh + timer).
     // Guard against tiny deltas that produce absurd spikes, and smooth rates for a less jittery UI.
     property int minTrafficSampleDeltaMs: 600
     property double trafficEmaAlpha: 0.5
-
-    // Polling/monitor debounce and caching
-    property bool needsInitialRefresh: true
-    readonly property bool pollingActive: root.tooltipActive || root.needsInitialRefresh
-    property double lastMonitorEventMs: 0
-    property int monitorDebounceMs: 300
-    property double lastStatusUpdateMs: 0
-    property int statusCacheMs: 30000
 
     function addTooltipUser() {
         root.tooltipUserCount = Math.max(0, root.tooltipUserCount + 1);
@@ -72,8 +61,7 @@ Item {
     }
 
     function refreshNetwork() {
-        statusRunner.trigger();
-        wifiRunner.trigger();
+        root.syncNativeState();
         ipRunner.trigger();
         root.refreshSources();
         root.readTrafficSample();
@@ -121,6 +109,120 @@ Item {
         if (typeof model.length === "number")
             return model.length;
         return 0;
+    }
+
+    function findConnectedDevice() {
+        if (!root.nativeNetworkBackend)
+            return null;
+
+        const devices = Networking.devices;
+        const deviceCount = root.modelCount(devices);
+        let fallbackEthernet = null;
+
+        for (let i = 0; i < deviceCount; i++) {
+            const device = root.modelAt(devices, i);
+            if (!device || !device.connected)
+                continue;
+            if (device.type === DeviceType.Wifi)
+                return device;
+            if (!fallbackEthernet)
+                fallbackEthernet = device;
+        }
+
+        return fallbackEthernet;
+    }
+
+    function findConnectedWifiNetwork() {
+        const wifiDevice = root.connectedDevice;
+        if (!wifiDevice || wifiDevice.type !== DeviceType.Wifi)
+            return null;
+
+        const networks = wifiDevice.networks;
+        const networkCount = root.modelCount(networks);
+        for (let i = 0; i < networkCount; i++) {
+            const network = root.modelAt(networks, i);
+            if (network && network.connected)
+                return network;
+        }
+
+        return null;
+    }
+
+    function setWifiScannerEnabled(enabled) {
+        if (!root.nativeNetworkBackend)
+            return;
+
+        const devices = Networking.devices;
+        const deviceCount = root.modelCount(devices);
+        for (let i = 0; i < deviceCount; i++) {
+            const device = root.modelAt(devices, i);
+            if (!device || device.type !== DeviceType.Wifi || device.scannerEnabled === enabled)
+                continue;
+            device.scannerEnabled = enabled;
+        }
+    }
+
+    function syncNativeState() {
+        if (!root.nativeNetworkBackend) {
+            root.connectionType = "disconnected";
+            root.connectionState = "";
+            root.deviceName = "";
+            root.ssid = "";
+            root.signalPercent = 0;
+            root.frequencyMhz = 0;
+            root.ethernetSubsystem = "";
+            root.ethernetDeviceLabel = "";
+            root.lastEthernetDevice = "";
+            root.subsystemCheckRequested = false;
+            root.deviceLabelRequested = false;
+            root.ipAddress = "";
+            root.gateway = "";
+            root.resetTraffic();
+            return;
+        }
+
+        const device = root.connectedDevice;
+        const wifiNetwork = root.connectedWifiNetwork;
+        const nextType = !device
+            ? "disconnected"
+            : (device.type === DeviceType.Wifi ? "wifi" : "ethernet");
+        const nextDeviceName = device ? String(device.name || "") : "";
+        const nextSsid = wifiNetwork ? String(wifiNetwork.name || "") : "";
+        const nextSignalPercent = wifiNetwork && isFinite(wifiNetwork.signalStrength)
+            ? Math.max(0, Math.min(100, Math.round(wifiNetwork.signalStrength * 100)))
+            : 0;
+        const deviceChanged = root.deviceName !== nextDeviceName;
+        const typeChanged = root.connectionType !== nextType;
+
+        root.connectionType = nextType;
+        root.connectionState = device ? "connected" : "";
+        root.deviceName = nextDeviceName;
+        root.ssid = nextSsid;
+        root.signalPercent = nextSignalPercent;
+        root.frequencyMhz = 0;
+
+        if (deviceChanged || typeChanged) {
+            root.ipAddress = "";
+            root.gateway = "";
+            root.resetTraffic();
+        }
+
+        if (nextType !== "ethernet") {
+            root.ethernetSubsystem = "";
+            root.ethernetDeviceLabel = "";
+            root.lastEthernetDevice = "";
+            root.subsystemCheckRequested = false;
+            root.deviceLabelRequested = false;
+        } else {
+            const ethernetDeviceChanged = root.lastEthernetDevice !== nextDeviceName;
+            root.lastEthernetDevice = nextDeviceName;
+            if (ethernetDeviceChanged) {
+                root.ethernetSubsystem = "";
+                root.ethernetDeviceLabel = "";
+                root.deviceLabelRequested = false;
+            }
+            root.subsystemCheckRequested = root.connectionState === "connected";
+        }
     }
 
     function collectNativeSourceEntries() {
@@ -229,66 +331,6 @@ Item {
         sourceSwitchTimeoutTimer.stop();
     }
 
-    function handleNetworkManagerEvent(data) {
-        if (!data || data.trim() === "")
-            return;
-
-        const now = Date.now();
-        if (now - root.lastMonitorEventMs < root.monitorDebounceMs)
-            return;
-
-        root.lastMonitorEventMs = now;
-        root.subsystemCheckRequested = true;
-
-        if (root.tooltipActive) {
-            monitorDebouncedRefresh.restart();
-            return;
-        }
-
-        const cacheAge = now - root.lastStatusUpdateMs;
-        if (cacheAge < root.statusCacheMs && root.lastStatusUpdateMs > 0)
-            return;
-
-        root.forceRefreshRequested = true;
-        monitorDebouncedRefresh.restart();
-    }
-
-    function applyEthernetStatus(ethernetLine) {
-        if (!ethernetLine)
-            return false;
-
-        const parts = ethernetLine.split(":");
-        const device = parts[0] || "";
-        const deviceChanged = root.lastEthernetDevice !== device;
-        root.lastEthernetDevice = device;
-        root.deviceName = device;
-        if (deviceChanged)
-            root.ethernetSubsystem = "";
-        if (deviceChanged) {
-            root.ethernetDeviceLabel = "";
-            root.deviceLabelRequested = false;
-        }
-        const connection = parts.slice(3).join(":");
-        root.ethernetConnection = connection && connection !== "--" ? connection : "";
-        root.connectionType = "ethernet";
-        root.connectionState = parts[2] || "";
-
-        if (deviceChanged || root.connectionState !== "connected")
-            root.subsystemCheckRequested = true;
-        if (root.connectionState !== "connected") {
-            root.subsystemCheckRequested = false;
-            root.deviceLabelRequested = false;
-        }
-
-        if (root.connectionState === "connected") {
-            root.clearWifiDetails();
-            ethernetSubsystemRunner.trigger();
-            return true;
-        }
-
-        return false;
-    }
-
     function applyEthernetSubsystem(subsystem) {
         const cleanedSubsystem = (subsystem || "").trim();
         root.ethernetSubsystem = cleanedSubsystem;
@@ -302,76 +344,6 @@ Item {
         } else {
             root.deviceLabelRequested = false;
         }
-    }
-
-    function applyWifiStatus(wifiLine, wasWifiConnected) {
-        if (!wifiLine)
-            return false;
-
-        const parts = wifiLine.split(":");
-        root.deviceName = parts[0] || "";
-        root.connectionType = "wifi";
-        root.connectionState = parts[2] || "";
-        root.subsystemCheckRequested = false;
-        root.deviceLabelRequested = false;
-        const connection = parts.slice(3).join(":");
-        root.ssid = connection && connection !== "--" ? connection : "";
-
-        if (root.connectionState === "connected") {
-            if (!wasWifiConnected)
-                root.resetTraffic();
-            ipRunner.trigger();
-            root.readTrafficSample();
-            return true;
-        }
-
-        return false;
-    }
-
-    function clearWifiDetails() {
-        root.ssid = "";
-        root.signalPercent = 0;
-        root.frequencyMhz = 0;
-        root.ipAddress = "";
-        root.gateway = "";
-        root.resetTraffic();
-    }
-
-    function updateStatus(text) {
-        if (!text)
-            return;
-        root.forceRefreshRequested = false;
-        root.needsInitialRefresh = false;
-        root.lastStatusUpdateMs = Date.now();
-
-        const wasWifiConnected = root.connectionType === "wifi" && root.connectionState === "connected";
-        const lines = text.trim().split("\n");
-        const statusLines = Parsers.findStatusLines(lines);
-        if (root.applyWifiStatus(statusLines.wifiLine, wasWifiConnected))
-            return;
-        if (root.applyEthernetStatus(statusLines.ethernetLine))
-            return;
-
-        root.connectionType = "disconnected";
-        root.connectionState = "";
-        root.deviceName = "";
-        root.ethernetSubsystem = "";
-        root.ethernetDeviceLabel = "";
-        root.ethernetConnection = "";
-        root.lastEthernetDevice = "";
-        root.subsystemCheckRequested = false;
-        root.deviceLabelRequested = false;
-        root.clearWifiDetails();
-    }
-
-    function updateSignal(text) {
-        if (!text)
-            return;
-        const details = Parsers.parseWifiSignal(text.trim().split("\n"));
-        root.signalPercent = details.signalPercent;
-        if (details.ssid)
-            root.ssid = details.ssid;
-        root.frequencyMhz = details.frequencyMhz;
     }
 
     function updateIpDetails(text) {
@@ -489,6 +461,7 @@ Item {
     }
 
     onTooltipActiveChanged: {
+        root.setWifiScannerEnabled(root.tooltipActive);
         if (root.tooltipActive) {
             root.refreshNetwork();
         } else {
@@ -500,44 +473,19 @@ Item {
     }
 
     Component.onCompleted: {
-        DependencyCheck.require("nmcli", "NetworkService", function (available) {
-            root.nmcliAvailable = available;
-        });
-    }
-
-    CommandRunner {
-        id: statusRunner
-
-        command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev", "status"]
-        enabled: root.nmcliAvailable && root.pollingActive
-        intervalMs: 10000
-
-        onRan: function(commandOutput) {
-            root.updateStatus(commandOutput);
-        }
-    }
-
-    CommandRunner {
-        id: wifiRunner
-
-        command: ["nmcli", "-t", "-f", "ACTIVE,SIGNAL,SSID,FREQ", "dev", "wifi"]
-        enabled: root.nmcliAvailable
-            && root.pollingActive
-            && (root.needsInitialRefresh || root.connectionType === "wifi")
-        intervalMs: 15000
-
-        onRan: function(commandOutput) {
-            root.updateSignal(commandOutput);
-        }
+        root.syncNativeState();
+        root.refreshSources();
     }
 
     CommandRunner {
         id: ipRunner
 
-        command: root.deviceName ? ["nmcli", "-t", "-f", "IP4.ADDRESS,IP4.GATEWAY", "dev", "show", root.deviceName] : []
-        enabled: root.nmcliAvailable
-            && root.tooltipActive
-            && root.connectionType === "wifi"
+        // Quickshell.Networking gives us device/network state, but not the
+        // active IPv4 address or default gateway on the current backend.
+        command: root.deviceName
+            ? ["sh", "-lc", "ip -o -4 addr show dev '" + root.deviceName + "' scope global | awk 'NR==1 {print \"IP4.ADDRESS:\" $4}'; ip route show default dev '" + root.deviceName + "' | awk 'NR==1 {print \"IP4.GATEWAY:\" $3}'"]
+            : []
+        enabled: root.tooltipActive
             && root.connectionState === "connected"
             && root.deviceName !== ""
         intervalMs: 30000
@@ -550,24 +498,12 @@ Item {
     Timer {
         interval: 2000
         repeat: true
-        running: root.tooltipActive && root.nativeNetworkBackend
-
-        onTriggered: root.refreshSources()
-    }
-
-    Timer {
-        id: sourceSwitchTimeoutTimer
-
-        interval: 12000
-        running: false
-        repeat: false
+        running: root.nativeNetworkBackend
 
         onTriggered: {
-            if (!root.sourceSwitching)
-                return;
-            root.sourceError = "Switch request timed out";
-            root.sourceSwitching = false;
-            root.sourceSwitchingName = "";
+            root.syncNativeState();
+            if (root.tooltipActive)
+                root.refreshSources();
         }
     }
 
@@ -588,21 +524,22 @@ Item {
         repeat: true
         running: root.tooltipActive
             && root.connectionType === "wifi"
-            && root.connectionState === "connected"
             && root.deviceName !== ""
+            && root.connectionState === "connected"
         onTriggered: root.readTrafficSample()
     }
 
     CommandRunner {
         id: ethernetSubsystemRunner
 
+        // The Networking API does not currently expose sysfs/udev hardware metadata.
         command: root.deviceName
             ? "if [ -L /sys/class/net/" + root.deviceName + "/device/subsystem ]; then basename \"$(readlink /sys/class/net/" + root.deviceName + "/device/subsystem)\"; fi"
             : ""
         enabled: root.connectionType === "ethernet"
             && root.connectionState === "connected"
             && root.deviceName !== ""
-            && (root.subsystemCheckRequested || root.forceRefreshRequested)
+            && root.subsystemCheckRequested
         intervalMs: 0
 
         onRan: function(commandOutput) {
@@ -613,6 +550,7 @@ Item {
     CommandRunner {
         id: ethernetDeviceLabelRunner
 
+        // Friendly USB NIC labels still come from udev properties today.
         command: root.deviceName
             ? "if [ -d /sys/class/net/" + root.deviceName + "/device ]; then udevadm info -q property -p /sys/class/net/" + root.deviceName + " | sed -n 's/^ID_MODEL_FROM_DATABASE=//p; s/^ID_MODEL=//p; s/^ID_VENDOR_FROM_DATABASE=//p; s/^ID_VENDOR=//p' | head -n1; fi"
             : ""
@@ -620,7 +558,7 @@ Item {
             && root.connectionState === "connected"
             && root.deviceName !== ""
             && root.ethernetSubsystem === "usb"
-            && (root.deviceLabelRequested || root.forceRefreshRequested)
+            && root.deviceLabelRequested
         intervalMs: 0
 
         onRan: function(commandOutput) {
@@ -631,20 +569,18 @@ Item {
     }
 
     Timer {
-        id: monitorDebouncedRefresh
+        id: sourceSwitchTimeoutTimer
 
-        interval: root.monitorDebounceMs
+        interval: 12000
         running: false
+        repeat: false
 
         onTriggered: {
-            statusRunner.trigger();
-            root.forceRefreshRequested = false;
+            if (!root.sourceSwitching)
+                return;
+            root.sourceError = "Switch request timed out";
+            root.sourceSwitching = false;
+            root.sourceSwitchingName = "";
         }
-    }
-
-    ProcessMonitor {
-        command: ["nmcli", "monitor"]
-        enabled: root.nmcliAvailable
-        onOutput: data => root.handleNetworkManagerEvent(data)
     }
 }

@@ -12,7 +12,7 @@ Item {
     readonly property bool active: root.enabled && (root.open || root.pinned || (root.hoverable && root.popupHovered))
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
     property bool autoScroll: true
-    // Either a URL string (opened via xdg-open) or an argv array.
+    // Either a URL string (opened via Qt) or an argv array.
     // Do not pass a shell string here; it will be ignored for safety.
     property var browserLink: ""
     property Component contentComponent: null
@@ -64,7 +64,7 @@ Item {
             return;
         }
 
-        Common.ProcessHelper.execDetached(["xdg-open", link]);
+        Qt.openUrlExternally(link);
     }
 
     function refreshAnchorRect() {

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import "../../common" as Common
 
@@ -10,6 +11,7 @@ Item {
   id: root
   visible: false
 
+  readonly property var hyprland: Hyprland
   readonly property bool isHyprlandSession: (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "") !== ""
   readonly property string hyprConfigDir: Quickshell.env("HOME") + "/.config/hypr/hyprland"
   readonly property string monitorsPath: hyprConfigDir + "/monitors.conf"
@@ -57,10 +59,60 @@ Item {
   function _parseManaged(text) {
     const outputs = {};
     const lines = (text || "").split("\n");
+    let currentBlock = null;
+
+    function commitCurrentBlock() {
+      if (!currentBlock || !currentBlock.output)
+        return;
+      const position = String(currentBlock.position || "0x0");
+      const posM = position.match(/(-?\d+)x(-?\d+)/);
+      outputs[currentBlock.output] = {
+        name: currentBlock.output,
+        disabled: currentBlock.disabled === true,
+        mode: currentBlock.mode || "preferred",
+        x: posM ? parseInt(posM[1]) : 0,
+        y: posM ? parseInt(posM[2]) : 0,
+        scale: isFinite(Number(currentBlock.scale)) ? Number(currentBlock.scale) : 1.0,
+        transform: Math.round(Number(currentBlock.transform || 0)),
+        vrr: Math.round(Number(currentBlock.vrr || 0)),
+        mirror: String(currentBlock.mirror || ""),
+        bitdepth: Math.round(Number(currentBlock.bitdepth || 8)),
+        cm: String(currentBlock.cm || "auto"),
+        sdrbrightness: isFinite(Number(currentBlock.sdrbrightness)) ? Number(currentBlock.sdrbrightness) : 1.0,
+        sdrsaturation: isFinite(Number(currentBlock.sdrsaturation)) ? Number(currentBlock.sdrsaturation) : 1.0
+      };
+    }
+
+    function parseBoolean(value) {
+      return /^(1|true|yes|on)$/i.test(String(value || "").trim());
+    }
+
     for (const raw of lines) {
       const line = raw.trim();
       if (!line || line.startsWith("#"))
         continue;
+      if (line === "monitorv2 {") {
+        commitCurrentBlock();
+        currentBlock = {};
+        continue;
+      }
+      if (line === "}") {
+        commitCurrentBlock();
+        currentBlock = null;
+        continue;
+      }
+      if (currentBlock) {
+        const kv = line.match(/^([a-zA-Z_]+)\s*=\s*(.+)$/);
+        if (!kv)
+          continue;
+        const key = kv[1].trim();
+        const value = kv[2].trim();
+        if (key === "disabled")
+          currentBlock.disabled = parseBoolean(value);
+        else
+          currentBlock[key] = value;
+        continue;
+      }
       const disabledMatch = line.match(/^monitor\s*=\s*([^,]+),\s*disable\s*$/);
       if (disabledMatch) {
         const name = disabledMatch[1].trim();
@@ -140,6 +192,7 @@ Item {
         sdrsaturation: sdrsaturation
       };
     }
+    commitCurrentBlock();
     return outputs;
   }
 
@@ -195,12 +248,30 @@ Item {
     return merged;
   }
 
+  function _liveMonitorData() {
+    const monitors = [];
+    for (const screen of Quickshell.screens || []) {
+      const monitor = root.hyprland.monitorFor(screen);
+      if (monitor && monitor.lastIpcObject)
+        monitors.push(monitor.lastIpcObject);
+    }
+    return monitors;
+  }
+
+  function _syncLiveOutputsFromHyprland() {
+    root.liveOutputs = root._buildFromLive(root._liveMonitorData());
+    root.dataChanged();
+    root.loading = false;
+  }
+
   function refresh() {
     if (!root.isHyprlandSession || !root.hyprctlAvailable)
       return;
     root.loading = true;
-    liveMonitorsProc.running = true;
-    loadConfigProc.running = true;
+    root.hyprland.refreshMonitors();
+    Qt.callLater(root._syncLiveOutputsFromHyprland);
+    monitorsConfigFile.reload();
+    root.loadConfig();
   }
 
   function generateManagedBlock(outputsMap) {
@@ -215,30 +286,37 @@ Item {
       if (!o)
         continue;
       if (o.disabled) {
-        lines.push("monitor = " + name + ", disable");
+        lines.push("monitorv2 {");
+        lines.push("  output = " + name);
+        lines.push("  disabled = true");
+        lines.push("}");
         continue;
       }
       const mode = o.mode || "preferred";
       const pos = (o.x || 0) + "x" + (o.y || 0);
       const scale = isFinite(o.scale) ? o.scale : 1.0;
-      let line = "monitor = " + name + ", " + mode + ", " + pos + ", " + scale;
+      lines.push("monitorv2 {");
+      lines.push("  output = " + name);
+      lines.push("  mode = " + mode);
+      lines.push("  position = " + pos);
+      lines.push("  scale = " + scale);
       if ((o.transform || 0) !== 0)
-        line += ", transform, " + Math.round(o.transform);
+        lines.push("  transform = " + Math.round(o.transform));
       if ((o.vrr || 0) > 0)
-        line += ", vrr, " + Math.round(o.vrr);
+        lines.push("  vrr = " + Math.round(o.vrr));
       if ((o.mirror || "") !== "")
-        line += ", mirror, " + o.mirror;
+        lines.push("  mirror = " + o.mirror);
       if ((o.bitdepth || 8) !== 8)
-        line += ", bitdepth, " + Math.round(o.bitdepth);
+        lines.push("  bitdepth = " + Math.round(o.bitdepth));
       if ((o.cm || "auto") !== "auto")
-        line += ", cm, " + o.cm;
+        lines.push("  cm = " + o.cm);
       if ((o.sdrbrightness || 1.0) !== 1.0)
-        line += ", sdrbrightness, " + Number(o.sdrbrightness).toFixed(2);
+        lines.push("  sdrbrightness = " + Number(o.sdrbrightness).toFixed(2));
       if ((o.sdrsaturation || 1.0) !== 1.0)
-        line += ", sdrsaturation, " + Number(o.sdrsaturation).toFixed(2);
-      lines.push(line);
+        lines.push("  sdrsaturation = " + Number(o.sdrsaturation).toFixed(2));
+      lines.push("}");
     }
-    return lines.join("\n");
+    return lines.join("\n\n");
   }
 
   function writeAndApply(outputsMap) {
@@ -251,9 +329,19 @@ Item {
       + managed
       + (managed ? "\n" : "")
       + (root.preservedSuffix || "\n# END managed-by-quickshell-display-config\n");
-    const esc = finalText.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\$/g, "\\$").replace(/`/g, "\\`");
-    writeApplyProc.command = ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland\" && printf \"%s\" \"" + esc + "\" > \"$HOME/.config/hypr/hyprland/monitors.conf\" && hyprctl reload"];
+    monitorsConfigFile.setText(finalText);
+    monitorsConfigFile.reload();
+    root.loadConfig();
+    writeApplyProc.command = ["hyprctl", "reload"];
     writeApplyProc.running = true;
+  }
+
+  function loadConfig() {
+    const split = root._splitManaged(monitorsConfigFile.text() || "");
+    root.preservedPrefix = split.prefix;
+    root.preservedSuffix = split.suffix;
+    root.parsedConfigOutputs = root._parseManaged(split.managed);
+    root.dataChanged();
   }
 
   Component.onCompleted: {
@@ -264,51 +352,14 @@ Item {
     });
   }
 
-  Process {
-    id: liveMonitorsProc
-    running: false
-    command: ["hyprctl", "-j", "monitors", "all"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          const data = JSON.parse(text || "[]");
-          root.liveOutputs = root._buildFromLive(data);
-          root.dataChanged();
-        } catch (e) {
-          root.lastError = "Failed to parse hyprctl monitor data";
-        }
-      }
-    }
-    // qmllint disable signal-handler-parameters
-    onExited: code => {
-      if (code !== 0)
-        root.lastError = "hyprctl monitors failed";
-      root.loading = false;
-    }
-    // qmllint enable signal-handler-parameters
-  }
-
-  Process {
-    id: loadConfigProc
-    running: false
-    command: ["sh", "-lc", "mkdir -p \"$HOME/.config/hypr/hyprland\" && touch \"$HOME/.config/hypr/hyprland/monitors.conf\" && cat \"$HOME/.config/hypr/hyprland/monitors.conf\""]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        const split = root._splitManaged(text || "");
-        root.preservedPrefix = split.prefix;
-        root.preservedSuffix = split.suffix;
-        root.parsedConfigOutputs = root._parseManaged(split.managed);
-        root.dataChanged();
-      }
-    }
-    // qmllint disable signal-handler-parameters
-    onExited: code => {
-      if (code !== 0)
-        root.lastError = "Failed to read monitors.conf";
-    }
-    // qmllint enable signal-handler-parameters
+  FileView {
+    id: monitorsConfigFile
+    path: root.monitorsPath
+    blockLoading: true
+    blockWrites: true
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
   }
 
   Process {

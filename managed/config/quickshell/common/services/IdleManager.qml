@@ -1,5 +1,6 @@
 import QtQml
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import ".." as Common
 
@@ -48,7 +49,7 @@ Scope {
 
         root.dpmsOff = !on;
         if (root.currentDesktop.indexOf("hypr") !== -1) {
-            root.run(root.dpmsCommands.hyprland[on ? "on" : "off"]);
+            Hyprland.dispatch("dpms " + (on ? "on" : "off"));
             return;
         }
         if (root.currentDesktop.indexOf("niri") !== -1) {
