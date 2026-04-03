@@ -6,6 +6,7 @@ package main
 
 typedef void (*QsGo_TokenFn)   (void* ctx, const char* token, int done);
 typedef void (*QsGo_BrightFn)  (void* ctx, int percent, const char* device);
+typedef void (*QsGo_HyprlandFn)(void* ctx);
 
 // Static wrappers are required to call C function pointers from Go.
 static void invoke_token_fn(QsGo_TokenFn fn, void* ctx, const char* token, int done) {
@@ -14,6 +15,9 @@ static void invoke_token_fn(QsGo_TokenFn fn, void* ctx, const char* token, int d
 static void invoke_bright_fn(QsGo_BrightFn fn, void* ctx, int percent, const char* device) {
     fn(ctx, percent, device);
 }
+static void invoke_hyprland_fn(QsGo_HyprlandFn fn, void* ctx) {
+    fn(ctx);
+}
 */
 import "C"
 import (
@@ -21,6 +25,7 @@ import (
 
 	"qs-go/internal/ai"
 	"qs-go/internal/backlight"
+	"qs-go/internal/hyprland"
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
 	"qs-go/internal/sysinfo"
@@ -61,6 +66,26 @@ func QsGo_Backlight_Monitor(cb C.QsGo_BrightFn, ctx unsafe.Pointer) C.int {
 //export QsGo_Backlight_StopMonitor
 func QsGo_Backlight_StopMonitor(id C.int) {
 	backlight.StopMonitor(int(id))
+}
+
+// ----- Hyprland -----
+
+//export QsGo_Hyprland_Refresh
+func QsGo_Hyprland_Refresh() *C.char {
+	return C.CString(hyprland.Refresh())
+}
+
+//export QsGo_Hyprland_Monitor
+func QsGo_Hyprland_Monitor(cb C.QsGo_HyprlandFn, ctx unsafe.Pointer) C.int {
+	id := hyprland.Monitor(func() {
+		C.invoke_hyprland_fn(cb, ctx)
+	})
+	return C.int(id)
+}
+
+//export QsGo_Hyprland_StopMonitor
+func QsGo_Hyprland_StopMonitor(id C.int) {
+	hyprland.StopMonitor(int(id))
 }
 
 // ----- Pacman -----

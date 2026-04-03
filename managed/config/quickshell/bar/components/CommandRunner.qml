@@ -14,7 +14,6 @@ Item {
 
     // String uses `sh -c` for backward-compat. Prefer passing an argv array.
     property var command: ""
-    property bool enabled: true
     property int intervalMs: 10000
     property string output: ""
     property string errorOutput: ""

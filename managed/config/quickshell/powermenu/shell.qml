@@ -13,6 +13,8 @@ ShellRoot {
     property string powermenuSelection: ""
     property bool powermenuVisible: true
 
+    Component.onCompleted: Quickshell.watchFiles = false
+
     function onButton(action) {
         if (root.powermenuSelection === action) {
             root.powermenuVisible = false;

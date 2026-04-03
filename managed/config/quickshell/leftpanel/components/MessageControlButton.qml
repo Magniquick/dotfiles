@@ -6,7 +6,6 @@ Rectangle {
     id: root
     property string icon: ""
     property bool activated: false
-    property bool enabled: true
 
     signal clicked()
 

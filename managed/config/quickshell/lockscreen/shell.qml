@@ -1,28 +1,20 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
-import Quickshell.Wayland
 
 ShellRoot {
-    id: root
+    Component.onCompleted: Quickshell.watchFiles = false
 
-    Component.onCompleted: console.log("[lockscreen/shell.qml] Root shell loaded");
-
-    LockContext {
-        id: lockContext
-
-        onUnlocked: {
-            lock.locked = false;
-            Qt.quit();
-        }
+    LockController {
+        id: controller
+        locked: true
     }
 
-    WlSessionLock {
-        id: lock
-        locked: true
+    Connections {
+        target: controller.context
 
-        LockSurface {
-            context: lockContext
+        function onUnlocked() {
+            Qt.quit();
         }
     }
 }

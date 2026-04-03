@@ -17,6 +17,15 @@ Scope {
 
     onCurrentTextChanged: showFailure = false
 
+    function reset() {
+        root.currentText = "";
+        root.unlockInProgress = false;
+        root.showPassword = false;
+        root.showFailure = false;
+        root.lastMessage = "";
+        root.accountLocked = false;
+    }
+
     function tryUnlock() {
         if (root.currentText.length === 0 || root.unlockInProgress)
             return;

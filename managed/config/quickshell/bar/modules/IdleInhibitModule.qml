@@ -21,7 +21,11 @@ ModuleContainer {
     property int presetIndex: root.indexFromGlobalState()
     property var targetWindow: null
     property double nowMs: Date.now()
+    property var activeIdleInhibitors: []
+    property int portalInhibitSessionCount: 0
     readonly property int remainingSeconds: root.computeRemainingSeconds()
+    readonly property int dpmsTimeoutSeconds: Math.max(0, Math.round(GlobalState.idleMonitorSleepTimeoutSec || 0))
+    readonly property int earliestDpmsSeconds: root.computeEarliestDpmsSeconds()
     readonly property string iconText: root.inhibitEnabled ? "" : "󰒲"
     readonly property color iconColor: root.inhibitEnabled ? Config.color.on_primary_container : Config.color.on_surface_variant
 
@@ -49,6 +53,40 @@ ModuleContainer {
         running: root.tooltipActive && root.inhibitEnabled && GlobalState.idleSleepInhibitUntilMs > 0 && root.visible
 
         onTriggered: root.nowMs = Date.now()
+    }
+
+    CommandRunner {
+        enabled: root.tooltipActive && root.visible
+        intervalMs: 3000
+        command: ["systemd-inhibit", "--list"]
+        timeoutMs: 3000
+
+        onRan: function(output) {
+            root.activeIdleInhibitors = root.parseSystemdIdleInhibitors(output);
+        }
+
+        onError: function() {
+            root.activeIdleInhibitors = [];
+        }
+
+        onTimeout: root.activeIdleInhibitors = []
+    }
+
+    CommandRunner {
+        enabled: root.tooltipActive && root.visible
+        intervalMs: 3000
+        command: ["busctl", "--user", "tree", "org.freedesktop.portal.Desktop"]
+        timeoutMs: 3000
+
+        onRan: function(output) {
+            root.portalInhibitSessionCount = root.parsePortalSessionCount(output);
+        }
+
+        onError: function() {
+            root.portalInhibitSessionCount = 0;
+        }
+
+        onTimeout: root.portalInhibitSessionCount = 0
     }
 
     content: [
@@ -123,6 +161,26 @@ ModuleContainer {
                 wrapMode: Text.WordWrap
             }
 
+            Text {
+                Layout.fillWidth: true
+                color: Config.color.on_surface_variant
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.labelSmall.size
+                font.weight: Config.type.labelSmall.weight
+                text: root.dpmsSummary()
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                color: Config.color.on_surface_variant
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.labelSmall.size
+                font.weight: Config.type.labelSmall.weight
+                text: root.inhibitorSummary()
+                wrapMode: Text.WordWrap
+            }
+
             MK.DiscreteSlider {
                 id: presetSlider
 
@@ -156,9 +214,14 @@ ModuleContainer {
         const minutes = Math.floor(totalSeconds / 60);
         const hours = Math.floor(minutes / 60);
         const remMinutes = minutes % 60;
+        const remSeconds = totalSeconds % 60;
 
         if (hours > 0)
             return hours + "h " + remMinutes + "m";
+        if (minutes > 0)
+            return minutes + "m";
+        if (totalSeconds > 0)
+            return remSeconds + "s";
         return minutes + "m";
     }
 
@@ -173,6 +236,92 @@ ModuleContainer {
         if (!root.inhibitEnabled || GlobalState.idleSleepInhibitUntilMs <= 0)
             return 0;
         return Math.max(0, Math.floor((GlobalState.idleSleepInhibitUntilMs - root.nowMs) / 1000));
+    }
+
+    function computeEarliestDpmsSeconds() {
+        if (!(root.dpmsTimeoutSeconds > 0))
+            return 0;
+
+        if (!root.inhibitEnabled)
+            return root.dpmsTimeoutSeconds;
+
+        if (GlobalState.idleSleepInhibitUntilMs > 0)
+            return root.remainingSeconds + root.dpmsTimeoutSeconds;
+
+        return 0;
+    }
+
+    function parseSystemdIdleInhibitors(output) {
+        const names = [];
+        const seen = {};
+        const lines = String(output || "").split("\n");
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (line === "" || line.indexOf("WHO") === 0 || line.indexOf("inhibitors listed.") !== -1)
+                continue;
+
+            const match = rawLine.match(/^\s*(.+?)\s+\d+\s+\S+\s+\d+\s+\S+\s+(\S+)\s+(.+?)\s+(block|delay)\s*$/);
+            if (!match)
+                continue;
+
+            const who = match[1].trim();
+            const what = match[2].trim().toLowerCase();
+            if (what.split(":").indexOf("idle") === -1)
+                continue;
+
+            if (!seen[who]) {
+                seen[who] = true;
+                names.push(who);
+            }
+        }
+
+        return names;
+    }
+
+    function parsePortalSessionCount(output) {
+        const lines = String(output || "").split("\n");
+        let count = 0;
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (line.indexOf("/org/freedesktop/portal/desktop/session/") === -1)
+                continue;
+            if (line === "/org/freedesktop/portal/desktop/session")
+                continue;
+            count += 1;
+        }
+
+        return count;
+    }
+
+    function dpmsSummary() {
+        if (!(root.dpmsTimeoutSeconds > 0))
+            return "DPMS off is disabled";
+
+        const totalLabel = root.formatRemaining(root.dpmsTimeoutSeconds);
+        if (!root.inhibitEnabled)
+            return "Displays turn off after " + totalLabel + " of idle time";
+
+        if (GlobalState.idleSleepInhibitUntilMs > 0)
+            return "DPMS off in " + root.formatRemaining(root.earliestDpmsSeconds) + " total (" + root.formatRemaining(root.remainingSeconds) + " inhibit remaining + " + totalLabel + " DPMS timeout)";
+
+        return "DPMS timeout is " + totalLabel + " after caffeine is turned off";
+    }
+
+    function inhibitorSummary() {
+        const parts = [];
+
+        if (root.activeIdleInhibitors.length > 0)
+            parts.push("systemd idle inhibitors: " + root.activeIdleInhibitors.join(", "));
+
+        if (root.portalInhibitSessionCount > 0)
+            parts.push("portal inhibit sessions: " + root.portalInhibitSessionCount);
+
+        if (parts.length === 0)
+            return "Active inhibitors: none detected";
+
+        return "Active inhibitors: " + parts.join(" | ");
     }
 
     function indexFromGlobalState() {
@@ -241,6 +390,10 @@ ModuleContainer {
         function onIdleSleepInhibitUntilMsChanged() {
             root.nowMs = Date.now();
             root.presetIndex = root.indexFromGlobalState();
+        }
+
+        function onIdleMonitorSleepTimeoutSecChanged() {
+            root.nowMs = Date.now();
         }
     }
 

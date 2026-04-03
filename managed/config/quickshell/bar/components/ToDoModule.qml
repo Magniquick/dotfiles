@@ -57,7 +57,8 @@ ColumnLayout {
         return taskColors[index % taskColors.length];
     }
     function refresh() {
-        TodoistService.refresh("view");
+        if (TodoistService.shouldRefreshView())
+            TodoistService.refresh("view");
     }
     function scheduleProjectSelectorClose() {
         if (projectSelector.popup.visible)
@@ -86,6 +87,8 @@ ColumnLayout {
         root.refresh();
     }
     onVisibleChanged: {
+        if (visible)
+            root.refresh();
         if (!visible && projectSelector.popup.visible)
             projectSelector.popup.close();
     }

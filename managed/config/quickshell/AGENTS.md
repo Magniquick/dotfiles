@@ -18,7 +18,7 @@ The Quickshell binary locally tracks the master branch.
 - Main shell (bar + panels + clock + panels): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
 - HyprQuickshot (screenshot utility): run the main shell with `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
-- Reload: Restart `quickshell` after QML changes (no hot reload)
+- Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for a manual reload with fresh warnings/errors, or restart `quickshell` for a full process restart
 - Global config is at `quickshell.conf`
 
 **Native modules (Rust/Go/C++):**
@@ -30,11 +30,9 @@ The Quickshell binary locally tracks the master branch.
 
 ### Entry Points and Shell Structure
 
-- **Root shell** (`shell.qml`): Loads bar per screen via `Variants` over `Quickshell.screens` + left/right panels
-- **Bar** (`bar/shell.qml` → `bar/BarWindow.qml`): Status bar with three-section layout (left/center/right)
-- **Left panel** (`leftpanel/shell.qml` → `leftpanel/LeftPanel.qml`): Left-side overlay panel
-- **Right panel** (`rightpanel/shell.qml` → `rightpanel/RightPanel.qml`): Right-side overlay panel
+- **Root shell** (`shell.qml`): Loads bar per screen via `Variants` over `Quickshell.screens`, left/right panels, overview, resident lock controller, powermenu, and HyprQuickshot
 - **Powermenu** (`powermenu/shell.qml` → `powermenu/Powermenu.qml`): Overlay with system actions (poweroff/reboot/lock/hibernate/suspend/windows/etc)
+- **Lockscreen** (`lockscreen/shell.qml` + `lockscreen/LockController.qml`): resident lock controller in the main shell with a standalone fallback shell
 - **HyprQuickshot** (`hyprquickshot/HyprQuickshot.qml`): Screenshot tool with region/window/monitor selection
 
 ### Module System
@@ -200,7 +198,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 ## Testing
 
-**No automated tests.** Manual verification required: run ./qs at repo root with a short timeout and monitor output logs.
+**No automated tests.** Manual verification should usually use `bash tools/reload-quickshell.sh` to trigger a reload and inspect fresh warnings/errors. Use a full `./qs` restart only when you specifically need to verify cold startup or process-launch behavior.
 - In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
 - **Lockscreen safety**: Never terminate/kill a running lockscreen instance unless authentication has succeeded and the session unlock path is executing. Do not use timeout/force-kill smoke tests (`timeout ... quickshell --path lockscreen`) against active lock sessions, as this can leave Hyprland in an invalid lock state.
 

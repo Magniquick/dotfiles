@@ -49,6 +49,24 @@ Item {
 
         return match;
     }
+    function containsTarget(target) {
+        if (!target)
+            return false;
+
+        const targetId = String(target.stableId || "");
+        const targets = Array.isArray(root.windowTargets) ? root.windowTargets : [];
+        for (let index = 0; index < targets.length; index += 1) {
+            const candidate = targets[index];
+            if (!candidate)
+                continue;
+            if (targetId !== "" && String(candidate.stableId || "") === targetId)
+                return true;
+            if (candidate === target)
+                return true;
+        }
+
+        return false;
+    }
 
     function refreshHover() {
         if (!root.visible || root.lastMouseX < 0 || root.lastMouseY < 0)
@@ -56,7 +74,8 @@ Item {
 
         const target = root.findTargetAt(root.lastMouseX, root.lastMouseY);
         if (!target) {
-            root.clearSelection();
+            if (!root.containsTarget(root.selectedTarget))
+                root.clearSelection();
             return;
         }
 

@@ -4,11 +4,14 @@ Documentation=https://quickshell.org/docs/
 PartOf=graphical-session.target
 After=graphical-session.target
 Requisite=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 ExecStart=/home/magni/.config/quickshell/qs
-ExecStop=/usr/bin/quickshell kill
+ExecStop=/usr/bin/quickshell kill --path /home/magni/.local/share/dotbak/managed/config/quickshell
 Restart=on-failure
+MemoryMax=2G
 
 [Install]
 WantedBy=graphical-session.target

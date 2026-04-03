@@ -29,6 +29,7 @@ type listOutput struct {
 	Today       []taskOutput            `json:"today"`
 	Projects    map[string][]taskOutput `json:"projects"`
 	LastUpdated string                  `json:"last_updated"`
+	SyncedAt    string                  `json:"synced_at,omitempty"`
 	UsingCache  bool                    `json:"using_cache"`
 	Error       string                  `json:"error,omitempty"`
 }
@@ -143,7 +144,6 @@ func renderListOutput(state *cacheState, usingCache bool, errMsg string) listOut
 		Error:      strings.TrimSpace(errMsg),
 	}
 	if state == nil {
-		out.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 		return out
 	}
 
@@ -192,6 +192,9 @@ func renderListOutput(state *cacheState, usingCache bool, errMsg string) listOut
 		latestUpdate = time.Now().UTC()
 	}
 	out.LastUpdated = latestUpdate.UTC().Format(time.RFC3339)
+	if state.SyncedAt > 0 {
+		out.SyncedAt = time.Unix(state.SyncedAt, 0).UTC().Format(time.RFC3339)
+	}
 
 	sort.Slice(out.Today, func(i, j int) bool { return out.Today[i].Title < out.Today[j].Title })
 	for k := range out.Projects {
@@ -241,6 +244,7 @@ func ListTasks(envFile, cachePath string, preferCache bool) string {
 	}
 
 	nextState := applySyncResponse(cachedState, resp)
+	nextState.SyncedAt = time.Now().UTC().Unix()
 	if werr := writeCacheState(cachePath, nextState); werr != nil {
 		out := renderListOutput(nextState, false, "")
 		out.Error = "cache write failed: " + werr.Error()

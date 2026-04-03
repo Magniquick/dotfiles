@@ -56,6 +56,7 @@ add_library(qsgo_plugin SHARED
     cpp/qsgo_plugin.cpp
     cpp/QsGoSysInfo.cpp
     cpp/QsGoBacklight.cpp
+    cpp/QsGoHyprlandSnapshot.cpp
     cpp/QsGoAiSession.cpp
     cpp/QsGoAiModels.cpp
     cpp/QsGoPacman.cpp

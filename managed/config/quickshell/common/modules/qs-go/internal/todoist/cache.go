@@ -15,6 +15,7 @@ const todoistCacheVersion = 1
 
 type cacheState struct {
 	SyncToken string                      `json:"sync_token"`
+	SyncedAt  int64                       `json:"synced_at,omitempty"`
 	Tasks     map[string]*apiSync.Task    `json:"tasks"`
 	Projects  map[string]*apiSync.Project `json:"projects"`
 }

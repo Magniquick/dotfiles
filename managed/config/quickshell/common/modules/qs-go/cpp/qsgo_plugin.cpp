@@ -4,6 +4,7 @@
 #include "QsGoAiModels.h"
 #include "QsGoAiSession.h"
 #include "QsGoBacklight.h"
+#include "QsGoHyprlandSnapshot.h"
 #include "QsGoIcal.h"
 #include "QsGoPacman.h"
 #include "QsGoSysInfo.h"
@@ -19,6 +20,7 @@ public:
     // uri is expected to be "qsgo" from qmldir.
     qmlRegisterType<QsGoSysInfo>   (uri, 1, 0, "SysInfoProvider");
     qmlRegisterType<QsGoBacklight> (uri, 1, 0, "BacklightProvider");
+    qmlRegisterType<QsGoHyprlandSnapshot>(uri, 1, 0, "HyprlandSnapshotProvider");
     qmlRegisterType<QsGoAiSession> (uri, 1, 0, "AiChatSession");
     qmlRegisterType<QsGoAiModels>  (uri, 1, 0, "AiModelCatalog");
     qmlRegisterType<QsGoPacman>    (uri, 1, 0, "PacmanUpdatesProvider");

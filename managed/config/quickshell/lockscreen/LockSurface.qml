@@ -1,12 +1,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Widgets
 import Quickshell.Services.UPower
 import Quickshell.Bluetooth
 import Quickshell.Networking
@@ -21,15 +21,17 @@ WlSessionLockSurface {
   property bool startAnim: false
   readonly property string powermenuLauncher: Quickshell.shellPath("../tools/run-quickshell.sh")
   readonly property string currentUser: Quickshell.env("USER") || "user"
-  readonly property string profileImagePath: Quickshell.shellPath("assets/pfp.png")
+  readonly property url profileImageSource: Qt.resolvedUrl("assets/pfp.png")
   readonly property string mondDisplayFontFamily: "Anurati"
   property string wallpaperPath: ""
   property bool powerMenuVisible: false
   property bool advancedPowerOptions: false
+  property real authShakeOffset: 0
   readonly property int surfaceRadius: Common.Config.shape.corner.lg
   readonly property int panelPadding: 20
 
   readonly property var colors: Common.Config.color
+  readonly property var palette: Common.Config.palette
 
   function clearPasswordField() {
     passField.clear();
@@ -567,186 +569,167 @@ WlSessionLockSurface {
           }
         }
       }
+    }
+  }
 
-      MK.Card {
-        id: loginContainer
+  Item {
+    id: authDock
 
-        property real shakeOffset: 0
+    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.bottom: parent.bottom
+    anchors.bottomMargin: 24
+    width: Math.min(parent.width - 160, 560)
+    height: authShell.implicitHeight
+    implicitHeight: height
+    z: 4
 
-        Layout.fillWidth: true
-        type: 1
-        radius: 22
-        backgroundColor: Qt.alpha(root.colors.surface_container_highest, 0.88)
-        borderColor: Qt.alpha(root.colors.outline_variant, 0.82)
-        borderWidth: 1
-        implicitHeight: loginContent.implicitHeight + 40
+    transform: Translate {
+      x: root.authShakeOffset
+    }
 
-        transform: Translate {
-          x: loginContainer.shakeOffset
+    SequentialAnimation {
+      id: shakeAnim
+
+      NumberAnimation { target: root; property: "authShakeOffset"; to: -10; duration: 45 }
+      NumberAnimation { target: root; property: "authShakeOffset"; to: 10; duration: 45 }
+      NumberAnimation { target: root; property: "authShakeOffset"; to: -6; duration: 45 }
+      NumberAnimation { target: root; property: "authShakeOffset"; to: 6; duration: 45 }
+      NumberAnimation { target: root; property: "authShakeOffset"; to: 0; duration: 45 }
+    }
+
+    MK.Card {
+      id: authShell
+
+      anchors.fill: parent
+      type: 1
+      radius: 34
+      backgroundColor: Qt.alpha(root.palette.neutral10, 0.94)
+      borderColor: Qt.alpha(root.context.showFailure ? root.colors.error : root.colors.outline_variant, root.context.showFailure ? 0.55 : 0.18)
+      borderWidth: 1
+      implicitHeight: authRow.implicitHeight + 28
+
+      RowLayout {
+        id: authRow
+
+        anchors.fill: parent
+        anchors.leftMargin: 18
+        anchors.rightMargin: 18
+        anchors.topMargin: 14
+        anchors.bottomMargin: 14
+        spacing: 14
+
+        Rectangle {
+          Layout.preferredWidth: 56
+          Layout.preferredHeight: 56
+          radius: 28
+          color: Qt.alpha(root.colors.primary_container, 0.82)
+          border.width: 1
+          border.color: Qt.alpha(root.colors.outline_variant, 0.48)
+
+          Image {
+            id: profileImage
+
+            anchors.fill: parent
+            source: root.profileImageSource
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            visible: false
+          }
+
+          OpacityMask {
+            anchors.fill: profileImage
+            source: profileImage
+            maskSource: Rectangle {
+              width: profileImage.width
+              height: profileImage.height
+              radius: width / 2
+            }
+          }
         }
 
         Rectangle {
-          anchors.fill: parent
-          radius: loginContainer.radius
-          color: Qt.alpha(root.colors.surface, 0.04)
-        }
-
-        SequentialAnimation {
-          id: shakeAnim
-
-          NumberAnimation { target: loginContainer; property: "shakeOffset"; to: -9; duration: 45 }
-          NumberAnimation { target: loginContainer; property: "shakeOffset"; to: 9; duration: 45 }
-          NumberAnimation { target: loginContainer; property: "shakeOffset"; to: -5; duration: 45 }
-          NumberAnimation { target: loginContainer; property: "shakeOffset"; to: 5; duration: 45 }
-          NumberAnimation { target: loginContainer; property: "shakeOffset"; to: 0; duration: 45 }
-        }
-
-        ColumnLayout {
-          id: loginContent
-
-          anchors.fill: parent
-          anchors.margins: 20
-          spacing: 14
+          Layout.fillWidth: true
+          implicitHeight: 50
+          radius: 25
+          color: Qt.alpha(root.palette.neutral20, 0.9)
+          border.width: 1
+          border.color: Qt.alpha(root.context.showFailure ? root.colors.error : root.colors.outline_variant, root.context.showFailure ? 0.8 : 0.22)
 
           RowLayout {
-            Layout.fillWidth: true
-            spacing: 14
-
-            ClippingWrapperRectangle {
-              Layout.preferredWidth: 48
-              Layout.preferredHeight: 48
-              radius: 24
-              color: Qt.alpha(root.colors.primary_container, 0.78)
-              border.width: 1
-              border.color: Qt.alpha(root.colors.outline_variant, 0.75)
-
-              Image {
-                source: "file://" + root.profileImagePath
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                cache: false
-                width: 48
-                height: 48
-              }
-            }
-
-            ColumnLayout {
-              Layout.fillWidth: true
-              spacing: 3
-
-              Text {
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-                text: root.currentUser.toUpperCase()
-                color: root.colors.on_surface
-                font.family: root.mondDisplayFontFamily
-                font.pixelSize: Common.Config.type.titleMedium.size
-                font.letterSpacing: 2.2
-                font.weight: Font.DemiBold
-              }
-
-              Text {
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-                text: root.context.unlockInProgress ? "Checking credentials" : (root.screen ? root.screen.name : "Session")
-                color: root.colors.on_surface_variant
-                font.family: Common.Config.fontFamily
-                font.pixelSize: Common.Config.type.bodyMedium.size
-              }
-            }
-
-            LockButton {
-              text: root.context.showPassword ? "Hide" : "Show"
-              enabled: !root.context.unlockInProgress
-              onClicked: root.context.showPassword = !root.context.showPassword
-            }
-
-          }
-
-          RowLayout {
-            id: inputRow
-
-            Layout.fillWidth: true
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
             spacing: 10
 
-            Rectangle {
+            Text {
+              text: "\uf2bd"
+              color: Qt.alpha(root.colors.on_surface_variant, 0.82)
+              font.family: Common.Config.iconFontFamily
+              font.pixelSize: 18
+            }
+
+            MK.TextField {
+              id: passField
+
               Layout.fillWidth: true
-              implicitHeight: 44
-              radius: 12
-              color: Qt.alpha(root.colors.surface_container_low, 0.92)
-              border.width: 1
-              border.color: Qt.alpha(root.context.showFailure ? root.colors.error : root.colors.outline_variant, root.context.showFailure ? 0.85 : 0.68)
+              placeholderText: root.context.unlockInProgress ? "Checking " + root.currentUser.toLowerCase() : (root.context.showFailure ? "Incorrect password" : root.currentUser.toLowerCase())
+              echoMode: root.context.showPassword ? TextInput.Normal : TextInput.Password
+              enabled: !root.context.unlockInProgress
+              selectByMouse: false
+              font.family: Common.Config.fontFamily
+              font.pixelSize: Common.Config.type.bodyLarge.size
+              color: root.colors.on_surface
+              placeholderTextColor: Qt.alpha(root.colors.on_surface_variant, 0.82)
+              inputMethodHints: Qt.ImhSensitiveData
 
-              RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 9
-                anchors.rightMargin: 9
-                spacing: 6
+              background: Item {}
 
-                Rectangle {
-                  Layout.preferredWidth: 28
-                  Layout.preferredHeight: 28
-                  radius: 9
-                  color: Qt.alpha(root.colors.secondary_container, 0.9)
-
-                  Text {
-                    anchors.centerIn: parent
-                    text: "\uf023"
-                    color: root.colors.on_secondary_container
-                    font.family: Common.Config.iconFontFamily
-                    font.pixelSize: 14
-                  }
-                }
-
-                MK.TextField {
-                  id: passField
-
-                  Layout.fillWidth: true
-                  placeholderText: root.context.unlockInProgress ? "Authenticating..." : (root.context.showFailure ? "Incorrect password" : "Password")
-                  echoMode: root.context.showPassword ? TextInput.Normal : TextInput.Password
-                  enabled: !root.context.unlockInProgress
-                  selectByMouse: false
-                  font.family: Common.Config.fontFamily
-                  font.pixelSize: Common.Config.type.bodyLarge.size
-                  color: root.colors.on_surface
-                  placeholderTextColor: root.colors.on_surface_variant
-                  inputMethodHints: Qt.ImhSensitiveData
-
-                  background: Item {}
-
-                  onTextChanged: {
-                    root.context.currentText = text;
-                    if (text.length > 0)
-                      root.context.clearError();
-                  }
-                  onAccepted: root.context.tryUnlock()
-
-                  Component.onCompleted: forceActiveFocus()
-                }
+              onTextChanged: {
+                root.context.currentText = text;
+                if (text.length > 0)
+                  root.context.clearError();
               }
+              onAccepted: root.context.tryUnlock()
+
+              Component.onCompleted: forceActiveFocus()
             }
 
             LockButton {
-              Layout.preferredHeight: 44
-              text: root.context.unlockInProgress ? "..." : "Unlock"
-              filled: true
-              buttonEnabled: !root.context.unlockInProgress && root.context.currentText.length > 0
-              onClicked: root.context.tryUnlock()
+              Layout.preferredWidth: 34
+              Layout.preferredHeight: 34
+              text: root.context.showPassword ? "\uf06e" : "\uf070"
+              iconOnly: true
+              buttonEnabled: !root.context.unlockInProgress
+              onClicked: root.context.showPassword = !root.context.showPassword
             }
           }
+        }
 
-          Text {
-            Layout.fillWidth: true
-            color: root.colors.error
-            font.family: Common.Config.fontFamily
-            font.pixelSize: Common.Config.type.bodySmall.size
-            text: root.context.lastMessage.length > 0 ? root.context.lastMessage : "Authentication failed"
-            visible: root.context.showFailure
-            wrapMode: Text.WordWrap
-          }
+        LockButton {
+          Layout.preferredWidth: 50
+          Layout.preferredHeight: 50
+          text: root.context.unlockInProgress ? "..." : "\uf061"
+          iconOnly: !root.context.unlockInProgress
+          filled: true
+          buttonEnabled: !root.context.unlockInProgress && root.context.currentText.length > 0
+          onClicked: root.context.tryUnlock()
         }
       }
+    }
 
+    Text {
+      anchors.top: authShell.bottom
+      anchors.topMargin: 8
+      anchors.horizontalCenter: authShell.horizontalCenter
+      width: Math.min(authShell.width - 32, 420)
+      color: root.colors.error
+      font.family: Common.Config.fontFamily
+      font.pixelSize: Common.Config.type.bodySmall.size
+      text: root.context.lastMessage.length > 0 ? root.context.lastMessage : "Authentication failed"
+      visible: root.context.showFailure
+      wrapMode: Text.WordWrap
+      horizontalAlignment: Text.AlignHCenter
     }
   }
 

@@ -16,7 +16,6 @@ Item {
     // Do not pass a shell string here; it will be ignored for safety.
     property var browserLink: ""
     property Component contentComponent: null
-    property bool enabled: true
     property bool hoverable: false
     property int maximumHeight: 0
     property bool open: false

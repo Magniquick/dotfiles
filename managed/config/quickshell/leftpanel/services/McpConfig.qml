@@ -13,8 +13,6 @@ Item {
         path: root.configUrl
         blockLoading: true
         blockWrites: true
-        watchChanges: true
-        onFileChanged: reload()
     }
 
     function parseServers(text) {

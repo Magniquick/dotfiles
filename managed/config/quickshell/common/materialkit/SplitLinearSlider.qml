@@ -16,7 +16,6 @@ Item {
   readonly property real totalGap: gapOnEachSide * 2 + dividerWidth
   property real endDotSize: 5
   property real innerCornerRadius: Math.max(1, Math.min(cornerRadius, thickness * 0.25))
-  property bool enabled: true
   property bool dragging: mouseArea.pressed
   property bool hovered: mouseArea.containsMouse
   property real hoverRatio: 0.0

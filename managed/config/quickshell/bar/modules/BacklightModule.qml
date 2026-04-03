@@ -26,7 +26,6 @@ import QtQuick.Layouts
 import Quickshell
 import ".."
 import "../components"
-import "../components/displayconfig" as DisplayConfig
 
 ModuleContainer {
     id: root
@@ -46,8 +45,6 @@ ModuleContainer {
     readonly property string iconText: root.iconForBrightness()
     property var icons: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "󰃚"]
     readonly property int sliderValue: root.brightnessPercent >= 0 ? root.brightnessPercent : 0
-    readonly property bool isHyprlandSession: (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "") !== ""
-    property bool displayConfigOpen: false
     function iconForBrightness() {
         const percent = root.brightnessPercent;
         if (percent < 0)
@@ -130,23 +127,7 @@ ModuleContainer {
                     visible: root.method === "ddc" && root.ddcBusNum !== ""
                 }
             }
-            TooltipActionsRow {
-                spacing: Config.space.sm
-                visible: root.isHyprlandSession
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "Display Config"
-                    onClicked: root.displayConfigOpen = true
-                }
-            }
         }
-    }
-
-    DisplayConfig.DisplayConfigWindow {
-        open: root.displayConfigOpen
-        targetItem: root
-        onOpenChanged: root.displayConfigOpen = open
     }
 
     MouseArea {

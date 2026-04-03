@@ -9,7 +9,6 @@ Item {
     id: root
 
     property var command: [] // Command to run (string or array of strings)
-    property bool enabled: true // Whether the process should be running
     property string processName: (Array.isArray(command) ? command[0] : command) || "Process"
 
     property int restartAttempts: 0

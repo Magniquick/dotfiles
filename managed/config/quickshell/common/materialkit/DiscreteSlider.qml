@@ -10,7 +10,6 @@ Item {
   property real maximum: 1
   property int steps: 2
   property real value: 0
-  property bool enabled: true
   property bool dragging: mouseArea.pressed
   property bool hovered: mouseArea.containsMouse
   property color trackColor: Common.Config.color.surface_container_highest

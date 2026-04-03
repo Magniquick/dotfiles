@@ -25,6 +25,7 @@ ShellRoot {
     }
 
     Component.onCompleted: {
+        Quickshell.watchFiles = false;
         Hyprland.refreshMonitors();
         Hyprland.refreshWorkspaces();
         Hyprland.refreshToplevels();

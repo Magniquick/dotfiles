@@ -20,6 +20,7 @@ QtObject {
     property bool rightPanelVisible: false
     property bool overviewVisible: false
     property bool idleSleepInhibited: false
+    property int idleMonitorSleepTimeoutSec: 300
     // -2 = off, -1 = indefinite, positive = timed minutes preset.
     property int idleSleepInhibitModeMinutes: -2
     // Unix epoch in milliseconds; 0 means no timed expiry.

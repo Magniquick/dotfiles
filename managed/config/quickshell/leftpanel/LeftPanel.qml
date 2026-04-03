@@ -298,8 +298,6 @@ Item {
     }
 
     Component.onCompleted: {
-        // Avoid forcing a network refresh on startup; open the model picker to refresh when needed.
         root.rebuildAvailableModels();
-        chatSession.refreshMcp();
     }
 }

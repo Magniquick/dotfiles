@@ -10,6 +10,8 @@ extern "C" {
 typedef void (*QsGo_TokenFn)   (void* ctx, const char* token, int done);
 /* backlight change callback */
 typedef void (*QsGo_BrightFn)  (void* ctx, int percent, const char* device);
+/* hyprland change callback */
+typedef void (*QsGo_HyprlandFn)(void* ctx);
 
 /* ---------- SysInfo ---------- */
 
@@ -24,6 +26,12 @@ char* QsGo_Backlight_Set(int percent);
 /* Returns session id. Calls cb from a background goroutine on change. */
 int   QsGo_Backlight_Monitor(QsGo_BrightFn cb, void* ctx);
 void  QsGo_Backlight_StopMonitor(int id);
+
+/* ---------- Hyprland ---------- */
+
+char* QsGo_Hyprland_Refresh(void);
+int   QsGo_Hyprland_Monitor(QsGo_HyprlandFn cb, void* ctx);
+void  QsGo_Hyprland_StopMonitor(int id);
 
 /* ---------- Pacman ---------- */
 

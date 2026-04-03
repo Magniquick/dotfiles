@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Io
 import qscapture 1.0
+import qsgo
 
 import "src" as Src
 import "src/ScreenshotUtils.js" as ScreenshotUtils
@@ -53,12 +54,19 @@ Src.FreezeScreen {
     property bool pactlAvailable: false
     property string frozenWindowCacheState: "idle"
     property var frozenWindowTargets: []
+    property bool frozenWindowSnapshotPending: false
     property string initialGrabRequestId: ""
     property string frozenWindowCacheRequestId: ""
     property string screenshotRequestId: ""
+    property var debugCaptureRequests: ({})
+    property var debugEventHistory: []
     property var windowSelectorItem: windowSelectorLoader.item
-    readonly property var workspaceToplevels: hyprlandMonitor && hyprlandMonitor.activeWorkspace && hyprlandMonitor.activeWorkspace.toplevels ? hyprlandMonitor.activeWorkspace.toplevels.values : []
-    readonly property var liveWindowTargets: root.buildWindowTargets(workspaceToplevels, hyprlandMonitor, false)
+    readonly property var allHyprlandToplevels: Hyprland.toplevels && Hyprland.toplevels.values ? Hyprland.toplevels.values : []
+    readonly property var workspaceToplevels: root.filterWorkspaceToplevels(root.allHyprlandToplevels, root.hyprlandMonitor)
+    readonly property var liveWindowTargets: root.buildWindowTargetsFromSnapshot({
+        activeWorkspace: hyprlandSnapshot.activeWorkspace,
+        clients: hyprlandSnapshot.clients
+    })
     readonly property var currentWindowTargets: root.screenFrozen ? root.frozenWindowTargets : root.liveWindowTargets
     readonly property bool windowModeLoading: root.screenFrozen && (root.initialFrozenGrabPending || root.frozenWindowCacheState === "capturing")
     readonly property bool windowModeAvailable: root.currentWindowTargets.length > 0
@@ -92,6 +100,96 @@ Src.FreezeScreen {
             return list;
         }
         return [];
+    }
+    function filterWorkspaceToplevels(toplevels, monitor) {
+        const source = root.asList(toplevels);
+        const activeWorkspace = monitor && monitor.activeWorkspace ? monitor.activeWorkspace : null;
+        const activeWorkspaceName = activeWorkspace ? String(activeWorkspace.name || "") : "";
+        const activeWorkspaceId = activeWorkspace && activeWorkspace.id !== undefined ? Number(activeWorkspace.id) : NaN;
+        const monitorName = monitor ? String(monitor.name || "") : "";
+        const filtered = [];
+
+        for (const toplevel of source) {
+            const workspace = toplevel && toplevel.workspace ? toplevel.workspace : null;
+            const workspaceMonitor = workspace && workspace.monitor ? workspace.monitor : null;
+            const workspaceName = workspace ? String(workspace.name || "") : "";
+            const workspaceId = workspace && workspace.id !== undefined ? Number(workspace.id) : NaN;
+            const screens = toplevel && toplevel.screens ? root.asList(toplevel.screens) : [];
+            const screenMatches = screens.length === 0
+                ? true
+                : screens.some(screen => screen && String(screen.name || "") === monitorName);
+            const ipcObject = toplevel && toplevel.lastIpcObject ? toplevel.lastIpcObject : null;
+            const toplevelMonitor = ipcObject && ipcObject.monitor !== undefined ? Number(ipcObject.monitor) : null;
+            const monitorMatches = !monitorName
+                ? true
+                : ((workspaceMonitor && String(workspaceMonitor.name || "") === monitorName)
+                    || screenMatches
+                    || (!workspaceMonitor && monitor && monitor.lastIpcObject && toplevelMonitor === Number(monitor.lastIpcObject.id)));
+            const workspaceMatches = activeWorkspaceName !== ""
+                ? workspaceName === activeWorkspaceName
+                : (!isNaN(activeWorkspaceId) && workspaceId === activeWorkspaceId);
+
+            if (monitorMatches && workspaceMatches)
+                filtered.push(toplevel);
+        }
+
+        return filtered;
+    }
+    function buildWindowTargetsFromSnapshot(snapshot, frozen) {
+        const nextTargets = [];
+        const activeWorkspace = snapshot && snapshot.activeWorkspace ? snapshot.activeWorkspace : null;
+        const clients = snapshot ? root.asList(snapshot.clients) : [];
+        const monitorObject = root.hyprlandMonitor && root.hyprlandMonitor.lastIpcObject ? root.hyprlandMonitor.lastIpcObject : null;
+        const activeScreen = root.activeScreen || null;
+        const activeWorkspaceId = activeWorkspace && activeWorkspace.id !== undefined ? Number(activeWorkspace.id) : NaN;
+        const activeWorkspaceName = activeWorkspace ? String(activeWorkspace.name || "") : "";
+        const activeMonitorId = activeWorkspace && activeWorkspace.monitorID !== undefined
+            ? Number(activeWorkspace.monitorID)
+            : NaN;
+        const monitorOffsetX = monitorObject && monitorObject.x !== undefined ? Number(monitorObject.x) : Number(activeScreen ? activeScreen.x || 0 : 0);
+        const monitorOffsetY = monitorObject && monitorObject.y !== undefined ? Number(monitorObject.y) : Number(activeScreen ? activeScreen.y || 0 : 0);
+
+        if (isNaN(activeWorkspaceId) && activeWorkspaceName === "")
+            return nextTargets;
+
+        for (const client of clients) {
+            if (!client || !client.mapped || client.hidden)
+                continue;
+
+            const workspace = client.workspace || null;
+            const workspaceId = workspace && workspace.id !== undefined ? Number(workspace.id) : NaN;
+            const workspaceName = workspace ? String(workspace.name || "") : "";
+            const clientMonitorId = client.monitor !== undefined ? Number(client.monitor) : NaN;
+            const monitorMatches = isNaN(activeMonitorId) || clientMonitorId === activeMonitorId;
+            const workspaceMatches = activeWorkspaceName !== ""
+                ? workspaceName === activeWorkspaceName
+                : (!isNaN(activeWorkspaceId) && workspaceId === activeWorkspaceId);
+            const stableId = client.stableId !== undefined && client.stableId !== null ? String(client.stableId) : "";
+            const at = root.asList(client.at);
+            const size = root.asList(client.size);
+
+            if (!monitorMatches || !workspaceMatches || stableId === "" || at.length < 2 || size.length < 2)
+                continue;
+
+            nextTargets.push({
+                stableId: stableId,
+                x: Number(at[0]) - monitorOffsetX,
+                y: Number(at[1]) - monitorOffsetY,
+                width: Number(size[0]),
+                height: Number(size[1]),
+                title: String(client.title || ""),
+                className: String(client.class || ""),
+                captureState: frozen ? "pending" : "ready",
+                imagePath: frozen ? Quickshell.cachePath(`hyprquickshot-window-${Date.now()}-${Math.round(Math.random() * 100000)}-${stableId}.png`) : ""
+            });
+        }
+
+        return nextTargets;
+    }
+    function refreshLiveWindowTargets() {
+        if (!root.active || !root.sessionVisible || root.mode !== "window" || root.screenFrozen)
+            return;
+        hyprlandSnapshot.refresh();
     }
     function buildWindowTarget(toplevel, monitor, frozen) {
         const monitorObject = monitor && monitor.lastIpcObject ? monitor.lastIpcObject : null;
@@ -136,6 +234,132 @@ Src.FreezeScreen {
             "stableIds=", JSON.stringify(targets.map(target => target.stableId)));
         return targets;
     }
+    function findCurrentWindowTarget(stableId) {
+        const targetId = String(stableId || "");
+        const targets = Array.isArray(root.currentWindowTargets) ? root.currentWindowTargets : [];
+        for (const target of targets) {
+            if (target && String(target.stableId || "") === targetId)
+                return target;
+        }
+        return null;
+    }
+    function updateDebugCapture(requestId, values) {
+        const next = Object.assign({}, root.debugCaptureRequests);
+        const current = Object.assign({}, next[requestId] || {});
+        next[requestId] = Object.assign(current, values || {});
+        root.debugCaptureRequests = next;
+    }
+    function appendDebugEvent(eventName, payload) {
+        const next = Array.isArray(root.debugEventHistory) ? root.debugEventHistory.slice(0) : [];
+        next.push({
+            event: String(eventName || ""),
+            payload: payload || {},
+            timestamp: Date.now()
+        });
+        while (next.length > 60)
+            next.shift();
+        root.debugEventHistory = next;
+    }
+    function debugCaptureStatusJson() {
+        return JSON.stringify(root.debugCaptureRequests);
+    }
+    function debugStateJson() {
+        return JSON.stringify({
+            active: root.active,
+            activeScreen: root.activeScreen ? {
+                name: root.activeScreen.name || "",
+                width: Number(root.activeScreen.width || 0),
+                height: Number(root.activeScreen.height || 0),
+                x: Number(root.activeScreen.x || 0),
+                y: Number(root.activeScreen.y || 0)
+            } : null,
+            currentWindowTargets: root.currentWindowTargets,
+            hyprlandMonitor: root.hyprlandMonitor ? {
+                name: root.hyprlandMonitor.name || "",
+                width: Number(root.hyprlandMonitor.width || 0),
+                height: Number(root.hyprlandMonitor.height || 0),
+                x: Number(root.hyprlandMonitor.x || 0),
+                y: Number(root.hyprlandMonitor.y || 0)
+            } : null,
+            mode: root.mode,
+            snapshotClients: hyprlandSnapshot.clients,
+            snapshotError: hyprlandSnapshot.error,
+            snapshotRevision: Number(hyprlandSnapshot.revision || 0),
+            frozenWindowSnapshotPending: root.frozenWindowSnapshotPending,
+            frozenWindowCacheState: root.frozenWindowCacheState,
+            frozenWindowTargets: root.frozenWindowTargets,
+            pendingFreezeFilePath: root.runtimeDir ? `${root.runtimeDir}/hyprquickshot_frozen_${root.targetScreen ? root.targetScreen.name || "" : ""}.png` : "",
+            recordingState: root.recordingState,
+            screenFrozen: root.screenFrozen,
+            sessionVisible: root.sessionVisible,
+            workspaceToplevels: root.buildWindowTargets(root.workspaceToplevels, root.hyprlandMonitor, false),
+            windowModeAvailable: root.windowModeAvailable,
+            windowModeLoading: root.windowModeLoading,
+            debugEventHistory: root.debugEventHistory
+        });
+    }
+    function debugSetMode(modeValue) {
+        const nextMode = String(modeValue || "");
+        if (nextMode !== "region" && nextMode !== "window" && nextMode !== "screen")
+            return false;
+        root.setMode(nextMode);
+        return true;
+    }
+    function debugRefreshWindows() {
+        hyprlandSnapshot.refresh();
+        Qt.callLater(root.syncSelectorPreview);
+        return root.debugStateJson();
+    }
+    function debugSnapshotStateJson() {
+        return JSON.stringify({
+            active: root.active,
+            error: String(hyprlandSnapshot.error || ""),
+            running: !!hyprlandSnapshot.running,
+            revision: Number(hyprlandSnapshot.revision || 0),
+            frozenWindowSnapshotPending: root.frozenWindowSnapshotPending,
+            frozenWindowCacheState: root.frozenWindowCacheState,
+            frozenWindowTargetCount: Array.isArray(root.frozenWindowTargets) ? root.frozenWindowTargets.length : 0,
+            sessionVisible: root.sessionVisible,
+            mode: root.mode,
+            screenFrozen: root.screenFrozen,
+            activeWorkspace: hyprlandSnapshot.activeWorkspace || {},
+            clients: root.asList(hyprlandSnapshot.clients)
+        });
+    }
+    function debugStartSnapshotProbe() {
+        hyprlandSnapshot.start();
+    }
+    function debugRefreshSnapshot() {
+        hyprlandSnapshot.refresh();
+    }
+    function debugStopSnapshotProbe() {
+        if (!root.active)
+            hyprlandSnapshot.stop();
+    }
+    function debugCaptureWindow(stableId) {
+        const targetId = String(stableId || "");
+        if (targetId === "")
+            return "";
+        const target = root.findCurrentWindowTarget(targetId);
+        const outputPath = Quickshell.cachePath(`hyprquickshot-debug-window-${targetId}-${Date.now()}.png`);
+        const requestId = root.createRequestId("debug-window-capture");
+        root.updateDebugCapture(requestId, {
+            outputPath: outputPath,
+            stableId: targetId,
+            startedAt: Date.now(),
+            status: "pending",
+            target: target ? {
+                x: Number(target.x || 0),
+                y: Number(target.y || 0),
+                width: Number(target.width || 0),
+                height: Number(target.height || 0),
+                title: String(target.title || ""),
+                className: String(target.className || "")
+            } : null
+        });
+        captureProvider.captureToplevel(requestId, targetId, outputPath, false);
+        return requestId;
+    }
     function cleanupFrozenWindowCache() {
         console.log("[window-targets] cleanup frozen cache",
             "requestId=", root.frozenWindowCacheRequestId,
@@ -161,12 +385,15 @@ Src.FreezeScreen {
         root.frozenWindowTargets = [];
         root.frozenWindowCacheState = "idle";
     }
-    function startFrozenWindowCacheCapture() {
-        if (!root.active || !root.screenFrozen || root.frozenFrame === "")
-            return;
-
+    function launchFrozenWindowCacheBatch(targets) {
+        root.appendDebugEvent("launchFrozenWindowCacheBatch", {
+            targetCount: Array.isArray(targets) ? targets.length : 0,
+            stableIds: Array.isArray(targets) ? targets.map(target => String(target.stableId || "")) : [],
+            snapshotRevision: Number(hyprlandSnapshot.revision || 0),
+            snapshotClientCount: root.asList(hyprlandSnapshot.clients).length
+        });
         root.cleanupFrozenWindowCache();
-        root.frozenWindowTargets = root.buildWindowTargets(root.workspaceToplevels, root.hyprlandMonitor, true);
+        root.frozenWindowTargets = Array.isArray(targets) ? targets : [];
         root.frozenWindowCacheState = root.frozenWindowTargets.length > 0 ? "capturing" : "ready";
         console.log("[window-targets] frozen cache start",
             "state=", root.frozenWindowCacheState,
@@ -182,6 +409,42 @@ Src.FreezeScreen {
         root.frozenWindowCacheRequestId = root.createRequestId("frozen-window-cache");
         console.log("[window-targets] launching frozen cache capture", "requestId=", root.frozenWindowCacheRequestId);
         captureProvider.captureToplevelBatch(root.frozenWindowCacheRequestId, requests, false);
+    }
+    function startFrozenWindowCacheCapture() {
+        if (!root.active || !root.screenFrozen || root.frozenFrame === "") {
+            root.appendDebugEvent("startFrozenWindowCacheCapture:skipped", {
+                active: root.active,
+                screenFrozen: root.screenFrozen,
+                frozenFrame: String(root.frozenFrame || "")
+            });
+            return;
+        }
+        root.frozenWindowCacheState = "capturing";
+        const targets = root.buildWindowTargetsFromSnapshot({
+            activeWorkspace: hyprlandSnapshot.activeWorkspace,
+            clients: hyprlandSnapshot.clients
+        }, true);
+        root.appendDebugEvent("startFrozenWindowCacheCapture:evaluated", {
+            targetCount: targets.length,
+            stableIds: targets.map(target => String(target.stableId || "")),
+            snapshotRevision: Number(hyprlandSnapshot.revision || 0),
+            snapshotClientCount: root.asList(hyprlandSnapshot.clients).length,
+            snapshotError: String(hyprlandSnapshot.error || ""),
+            frozenFrame: String(root.frozenFrame || "")
+        });
+        if (targets.length === 0 && hyprlandSnapshot.error === "") {
+            root.frozenWindowSnapshotPending = true;
+            root.appendDebugEvent("startFrozenWindowCacheCapture:pendingRefresh", {
+                snapshotRevision: Number(hyprlandSnapshot.revision || 0),
+                snapshotClientCount: root.asList(hyprlandSnapshot.clients).length
+            });
+            hyprlandSnapshot.refresh();
+            frozenWindowSnapshotRetry.restart();
+            return;
+        }
+        root.frozenWindowSnapshotPending = false;
+        frozenWindowSnapshotRetry.stop();
+        root.launchFrozenWindowCacheBatch(targets);
     }
     function syncSelectorPreview() {
         if (!sessionVisible || initialFrozenGrabPending)
@@ -285,8 +548,8 @@ Src.FreezeScreen {
             return;
         const summary = root.saveToDisk ? "Screenshot saved" : "Screenshot copied";
         const body = root.saveToDisk ? lastScreenshotPath : "Copied to clipboard";
-        const scriptPath = (Quickshell.shellDir || "") + "/scripts/notify-screenshot.sh";
-        if (Quickshell.shellDir && Quickshell.shellDir !== "") {
+        const scriptPath = Quickshell.shellPath("hyprquickshot/scripts/notify-screenshot.sh");
+        if (scriptPath && scriptPath !== "") {
             Quickshell.execDetached([scriptPath, summary, body, lastScreenshotPath]);
         } else {
             Quickshell.execDetached(["notify-send", "-a", "HyprShot", summary, body]);
@@ -369,17 +632,36 @@ Src.FreezeScreen {
         }
         root._recordAudioModeFallback = next;
     }
+    function isPreRecordState() {
+        return recordingState === "selecting" || recordingState === "countdown";
+    }
+    function cancelRecordFlowToScreenshot() {
+        if (!root.isPreRecordState())
+            return;
+        root.stopRecordFlow();
+        if (root.mode === "screen")
+            root.awaitingScreenConfirm = true;
+        if (root.active && root.sessionVisible)
+            Qt.callLater(root.syncSelectorPreview);
+    }
     function setMode(newMode) {
-        if (mode === newMode)
+        if (recordingState === "recording")
+            return;
+
+        const cancellingPreRecord = root.isPreRecordState();
+        if (cancellingPreRecord)
+            root.stopRecordFlow();
+
+        if (mode === newMode && !cancellingPreRecord)
             return;
         mode = newMode;
         if (newMode === "window") {
             Hyprland.refreshMonitors();
             Hyprland.refreshWorkspaces();
             Hyprland.refreshToplevels();
+            root.refreshLiveWindowTargets();
         }
-        if (recordingState === "selecting" || recordingState === "idle")
-            awaitingScreenConfirm = newMode === "screen";
+        awaitingScreenConfirm = newMode === "screen";
         Qt.callLater(root.syncSelectorPreview);
     }
     function toggleMode() {
@@ -401,6 +683,7 @@ Src.FreezeScreen {
         activeScreen = null;
         sessionVisible = false;
         screenshotFailureKeepsSession = false;
+        frozenWindowSnapshotPending = false;
         initialGrabRequestId = "";
         screenshotRequestId = "";
         frozenWindowCacheRequestId = "";
@@ -434,6 +717,7 @@ Src.FreezeScreen {
             return;
         SharedCommon.GlobalState.hyprQuickshotScreen = selectedScreen;
         root.activeScreen = selectedScreen;
+        root.abortPendingInternalCapture("hyprquickshot-selectFocusedMonitorAndGrab");
         const timestamp = Date.now();
         const path = Quickshell.cachePath(`screenshot-${timestamp}.png`);
         root.tempPath = path;
@@ -493,6 +777,14 @@ Src.FreezeScreen {
         recordingState = "idle";
         recordingSelection = null;
         awaitingScreenConfirm = false;
+    }
+    function toggleRecordFlow() {
+        if (root.recordingState === "idle") {
+            root.startRecordFlow();
+            return;
+        }
+        if (root.isPreRecordState())
+            root.cancelRecordFlowToScreenshot();
     }
     function stopActiveRecording() {
         countdownTimer.stop();
@@ -564,15 +856,24 @@ Src.FreezeScreen {
         SharedCommon.GlobalState.hyprQuickshotVisible = false;
         SharedCommon.GlobalState.resetScreenRecordingState();
     }
-    onActiveChanged: root.syncGlobalState()
+    onActiveChanged: {
+        if (root.active)
+            hyprlandSnapshot.start();
+        else
+            hyprlandSnapshot.stop();
+        root.syncGlobalState();
+        root.appendDebugEvent("activeChanged", { active: root.active });
+    }
     onCurrentRecordingAudioDeviceChanged: root.syncGlobalState()
     onCurrentRecordingPathChanged: root.syncGlobalState()
     onRecordAudioModeChanged: root.syncGlobalState()
     onRecordingStateChanged: {
         syncRecordFlag();
         root.syncGlobalState();
+        root.appendDebugEvent("recordingStateChanged", { recordingState: root.recordingState });
     }
     onFrozenFrameChanged: {
+        root.appendDebugEvent("frozenFrameChanged", { frozenFrame: String(root.frozenFrame || "") });
         if (root.screenFrozen && root.frozenFrame !== "")
             root.startFrozenWindowCacheCapture();
         else if (!root.screenFrozen)
@@ -585,12 +886,24 @@ Src.FreezeScreen {
             "screenFrozen=", root.screenFrozen,
             "loading=", root.windowModeLoading,
             "count=", root.currentWindowTargets.length);
+        root.appendDebugEvent("currentWindowTargetsChanged", {
+            count: root.currentWindowTargets.length,
+            mode: root.mode,
+            screenFrozen: root.screenFrozen,
+            windowModeLoading: root.windowModeLoading
+        });
+        if (root.mode === "window" && root.sessionVisible && !root.windowModeLoading)
+            Qt.callLater(root.syncSelectorPreview);
         if (!root.windowModeLoading && !root.windowModeAvailable)
             root.resetSelectionState();
     }
     onSessionVisibleChanged: {
-        if (sessionVisible)
+        root.appendDebugEvent("sessionVisibleChanged", { sessionVisible: root.sessionVisible });
+        if (sessionVisible) {
+            if (root.mode === "window" && !root.screenFrozen)
+                root.refreshLiveWindowTargets();
             Qt.callLater(root.syncSelectorPreview);
+        }
     }
 
     Loader {
@@ -602,15 +915,34 @@ Src.FreezeScreen {
             category: "Hyprquickshot"
         }
     }
+    HyprlandSnapshotProvider {
+        id: hyprlandSnapshot
+    }
     CaptureProvider {
         id: captureProvider
     }
+    onModeChanged: root.appendDebugEvent("modeChanged", { mode: root.mode })
+    onScreenFrozenChanged: {
+        root.appendDebugEvent("screenFrozenChanged", { screenFrozen: root.screenFrozen });
+        if (!root.screenFrozen) {
+            root.frozenWindowSnapshotPending = false;
+            if (root.mode === "window")
+                root.refreshLiveWindowTargets();
+            root.resetSelectionState();
+            Qt.callLater(root.syncSelectorPreview);
+        }
+    }
+    onInitialGrabRequestIdChanged: root.appendDebugEvent("initialGrabRequestIdChanged", { requestId: root.initialGrabRequestId })
+    onScreenshotRequestIdChanged: root.appendDebugEvent("screenshotRequestIdChanged", { requestId: root.screenshotRequestId })
+    onFrozenWindowCacheRequestIdChanged: root.appendDebugEvent("frozenWindowCacheRequestIdChanged", { requestId: root.frozenWindowCacheRequestId })
+    onInitialFrozenGrabPendingChanged: root.appendDebugEvent("initialFrozenGrabPendingChanged", { initialFrozenGrabPending: root.initialFrozenGrabPending })
     Connections {
         target: captureProvider
         function onRequestFinished(requestId, filePath) {
             if (requestId === root.initialGrabRequestId) {
                 if (!root.active)
                     return;
+                root.abortPendingInternalCapture("hyprquickshot-initial-grab-finished");
                 root.initialGrabRequestId = "";
                 root.sessionVisible = true;
                 root.resetSelectionState();
@@ -634,11 +966,21 @@ Src.FreezeScreen {
                 root.screenshotFailureKeepsSession = false;
                 root.deactivate();
             }
+
+            if (String(requestId).startsWith("debug-window-capture")) {
+                root.updateDebugCapture(requestId, {
+                    completedAt: Date.now(),
+                    filePath: filePath,
+                    status: "finished"
+                });
+                return;
+            }
         }
         function onRequestFailed(requestId, error) {
             if (requestId === root.initialGrabRequestId) {
                 if (!root.active)
                     return;
+                root.abortPendingInternalCapture("hyprquickshot-initial-grab-failed");
                 root.initialGrabRequestId = "";
                 Quickshell.execDetached(["notify-send", "-a", "HyprShot", "Failed to capture screen", error]);
                 root.deactivate();
@@ -668,6 +1010,14 @@ Src.FreezeScreen {
                 } else {
                     root.deactivate();
                 }
+            }
+
+            if (String(requestId).startsWith("debug-window-capture")) {
+                root.updateDebugCapture(requestId, {
+                    completedAt: Date.now(),
+                    error: String(error || ""),
+                    status: "failed"
+                });
             }
         }
         function onBatchFinished(requestId) {
@@ -721,6 +1071,70 @@ Src.FreezeScreen {
         }
         function stop(): void {
             root.stopActiveRecording();
+        }
+    }
+    IpcHandler {
+        target: "hyprquickshot-debug"
+        function state(): string {
+            return root.debugStateJson();
+        }
+        function snapshotState(): string {
+            return root.debugSnapshotStateJson();
+        }
+        function startSnapshotProbe(): void {
+            root.debugStartSnapshotProbe();
+        }
+        function refreshSnapshot(): void {
+            root.debugRefreshSnapshot();
+        }
+        function stopSnapshotProbe(): void {
+            root.debugStopSnapshotProbe();
+        }
+        function refreshWindows(): string {
+            return root.debugRefreshWindows();
+        }
+        function setMode(modeValue: string): bool {
+            return root.debugSetMode(modeValue);
+        }
+        function captureWindow(stableId: string): string {
+            return root.debugCaptureWindow(stableId);
+        }
+        function captureStatus(): string {
+            return root.debugCaptureStatusJson();
+        }
+        function debugHistory(): string {
+            return JSON.stringify(root.debugEventHistory);
+        }
+    }
+    Connections {
+        target: root
+        function onDebugEvent(eventName, payload) {
+            root.appendDebugEvent(`freeze:${eventName}`, payload);
+        }
+    }
+    Timer {
+        id: frozenWindowSnapshotRetry
+        interval: 120
+        repeat: false
+        running: false
+        onTriggered: {
+            if (!root.frozenWindowSnapshotPending)
+                return;
+            if (!root.active || !root.screenFrozen || root.frozenFrame === "" || root.initialFrozenGrabPending) {
+                root.appendDebugEvent("frozenWindowSnapshotRetry:cancelled", {
+                    active: root.active,
+                    screenFrozen: root.screenFrozen,
+                    frozenFrame: String(root.frozenFrame || ""),
+                    initialFrozenGrabPending: root.initialFrozenGrabPending
+                });
+                root.frozenWindowSnapshotPending = false;
+                return;
+            }
+            root.appendDebugEvent("frozenWindowSnapshotRetry", {
+                revision: Number(hyprlandSnapshot.revision || 0),
+                clientCount: root.asList(hyprlandSnapshot.clients).length
+            });
+            root.startFrozenWindowCacheCapture();
         }
     }
     Timer {
@@ -777,7 +1191,7 @@ Src.FreezeScreen {
         onActivated: root.toggleSaveMode()
     }
     Shortcut {
-        enabled: root.active && root.recordingState !== "countdown" && root.recordingState !== "recording"
+        enabled: root.active && root.recordingState !== "recording"
         sequence: "Tab"
         onActivated: root.toggleMode()
     }
@@ -933,9 +1347,7 @@ Src.FreezeScreen {
         onAudioModeSelected: selectedMode => root.setRecordAudioMode(selectedMode)
         onModeSelected: selectedMode => root.setMode(selectedMode)
         onRecordRequested: {
-            if (root.recordingState !== "idle")
-                return;
-            root.startRecordFlow();
+            root.toggleRecordFlow();
         }
         onSaveToDiskToggled: enabled => root.setSaveToDisk(enabled)
         onScreenFrozenToggled: frozen => {
