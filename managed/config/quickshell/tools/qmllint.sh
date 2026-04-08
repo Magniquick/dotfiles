@@ -60,6 +60,8 @@ add_import_dir "$ROOT_DIR/common/modules/qs-go/build/qml"
 add_import_dir "$ROOT_DIR/common/modules/qs-go/qml"
 add_import_dir "$ROOT_DIR/common/modules/qs-capture/build/qml"
 add_import_dir "$ROOT_DIR/common/modules/qs-capture/qml"
+add_import_dir "$ROOT_DIR/common/modules/qsmath/build/qml"
+add_import_dir "$ROOT_DIR/common/modules/qsmath/qml"
 add_import_dir "$ROOT_DIR/common/modules/unified-lyrics-api/build/qml"
 add_import_dir "$ROOT_DIR/common/modules/unified-lyrics-api/qml"
 

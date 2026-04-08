@@ -1,4 +1,4 @@
-arch = [
+arch = { packages = [
 	"binwalk",
 	"ida-free",
 	"wireshark-qt",
@@ -17,4 +17,4 @@ arch = [
 	"sleuthkit",	# fs forensics
 	"upx",
 	"perl-image-exiftool",
-]
+] }

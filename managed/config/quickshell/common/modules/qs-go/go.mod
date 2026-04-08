@@ -7,7 +7,6 @@ require (
 	github.com/arran4/golang-ical v0.3.4
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/pilebones/go-udev v0.9.1
 )
 
 require (

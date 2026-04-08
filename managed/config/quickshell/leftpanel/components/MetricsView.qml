@@ -91,8 +91,8 @@ Item {
                 icon: "\uefc5"
             }
             Components.CircularGauge {
-                value: root.storageWorstValue
-                secondaryValue: root.storageActualValue
+                value: root.storageActualValue
+                secondaryValue: sysInfoProvider.disk_btrfs_available ? root.storageWorstValue : -1
                 accent: root.diskHealthColor
                 label: "Storage"
                 icon: "\udb80\udeca"

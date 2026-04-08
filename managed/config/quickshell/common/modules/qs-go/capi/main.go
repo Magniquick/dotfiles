@@ -5,18 +5,10 @@ package main
 #include <stdlib.h>
 
 typedef void (*QsGo_TokenFn)   (void* ctx, const char* token, int done);
-typedef void (*QsGo_BrightFn)  (void* ctx, int percent, const char* device);
-typedef void (*QsGo_HyprlandFn)(void* ctx);
 
 // Static wrappers are required to call C function pointers from Go.
 static void invoke_token_fn(QsGo_TokenFn fn, void* ctx, const char* token, int done) {
     fn(ctx, token, done);
-}
-static void invoke_bright_fn(QsGo_BrightFn fn, void* ctx, int percent, const char* device) {
-    fn(ctx, percent, device);
-}
-static void invoke_hyprland_fn(QsGo_HyprlandFn fn, void* ctx) {
-    fn(ctx);
 }
 */
 import "C"
@@ -24,69 +16,10 @@ import (
 	"unsafe"
 
 	"qs-go/internal/ai"
-	"qs-go/internal/backlight"
-	"qs-go/internal/hyprland"
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
-	"qs-go/internal/sysinfo"
 	"qs-go/internal/todoist"
 )
-
-// ----- SysInfo -----
-
-//export QsGo_SysInfo_Refresh
-func QsGo_SysInfo_Refresh(diskDevice *C.char) *C.char {
-	dev := C.GoString(diskDevice)
-	result := sysinfo.Refresh(dev)
-	return C.CString(result)
-}
-
-// ----- Backlight -----
-
-//export QsGo_Backlight_Get
-func QsGo_Backlight_Get() *C.char {
-	return C.CString(backlight.Get())
-}
-
-//export QsGo_Backlight_Set
-func QsGo_Backlight_Set(percent C.int) *C.char {
-	return C.CString(backlight.Set(int(percent)))
-}
-
-//export QsGo_Backlight_Monitor
-func QsGo_Backlight_Monitor(cb C.QsGo_BrightFn, ctx unsafe.Pointer) C.int {
-	id := backlight.Monitor(func(percent int, device string) {
-		cDevice := C.CString(device)
-		C.invoke_bright_fn(cb, ctx, C.int(percent), cDevice)
-		C.free(unsafe.Pointer(cDevice))
-	})
-	return C.int(id)
-}
-
-//export QsGo_Backlight_StopMonitor
-func QsGo_Backlight_StopMonitor(id C.int) {
-	backlight.StopMonitor(int(id))
-}
-
-// ----- Hyprland -----
-
-//export QsGo_Hyprland_Refresh
-func QsGo_Hyprland_Refresh() *C.char {
-	return C.CString(hyprland.Refresh())
-}
-
-//export QsGo_Hyprland_Monitor
-func QsGo_Hyprland_Monitor(cb C.QsGo_HyprlandFn, ctx unsafe.Pointer) C.int {
-	id := hyprland.Monitor(func() {
-		C.invoke_hyprland_fn(cb, ctx)
-	})
-	return C.int(id)
-}
-
-//export QsGo_Hyprland_StopMonitor
-func QsGo_Hyprland_StopMonitor(id C.int) {
-	hyprland.StopMonitor(int(id))
-}
 
 // ----- Pacman -----
 

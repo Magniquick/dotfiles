@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+clang_format=${CLANG_FORMAT:-clang-format}
+if ! command -v "$clang_format" >/dev/null 2>&1; then
+  echo "pre-commit: clang-format not found" >&2
+  exit 1
+fi
+
+staged_files=$(
+  git diff --cached --name-only --diff-filter=ACMR |
+    while IFS= read -r file; do
+      case "$file" in
+        managed/config/quickshell/*.h|managed/config/quickshell/*.hpp|managed/config/quickshell/*.c|managed/config/quickshell/*.cc|managed/config/quickshell/*.cpp|\
+        managed/config/quickshell/*/*.h|managed/config/quickshell/*/*.hpp|managed/config/quickshell/*/*.c|managed/config/quickshell/*/*.cc|managed/config/quickshell/*/*.cpp|\
+        managed/config/quickshell/*/*/*.h|managed/config/quickshell/*/*/*.hpp|managed/config/quickshell/*/*/*.c|managed/config/quickshell/*/*/*.cc|managed/config/quickshell/*/*/*.cpp|\
+        managed/config/quickshell/*/*/*/*.h|managed/config/quickshell/*/*/*/*.hpp|managed/config/quickshell/*/*/*/*.c|managed/config/quickshell/*/*/*/*.cc|managed/config/quickshell/*/*/*/*.cpp)
+          printf '%s\n' "$file"
+          ;;
+      esac
+    done
+)
+
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+echo "$staged_files" | while IFS= read -r file; do
+  [ -n "$file" ] || continue
+  "$clang_format" -i "$file"
+  git add -- "$file"
+done

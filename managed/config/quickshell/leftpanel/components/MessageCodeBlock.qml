@@ -12,10 +12,23 @@ MK.Card {
     property string code: ""
     property string language: "txt"
     property bool editing: false
+    property string selectionKey: ""
+    property string activeSelectionKey: ""
     readonly property string displayCode: String(root.code || "").replace(/\n+$/, "")
     readonly property int lineCount: Math.max(1, root.displayCode.split("\n").length)
 
     signal codeEdited(string newCode)
+    signal selectionActivated(string selectionKey)
+
+    function clearSelection() {
+        if (codeArea.selectedText.length > 0)
+            codeArea.deselect();
+    }
+
+    onActiveSelectionKeyChanged: {
+        if (activeSelectionKey !== selectionKey)
+            clearSelection();
+    }
 
     implicitHeight: codeColumn.implicitHeight
     type: MK.Enum.cardOutlined
@@ -158,15 +171,85 @@ MK.Card {
             }
 
             // Code area
-            MK.Flickable {
+            Flickable {
                 id: codeFlick
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
-                implicitHeight: codeArea.contentHeight
-                contentWidth: codeArea.implicitWidth
-                contentHeight: codeArea.contentHeight
+                implicitHeight: Math.max(codeArea.contentHeight, codeContentItem.height)
+                contentWidth: codeContentItem.width
+                contentHeight: codeContentItem.height
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
+                boundsMovement: Flickable.StopAtBounds
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
+
+                Item {
+                    id: codeContentItem
+                    width: Math.max(codeArea.contentWidth, codeFlick.width)
+                    height: codeArea.contentHeight
+
+                    MK.TextEdit {
+                        id: codeArea
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        width: parent.width
+                        height: contentHeight
+                        readOnly: !root.editing
+                        selectByMouse: true
+                        font.family: "JetBrainsMono NFP"
+                        font.pixelSize: 12
+                        color: Common.Config.color.on_surface
+                        selectionColor: Qt.alpha(Common.Config.color.primary, 0.3)
+                        selectedTextColor: Common.Config.color.on_surface
+                        text: root.displayCode
+                        wrapMode: TextEdit.NoWrap
+
+                        onTextChanged: {
+                            if (root.editing) root.codeEdited(text)
+                        }
+
+                        onSelectedTextChanged: {
+                            if (selectedText.length > 0)
+                                root.selectionActivated(root.selectionKey);
+                        }
+
+                        Keys.onPressed: event => {
+                            if (event.key === Qt.Key_Tab) {
+                                const cursor = codeArea.cursorPosition
+                                codeArea.insert(cursor, "    ")
+                                codeArea.cursorPosition = cursor + 4
+                                event.accepted = true
+                            }
+                        }
+                    }
+                }
+
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+
+                    function clampX(value) {
+                        const maxX = Math.max(0, codeFlick.contentWidth - codeFlick.width);
+                        return Math.max(0, Math.min(maxX, value));
+                    }
+
+                    onWheel: event => {
+                        let deltaX = 0;
+
+                        if (event.pixelDelta && event.pixelDelta.x !== 0) {
+                            deltaX = event.pixelDelta.x;
+                        } else if (event.angleDelta.x !== 0) {
+                            deltaX = event.angleDelta.x / 2;
+                        } else if (event.modifiers & Qt.ShiftModifier) {
+                            deltaX = event.angleDelta.y / 2;
+                        }
+
+                        if (deltaX === 0)
+                            return;
+
+                        codeFlick.contentX = clampX(codeFlick.contentX - deltaX);
+                        event.accepted = true;
+                    }
+                }
 
                 T.ScrollBar.horizontal: MK.ScrollBar {
                     policy: T.ScrollBar.AsNeeded
@@ -175,34 +258,6 @@ MK.Card {
                         implicitHeight: 4
                         radius: 2
                         color: Qt.alpha(Common.Config.color.on_surface, 0.15)
-                    }
-                }
-
-                MK.TextEdit {
-                    id: codeArea
-                    width: Math.max(implicitWidth, codeFlick.width)
-                    height: contentHeight
-                    readOnly: !root.editing
-                    selectByMouse: true
-                    font.family: "JetBrainsMono NFP"
-                    font.pixelSize: 12
-                    color: Common.Config.color.on_surface
-                    selectionColor: Qt.alpha(Common.Config.color.primary, 0.3)
-                    selectedTextColor: Common.Config.color.on_surface
-                    text: root.displayCode
-                    wrapMode: TextEdit.NoWrap
-
-                    onTextChanged: {
-                        if (root.editing) root.codeEdited(text)
-                    }
-
-                    Keys.onPressed: event => {
-                        if (event.key === Qt.Key_Tab) {
-                            const cursor = codeArea.cursorPosition
-                            codeArea.insert(cursor, "    ")
-                            codeArea.cursorPosition = cursor + 4
-                            event.accepted = true
-                        }
                     }
                 }
 

@@ -74,6 +74,7 @@ Item {
             spacing: 10
             clip: true
             model: root.messagesModel
+            property string activeSelectionKey: ""
 
             // Follow output as it streams, but don't fight the user if they've scrolled up.
             property bool autoFollow: true
@@ -120,6 +121,7 @@ Item {
                 content: body
                 metrics: metrics
                 attachments: attachments
+                activeSelectionKey: messageList.activeSelectionKey
                 modelLabel: sender === "assistant" ? root.modelLabel : ""
                 moodIcon: root.moodIcon
                 moodName: root.moodName
@@ -135,6 +137,7 @@ Item {
                 onRegenerateRequested: root.regenerateRequested(_messageId)
                 onDeleteRequested: root.deleteRequested(_messageId)
                 onEditSaved: newContent => root.editRequested(_messageId, newContent)
+                onSelectionActivated: selectionKey => messageList.activeSelectionKey = selectionKey
             }
 
         }

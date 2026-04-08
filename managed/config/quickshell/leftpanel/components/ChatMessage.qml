@@ -19,6 +19,7 @@ Item {
 
     property bool editing: false
     property bool renderMarkdown: true
+    property string activeSelectionKey: ""
     property var metrics: ({})
     property var attachments: []
 
@@ -27,10 +28,12 @@ Item {
     signal regenerateRequested()
     signal deleteRequested()
     signal editSaved(string newContent)
+    signal selectionActivated(string selectionKey)
 
     readonly property bool isAssistant: role === "assistant"
     readonly property bool isUser: role === "user"
     readonly property color accentColor: isUser ? Common.Config.color.primary : Common.Config.color.primary
+    readonly property string selectionPrefix: "message-" + root.messageIndex + ":"
 
     // Streaming fade: when a new block appears (block count increases), fade it in.
     // We track the last-seen block count separately from the model so the timer only
@@ -59,15 +62,24 @@ Item {
         onTriggered: root._blockFadeOpacity = 1
     }
 
-    // Parse content into blocks (text paragraphs and code).
-    // Text sections are split on double-newlines so each paragraph gets its own
-    // block — this lets the streaming fade trigger per paragraph, not just per
-    // code fence.  Handles partial/unclosed fences mid-stream.
-    function textToBlocks(raw) {
-        return raw.split(/\n\n+/)
-            .map(s => s.trim())
-            .filter(s => s.length > 0)
-            .map(s => ({ type: "text", content: s }));
+    onActiveSelectionKeyChanged: {
+        if (!activeSelectionKey.startsWith(selectionPrefix) && sourceView.selectedText.length > 0)
+            sourceView.deselect();
+    }
+
+    // Parse content into larger text/code runs. Keeping contiguous prose in a
+    // single block preserves cross-paragraph text selection, while the final
+    // in-progress text run can stay plain during streaming to avoid markdown
+    // re-layout jitter on every token.
+    function pushTextBlock(blocks, raw, completed) {
+        const normalized = String(raw || "").replace(/^\n+|\n+$/g, "");
+        if (normalized.length === 0)
+            return;
+        blocks.push({
+            type: "text",
+            content: normalized,
+            completed: completed
+        });
     }
 
     readonly property var contentBlocks: {
@@ -79,8 +91,7 @@ Item {
 
         while ((match = codeBlockRegex.exec(text)) !== null) {
             if (match.index > lastIndex) {
-                const textBefore = text.substring(lastIndex, match.index).trim();
-                if (textBefore) blocks.push(...textToBlocks(textBefore));
+                pushTextBlock(blocks, text.substring(lastIndex, match.index), true);
             }
             blocks.push({
                 type: "code",
@@ -96,24 +107,31 @@ Item {
             // Check for an unclosed opening fence (streaming mid-block)
             const fenceIdx = remaining.search(/```\w*\n/);
             if (fenceIdx >= 0) {
-                const textBefore = remaining.substring(0, fenceIdx).trim();
-                if (textBefore) blocks.push(...textToBlocks(textBefore));
+                pushTextBlock(blocks, remaining.substring(0, fenceIdx), true);
                 const afterFence = remaining.substring(fenceIdx);
                 const langMatch = afterFence.match(/^```(\w*)\n/);
                 const lang = langMatch ? (langMatch[1] || "txt") : "txt";
                 const codeContent = afterFence.substring(langMatch ? langMatch[0].length : 4).replace(/\n$/, "");
                 blocks.push({ type: "code", language: lang, content: codeContent, completed: false });
             } else {
-                const trimmed = remaining.trim();
-                if (trimmed) blocks.push(...textToBlocks(trimmed));
+                pushTextBlock(blocks, remaining, !root.streaming);
             }
         }
 
         if (blocks.length === 0 && text.trim()) {
-            blocks.push(...textToBlocks(text));
+            pushTextBlock(blocks, text, !root.streaming);
         }
 
         return blocks;
+    }
+
+    function containsMath(text) {
+        const source = String(text || "");
+        return /(^|[^\\])\$[^\s$][\s\S]*?[^\\]\$/.test(source)
+            || /\\\([\s\S]+?\\\)/.test(source)
+            || /\$\$[\s\S]+?\$\$/.test(source)
+            || /\\\[[\s\S]+?\\\]/.test(source)
+            || /\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|matrix\*?|bmatrix|pmatrix|vmatrix|Vmatrix)\}[\s\S]+?\\end\{(?:equation\*?|align\*?|gather\*?|multline\*?|matrix\*?|bmatrix|pmatrix|vmatrix|Vmatrix)\}/.test(source);
     }
 
     implicitHeight: mainRow.implicitHeight + separator.height + 16
@@ -298,7 +316,9 @@ Item {
             // Content blocks — always live, including during streaming.
             // contentBlocks handles partial fences so markdown renders cleanly mid-stream.
             Repeater {
-                model: (!root.thinking && !root.editing && root.renderMarkdown) ? root.contentBlocks : []
+                id: contentRepeater
+                model: (!root.thinking && !root.editing && root.renderMarkdown)
+                    ? root.contentBlocks : []
 
                 Loader {
                     id: contentBlockLoader
@@ -320,35 +340,104 @@ Item {
                     Component {
                         id: codeBlockComponent
                         MessageCodeBlock {
+                            selectionKey: root.selectionPrefix + "block-" + contentBlockLoader.index
+                            activeSelectionKey: root.activeSelectionKey
                             code: contentBlockLoader.modelData.content
                             language: contentBlockLoader.modelData.language
                             editing: false
+                            onSelectionActivated: selectionKey => root.selectionActivated(selectionKey)
                         }
                     }
 
                     Component {
                         id: textBlockComponent
-                        TextEdit {
-                            text: root.renderMarkdown
-                                ? String(contentBlockLoader.modelData.content).replace(/\n/g, "  \n")
-                                : contentBlockLoader.modelData.content
-                            textFormat: root.renderMarkdown ? TextEdit.MarkdownText : TextEdit.PlainText
-                            color: Common.Config.color.on_surface
-                            wrapMode: TextEdit.Wrap
-                            font.family: Common.Config.fontFamily
-                            font.pixelSize: 13
-                            readOnly: true
-                            selectByMouse: true
-                            cursorVisible: false
-                            activeFocusOnPress: false
+                        Item {
+                            id: textBlockRoot
+                            property string selectionKey: root.selectionPrefix + "block-" + contentBlockLoader.index
+                            readonly property bool markdownReady: root.renderMarkdown
+                                && contentBlockLoader.modelData.completed
+                            readonly property bool useMathRenderer: markdownReady
+                                && root.containsMath(contentBlockLoader.modelData.content)
+                            property var mathBlockItem: mathBlockLoader.item
+                            implicitWidth: useMathRenderer && mathBlockItem
+                                ? mathBlockItem.implicitWidth
+                                : textBlock.implicitWidth
+                            implicitHeight: useMathRenderer && mathBlockItem
+                                ? mathBlockItem.implicitHeight
+                                : textBlock.implicitHeight
 
-                            onLinkActivated: link => Qt.openUrlExternally(link)
+                            function clearSelection() {
+                                if (useMathRenderer) {
+                                    if (mathBlockItem && mathBlockItem.clearSelection)
+                                        mathBlockItem.clearSelection();
+                                } else if (textBlock.selectedText.length > 0) {
+                                    textBlock.deselect();
+                                }
+                            }
 
-                            MouseArea {
+                            onSelectionKeyChanged: {
+                                if (root.activeSelectionKey !== selectionKey)
+                                    clearSelection();
+                            }
+
+                            Connections {
+                                target: root
+                                function onActiveSelectionKeyChanged() {
+                                    if (root.activeSelectionKey !== textBlockRoot.selectionKey)
+                                        textBlockRoot.clearSelection();
+                                }
+                            }
+
+                            TextEdit {
+                                id: textBlock
                                 anchors.fill: parent
-                                acceptedButtons: Qt.NoButton
-                                hoverEnabled: true
-                                cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor
+                                visible: !textBlockRoot.useMathRenderer
+                                readonly property bool markdownReady: textBlockRoot.markdownReady
+                                text: markdownReady
+                                    ? String(contentBlockLoader.modelData.content).replace(/\n/g, "  \n")
+                                    : contentBlockLoader.modelData.content
+                                textFormat: markdownReady ? TextEdit.MarkdownText : TextEdit.PlainText
+                                color: Common.Config.color.on_surface
+                                wrapMode: TextEdit.Wrap
+                                font.family: Common.Config.fontFamily
+                                font.pixelSize: 13
+                                readOnly: true
+                                selectByMouse: true
+                                cursorVisible: false
+                                activeFocusOnPress: false
+
+                                onLinkActivated: link => Qt.openUrlExternally(link)
+                                onSelectedTextChanged: {
+                                    if (selectedText.length > 0)
+                                        root.selectionActivated(textBlockRoot.selectionKey);
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.NoButton
+                                    hoverEnabled: true
+                                    cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor
+                                }
+                            }
+
+                            Loader {
+                                id: mathBlockLoader
+                                anchors.fill: parent
+                                active: textBlockRoot.useMathRenderer
+                                visible: active
+
+                                sourceComponent: mathBlockComponent
+                            }
+
+                            Component {
+                                id: mathBlockComponent
+                                MessageMathBlock {
+                                    markdown: contentBlockLoader.modelData.content
+                                    completed: contentBlockLoader.modelData.completed
+                                    selectionKey: textBlockRoot.selectionKey
+                                    activeSelectionKey: root.activeSelectionKey
+                                    onSelectionActivated: selectionKey => root.selectionActivated(selectionKey)
+                                }
                             }
                         }
                     }
@@ -357,6 +446,7 @@ Item {
 
             // Raw markdown/source view
             TextEdit {
+                id: sourceView
                 Layout.fillWidth: true
                 Layout.topMargin: 2
                 visible: !root.thinking && !root.editing && !root.renderMarkdown
@@ -370,6 +460,11 @@ Item {
                 selectByMouse: true
                 cursorVisible: false
                 activeFocusOnPress: false
+
+                onSelectedTextChanged: {
+                    if (selectedText.length > 0)
+                        root.selectionActivated(root.selectionPrefix + "source");
+                }
             }
 
             // Edit area

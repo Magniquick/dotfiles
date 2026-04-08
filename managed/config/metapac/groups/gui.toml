@@ -1,4 +1,4 @@
-arch = [
+arch = { packages = [
 	"uwsm",
 	"runapp",
 	"hyprland",
@@ -49,4 +49,4 @@ arch = [
 	"noto-fonts",
 	"noto-fonts-cjk",
 	"noto-fonts-emoji"
-]
+] }

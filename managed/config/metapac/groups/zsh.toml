@@ -1,4 +1,4 @@
-arch = [
+arch = { packages = [
 	"brillo",
 	"pacman-contrib",	# used for updpkgsums
 	"topgrade",
@@ -34,4 +34,4 @@ arch = [
 	"wget",
 	"yt-dlp",
 	"lutgen-bin"
-]
+] }

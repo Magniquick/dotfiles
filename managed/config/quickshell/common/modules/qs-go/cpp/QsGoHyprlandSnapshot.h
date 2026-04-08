@@ -1,8 +1,11 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 #include <QVariantList>
 #include <QVariantMap>
+
+class QLocalSocket;
 
 class QsGoHyprlandSnapshot : public QObject {
   Q_OBJECT
@@ -17,11 +20,21 @@ public:
   explicit QsGoHyprlandSnapshot(QObject* parent = nullptr);
   ~QsGoHyprlandSnapshot() override;
 
-  QVariantMap activeWorkspace() const { return m_activeWorkspace; }
-  QVariantList clients() const { return m_clients; }
-  QString error() const { return m_error; }
-  bool running() const { return m_monitorId >= 0; }
-  int revision() const { return m_revision; }
+  QVariantMap activeWorkspace() const {
+    return m_activeWorkspace;
+  }
+  QVariantList clients() const {
+    return m_clients;
+  }
+  QString error() const {
+    return m_error;
+  }
+  bool running() const {
+    return m_running;
+  }
+  int revision() const {
+    return m_revision;
+  }
 
   Q_INVOKABLE void start();
   Q_INVOKABLE void stop();
@@ -35,15 +48,30 @@ signals:
   void revisionChanged();
 
 private:
-  static void monitorCallback(void* ctx);
-  void applySnapshot(const QByteArray& json);
+  struct SnapshotPayload {
+    QVariantMap activeWorkspace;
+    QVariantList clients;
+    QString error;
+    bool valid = false;
+  };
+
+  SnapshotPayload fetchSnapshot() const;
+  QString socketBase() const;
+  QString readCommand(const QString& command) const;
+  void connectEventSocket();
+  void scheduleReconnect();
+  void processEventBuffer();
+  void applySnapshot(const SnapshotPayload& payload);
   void setError(const QString& error);
 
   QVariantMap m_activeWorkspace;
   QVariantList m_clients;
   QString m_error;
-  int m_monitorId = -1;
+  bool m_running = false;
   bool m_refreshInFlight = false;
   bool m_refreshPending = false;
   int m_revision = 0;
+  QPointer<QLocalSocket> m_eventSocket;
+  QByteArray m_eventBuffer;
+  bool m_reconnectScheduled = false;
 };

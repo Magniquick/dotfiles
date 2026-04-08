@@ -10,6 +10,11 @@ Item {
     property int dismissTotalMs: 0
     readonly property bool autoDismissEnabled: root.entry && root.entry.timer && root.entry.timer.interval > 0
     property bool autoDismissPaused: false
+    property double dismissElapsedMs: 0
+    property double dismissStartedAtMs: 0
+    property real dismissAnimationFrom: 0.0
+    property int dismissAnimationDurationMs: 0
+    property int dismissAnimationKey: 0
 
     width: 320
     implicitHeight: frame.implicitHeight
@@ -56,10 +61,14 @@ Item {
     }
 
     function resetAutoDismiss() {
-        progressAnim.stop();
         dismissProgress = 0.0;
         dismissTotalMs = autoDismissEnabled ? root.entry.timer.interval : 0;
         autoDismissPaused = false;
+        dismissElapsedMs = 0;
+        dismissStartedAtMs = 0;
+        dismissAnimationFrom = 0.0;
+        dismissAnimationDurationMs = 0;
+        dismissAnimationKey++;
 
         if (!autoDismissEnabled)
             return;
@@ -70,10 +79,7 @@ Item {
             return;
         }
 
-        progressAnim.duration = dismissTotalMs;
-        progressAnim.from = 0;
-        progressAnim.to = 1;
-        progressAnim.start();
+        root.startAutoDismissVisual(dismissTotalMs, 0.0);
     }
 
     function pauseAutoDismiss() {
@@ -82,8 +88,10 @@ Item {
         if (autoDismissPaused)
             return;
         autoDismissPaused = true;
+        root.captureElapsedProgress();
         root.entry.timer.stop();
-        progressAnim.stop();
+        dismissAnimationDurationMs = 0;
+        dismissAnimationKey++;
     }
 
     function resumeAutoDismiss() {
@@ -104,19 +112,31 @@ Item {
 
         root.entry.timer.interval = remainingMs;
         root.entry.timer.restart();
-
-        progressAnim.duration = remainingMs;
-        progressAnim.from = dismissProgress;
-        progressAnim.to = 1;
-        progressAnim.start();
+        root.startAutoDismissVisual(remainingMs, dismissProgress);
     }
 
-    NumberAnimation {
-        id: progressAnim
-        target: root
-        property: "dismissProgress"
-        easing.type: Easing.Linear
-        running: false
+    function captureElapsedProgress() {
+        if (dismissTotalMs <= 0)
+            return;
+
+        if (dismissStartedAtMs > 0)
+            dismissElapsedMs += Math.max(0, Date.now() - dismissStartedAtMs);
+
+        dismissElapsedMs = Math.max(0, Math.min(dismissTotalMs, dismissElapsedMs));
+        dismissStartedAtMs = 0;
+        dismissProgress = dismissTotalMs > 0 ? (dismissElapsedMs / dismissTotalMs) : dismissProgress;
+    }
+
+    function startAutoDismissVisual(durationMs, fromProgress) {
+        dismissAnimationDurationMs = Math.max(0, Math.round(Number(durationMs) || 0));
+        dismissAnimationFrom = Math.max(0, Math.min(1, Number(fromProgress) || 0));
+        dismissProgress = dismissAnimationFrom;
+        dismissStartedAtMs = Date.now();
+
+        if (dismissAnimationDurationMs <= 0 || dismissAnimationFrom >= 1.0)
+            return;
+
+        dismissAnimationKey++;
     }
 
     Connections {
@@ -173,6 +193,10 @@ Item {
             showCloseButton: true
             autoDismissRingVisible: root.autoDismissEnabled
             autoDismissProgress: root.dismissProgress
+            autoDismissAnimating: root.autoDismissEnabled && !root.autoDismissPaused && root.dismissAnimationDurationMs > 0
+            autoDismissAnimationFrom: root.dismissAnimationFrom
+            autoDismissAnimationDurationMs: root.dismissAnimationDurationMs
+            autoDismissAnimationKey: root.dismissAnimationKey
             autoDismissPaused: root.autoDismissPaused
             bodyMaxLines: 3
             bodyExpandable: true

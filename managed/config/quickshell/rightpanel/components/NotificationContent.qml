@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import "../../common/materialkit" as MK
 import "../../common" as Common
@@ -16,6 +15,10 @@ RowLayout {
     // Popup auto-dismiss ring around the close button.
     property bool autoDismissRingVisible: false
     property real autoDismissProgress: 0.0
+    property bool autoDismissAnimating: false
+    property real autoDismissAnimationFrom: 0.0
+    property int autoDismissAnimationDurationMs: 0
+    property int autoDismissAnimationKey: 0
     property bool autoDismissPaused: false
     // Popup notifications should stay compact. When bodyMaxLines > 0 and
     // bodyExpandable is true, the body is clamped with ellipsis and can be
@@ -217,6 +220,18 @@ RowLayout {
         bodyExpanded = false;
     }
 
+    component UniformShaderRing: MK.CircleProgressShape {
+        arcRadius: Math.max(0, (height / 2) - 3)
+        progress: root.autoDismissProgress
+        animatedProgressEnabled: root.autoDismissAnimating
+        animatedProgressFrom: root.autoDismissAnimationFrom
+        animatedProgressDuration: root.autoDismissAnimationDurationMs
+        animatedProgressKey: root.autoDismissAnimationKey
+        strokeWidth: 2
+        strokeColor: "#ffffff"
+        opacity: root.autoDismissPaused ? 0.45 : 0.85
+    }
+
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 4
@@ -259,6 +274,7 @@ RowLayout {
                         width: 32
                         height: 32
                         radius: width / 2
+                        clip: true
                         color: "transparent"
                         visible: root.imageSource.length > 0 && leadingIconImage.status === Image.Ready
 
@@ -268,27 +284,7 @@ RowLayout {
                             source: root.resolvedImageSource
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
-                            visible: false
-                        }
-
-                        Rectangle {
-                            id: leadingIconMask
-                            anchors.fill: parent
-                            radius: width / 2
-                            visible: false
-                        }
-
-                        Loader {
-                            anchors.fill: parent
-                            active: leadingIcon.visible
-                                && root.inListViewport
-                                && leadingIconImage.status === Image.Ready
-                            sourceComponent: OpacityMask {
-                                anchors.fill: parent
-                                cached: true
-                                source: leadingIconImage
-                                maskSource: leadingIconMask
-                            }
+                            visible: root.inListViewport
                         }
                     }
 
@@ -348,18 +344,9 @@ RowLayout {
                         color: "transparent"
                         visible: root.showCloseButton
 
-                        // Simple built-in ring. Note: its arc radius is hardcoded
-                        // internally, so we size it with arcRadius.
-                        MK.CircleProgressShape {
-                            anchors.centerIn: parent
-                            width: parent.width
-                            height: parent.height
-                            // Button is 24x24; keep the ring tucked in.
-                            arcRadius: Math.max(0, (height / 2) - 3)
-                            progress: root.autoDismissProgress
-                            strokeWidth: 2
+                        UniformShaderRing {
+                            anchors.fill: parent
                             visible: root.autoDismissRingVisible
-                            opacity: root.autoDismissPaused ? 0.45 : 0.85
                         }
 
                         Text {

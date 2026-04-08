@@ -1,5 +1,5 @@
-arch = [
-	"linux-cachyos-nvidia",
+arch = { packages = [
+	"nvidia-580xx-dkms",
 	"cuda",
 	"nvidia-prime",	# Never used, but might be useful later
 	"bbswitch-dkms",
@@ -18,4 +18,4 @@ arch = [
 	"pipewire-pulse",
 	"pavucontrol",
 	"alsa-tools",
-]
+] }

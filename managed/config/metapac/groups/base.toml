@@ -1,4 +1,4 @@
-arch = [
+arch = { packages = [
 	# mirrorlists
 	"alhp-keyring",
 	"alhp-mirrorlist",
@@ -38,4 +38,4 @@ arch = [
 	"acpid", 	# acpi daemon
 	"smartmontools",
 	"snapper", 	# btrfs snapshot manager # TODO: make backups
-]
+] }
