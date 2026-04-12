@@ -6,7 +6,7 @@ require (
 	github.com/CnTeng/todoist-api-go v0.2.4
 	github.com/arran4/golang-ical v0.3.4
 	github.com/joho/godotenv v1.5.1
-	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/modelcontextprotocol/go-sdk v1.5.0
 )
 
 require (
