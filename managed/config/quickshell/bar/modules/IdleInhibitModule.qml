@@ -26,6 +26,11 @@ ModuleContainer {
     readonly property int remainingSeconds: root.computeRemainingSeconds()
     readonly property int dpmsTimeoutSeconds: Math.max(0, Math.round(GlobalState.idleMonitorSleepTimeoutSec || 0))
     readonly property int earliestDpmsSeconds: root.computeEarliestDpmsSeconds()
+    property bool detailsExpanded: false
+    readonly property var displayOffPresets: [0, 60, 120, 180, 300, 600, 900, 1800]
+    readonly property var sleepPresets: [0, 900, 1800, 3600, 7200]
+    property int displayOffIndex: root.displayOffIndexFromState()
+    property int sleepIndex: root.sleepIndexFromState()
     readonly property string iconText: root.inhibitEnabled ? "" : "󰒲"
     readonly property color iconColor: root.inhibitEnabled ? Config.color.on_primary_container : Config.color.on_surface_variant
 
@@ -100,112 +105,340 @@ ModuleContainer {
         ColumnLayout {
             spacing: Config.space.sm
 
-            RowLayout {
+            // Header — clickable to toggle details
+            Item {
                 Layout.fillWidth: true
-                spacing: Config.space.md
+                implicitHeight: caffeineHeader.implicitHeight
 
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
+                RowLayout {
+                    id: caffeineHeader
 
-                    Rectangle {
-                        anchors.centerIn: parent
-                        color: Qt.alpha(root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant, 0.12)
-                        height: parent.height
-                        radius: height / 2
-                        width: parent.width
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: Config.space.md
+
+                    Item {
+                        Layout.preferredHeight: Config.space.xxl * 2
+                        Layout.preferredWidth: Config.space.xxl * 2
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            color: Qt.alpha(root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant, 0.12)
+                            height: parent.height
+                            radius: height / 2
+                            width: parent.width
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            color: root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant
+                            font.family: Config.iconFontFamily
+                            font.pixelSize: Config.type.headlineLarge.size
+                            text: root.iconText
+                        }
                     }
 
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant
-                        font.family: Config.iconFontFamily
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.iconText
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.space.none
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.space.xs
+
+                            Text {
+                                Layout.minimumWidth: 0
+                                color: Config.color.on_surface
+                                elide: Text.ElideRight
+                                font.family: Config.fontFamily
+                                font.pixelSize: Config.type.headlineSmall.size
+                                font.weight: Font.Bold
+                                text: "Caffeine"
+                            }
+
+                            Text {
+                                color: Config.color.on_surface_variant
+                                font.family: Config.iconFontFamily
+                                font.pixelSize: Config.type.labelLarge.size
+                                text: root.detailsExpanded ? "󰅀" : "󰅂"
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            color: Config.color.on_surface_variant
+                            elide: Text.ElideRight
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelMedium.size
+                            text: root.inhibitEnabled ? "Awake mode enabled" : "Auto sleep enabled"
+                        }
                     }
                 }
 
-                ColumnLayout {
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.detailsExpanded = !root.detailsExpanded
+                }
+            }
+
+            // Screen 0: Quick controls
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.sm
+                visible: !root.detailsExpanded
+
+                Text {
                     Layout.fillWidth: true
-                    spacing: Config.space.none
+                    color: Config.color.on_surface_variant
+                    font.family: Config.fontFamily
+                    font.pixelSize: Config.type.labelSmall.size
+                    font.weight: Config.type.labelSmall.weight
+                    text: root.inhibitEnabled
+                        ? root.activeSubtitle()
+                        : root.dpmsTimeoutSeconds > 0
+                            ? "Display off after " + root.timeoutLabel(root.dpmsTimeoutSeconds) + " idle"
+                            : "Display idle timeout disabled"
+                    wrapMode: Text.WordWrap
+                }
 
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.headlineSmall.size
-                        font.weight: Font.Bold
-                        text: "Caffeine"
-                    }
+                MK.DiscreteSlider {
+                    id: presetSlider
 
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface_variant
-                        elide: Text.ElideRight
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: root.inhibitEnabled ? "Awake mode enabled" : "Auto sleep enabled"
+                    Layout.fillWidth: true
+                    fillColor: Config.color.primary
+                    handleColor: Config.color.primary
+                    handleSize: 12
+                    maximum: 4
+                    minimum: 0
+                    steps: 5
+                    tickColor: Config.color.on_primary
+                    tickInactiveColor: Config.color.on_surface_variant
+                    trackColor: Qt.alpha(Config.color.surface_variant, 0.9)
+                    trackThickness: 2
+                    value: root.presetIndex
+
+                    onUserChanged: function(value) {
+                        const nextIndex = Math.max(0, Math.min(4, Math.round(value)));
+                        if (nextIndex === root.presetIndex)
+                            return;
+
+                        root.presetIndex = nextIndex;
+                        root.applyPreset(nextIndex);
                     }
                 }
             }
 
-            Text {
-                Layout.fillWidth: true
-                color: Config.color.on_surface_variant
-                font.family: Config.fontFamily
-                font.pixelSize: Config.type.labelSmall.size
-                font.weight: Config.type.labelSmall.weight
-                text: root.inhibitEnabled ? root.activeSubtitle() : ""
-                visible: root.inhibitEnabled
-                wrapMode: Text.WordWrap
+            // Screen 1: Timeout settings
+            ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.space.xs
+                    visible: root.detailsExpanded
+
+                    // Display Off section
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Config.space.xs
+                        spacing: Config.space.sm
+
+                        Text {
+                            color: Config.color.primary
+                            font.family: Config.fontFamily
+                            font.letterSpacing: 1.5
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Black
+                            text: "DISPLAY OFF"
+                        }
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            color: Qt.alpha(Config.color.outline_variant, 0.55)
+                            implicitHeight: 1
+                            radius: 1
+                        }
+
+                        Text {
+                            color: Config.color.on_surface
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Medium
+                            text: root.timeoutLabel(GlobalState.idleMonitorSleepTimeoutSec)
+                        }
+                    }
+
+                    MK.DiscreteSlider {
+                        Layout.fillWidth: true
+                        fillColor: Config.color.secondary
+                        handleColor: Config.color.secondary
+                        handleSize: 12
+                        maximum: root.displayOffPresets.length - 1
+                        minimum: 0
+                        steps: root.displayOffPresets.length
+                        tickColor: Config.color.on_secondary
+                        tickInactiveColor: Config.color.on_surface_variant
+                        trackColor: Qt.alpha(Config.color.surface_variant, 0.9)
+                        trackThickness: 2
+                        value: root.displayOffIndex
+
+                        onUserChanged: function(value) {
+                            const nextIndex = Math.max(0, Math.min(root.displayOffPresets.length - 1, Math.round(value)));
+                            if (nextIndex === root.displayOffIndex)
+                                return;
+                            root.displayOffIndex = nextIndex;
+                            root.applyDisplayOff(nextIndex);
+                        }
+                    }
+
+                    // Suspend section
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.space.sm
+                        Layout.bottomMargin: Config.space.xs
+                        spacing: Config.space.sm
+
+                        Text {
+                            color: Config.color.primary
+                            font.family: Config.fontFamily
+                            font.letterSpacing: 1.5
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Black
+                            text: "SUSPEND"
+                        }
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            color: Qt.alpha(Config.color.outline_variant, 0.55)
+                            implicitHeight: 1
+                            radius: 1
+                        }
+
+                        Text {
+                            color: Config.color.on_surface
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Medium
+                            text: root.timeoutLabel(GlobalState.idleSuspendEnabled ? Math.round(GlobalState.idleSuspendTimeoutSec) : 0)
+                        }
+                    }
+
+                    MK.DiscreteSlider {
+                        Layout.fillWidth: true
+                        fillColor: Config.color.tertiary
+                        handleColor: Config.color.tertiary
+                        handleSize: 12
+                        maximum: root.sleepPresets.length - 1
+                        minimum: 0
+                        steps: root.sleepPresets.length
+                        tickColor: Config.color.on_tertiary
+                        tickInactiveColor: Config.color.on_surface_variant
+                        trackColor: Qt.alpha(Config.color.surface_variant, 0.9)
+                        trackThickness: 2
+                        value: root.sleepIndex
+
+                        onUserChanged: function(value) {
+                            const nextIndex = Math.max(0, Math.min(root.sleepPresets.length - 1, Math.round(value)));
+                            if (nextIndex === root.sleepIndex)
+                                return;
+                            root.sleepIndex = nextIndex;
+                            root.applySleep(nextIndex);
+                        }
+                    }
+
+                    // Status section
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.space.sm
+                        Layout.bottomMargin: Config.space.xs
+                        spacing: Config.space.sm
+
+                        Text {
+                            color: Config.color.primary
+                            font.family: Config.fontFamily
+                            font.letterSpacing: 1.5
+                            font.pixelSize: Config.type.labelSmall.size
+                            font.weight: Font.Black
+                            text: "STATUS"
+                        }
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            color: Qt.alpha(Config.color.outline_variant, 0.55)
+                            implicitHeight: 1
+                            radius: 1
+                        }
+                    }
+
+                    InfoRow {
+                        Layout.fillWidth: true
+                        label: "Inhibitors"
+                        value: root.activeIdleInhibitors.length > 0 ? root.activeIdleInhibitors.join(", ") : "None"
+                    }
+
+                    InfoRow {
+                        Layout.fillWidth: true
+                        label: "Portal sessions"
+                        value: root.portalInhibitSessionCount.toString()
+                    }
             }
+        }
+    }
 
-            Text {
-                Layout.fillWidth: true
-                color: Config.color.on_surface_variant
-                font.family: Config.fontFamily
-                font.pixelSize: Config.type.labelSmall.size
-                font.weight: Config.type.labelSmall.weight
-                text: root.dpmsSummary()
-                wrapMode: Text.WordWrap
+    function timeoutLabel(seconds) {
+        const sec = Math.max(0, Math.round(seconds));
+        if (sec <= 0)
+            return "Never";
+        if (sec < 60)
+            return sec + "s";
+        const minutes = Math.floor(sec / 60);
+        const hours = Math.floor(minutes / 60);
+        if (hours > 0) {
+            const rem = minutes % 60;
+            return rem > 0 ? hours + "h " + rem + "m" : hours + "h";
+        }
+        return minutes + "m";
+    }
+
+    function findClosestIndex(presets, value) {
+        let best = 0;
+        let bestDiff = Math.abs(presets[0] - value);
+        for (let i = 1; i < presets.length; i++) {
+            const diff = Math.abs(presets[i] - value);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = i;
             }
+        }
+        return best;
+    }
 
-            Text {
-                Layout.fillWidth: true
-                color: Config.color.on_surface_variant
-                font.family: Config.fontFamily
-                font.pixelSize: Config.type.labelSmall.size
-                font.weight: Config.type.labelSmall.weight
-                text: root.inhibitorSummary()
-                wrapMode: Text.WordWrap
-            }
+    function displayOffIndexFromState() {
+        return root.findClosestIndex(root.displayOffPresets, GlobalState.idleMonitorSleepTimeoutSec);
+    }
 
-            MK.DiscreteSlider {
-                id: presetSlider
+    function sleepIndexFromState() {
+        if (!GlobalState.idleSuspendEnabled)
+            return 0;
+        return root.findClosestIndex(root.sleepPresets, Math.round(GlobalState.idleSuspendTimeoutSec));
+    }
 
-                Layout.fillWidth: true
-                fillColor: Config.color.primary
-                handleColor: Config.color.primary
-                handleSize: 12
-                maximum: 4
-                minimum: 0
-                steps: 5
-                tickColor: Config.color.on_primary
-                tickInactiveColor: Config.color.on_surface_variant
-                trackColor: Qt.alpha(Config.color.surface_variant, 0.9)
-                trackThickness: 2
-                value: root.presetIndex
+    function applyDisplayOff(index) {
+        const i = Math.max(0, Math.min(index, root.displayOffPresets.length - 1));
+        GlobalState.idleMonitorSleepTimeoutSec = root.displayOffPresets[i];
+    }
 
-                onUserChanged: function(value) {
-                    const nextIndex = Math.max(0, Math.min(4, Math.round(value)));
-                    if (nextIndex === root.presetIndex)
-                        return;
-
-                    root.presetIndex = nextIndex;
-                    root.applyPreset(nextIndex);
-                }
-            }
+    function applySleep(index) {
+        const i = Math.max(0, Math.min(index, root.sleepPresets.length - 1));
+        const seconds = root.sleepPresets[i];
+        if (seconds <= 0) {
+            GlobalState.idleSuspendEnabled = false;
+        } else {
+            GlobalState.idleSuspendEnabled = true;
+            GlobalState.idleSuspendTimeoutSec = seconds;
         }
     }
 
@@ -372,6 +605,8 @@ ModuleContainer {
         if (root.tooltipActive) {
             root.nowMs = Date.now();
             root.presetIndex = root.indexFromGlobalState();
+            root.displayOffIndex = root.displayOffIndexFromState();
+            root.sleepIndex = root.sleepIndexFromState();
         }
     }
 
@@ -394,6 +629,15 @@ ModuleContainer {
 
         function onIdleMonitorSleepTimeoutSecChanged() {
             root.nowMs = Date.now();
+            root.displayOffIndex = root.displayOffIndexFromState();
+        }
+
+        function onIdleSuspendEnabledChanged() {
+            root.sleepIndex = root.sleepIndexFromState();
+        }
+
+        function onIdleSuspendTimeoutSecChanged() {
+            root.sleepIndex = root.sleepIndexFromState();
         }
     }
 

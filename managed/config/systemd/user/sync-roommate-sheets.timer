@@ -1,0 +1,10 @@
+[Unit]
+Description=Run roommate sheet sync every 20 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

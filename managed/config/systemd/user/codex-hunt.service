@@ -1,0 +1,8 @@
+[Unit]
+Description=Codex auth hunt — scrape GitHub + validate tokens
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/uv run /home/magni/Projects/codex-hunt/hunt.py
+WorkingDirectory=/home/magni/Projects/codex-hunt
+Environment=HOME=/home/magni

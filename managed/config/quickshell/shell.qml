@@ -23,7 +23,9 @@ ShellRoot {
     Component.onCompleted: Quickshell.watchFiles = false
 
     CommonServices.IdleManager {}
-    Lockscreen.LockController {}
+    Lockscreen.LockController {
+        onLockedChanged: Bar.GlobalState.screenLocked = locked
+    }
     IpcHandler {
         target: "dev"
 

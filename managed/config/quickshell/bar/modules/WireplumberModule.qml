@@ -829,6 +829,22 @@ ModuleContainer {
         }
     }
 
+    property int sinkRetryAttempts: 0
+
+    // Retry until PipeWire delivers a usable sink. Covers the startup race
+    // where defaultAudioSink is still null when Component.onCompleted fires
+    // and the ready/sink-changed signals have already been emitted.
+    Timer {
+        interval: 250
+        repeat: true
+        running: !root.volumeAvailable && root.sinkRetryAttempts < 40
+
+        onTriggered: {
+            root.sinkRetryAttempts += 1;
+            root.refreshSink();
+        }
+    }
+
     Component.onCompleted: {
         root.refreshSink();
     }
@@ -871,10 +887,12 @@ ModuleContainer {
     Connections {
         function onDefaultAudioSinkChanged() {
             root.logEvent("defaultAudioSinkChanged");
+            root.sinkRetryAttempts = 0;
             root.refreshSink();
         }
         function onReadyChanged() {
             root.logEvent("pipewireReadyChanged");
+            root.sinkRetryAttempts = 0;
             root.refreshSink();
         }
 

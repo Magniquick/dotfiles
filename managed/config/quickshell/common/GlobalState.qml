@@ -20,11 +20,15 @@ QtObject {
     property bool rightPanelVisible: false
     property bool overviewVisible: false
     property bool idleSleepInhibited: false
-    property int idleMonitorSleepTimeoutSec: 300
+    property int idleMonitorSleepTimeoutSec: 180
     // -2 = off, -1 = indefinite, positive = timed minutes preset.
     property int idleSleepInhibitModeMinutes: -2
     // Unix epoch in milliseconds; 0 means no timed expiry.
     property double idleSleepInhibitUntilMs: 0
+    // Suspend-after-idle timeout (seconds). 0 = disabled.
+    property real idleSuspendTimeoutSec: 1800
+    property bool idleSuspendEnabled: false
+    property bool screenLocked: false
 
     // Remember which output the panel should appear on. Callers should pass a
     // `Screen` object (typically `root.QsWindow.window.screen`).

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run codex hunt every hour
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
