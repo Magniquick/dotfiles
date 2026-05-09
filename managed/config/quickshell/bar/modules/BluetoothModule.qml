@@ -50,6 +50,7 @@ ModuleContainer {
     property string lastScanHolders: ""
     property int lastScanStopNotifyMs: 0
     property bool showUnpairedDevices: false
+    property bool debugBluetooth: false
     property bool debugLogging: true
 
     readonly property bool adapterEnabled: !!(root.adapter && root.adapter.enabled)
@@ -430,13 +431,6 @@ ModuleContainer {
 
         root.updatePendingDeviceActions();
         root.requestScanState();
-        root.requestLibrepodsBattery();
-    }
-
-    function requestLibrepodsBattery() {
-        if (librepodsTooltipProcess.running)
-            return;
-        librepodsTooltipProcess.running = true;
     }
 
     function toggleAdapterEnabled() {
@@ -703,7 +697,7 @@ ModuleContainer {
 
     ProcessMonitor {
         id: discoveryOwnerMonitor
-        enabled: root.adapterEnabled
+        enabled: root.adapterEnabled && root.debugBluetooth
         processName: "BlueZStartDiscoveryMonitor"
         command: ["dbus-monitor", "--system", "type='method_call',destination='org.bluez',interface='org.bluez.Adapter1',member='StartDiscovery'"]
         onOutput: data => root.parseDiscoveryOwnerLine(data)
@@ -762,6 +756,7 @@ ModuleContainer {
 
     Process {
         id: librepodsTooltipProcess
+        running: root.debugBluetooth
         command: ["sh", "-lc", "svc=$(busctl --user list 2>/dev/null | awk '$1 ~ /^org\\.kde\\.StatusNotifierItem-/ {print $1}' | while read -r s; do id=$(busctl --user get-property \"$s\" /StatusNotifierItem org.kde.StatusNotifierItem Id 2>/dev/null); echo \"$id\" | grep -qi '\"librepods\"' && { echo \"$s\"; break; }; done); [ -n \"$svc\" ] && busctl --user get-property \"$svc\" /StatusNotifierItem org.kde.StatusNotifierItem ToolTip 2>/dev/null || true"]
 
         stdout: StdioCollector {
@@ -807,7 +802,6 @@ ModuleContainer {
         running: root.tooltipActive && root.adapterEnabled
         onTriggered: {
             root.requestScanState();
-            root.requestLibrepodsBattery();
         }
     }
 

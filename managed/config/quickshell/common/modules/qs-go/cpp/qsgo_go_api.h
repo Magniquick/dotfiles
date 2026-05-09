@@ -20,6 +20,10 @@ char* QsGo_Pacman_Sync(void);
 
 char* QsGo_Ical_Refresh(int days);
 
+/* ---------- systemd failed units ---------- */
+
+char* QsGo_SystemdFailed_Refresh(void);
+
 /* ---------- Config / secrets resolver ---------- */
 
 char* QsGo_Config_Resolve(void);

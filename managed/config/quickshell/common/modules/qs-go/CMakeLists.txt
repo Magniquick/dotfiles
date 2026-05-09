@@ -12,7 +12,7 @@ endif()
 
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Network DBus)
 
 # Build the Go shared library once and keep it next to the QML module output.
 find_program(GO_EXECUTABLE go REQUIRED)
@@ -63,6 +63,7 @@ add_library(qsgo_plugin SHARED
     cpp/QsGoPacman.cpp
     cpp/QsGoIcal.cpp
     cpp/QsGoTodoist.cpp
+    cpp/QsGoSystemdFailed.cpp
 )
 
 set_target_properties(qsgo_plugin
@@ -96,6 +97,7 @@ target_link_libraries(qsgo_plugin PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Network
+    Qt6::DBus
     "${QSGO_GO_LIB}"
 )
 

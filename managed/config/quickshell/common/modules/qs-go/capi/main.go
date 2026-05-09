@@ -1,4 +1,6 @@
 // Package main is the CGO c-shared entry point. All //export functions define the C ABI.
+//
+//nolint:revive // exported underscore names are fixed by the C ABI.
 package main
 
 /*
@@ -21,17 +23,20 @@ import (
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
 	"qs-go/internal/secrets"
+	"qs-go/internal/systemd"
 	"qs-go/internal/todoist"
 )
 
 // ----- Pacman -----
 
 //export QsGo_Pacman_Refresh
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Pacman_Refresh(noAur C.int) *C.char {
 	return C.CString(pacman.Refresh(noAur != 0))
 }
 
 //export QsGo_Pacman_Sync
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Pacman_Sync() *C.char {
 	return C.CString(pacman.Sync())
 }
@@ -39,23 +44,35 @@ func QsGo_Pacman_Sync() *C.char {
 // ----- iCal -----
 
 //export QsGo_Ical_Refresh
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Ical_Refresh(days C.int) *C.char {
 	return C.CString(ical.Refresh(int(days)))
+}
+
+// ----- systemd failed units -----
+
+//export QsGo_SystemdFailed_Refresh
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_SystemdFailed_Refresh() *C.char {
+	return C.CString(systemd.Refresh())
 }
 
 // ----- Config / secrets resolver -----
 
 //export QsGo_Config_Resolve
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Config_Resolve() *C.char {
 	return C.CString(appconfig.ResolveJSON(secrets.NewResolver()))
 }
 
 //export QsGo_AiMcp_Refresh
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_AiMcp_Refresh(configJSON *C.char) *C.char {
 	return C.CString(ai.RefreshMcp(C.GoString(configJSON)))
 }
 
 //export QsGo_AiMcp_GetPrompt
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_AiMcp_GetPrompt(configJSON, serverID, promptName, argsJSON *C.char) *C.char {
 	return C.CString(ai.GetMcpPrompt(
 		C.GoString(configJSON),

@@ -2,9 +2,15 @@
 
 This directory contains native/QML modules consumed by the Quickshell config (Wayland/Hyprland). Prefer Quickshell built-in services/APIs where possible; use these modules for capabilities that need native code or vendored QML.
 
+## Migration Policy
+
+For `qs-go` and the other Go-backed plugins/helpers, use full-sweep migrations. When replacing an API, model shape, provider path, config format, C ABI, or QML-facing type, migrate all in-tree callsites in the same change and remove the superseded path. Backward-compatible wrappers, dual formats, legacy aliases, and compatibility shims are not needed unless the user explicitly requests them; simpler current behavior is preferred even if edge cases change.
+
 ## Project Structure
 
-- `qs-go/`: Go → CGO → C++ Qt plugin (import: `qsgo`). **Primary native module.**
+- `qs-go/`: Go -> CGO -> C++ Qt plugin (import: `qsgo`). **Primary native module.**
+- `qs-capture/`: C++/Qt capture plugin used by HyprQuickshot.
+- `qsmath/`: C++/Qt math rendering plugin used by left-panel message math blocks.
 - `unified-lyrics-api/`: Go helper + C++ QML plugin with transparent Spotify/LRCLIB fallback.
 - `../materialkit/`: Local MaterialKit QML primitives (Pane/Card/Button/IconButton/Slider/Progress/Ripple).
 - `rounded_polygon_qmljs/`: JS/QML shape helpers tracked as a git submodule.
@@ -25,12 +31,16 @@ Build native modules:
   - Import path: `common/modules/qs-go/build/qml`
   - On first build, run `cd common/modules/qs-go && go mod tidy` to populate go.sum
   - When Go source changes: `./tools/build-qs-go.sh` (CMake tracks Go sources via GLOB_RECURSE; only use `rm -rf common/modules/qs-go/build` if C++ headers change or the build is corrupt)
-  - Quick test: `QML_IMPORT_PATH=~/.config/quickshell/common/modules/qs-go/build/qml quickshell`
+  - Quick test from repo root: `env QML_IMPORT_PATH="$PWD/common/modules/qs-go/build/qml" quickshell`
+- `qs-capture`: `bash tools/build-qs-capture.sh`
+  - Import path: `common/modules/qs-capture/build/qml`
+- `qsmath`: `bash tools/build-qsmath.sh`
+  - Import path: `common/modules/qsmath/build/qml`
 - `unified-lyrics-api`:
   - `cd common/modules/unified-lyrics-api && cmake -S . -B build && cmake --build build`
   - Import path: `common/modules/unified-lyrics-api/build/qml`
 
-No automated test runner is wired up here; verify changes by rebuilding and restarting `quickshell`.
+No root-level test runner is wired up. For Go changes, run focused package tests in the module you touched (for example `cd common/modules/qs-go && go test ./... -count=1`), rebuild the affected native module, then finish with `bash tools/reload-quickshell.sh`.
 
 ## qs-go (Go / C++ Qt Plugin) Notes
 
@@ -48,43 +58,43 @@ Source layout:
 - `internal/secrets/`: Secret Service lookup boundary for keys/tokens/passwords
 - AI-specific layout:
   - `internal/ai/providers/`: self-contained inference providers; each provider implements the shared provider interface and owns its HTTP/payload logic
-  - `internal/ai/models/helpers/`: shared model capability enrichment and cache helpers keyed by canonical `provider/model` ids
+  - `internal/ai/models/helpers/`: shared model capability helpers keyed by canonical `provider/model` ids
   - `internal/ai/shared/`: provider-agnostic request/response/domain structs shared by providers and the AI entrypoints
   - `internal/ai/mcp/`: MCP 2025-11-25 client runtime built on `github.com/modelcontextprotocol/go-sdk` for HTTP servers, local built-in tools, typed server/tool/prompt/resource snapshots, and tool execution
 
 QML types (all in `import qsgo`):
 
 - `SysInfoProvider`
-  - Invokable: `refresh(diskDevice)`
+  - Invokable: `refresh()`
   - Properties: `cpu`, `mem`, `mem_used`, `mem_total`, `disk`, `disk_health`, `disk_wear`, `temp`, `uptime`,
+    `disk_worst_case`, `disk_btrfs_available`, `disk_btrfs_free_est_gib`, `disk_btrfs_free_min_gib`,
     `psi_cpu_some`, `psi_cpu_full`, `psi_mem_some`, `psi_mem_full`, `psi_io_some`, `psi_io_full`, `disk_device`, `error`
 - `BacklightProvider`
-  - Invokables: `start()`, `refresh()`, `setBrightness(percent)`, `stopMonitor()`
+  - Invokables: `start()`, `startMonitor()`, `refresh()`, `setBrightness(percent)`, `stopMonitor()`
   - Properties: `available`, `brightness_percent`, `device`, `error`
 - `ConfigResolver`
   - Invokable: `refresh()`
   - Properties: `values`
   - Notes: central QML-facing bridge combining `internal/appconfig` non-secret TOML with `internal/secrets` provider API keys
+- `HyprlandSnapshotProvider`
+  - Invokables: `start()`, `stop()`, `refresh()`
+  - Properties: `activeWorkspace`, `clients`, `error`, `running`, `revision`
 - `AiChatSession`
   - Invokables: `submitInput`, `submitInputWithAttachments`, `cancel`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
-    `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`, `refreshMcp`, `getMcpPrompt`, `readMcpResource`
+    `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`, `pasteAttachmentFromClipboard`, `restoreHistory`,
+    `refreshMcp`, `getMcpPrompt`, `readMcpResource`, `refreshResumeConversations`, `resumeConversation`
   - Properties: `model_id`, `system_prompt`, `provider_config`, `mcp_config`, `busy`, `status`, `error`, `commands`,
-    `mcp_servers`, `mcp_tools`, `mcp_prompts`, `mcp_resources`, `mcp_status`, `mcp_error`
-  - Signals: `streamDone`, `openModelPickerRequested`, `openMoodPickerRequested`, `scrollToEndRequested`, `copyAllRequested(text)`
+    `mcp_servers`, `mcp_tools`, `mcp_prompts`, `mcp_resources`, `mcp_status`, `mcp_error`, `resume_conversations`
+  - Signals: `streamDone`, `openModelPickerRequested`, `openMoodPickerRequested`, `openResumePickerRequested`, `openMcpAddRequested`, `scrollToEndRequested`, `copyAllRequested(text)`
   - Notes:
-    - `QAbstractListModel`; roles: `messageId`, `sender`, `body`, `kind`, `metrics`, `attachments`
+    - `QAbstractListModel`; roles: `messageId`, `sender`, `body`, `kind`, `metrics`, `attachments`, `tool`, `showHeader`
     - `model_id` is canonical `provider/model` form, for example `openai/gpt-4o`
     - `provider_config` is a typed `QVariantMap` keyed by provider name; do not add provider-specific top-level properties back
     - `mcp_config` is a typed `QVariantList` of remote MCP server definitions; the runtime also appends local built-in MCP servers and returns typed `mcp_servers`, `mcp_tools`, `mcp_prompts`, and `mcp_resources`
     - slash-command helpers now include `/mcp add`, which opens a QML wizard and persists a minimal MCP server entry into `leftpanel/mcp_servers.json`
     - Todoist is configured from Secret Service as a hosted streamable MCP server at `https://ai.todoist.net/mcp`; do not use an `npx` Todoist server.
+    - chat history/resume is persisted by the qs-go `internal/chatstore` layer; keep resume data as typed Qt values at the QML boundary
     - structured QML-facing data must use Qt native types (`QVariantMap`, `QVariantList`, model roles), not JSON strings
-- `AiModelCatalog`
-  - Invokable: `refresh()`
-  - Properties: `provider_config`, `busy`, `status`, `error`, `providers`
-  - Notes:
-    - `providers` is a typed `QVariantList` of provider entries, each containing provider metadata, `recommended_models`, and `models`
-    - catalog entries expose canonical model ids plus raw provider model ids and structured capability metadata
 - `PacmanUpdatesProvider`
   - Invokables: `refresh(noAur)`, `sync()`
   - Properties: `updates_count`, `aur_updates_count`, `items_count`, `updates_text`, `aur_updates_text`, `last_checked`, `has_updates`, `error`
@@ -116,6 +126,7 @@ AI architecture notes:
 - The local email MCP server is read-only by default. It reads account metadata from ignored `leftpanel/config.toml` and passwords from Secret Service as `EMAIL_<ID>_PASSWORD` or compatible secret keys. `provider = "gmail"` defaults IMAP to `imap.gmail.com:993` with TLS. Do not expose send tools unless the user explicitly asks for a separate opt-in design.
 - Chat streams temporarily install MCP sampling/elicitation handlers onto the shared runtime so server-initiated sampling can reuse the active provider/model.
 - When extending the catalog or chat surface, prefer Qt-native structured data at the C++/QML boundary and keep any unavoidable JSON confined to the Go/C ABI layer.
+- MCP/tool-call UI rows must only show content that is sent back to the model. Keep provider output serialization aligned through `internal/ai/shared.ToolResultModelPayload` and `ToolResultModelOutput`; do not maintain provider-specific result/data shapes.
 
 ## Coding Style & Naming
 

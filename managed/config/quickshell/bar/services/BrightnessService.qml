@@ -7,6 +7,7 @@ import Quickshell.Io
 import qsgo
 
 import "../../common" as Common
+import "../components/DdcUtils.js" as DdcUtils
 
 Item {
   id: root
@@ -116,24 +117,7 @@ Item {
           return;
         }
 
-        const blocks = text.split(/\n\s*\n/);
-        const map = {};
-        for (const b of blocks) {
-          // Skip blocks that explicitly say DDC/CI is unsupported.
-          if (/does not support DDC\/CI/i.test(b) || /Invalid display/i.test(b))
-            continue;
-          const connectorMatch = b.match(/DRM\s*connector:\s*(?:card\d+-)?(.+)/i);
-          // Avoid matching literal '/' to keep the QML/JS regexp parser happy.
-          const busMatch = b.match(/I2C\s*bus:\s*.*i2c-(\d+)/i);
-          if (!connectorMatch || !busMatch)
-            continue;
-          const connector = (connectorMatch[1] || "").trim();
-          const busNum = (busMatch[1] || "").trim();
-          if (connector !== "" && busNum !== "")
-            map[connector] = busNum;
-        }
-
-        root.ddcByConnector = map;
+        root.ddcByConnector = DdcUtils.parseDdcDetect(text);
         root.ddcVersion++;
       }
     }
@@ -243,28 +227,6 @@ Item {
       }
     }
 
-    function parseDdcVcp10(output) {
-      // Typical: "VCP 10 C 50 100"
-      // Sometimes values may be hex: "0x0032 0x0064".
-      const s = (output || "").trim();
-      const tokens = s.match(/0x[0-9a-fA-F]+|\\d+/g) || [];
-      if (tokens.length < 2)
-        return null;
-
-      function parseNum(t) {
-        if (t.startsWith("0x") || t.startsWith("0X"))
-          return parseInt(t, 16);
-        return parseInt(t, 10);
-      }
-
-      // Heuristic: last two numeric tokens are current and max.
-      const cur = parseNum(tokens[tokens.length - 2]);
-      const max = parseNum(tokens[tokens.length - 1]);
-      if (!isFinite(cur) || !isFinite(max) || max <= 0)
-        return null;
-      return { current: cur, max: max };
-    }
-
     Component.onCompleted: {
       if (monitor.method === "backlight")
         monitor.refresh();
@@ -327,7 +289,7 @@ Item {
       stdout: StdioCollector {
         onStreamFinished: {
           monitor._ddcGetRunning = false;
-          const parsed = monitor.parseDdcVcp10(this.text || "");
+          const parsed = DdcUtils.parseDdcVcp10(this.text || "");
           if (!parsed) {
             monitor.error = "DDC read failed";
             return;

@@ -8,6 +8,7 @@
 #include "QsGoIcal.h"
 #include "QsGoPacman.h"
 #include "QsGoSysInfo.h"
+#include "QsGoSystemdFailed.h"
 #include "QsGoTodoist.h"
 
 class qsgo_plugin : public QQmlExtensionPlugin {
@@ -25,6 +26,7 @@ public:
     qmlRegisterType<QsGoPacman>(uri, 1, 0, "PacmanUpdatesProvider");
     qmlRegisterType<QsGoIcal>(uri, 1, 0, "IcalCache");
     qmlRegisterType<QsGoTodoist>(uri, 1, 0, "TodoistClient");
+    qmlRegisterType<QsGoSystemdFailed>(uri, 1, 0, "SystemdFailedProvider");
   }
 };
 

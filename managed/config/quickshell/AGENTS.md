@@ -4,7 +4,13 @@ This file provides guidance for working with code in this repository.
 
 ## Project Overview
 
-Custom Quickshell configuration for Wayland/Hyprland featuring a modular status bar, left/right panels, powermenu, screenshot utilities (HyprQuickshot), and system clock. Quickshell is a Qt/QML-based compositor shell toolkit.
+Custom Quickshell configuration for Wayland/Hyprland featuring a modular status bar, overview, left/right panels, powermenu, resident lock controller, and screenshot/recording utilities through HyprQuickshot. Quickshell is a Qt/QML-based compositor shell toolkit.
+
+## Compatibility Policy
+
+Backward compatibility inside this configuration is not a goal unless the user explicitly asks for it. Prefer full-sweep migrations: update every in-tree caller, binding, config shape, and doc in the same change, then delete the old path. Do not keep legacy shims, compatibility facades, aliases, or dead fallback branches just to preserve edge-case behavior in this codebase.
+
+For persisted local state such as SQLite rows or generated config, migrate or rewrite the stored data directly when the shape changes. Do not add runtime converters, normalizers, or "read old shape" branches for stale local rows unless the user explicitly asks for a compatibility layer.
 
 ## Documentation
 
@@ -15,16 +21,17 @@ The Quickshell binary locally tracks the master branch.
 
 **Running the shell:**
 
-- Main shell (bar + panels + clock + panels): `./qs` from the root directory.
+- Main shell (bar + overview + panels + lock controller + HyprQuickshot/powermenu loaders): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
 - HyprQuickshot (screenshot utility): run the main shell with `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
 - Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for the normal manual check. It restarts `quickshell.service`, waits briefly, then prints recent warnings/errors.
 - Global config is at `quickshell.conf`
 
-**Native modules (Rust/Go/C++):**
+**Native modules (Go/C++/QML):**
 
-- Build, import-path, and module notes live in `common/modules/AGENTS.md` (and module-specific `common/modules/*/AGENTS.md`).
-- Prefer golang based modules unless asked otherwise.
+- Build, import-path, and module notes live in `common/modules/AGENTS.md`.
+- Current native/module directories include `qs-go` (primary Go/CGO Qt plugin), `qs-capture` (native capture), `qsmath` (math rendering), `unified-lyrics-api`, and `rounded_polygon_qmljs`.
+- Prefer Go-based modules for new native integrations unless asked otherwise.
 
 ## Architecture
 
@@ -43,7 +50,8 @@ The bar uses a **modular architecture** with key directories:
 
    - `ModuleContainer.qml`: Base wrapper for bar modules
    - `TooltipPopup.qml`: Tooltip system with scrolling support (Flickable + ScrollIndicator)
-   - `IconTextRow.qml`, `BarLabel.qml`, `ActionChip.qml`: Common UI primitives (ActionChip has flash animation + loading spinner)
+   - `IconLabel.qml`, `IconTextRow.qml`, `BarLabel.qml`, `ActionChip.qml`, `ActionIconButton.qml`: Common UI primitives
+   - `ProcessMonitor.qml`, `TrafficGraph.qml`, `TooltipCard.qml`, `UpdatesTooltip.qml`, `CalendarTooltip.qml`: Shared behavior/tooltip helpers
    - `JsonUtils.js`: Robust JSON parsing utilities (`safeParse`, `parseObject`, `parseArray`, `formatTooltip`)
    - `CommandRunner.qml`: Process execution helper with stderr capture, timeout, error signals
 
@@ -52,41 +60,47 @@ The bar uses a **modular architecture** with key directories:
    - `Config`: Design tokens (fonts, spacing, colors, slider constants) from `common/Config.qml`
    - `ColorPalette`: Material palette + color roles from `common/ColorPalette.qml` / `common/colors.json`
    - `DependencyCheck`: Centralized dependency checking with notify-send alerts
-   - `GlobalState`: Shared runtime state (left/right panel visibility)
+   - `GlobalState`: Shared runtime state (panels, overview, powermenu, HyprQuickshot, recording, idle-inhibit, lock state)
+   - Service singletons: `BrightnessService`, `CalendarService`, `NetworkService`, `PrivacyService`, `SystemdFailedService`, `TodoistService`, `UpdatesService`
 
 1. **`bar/modules/`** : Feature modules, organized into groups
 
    - **Groups**: `StartMenuGroup`, `WorkspaceGroup`, `ControlsGroup`, `WirelessGroup`, `PanelGroup`
-   - **Individual modules**: `MprisModule`, `NetworkModule`, `BatteryModule`, `BacklightModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `SystemdFailedModule`, `WireplumberModule`, `ToDoModule`, etc.
+   - **Individual modules**: `MprisModule`, `NetworkModule`, `BluetoothModule`, `BatteryModule`, `BacklightModule`, `IdleInhibitModule`, `ScreenRecordingModule`, `PowerProfilesModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `SystemdFailedModule`, `UpdatesModule`, `ClockModule`, `WireplumberModule`, `ToDoModule`, etc.
 
-### Native Modules (Rust/Go/C++)
+### Native Modules (Go/C++/QML)
 
-Native module notes live in `common/modules/AGENTS.md` (plus module-specific docs like `common/modules/qs-native/AGENTS.md`).
+Native module notes live in `common/modules/AGENTS.md`. The primary QML plugin is `qs-go` (`import qsgo`), with focused modules for capture (`qs-capture`), math rendering (`qsmath`), lyrics (`unified-lyrics-api`), and rounded shape helpers (`rounded_polygon_qmljs`).
 
 ### Data Sources & Runtime Integration
 
 Modules integrate with system services via:
 
-- **Quickshell services**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland` (workspaces)
-- **Sysfs/udev**: Internal backlight via `qsgo.BacklightProvider` (sysfs + udev, no polling)
+- **Quickshell services/APIs**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland`, `Quickshell.Networking`, `Quickshell.Bluetooth`, `Quickshell.Services.Pipewire`, `Quickshell.Services.UPower`
+- **Native helpers**: `qsgo.BacklightProvider`, `PacmanUpdatesProvider`, `IcalCache`, `TodoistClient`, `SysInfoProvider`, `HyprlandSnapshotProvider`, `AiChatSession`, plus `qs-capture`, `qsmath`, and `unifiedlyrics`
 - **External commands**:
-  - `nmcli` for network status/wifi
-  - `systemctl --failed` + `busctl monitor` for systemd units
-  - `pw-dump` + `fuser /dev/video*` for privacy monitoring (camera/microphone detection)
-  - Updates: `checkupdates` + `pacman -Qm` (via `qsgo` PacmanUpdatesProvider)
-- **Native helpers**: see `common/modules/AGENTS.md` (and module-specific docs under `common/modules/`)
+  - `ip` for current address/gateway details that `Quickshell.Networking` does not expose
+  - `ddcutil` for external monitor brightness
+  - `qsgo.SystemdFailedProvider` for failed unit lists; it snapshots with structured `systemctl --output=json` and refreshes from systemd D-Bus events
+  - `inotifywait` + `fuser` + `ps` for camera device ownership; PipeWire covers microphone/screencast state
+  - Debug-only `busctl`, `dbus-monitor`, and `ps` for Bluetooth discovery diagnostics and librepods tray metadata
+  - `hp-charge-control` for battery charge policy controls
+  - `wl-screenrec`, `wl-copy`, and `pactl` for HyprQuickshot recording/copy/audio flows
+  - Updates: `checkupdates` and `yay -Qua` (via `qsgo` PacmanUpdatesProvider)
 
-However, try to use native quickshell modules if available. If not, fallback to shelling out or implementing a golang based module, based on user input.
+Prefer native Quickshell APIs when available. If not, prefer the existing `qs-go`/Go-native path for reusable integrations; shell out only for narrow command-backed gaps or when the user asks for it.
+
+For AI MCP/tool-call rows, the UI must only show content that is sent back to the model. If a row shows structured result data, provider serialization must include that same data through the shared qs-go tool-result helpers; do not add provider-specific result/data splits.
 
 ### Styling System
 
 - **Theme**: Material colors from Matugen JSON in `common/colors.json` via `common/Colors.qml`
 - **Config**: Design tokens in `common/Config.qml` (singleton), imported directly or via bar singleton
-  - Fonts: `fontFamily: "Google Sans"`, `iconFontFamily: "JetBrainsMono NFP"`
+  - Fonts: `fontFamily: "Google Sans Flex"`, `iconFontFamily: "Symbols Nerd Font Mono"`
   - Spacing/motion: `Config.space.*`, `Config.motion.duration.*`, `Config.shape.corner.*`
   - Colors: `Config.color` and `Config.palette` (from `common/Colors.qml`)
   - Typography: `Config.type.*` defines Material type scale (display/headline/title/body/label)
-- **Layering**: Bar uses `WlrLayershell.layer: WlrLayer.Background`; powermenu uses `Overlay` + `Exclusive` keyboard focus
+- **Layering**: Bar uses `WlrLayershell.layer: WlrLayer.Top`; left/right panels use overlay windows with on-demand focus; powermenu/overview use overlay + exclusive keyboard focus
 
 ### Color Roles (Material 3)
 
@@ -166,15 +180,15 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 - Example:
   ```qml
   Component.onCompleted: {
-      DependencyCheck.require("nmcli", "NetworkModule", function(available) {
-          root.nmcliAvailable = available;
+      DependencyCheck.require("ddcutil", "BrightnessService", function(available) {
+          root.ddcutilAvailable = available;
       });
   }
   ```
 
 **Process Crash Recovery:**
 
-- Long-running monitors (nmcli, udevadm, busctl) use exponential backoff restart
+- Long-running monitors (`dbus-monitor`, `inotifywait`, Bluetooth diagnostics, etc.) use exponential backoff restart where they are expected to stay alive
 - Pattern: `monitorRestartAttempts`, `monitorRestartTimer`, `monitorBackoffResetTimer`
 - Backoff: 1s → 2s → 4s → ... → 30s max, resets after 60s stability
 - Set `monitorDegraded: true` on crash for optional UI indicator
@@ -198,13 +212,15 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 ## Testing
 
-**No automated tests.** Manual verification should usually use `bash tools/reload-quickshell.sh`; the happy path is a service restart followed by "No warnings or errors" from the recent log tail.
+No root-wide QML test suite is defined. Native Go modules have focused package tests; follow `common/modules/AGENTS.md` when changing those paths.
+
+Manual verification should usually use `bash tools/reload-quickshell.sh`; the happy path is a service restart followed by "No warnings or errors" from the recent log tail.
 - In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
 - **Lockscreen safety**: Never terminate/kill a running lockscreen instance unless authentication has succeeded and the session unlock path is executing. Do not use timeout/force-kill smoke tests (`timeout ... quickshell --path lockscreen`) against active lock sessions, as this can leave Hyprland in an invalid lock state.
 
 ## Dependencies
 
-- **Build**: Qt6 QML modules; native module builds may require `cmake`, `cargo`, and/or `go` (see `common/modules/AGENTS.md`)
+- **Build**: Qt6 QML modules; native module builds may require `cmake` and/or `go` (see `common/modules/AGENTS.md`)
 - **Versioning**: Track Quickshell `master` branch; when using Context7, target the `master` branch docs.
 
 ## Commit & PR Guidelines

@@ -62,7 +62,8 @@ Item {
 
     function refreshNetwork() {
         root.syncNativeState();
-        ipRunner.trigger();
+        ipAddressRunner.trigger();
+        gatewayRunner.trigger();
         root.refreshSources();
         root.readTrafficSample();
         if (root.connectionType === "ethernet" && root.connectionState === "connected") {
@@ -352,27 +353,57 @@ Item {
         }
     }
 
-    function updateIpDetails(text) {
+    function updateIpAddressDetails(text) {
+        let ipValue = "";
         if (!text || text.trim() === "") {
             root.ipAddress = "";
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(text);
+            const entries = Array.isArray(parsed) ? parsed : [];
+            for (let i = 0; i < entries.length; i++) {
+                const addrInfo = entries[i] && Array.isArray(entries[i].addr_info) ? entries[i].addr_info : [];
+                for (let j = 0; j < addrInfo.length; j++) {
+                    const item = addrInfo[j] || {};
+                    if (item.family === "inet" && item.local) {
+                        const prefixlen = Number.isFinite(item.prefixlen) ? item.prefixlen : "";
+                        ipValue = String(item.local) + (prefixlen !== "" ? "/" + prefixlen : "");
+                        break;
+                    }
+                }
+                if (ipValue !== "")
+                    break;
+            }
+        } catch (err) {
+            ipValue = "";
+        }
+
+        root.ipAddress = ipValue;
+    }
+
+    function updateGatewayDetails(text) {
+        let gatewayValue = "";
+        if (!text || text.trim() === "") {
             root.gateway = "";
             return;
         }
 
-        let ipValue = "";
-        let gatewayValue = "";
-        const lines = text.trim().split("\n");
-        for (let i = 0; i < lines.length; i++) {
-            const parts = lines[i].split(":");
-            const key = parts[0];
-            const value = parts.slice(1).join(":");
-            if (key.indexOf("IP4.ADDRESS") === 0 && ipValue === "")
-                ipValue = value;
-            else if (key === "IP4.GATEWAY")
-                gatewayValue = value;
+        try {
+            const parsed = JSON.parse(text);
+            const entries = Array.isArray(parsed) ? parsed : [];
+            for (let i = 0; i < entries.length; i++) {
+                const gateway = entries[i] && entries[i].gateway ? String(entries[i].gateway) : "";
+                if (gateway !== "") {
+                    gatewayValue = gateway;
+                    break;
+                }
+            }
+        } catch (err) {
+            gatewayValue = "";
         }
 
-        root.ipAddress = ipValue;
         root.gateway = gatewayValue;
     }
 
@@ -502,12 +533,12 @@ Item {
     }
 
     CommandRunner {
-        id: ipRunner
+        id: ipAddressRunner
 
         // Quickshell.Networking gives us device/network state, but not the
-        // active IPv4 address or default gateway on the current backend.
+        // active IPv4 address on the current backend.
         command: root.deviceName
-            ? ["sh", "-lc", "ip -o -4 addr show dev '" + root.deviceName + "' scope global | awk 'NR==1 {print \"IP4.ADDRESS:\" $4}'; ip route show default dev '" + root.deviceName + "' | awk 'NR==1 {print \"IP4.GATEWAY:\" $3}'"]
+            ? ["ip", "-j", "-4", "addr", "show", "dev", root.deviceName, "scope", "global"]
             : []
         enabled: root.tooltipActive
             && root.connectionState === "connected"
@@ -515,7 +546,25 @@ Item {
         intervalMs: 30000
 
         onRan: function(commandOutput) {
-            root.updateIpDetails(commandOutput);
+            root.updateIpAddressDetails(commandOutput);
+        }
+    }
+
+    CommandRunner {
+        id: gatewayRunner
+
+        // Quickshell.Networking gives us device/network state, but not the
+        // default gateway on the current backend.
+        command: root.deviceName
+            ? ["ip", "-j", "route", "show", "default", "dev", root.deviceName]
+            : []
+        enabled: root.tooltipActive
+            && root.connectionState === "connected"
+            && root.deviceName !== ""
+        intervalMs: 30000
+
+        onRan: function(commandOutput) {
+            root.updateGatewayDetails(commandOutput);
         }
     }
 
@@ -563,10 +612,6 @@ Item {
                 }
 
                 function onStateChanged() {
-                    root.refreshNativeStateFromSignal();
-                }
-
-                function onNmStateChanged() {
                     root.refreshNativeStateFromSignal();
                 }
             }
