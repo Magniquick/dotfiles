@@ -13,8 +13,11 @@ Item {
     property string calendarStatus: ""
     property date currentDate: new Date()
     readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
+    readonly property int dayGridHeight: dayCellSize * 6 + Config.space.xs * 5
+    readonly property int monthViewportHeight: Config.type.headlineSmall.line + Config.space.sm * 3 + weekdayRowHeight + dayGridHeight
     readonly property int monthRangeYears: 5
     readonly property int monthRangeCenter: monthRangeYears * 12
+    readonly property int weekdayRowHeight: Config.type.labelSmall.size + Config.space.xs
     readonly property var dayEvents: {
         const key = calendar.dayKey(calendar.selectedDate);
         if (!key || !calendar.eventsByDay || !calendar.eventsByDay[key])
@@ -22,7 +25,6 @@ Item {
         return calendar.eventsByDay[key];
     }
     property var eventsByDay: ({})
-    property string refreshEnvFile: ""
     property int refreshDays: 180
     property date selectedDate: new Date()
     readonly property date today: new Date()
@@ -105,7 +107,7 @@ Item {
         if (!calendar.calendarClient)
             return;
         Qt.callLater(function () {
-            calendar.calendarClient.refreshFromEnv(calendar.refreshEnvFile, calendar.refreshDays);
+            calendar.calendarClient.refresh(calendar.refreshDays);
         });
     }
     // `dayEvents` is derived declaratively from `eventsByDay` and `selectedDate`.
@@ -155,7 +157,7 @@ Item {
             id: monthListView
 
             Layout.fillWidth: true
-            Layout.preferredHeight: 230 // Title + Header + Grid
+            Layout.preferredHeight: calendar.monthViewportHeight
             clip: true
             currentIndex: calendar.monthRangeCenter
             highlightMoveDuration: 120
@@ -217,7 +219,7 @@ Item {
                                 required property int index
                                 required property string modelData
 
-                                implicitHeight: Config.type.labelSmall.size + Config.space.xs
+                                implicitHeight: calendar.weekdayRowHeight
                                 implicitWidth: calendar.dayCellSize
 
                                 Text {
@@ -243,9 +245,9 @@ Item {
                             delegate: Item {
                                 id: dayDelegate
 
-                                readonly property var dateObj: inMonth ? new Date(monthDelegate.viewYear, monthDelegate.viewMonth, dayNumber) : undefined
-                                readonly property int dayNumber: index - monthDelegate.startOffset + 1
-                                readonly property bool inMonth: dayNumber > 0 && dayNumber <= monthDelegate.daysInMonth
+                                readonly property var dateObj: new Date(monthDelegate.viewYear, monthDelegate.viewMonth, index - monthDelegate.startOffset + 1)
+                                readonly property int dayNumber: dateObj.getDate()
+                                readonly property bool inMonth: dateObj.getMonth() === monthDelegate.viewMonth && dateObj.getFullYear() === monthDelegate.viewYear
                                 required property int index
                                 readonly property bool isSelection: inMonth && dayNumber === calendar.selectedDate.getDate() && monthDelegate.viewMonth === calendar.selectedDate.getMonth() && monthDelegate.viewYear === calendar.selectedDate.getFullYear()
                                 readonly property bool isToday: inMonth && dayNumber === calendar.todayDay && monthDelegate.viewMonth === calendar.todayMonth && monthDelegate.viewYear === calendar.todayYear
@@ -291,7 +293,8 @@ Item {
                                     font.pixelSize: Config.type.bodyMedium.size
                                     font.weight: Config.type.bodyMedium.weight
                                     horizontalAlignment: Text.AlignHCenter
-                                    text: dayDelegate.inMonth ? dayDelegate.dayNumber : ""
+                                    opacity: dayDelegate.inMonth ? 1.0 : 0.24
+                                    text: dayDelegate.dayNumber
                                     verticalAlignment: Text.AlignVCenter
                                 }
                                 MouseArea {

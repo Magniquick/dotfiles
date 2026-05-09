@@ -64,6 +64,7 @@ ActionButtonBase {
             font.family: Config.fontFamily
             font.pixelSize: Config.type.labelMedium.size
             font.weight: Config.type.labelMedium.weight
+            font.variableAxes: Config.fontVariableAxes(Config.type.labelMedium.size, Config.type.labelMedium.weight)
             renderType: Text.NativeRendering
             text: root.text
         }

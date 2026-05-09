@@ -131,6 +131,7 @@ Rectangle {
             font.family: Config.fontFamily
             font.pixelSize: Config.type.bodyMedium.size
             font.weight: Config.type.bodyMedium.weight
+            font.variableAxes: Config.fontVariableAxes(Config.type.bodyMedium.size, Config.type.bodyMedium.weight)
             text: root.tooltipText
             textFormat: Text.RichText
             wrapMode: Text.WordWrap

@@ -28,6 +28,7 @@ RowLayout {
         Text {
             anchors.centerIn: parent
             color: root.iconColor
+            font.family: Config.iconFontFamily
             font.pixelSize: Config.type.headlineLarge.size
             text: root.icon
         }
@@ -43,8 +44,10 @@ RowLayout {
             color: Config.color.on_surface
             elide: Text.ElideRight
             font.family: Config.fontFamily
+            font.letterSpacing: 0.4
             font.pixelSize: Config.type.headlineSmall.size
             font.weight: Font.Bold
+            font.variableAxes: { "opsz": Config.type.headlineSmall.size - 2, "wdth": 100, "wght": 550, "GRAD": 0, "ROND": 0, "slnt": 0 }
             text: root.title
         }
         Text {
@@ -54,6 +57,7 @@ RowLayout {
             elide: Text.ElideRight
             font.family: Config.fontFamily
             font.pixelSize: Config.type.labelMedium.size
+            font.variableAxes: Config.fontVariableAxes(Config.type.labelMedium.size, Font.Normal)
             text: root.subtitle
             visible: root.subtitle !== ""
         }

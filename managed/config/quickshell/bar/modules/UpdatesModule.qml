@@ -22,7 +22,7 @@ ModuleContainer {
 
     property bool hasUpdates: false
     readonly property string lastCheckedLabel: UpdatesService.lastCheckedLabel
-    property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu"
+    property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class yay -e yay -Syu --noconfirm"
     readonly property bool refreshing: UpdatesService.refreshing
     property string text: "0"
     property string updatedIcon: ""

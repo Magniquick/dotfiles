@@ -16,7 +16,7 @@ QtObject {
     readonly property int barPadding: space.none
     readonly property bool barPillShadowsEnabled: true
     readonly property bool enablePrivacyModule: true
-    readonly property string fontFamily: "Google Sans"
+    readonly property string fontFamily: "Google Sans Flex"
     readonly property int fontSize: type.bodyMedium.size
     readonly property int groupEdgeMargin: space.sm
     readonly property int groupMarginX: space.none
@@ -28,8 +28,6 @@ QtObject {
         const shellValue = Quickshell.env("SHELL");
         return shellValue && shellValue !== "" ? shellValue : "sh";
     }
-    // Centralized secrets/config env file. Used by multiple shells/modules.
-    readonly property string envFile: Quickshell.shellPath("common/.env")
     readonly property var color: Colors.color
     readonly property var palette: Colors.palette
     // Mixed-DPI note: avoid a global DPR derived from `Quickshell.screens[0]`.
@@ -133,6 +131,25 @@ QtObject {
         const alpha = fromColor.a + (toColor.a - fromColor.a) * mix;
 
         return Qt.rgba(rgb.r, rgb.g, rgb.b, _clamp01(alpha));
+    }
+
+    function fontVariableAxes(pixelSize, weight) {
+        const size = Number(pixelSize) || fontSize;
+        const value = Number(weight);
+        const qWeight = Number.isFinite(value) ? value : 50;
+        const cssWeight = qWeight > 100 ? qWeight
+            : qWeight >= 75 ? 700
+            : qWeight >= 63 ? 600
+            : qWeight >= 57 ? 500
+            : 400;
+
+        if (cssWeight >= 700)
+            return { "opsz": size + 2, "wdth": 100, "wght": 610, "GRAD": 10, "ROND": 40, "slnt": 0 };
+        if (cssWeight >= 600)
+            return { "opsz": size + 2, "wdth": 100, "wght": 550, "GRAD": 0, "ROND": 20, "slnt": 0 };
+        if (cssWeight >= 500)
+            return { "opsz": size + 2, "wdth": 100, "wght": 490, "GRAD": 0, "ROND": 30, "slnt": 0 };
+        return { "opsz": size + 2, "wdth": 100, "wght": 390, "GRAD": 0, "ROND": 15, "slnt": 0 };
     }
 
     function adjustOklabLightness(colorValue, factor) {

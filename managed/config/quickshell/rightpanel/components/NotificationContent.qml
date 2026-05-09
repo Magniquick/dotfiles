@@ -351,11 +351,11 @@ RowLayout {
 
                         Text {
                             anchors.fill: parent
-                            text: "\uf00d"
+                            text: "×"
                             color: closeArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface
-                            font.family: Common.Config.iconFontFamily
-                            font.pointSize: 11
-                            font.weight: Font.Bold
+                            font.family: Common.Config.fontFamily
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
                             opacity: 0.95
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -482,7 +482,7 @@ RowLayout {
                     text: root.hasDefaultAction ? "󰁜" : "\uea9c"
                     color: Common.Config.color.primary_fixed_dim
                     font.family: Common.Config.iconFontFamily
-                    font.pointSize: 12
+                    font.pointSize: root.hasDefaultAction ? 9 : 10
                 }
             }
 

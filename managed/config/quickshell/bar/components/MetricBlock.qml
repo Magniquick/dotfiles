@@ -65,6 +65,7 @@ Rectangle {
                 font.letterSpacing: 1
                 font.pixelSize: Math.max(Config.type.labelSmall.size, Config.fontSize - Config.space.xs)
                 font.weight: Font.DemiBold
+                font.variableAxes: Config.fontVariableAxes(Math.max(Config.type.labelSmall.size, Config.fontSize - Config.space.xs), Font.DemiBold)
                 text: root.label
             }
             Rectangle {
@@ -85,6 +86,7 @@ Rectangle {
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size - 2
                     font.weight: Font.Medium
+                    font.variableAxes: Config.fontVariableAxes(Config.type.labelSmall.size - 2, Font.Medium)
                     renderType: Text.NativeRendering
                     text: root.chipText
                 }
@@ -102,6 +104,7 @@ Rectangle {
                 color: root.valueColor
                 font.family: Config.fontFamily
                 font.pixelSize: Math.max(Config.type.labelSmall.size + Math.round(root.gutter / 2), Config.fontSize)
+                font.variableAxes: Config.fontVariableAxes(Math.max(Config.type.labelSmall.size + Math.round(root.gutter / 2), Config.fontSize), Font.Normal)
                 text: root.value
             }
             Text {
@@ -109,6 +112,7 @@ Rectangle {
                 color: root.labelColor
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size - 1
+                font.variableAxes: Config.fontVariableAxes(Config.type.bodySmall.size - 1, Font.Normal)
                 text: root.secondaryValue
                 visible: root.secondaryValue !== ""
             }
@@ -117,6 +121,7 @@ Rectangle {
                 color: root.labelColor
                 font.family: Config.fontFamily
                 font.pixelSize: Config.type.bodySmall.size - 1
+                font.variableAxes: Config.fontVariableAxes(Config.type.bodySmall.size - 1, Font.Normal)
                 text: root.tertiaryValue
                 visible: root.tertiaryValue !== ""
             }

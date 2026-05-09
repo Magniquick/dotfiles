@@ -55,6 +55,7 @@ Rectangle {
       font.family: Config.fontFamily
       font.pixelSize: Config.type.bodyLarge.size
       font.weight: Config.type.bodyLarge.weight
+      font.variableAxes: Config.fontVariableAxes(Config.type.bodyLarge.size, Config.type.bodyLarge.weight)
       text: root.title
     }
 

@@ -106,6 +106,7 @@ def diff_image(left: Image.Image, right: Image.Image) -> Image.Image:
 
 def initial_candidate(weight: int) -> dict[str, float]:
     return {
+        "pixel_delta": 0,
         "opsz_delta": 0,
         "wdth": 100,
         "wght": weight,
@@ -117,32 +118,55 @@ def initial_candidate(weight: int) -> dict[str, float]:
 
 def concrete_axes(candidate: dict[str, float], size: int) -> dict[str, float]:
     axes = dict(candidate)
+    axes.pop("pixel_delta", None)
     opsz_delta = axes.pop("opsz_delta")
     axes["opsz"] = max(6, min(144, size + opsz_delta))
     axes["wght"] = max(1, min(1000, axes["wght"]))
     return axes
 
 
-def source_images(cases: list[RenderCase], text: str) -> list[tuple[RenderCase, Image.Image]]:
-    return [(case, render_text(case.source_font, case.size, text)) for case in cases]
+def target_size(candidate: dict[str, float], source_size: int) -> int:
+    return max(1, int(round(source_size + candidate.get("pixel_delta", 0))))
 
 
-def score_candidate(candidate: dict[str, float], sources: list[tuple[RenderCase, Image.Image]], flex_font: Path,
-                    axis_order: list[str], text: str) -> float:
+def text_samples(text: str, per_letter: bool) -> list[str]:
+    if not per_letter:
+        return [text]
+    samples = []
+    for char in text:
+        if char.isspace():
+            continue
+        if char not in samples:
+            samples.append(char)
+    return samples
+
+
+def source_images(cases: list[RenderCase], samples: list[str]) -> list[tuple[RenderCase, str, Image.Image]]:
+    return [
+        (case, sample, render_text(case.source_font, case.size, sample))
+        for case in cases
+        for sample in samples
+    ]
+
+
+def score_candidate(candidate: dict[str, float], sources: list[tuple[RenderCase, str, Image.Image]], flex_font: Path,
+                    axis_order: list[str]) -> float:
     total = 0.0
-    for case, source in sources:
-        target = render_text(flex_font, case.size, text, concrete_axes(candidate, case.size), axis_order)
+    for case, sample, source in sources:
+        size = target_size(candidate, case.size)
+        target = render_text(flex_font, size, sample, concrete_axes(candidate, size), axis_order)
         total += diff_score(source, target)
     return total / len(sources)
 
 
-def axis_ranges(weight: int) -> dict[str, list[float]]:
+def axis_ranges(weight: int, max_rond: int, max_grad: int) -> dict[str, list[float]]:
     return {
+        "pixel_delta": list(range(-3, 2)),
         "opsz_delta": list(range(-8, 9, 2)),
         "wdth": list(range(88, 113, 2)),
         "wght": list(range(max(1, weight - 90), min(1000, weight + 91), 10)),
-        "GRAD": list(range(0, 81, 10)),
-        "ROND": list(range(0, 81, 10)),
+        "GRAD": list(range(0, max_grad + 1, 10)),
+        "ROND": list(range(0, max_rond + 1, 10)),
         "slnt": [0],
     }
 
@@ -160,12 +184,15 @@ def neighbor_candidates(seed: dict[str, float], ranges: dict[str, list[float]]) 
 
 
 def best_candidates(cases: list[RenderCase], flex_font: Path, axis_order: list[str], text: str,
-                    limit: int) -> list[dict[str, object]]:
-    sources = source_images(cases, text)
-    ranges = axis_ranges(cases[0].weight)
+                    limit: int, per_letter: bool, max_rond: int, max_grad: int) -> list[dict[str, object]]:
+    samples = text_samples(text, per_letter)
+    sources = source_images(cases, samples)
+    ranges = axis_ranges(cases[0].weight, max_rond, max_grad)
     current = initial_candidate(cases[0].weight)
+    current["ROND"] = min(current["ROND"], max_rond)
+    current["GRAD"] = min(current["GRAD"], max_grad)
     ranked = [{
-        "score": score_candidate(current, sources, flex_font, axis_order, text),
+        "score": score_candidate(current, sources, flex_font, axis_order),
         "candidate": current,
     }]
     seen = {tuple(sorted(current.items()))}
@@ -180,7 +207,7 @@ def best_candidates(cases: list[RenderCase], flex_font: Path, axis_order: list[s
                 continue
             seen.add(key)
             ranked.append({
-                "score": score_candidate(candidate, sources, flex_font, axis_order, text),
+                "score": score_candidate(candidate, sources, flex_font, axis_order),
                 "candidate": candidate,
             })
         ranked.sort(key=lambda item: item["score"])
@@ -197,7 +224,8 @@ def write_preview(out_dir: Path, style: str, best: dict[str, object], cases: lis
     candidate = best["candidate"]
     for case in cases:
         source = render_text(case.source_font, case.size, text)
-        target = render_text(flex_font, case.size, text, concrete_axes(candidate, case.size), axis_order)
+        size = target_size(candidate, case.size)
+        target = render_text(flex_font, size, text, concrete_axes(candidate, size), axis_order)
         source.save(preview_dir / f"{case.size}-source.png")
         target.save(preview_dir / f"{case.size}-flex.png")
         diff_image(source, target).save(preview_dir / f"{case.size}-diff.png")
@@ -215,6 +243,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--styles", default=",".join(style[0] for style in DEFAULT_STYLES),
                         help="Comma-separated static Google Sans styles to compare.")
+    parser.add_argument("--per-letter", action="store_true",
+                        help="Score each unique non-space character independently.")
+    parser.add_argument("--max-rond", type=int, default=80)
+    parser.add_argument("--max-grad", type=int, default=80)
     return parser.parse_args()
 
 
@@ -241,7 +273,8 @@ def main() -> int:
             continue
         source_font = fc_match_file(f"Google Sans:style={fc_style}")
         cases = [RenderCase(style_name, weight, size, source_font) for size in sizes]
-        top = best_candidates(cases, flex_font, axis_order, args.text, args.top)
+        top = best_candidates(cases, flex_font, axis_order, args.text, args.top,
+                              args.per_letter, args.max_rond, args.max_grad)
         write_preview(args.out, style_name, top[0], cases, flex_font, axis_order, args.text)
         results["styles"][style_name] = {
             "source_font": str(source_font),
