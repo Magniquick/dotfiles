@@ -1,13 +1,14 @@
 #include <QtQml/qqml.h>
 #include <QtQml/qqmlextensionplugin.h>
 
-#include "QsGoAiModels.h"
 #include "QsGoAiSession.h"
 #include "QsGoBacklight.h"
+#include "QsGoConfigResolver.h"
 #include "QsGoHyprlandSnapshot.h"
 #include "QsGoIcal.h"
 #include "QsGoPacman.h"
 #include "QsGoSysInfo.h"
+#include "QsGoSystemdFailed.h"
 #include "QsGoTodoist.h"
 
 class qsgo_plugin : public QQmlExtensionPlugin {
@@ -15,17 +16,17 @@ class qsgo_plugin : public QQmlExtensionPlugin {
   Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlEngineExtensionInterface")
 
 public:
-  void registerTypes(const char* uri) override
-  {
+  void registerTypes(const char* uri) override {
     // uri is expected to be "qsgo" from qmldir.
-    qmlRegisterType<QsGoSysInfo>   (uri, 1, 0, "SysInfoProvider");
-    qmlRegisterType<QsGoBacklight> (uri, 1, 0, "BacklightProvider");
+    qmlRegisterType<QsGoSysInfo>(uri, 1, 0, "SysInfoProvider");
+    qmlRegisterType<QsGoBacklight>(uri, 1, 0, "BacklightProvider");
+    qmlRegisterType<QsGoConfigResolver>(uri, 1, 0, "ConfigResolver");
     qmlRegisterType<QsGoHyprlandSnapshot>(uri, 1, 0, "HyprlandSnapshotProvider");
-    qmlRegisterType<QsGoAiSession> (uri, 1, 0, "AiChatSession");
-    qmlRegisterType<QsGoAiModels>  (uri, 1, 0, "AiModelCatalog");
-    qmlRegisterType<QsGoPacman>    (uri, 1, 0, "PacmanUpdatesProvider");
-    qmlRegisterType<QsGoIcal>      (uri, 1, 0, "IcalCache");
-    qmlRegisterType<QsGoTodoist>   (uri, 1, 0, "TodoistClient");
+    qmlRegisterType<QsGoAiSession>(uri, 1, 0, "AiChatSession");
+    qmlRegisterType<QsGoPacman>(uri, 1, 0, "PacmanUpdatesProvider");
+    qmlRegisterType<QsGoIcal>(uri, 1, 0, "IcalCache");
+    qmlRegisterType<QsGoTodoist>(uri, 1, 0, "TodoistClient");
+    qmlRegisterType<QsGoSystemdFailed>(uri, 1, 0, "SystemdFailedProvider");
   }
 };
 

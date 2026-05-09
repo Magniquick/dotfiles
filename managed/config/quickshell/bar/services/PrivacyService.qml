@@ -14,6 +14,7 @@ Singleton {
     property bool privacyFileLogging: true
     property string cameraLogPath: "/tmp/quickshell-privacy-camera.log"
     property bool _cameraLogInitialized: false
+    property bool wlPresentFrozen: false
 
     readonly property bool debugPrivacy: {
         const value = Quickshell.env("QS_PRIVACY_DEBUG")
@@ -97,7 +98,9 @@ Singleton {
     property bool cameraOpenSeen: false
     property bool cameraPendingConfirmation: false
     property bool probingCamera: false
+    property bool resolvingCameraApps: false
     property bool queuedCameraProbe: false
+    property string holderProbePidList: ""
     property string holderProbeStdout: ""
     property string holderProbeStderr: ""
     property var cameraHolderApps: []
@@ -110,7 +113,7 @@ Singleton {
         if (root.cameraActive) {
             return "confirmed"
         }
-        if (root.cameraPendingConfirmation || root.probingCamera || cameraRetryTimer.running) {
+        if (root.cameraPendingConfirmation || root.probingCamera || root.resolvingCameraApps || cameraRetryTimer.running) {
             return "pending"
         }
         return "inactive"
@@ -171,14 +174,8 @@ Singleton {
         id: holderProbe
 
         // Quickshell does not expose the process holding a V4L2 device, so we
-        // still resolve camera owners through /proc and ps when needed.
-        command: [
-            "sh",
-            "-c",
-            "device=\"$1\"; find /proc/[0-9]*/fd -lname \"$device\" 2>/dev/null | cut -d/ -f3 | sort -u | xargs -r ps -o pid=,comm= -p",
-            "privacy-camera-holders",
-            root.cameraDevice
-        ]
+        // resolve camera owners via fuser and ps when needed.
+        command: ["fuser", root.cameraDevice]
         running: root.probingCamera
 
         stdout: SplitParser {
@@ -209,14 +206,62 @@ Singleton {
         // qmllint disable signal-handler-parameters
         onExited: code => {
             root.probingCamera = false
-            if (code !== 0 && root.debugPrivacy) {
+            const pidList = root.extractPidList(root.holderProbeStdout)
+            if (pidList !== "") {
+                root.holderProbePidList = pidList
+                root.resolvingCameraApps = true
+                return
+            }
+            root.holderProbePidList = ""
+            if (code > 1 && root.debugPrivacy) {
                 console.warn("[PrivacyService] holder probe exited", code)
             }
             root.handleCameraProbeResults()
-            if (root.queuedCameraProbe) {
-                root.queuedCameraProbe = false
-                root.probingCamera = true
+            root.startQueuedCameraProbe()
+        }
+        // qmllint enable signal-handler-parameters
+    }
+
+    Process {
+        id: holderDetailsProbe
+
+        command: ["ps", "-o", "pid=,comm=", "-p", root.holderProbePidList]
+        running: root.resolvingCameraApps
+
+        stdout: SplitParser {
+            onRead: data => {
+                if (!data) {
+                    return
+                }
+                root.holderProbeStdout += data
             }
+        }
+
+        stderr: SplitParser {
+            onRead: data => {
+                if (!data) {
+                    return
+                }
+                root.holderProbeStderr += data
+            }
+        }
+
+        onRunningChanged: {
+            if (running) {
+                root.holderProbeStdout = ""
+                root.holderProbeStderr = ""
+            }
+        }
+
+        // qmllint disable signal-handler-parameters
+        onExited: code => {
+            root.resolvingCameraApps = false
+            root.holderProbePidList = ""
+            if (code !== 0 && root.debugPrivacy) {
+                console.warn("[PrivacyService] holder details probe exited", code)
+            }
+            root.handleCameraProbeResults()
+            root.startQueuedCameraProbe()
         }
         // qmllint enable signal-handler-parameters
     }
@@ -235,11 +280,18 @@ Singleton {
     }
 
     function queueCameraProbe() {
-        if (root.probingCamera) {
+        if (root.probingCamera || root.resolvingCameraApps) {
             root.queuedCameraProbe = true
             return
         }
         root.probingCamera = true
+    }
+
+    function startQueuedCameraProbe() {
+        if (root.queuedCameraProbe && !root.probingCamera && !root.resolvingCameraApps) {
+            root.queuedCameraProbe = false
+            root.probingCamera = true
+        }
     }
 
     function onCameraOpenEvent() {
@@ -393,6 +445,18 @@ Singleton {
         return String(value).toLowerCase()
     }
 
+    function extractPidList(raw) {
+        const pids = []
+        const matches = (raw || "").match(/\d+/g) || []
+        for (let i = 0; i < matches.length; i++) {
+            const pid = matches[i]
+            if (pids.indexOf(pid) === -1) {
+                pids.push(pid)
+            }
+        }
+        return pids.join(",")
+    }
+
     function nowIso() {
         return (new Date()).toISOString()
     }
@@ -535,5 +599,10 @@ Singleton {
         }
 
         return active.length > 0 ? `Privacy active: ${active.join(", ")}` : "No privacy concerns detected"
+    }
+
+    function togglePresentFreeze() {
+        root.wlPresentFrozen = !root.wlPresentFrozen
+        Quickshell.execDetached(["wl-present", "toggle-freeze"])
     }
 }

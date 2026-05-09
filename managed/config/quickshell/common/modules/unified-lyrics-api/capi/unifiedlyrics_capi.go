@@ -1,3 +1,4 @@
+// Package main exports the unified lyrics C ABI.
 package main
 
 /*
@@ -36,10 +37,20 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/zalando/go-keyring"
+
 	"unified-lyrics-api/unifiedlyrics"
 )
 
 var sharedClient = unifiedlyrics.New(os.Getenv("UNIFIED_LYRICS_CACHE_DIR"))
+
+func lookupSecret(key string) string {
+	value, err := keyring.Get("quickshell", key)
+	if err != nil {
+		return ""
+	}
+	return value
+}
 
 func cString(s string) *C.char {
 	if s == "" {
@@ -99,6 +110,7 @@ func freeSegments(segments *C.UnifiedLyricsSegment, count C.size_t) {
 	C.free(unsafe.Pointer(segments))
 }
 
+//revive:disable:var-naming C ABI export name must stay stable.
 //export UnifiedLyrics_GetLyrics
 func UnifiedLyrics_GetLyrics(spdc *C.char,
 	spotifyTrackRef *C.char,
@@ -115,7 +127,7 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	defer cancel()
 
 	res, err := sharedClient.Fetch(ctx, unifiedlyrics.Request{
-		SPDC:            C.GoString(spdc),
+		SPDC:            firstNonEmpty(C.GoString(spdc), lookupSecret("SP_DC")),
 		SpotifyTrackRef: C.GoString(spotifyTrackRef),
 		TrackName:       C.GoString(trackName),
 		ArtistName:      C.GoString(artistName),
@@ -171,6 +183,18 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	return out
 }
 
+//revive:enable:var-naming
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+//revive:disable:var-naming C ABI export name must stay stable.
 //export UnifiedLyrics_FreeResult
 func UnifiedLyrics_FreeResult(out *C.UnifiedLyricsResult) {
 	if out == nil {
@@ -191,5 +215,7 @@ func UnifiedLyrics_FreeResult(out *C.UnifiedLyricsResult) {
 	freeLines(out.lines, out.lineCount)
 	C.free(unsafe.Pointer(out))
 }
+
+//revive:enable:var-naming
 
 func main() {}

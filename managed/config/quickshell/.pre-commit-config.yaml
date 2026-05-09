@@ -21,6 +21,13 @@ repos:
         language: system
         types: [go]
 
+      - id: go-lint
+        name: go lint (golangci-lint)
+        entry: managed/config/quickshell/tools/go-lint.sh
+        language: system
+        pass_filenames: false
+        types: [go]
+
       - id: qmllint
         name: qmllint (qt6, fix all qml)
         entry: bash -lc 'managed/config/quickshell/tools/qmllint.sh --fix $(find . -name "*.qml")'

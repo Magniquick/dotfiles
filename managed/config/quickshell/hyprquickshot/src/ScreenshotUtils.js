@@ -36,10 +36,6 @@ function _stripFileUrl(s) {
   return String(s || "").replace("file://", "");
 }
 
-function _quote(value) {
-  return "\"" + String(value || "").replace(/(["\\$`])/g, "\\$1") + "\"";
-}
-
 function _resolveScreenshotOutput(opts) {
   const env = opts.env || {};
   const picturesDir = _resolvePicturesDir(env);
@@ -76,47 +72,31 @@ function planRecording(opts) {
   const mode = String(opts.mode || "region");
   const targetScreen = opts.targetScreen || null;
   const audioMode = String(opts.audioMode || "monitor");
+  const audioDevice = String(opts.audioDevice || "");
+  const argv = ["wl-screenrec"];
 
-  let captureArg = "";
   if (mode === "screen" && targetScreen && targetScreen.name) {
-    captureArg = "--output \"" + String(targetScreen.name).replace(/"/g, "\\\"") + "\"";
+    argv.push("--output", String(targetScreen.name));
   } else {
     const x = Math.round(_asNumber(opts.x, 0));
     const y = Math.round(_asNumber(opts.y, 0));
     const width = Math.round(_asNumber(opts.width, 0));
     const height = Math.round(_asNumber(opts.height, 0));
-    captureArg = "--geometry \"" + x + "," + y + " " + width + "x" + height + "\"";
+    argv.push("--geometry", x + "," + y + " " + width + "x" + height);
   }
 
-  let audioResolveCommand = "";
-  if (audioMode === "monitor") {
-    audioResolveCommand = "audio_device=\"$(pactl get-default-sink 2>/dev/null)\"; " +
-      "if [ -z \"$audio_device\" ]; then echo \"Could not resolve default sink\" >&2; exit 1; fi; " +
-      "audio_device=\"$audio_device.monitor\"; " +
-      "if ! pactl list short sources 2>/dev/null | awk '{print $2}' | grep -Fx -- \"$audio_device\" >/dev/null; then " +
-      "echo \"Monitor source not found: $audio_device\" >&2; exit 1; fi; ";
-  } else if (audioMode === "defaultMic") {
-    audioResolveCommand = "audio_device=\"$(pactl get-default-source 2>/dev/null)\"; " +
-      "if [ -z \"$audio_device\" ]; then echo \"Could not resolve default source\" >&2; exit 1; fi; " +
-      "case \"$audio_device\" in *.monitor) " +
-      "audio_device=\"$(pactl list short sources 2>/dev/null | awk '$2 !~ /\\.monitor$/ {print $2; exit}')\" ;; esac; " +
-      "if [ -z \"$audio_device\" ]; then echo \"No non-monitor microphone source found\" >&2; exit 1; fi; ";
-  }
-
-  const quotedOutputPath = "\"" + outputPath.replace(/"/g, "\\\"") + "\"";
-  const quotedVideosDir = "\"" + videosDir.replace(/"/g, "\\\"") + "\"";
-  let commandString = "mkdir -p -- " + quotedVideosDir + " && ";
-  commandString += audioResolveCommand;
   if (audioMode === "monitor" || audioMode === "defaultMic")
-    commandString += "printf 'audio_device:%s\\n' \"$audio_device\"; ";
-  commandString += "exec wl-screenrec " + captureArg + " --filename " + quotedOutputPath;
+    argv.push("--audio");
 
-  if (audioMode === "monitor" || audioMode === "defaultMic")
-    commandString += " --audio --audio-device \"$audio_device\"";
+  if ((audioMode === "monitor" || audioMode === "defaultMic") && audioDevice !== "")
+    argv.push("--audio-device", audioDevice);
+
+  argv.push("--filename", outputPath);
 
   return {
     audioMode: audioMode,
-    commandString: commandString,
+    audioDevice: audioDevice,
+    command: argv,
     outputPath: outputPath,
     outputDir: videosDir
   };

@@ -17,7 +17,7 @@ ModuleContainer {
     property string linkedIcon: "󰤣"
     property string usbEthernetIcon: ""
     property var wifiIcons: ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]
-    property string onClickCommand: "runapp nmgui"
+    property string onClickCommand: "runapp nm-connection-editor"
 
     readonly property string connectionState: NetworkService.connectionState
     readonly property string connectionType: NetworkService.connectionType

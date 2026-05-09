@@ -1,55 +1,40 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Quickshell.Io
+import qsgo
 
 Item {
     id: root
     visible: false
 
-    property url envFileUrl: Qt.resolvedUrl("../../common/.env")
-
-    FileView {
-        id: envFile
-        path: root.envFileUrl
-        blockLoading: true
+    ConfigResolver {
+        id: configResolver
+        Component.onCompleted: refresh()
     }
 
-    readonly property var envVars: {
-        const vars = {};
-        const text = envFile.text();
-        if (!text)
-            return vars;
-        const lines = text.split("\n");
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith("#"))
-                continue;
-            const eqIdx = trimmed.indexOf("=");
-            if (eqIdx === -1)
-                continue;
-            const key = trimmed.substring(0, eqIdx).trim();
-            let value = trimmed.substring(eqIdx + 1).trim();
-            if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'")))
-                value = value.slice(1, -1);
-            vars[key] = value;
-        }
-        return vars;
-    }
+    readonly property var envVars: configResolver.values
 
     readonly property string openaiApiKey: envVars["OPENAI_API_KEY"] || ""
     readonly property string geminiApiKey: envVars["GEMINI_API_KEY"] || ""
+    readonly property string localApiKey: envVars["LOCAL_API_KEY"] || ""
     readonly property string openaiBaseUrl: envVars["OPENAI_BASE_URL"] || ""
+    readonly property string localBaseUrl: envVars["LOCAL_BASE_URL"] || "http://127.0.0.1:8317/v1"
 
     function canonicalModelId(rawId) {
         const trimmed = String(rawId || "").trim();
         if (!trimmed)
-            return "gemini/gemini-3.1-flash-lite-preview";
+            return "local/gpt-5.4-mini";
         if (trimmed.indexOf("/") !== -1)
             return trimmed;
+        if (trimmed.startsWith("gpt-5."))
+            return "local/" + trimmed;
         return trimmed.startsWith("gemini-") ? ("gemini/" + trimmed) : ("openai/" + trimmed);
     }
 
     readonly property var providerConfig: ({
+        local: {
+            api_key: localApiKey,
+            base_url: localBaseUrl
+        },
         openai: {
             api_key: openaiApiKey,
             base_url: openaiBaseUrl
@@ -59,6 +44,6 @@ Item {
         }
     })
 
-    // Default model when OPENAI_MODEL is not set in the shared env file.
-    readonly property string modelId: canonicalModelId(envVars["OPENAI_MODEL"] || "gemini/gemini-3.1-flash-lite-preview")
+    // Default model when leftpanel/config.toml does not set one.
+    readonly property string modelId: canonicalModelId(envVars["OPENAI_MODEL"] || "local/gpt-5.4-mini")
 }

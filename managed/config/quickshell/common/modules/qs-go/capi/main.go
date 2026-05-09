@@ -1,4 +1,6 @@
 // Package main is the CGO c-shared entry point. All //export functions define the C ABI.
+//
+//nolint:revive // exported underscore names are fixed by the C ABI.
 package main
 
 /*
@@ -16,19 +18,25 @@ import (
 	"unsafe"
 
 	"qs-go/internal/ai"
+	"qs-go/internal/appconfig"
+	"qs-go/internal/chatstore"
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
+	"qs-go/internal/secrets"
+	"qs-go/internal/systemd"
 	"qs-go/internal/todoist"
 )
 
 // ----- Pacman -----
 
 //export QsGo_Pacman_Refresh
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Pacman_Refresh(noAur C.int) *C.char {
 	return C.CString(pacman.Refresh(noAur != 0))
 }
 
 //export QsGo_Pacman_Sync
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_Pacman_Sync() *C.char {
 	return C.CString(pacman.Sync())
 }
@@ -36,23 +44,35 @@ func QsGo_Pacman_Sync() *C.char {
 // ----- iCal -----
 
 //export QsGo_Ical_Refresh
-func QsGo_Ical_Refresh(envFile *C.char, days C.int) *C.char {
-	return C.CString(ical.Refresh(C.GoString(envFile), int(days)))
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_Ical_Refresh(days C.int) *C.char {
+	return C.CString(ical.Refresh(int(days)))
 }
 
-// ----- AI models -----
+// ----- systemd failed units -----
 
-//export QsGo_AiModels_Refresh
-func QsGo_AiModels_Refresh(providerConfigJSON *C.char) *C.char {
-	return C.CString(ai.RefreshCatalog(C.GoString(providerConfigJSON)))
+//export QsGo_SystemdFailed_Refresh
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_SystemdFailed_Refresh() *C.char {
+	return C.CString(systemd.Refresh())
+}
+
+// ----- Config / secrets resolver -----
+
+//export QsGo_Config_Resolve
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_Config_Resolve() *C.char {
+	return C.CString(appconfig.ResolveJSON(secrets.NewResolver()))
 }
 
 //export QsGo_AiMcp_Refresh
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_AiMcp_Refresh(configJSON *C.char) *C.char {
 	return C.CString(ai.RefreshMcp(C.GoString(configJSON)))
 }
 
 //export QsGo_AiMcp_GetPrompt
+//nolint:revive // exported name is part of the C ABI.
 func QsGo_AiMcp_GetPrompt(configJSON, serverID, promptName, argsJSON *C.char) *C.char {
 	return C.CString(ai.GetMcpPrompt(
 		C.GoString(configJSON),
@@ -106,16 +126,21 @@ func QsGo_AiChat_LastMetrics() *C.char {
 	return C.CString(ai.LastMetricsJSON())
 }
 
+//export QsGo_AiHistory_Apply
+func QsGo_AiHistory_Apply(actionJSON *C.char) *C.char {
+	return C.CString(chatstore.ApplyJSON(C.GoString(actionJSON)))
+}
+
 // ----- Todoist -----
 
 //export QsGo_Todoist_List
-func QsGo_Todoist_List(envFile, cachePath *C.char, preferCache C.int) *C.char {
-	return C.CString(todoist.ListTasks(C.GoString(envFile), C.GoString(cachePath), preferCache != 0))
+func QsGo_Todoist_List(cachePath *C.char, preferCache C.int) *C.char {
+	return C.CString(todoist.ListTasks(C.GoString(cachePath), preferCache != 0))
 }
 
 //export QsGo_Todoist_Action
-func QsGo_Todoist_Action(envFile, verb, argsJSON *C.char) *C.char {
-	return C.CString(todoist.Action(C.GoString(envFile), C.GoString(verb), C.GoString(argsJSON)))
+func QsGo_Todoist_Action(verb, argsJSON *C.char) *C.char {
+	return C.CString(todoist.Action(C.GoString(verb), C.GoString(argsJSON)))
 }
 
 // ----- Memory management -----

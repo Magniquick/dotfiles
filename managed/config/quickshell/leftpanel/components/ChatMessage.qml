@@ -13,6 +13,7 @@ Item {
     property string modelLabel: ""
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
+    property bool showHeader: true
     property bool done: true
     property bool thinking: false
     property bool streaming: false
@@ -153,6 +154,8 @@ Item {
 
             // Header row with label and actions
             RowLayout {
+                visible: root.showHeader
+                Layout.preferredHeight: visible ? implicitHeight : 0
                 Layout.fillWidth: true
                 spacing: 6
 
@@ -404,7 +407,7 @@ Item {
                                 readOnly: true
                                 selectByMouse: true
                                 cursorVisible: false
-                                activeFocusOnPress: false
+                                activeFocusOnPress: true
 
                                 onLinkActivated: link => Qt.openUrlExternally(link)
                                 onSelectedTextChanged: {
@@ -454,12 +457,12 @@ Item {
                 textFormat: TextEdit.PlainText
                 color: Common.Config.color.on_surface
                 wrapMode: TextEdit.Wrap
-                font.family: "JetBrainsMono NFP"
+                font.family: "monospace"
                 font.pixelSize: 12
                 readOnly: true
                 selectByMouse: true
                 cursorVisible: false
-                activeFocusOnPress: false
+                activeFocusOnPress: true
 
                 onSelectedTextChanged: {
                     if (selectedText.length > 0)

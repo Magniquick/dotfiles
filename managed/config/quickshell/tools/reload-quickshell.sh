@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 
-MODE="reload"
+MODE="service"
 WAIT_MS=2000
 TAIL_LINES=120
 SHOW_ALL=0
@@ -14,6 +14,8 @@ print_help() {
 Usage: ./tools/reload-quickshell.sh [options]
 
 Options:
+  --service      Restart quickshell.service (default; safest)
+  --soft         Use Quickshell.reload(false)
   --hard         Use Quickshell.reload(true)
   --all          Print the full recent log tail instead of filtering to issues
   --tail N       Read the last N log lines (default: 120)
@@ -24,6 +26,14 @@ EOF
 
 while (($# > 0)); do
   case "$1" in
+    --service)
+      MODE="service"
+      shift
+      ;;
+    --soft)
+      MODE="reload"
+      shift
+      ;;
     --hard)
       MODE="reloadHard"
       shift
@@ -52,7 +62,11 @@ while (($# > 0)); do
   esac
 done
 
-quickshell ipc -n -p "$ROOT_DIR" call dev "$MODE"
+if [[ "$MODE" == "service" ]]; then
+  env -u XDG_RUNTIME_DIR systemctl --user restart quickshell
+else
+  quickshell ipc -n -p "$ROOT_DIR" call dev "$MODE"
+fi
 sleep "$(awk "BEGIN { printf \"%.3f\", $WAIT_MS / 1000 }")"
 
 LOG_OUTPUT="$(quickshell log -n -p "$ROOT_DIR" --no-color --log-times -t "$TAIL_LINES")"

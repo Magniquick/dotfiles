@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+export QS_SHELL_DIR="$ROOT_DIR"
 
 QSGO_QML_DIR="$ROOT_DIR/common/modules/qs-go/build/qml"
 QSCAPTURE_QML_DIR="$ROOT_DIR/common/modules/qs-capture/build/qml"
@@ -23,6 +24,19 @@ export QML_IMPORT_PATH="$QSGO_QML_DIR:$QSCAPTURE_QML_DIR:$QSMATH_QML_DIR:$UNIFIE
 # Standalone configs (e.g. powermenu) may use QtQuick.Controls through local
 # MaterialKit components; ensure a valid controls style is always resolvable.
 export QT_QUICK_CONTROLS_STYLE="${QT_QUICK_CONTROLS_STYLE:-Basic}"
+# Let systemd supervise crashes. Quickshell's built-in crash relauncher can
+# recursively multiply processes when a soft reload hits a native crash.
+if [[ "${QS_ENABLE_CRASH_HANDLER:-0}" != "1" ]]; then
+  export QS_DISABLE_CRASH_HANDLER=1
+fi
+
+DEFAULT_QT_LOGGING_RULES="*.debug=false;quickshell.hyprland.ipc.events.debug=false;quickshell.wayland.toplevelManagement.debug=false;quickshell.dbus.properties.debug=false"
+if [[ -n "${QT_LOGGING_RULES:-}" ]]; then
+  export QT_LOGGING_RULES="$DEFAULT_QT_LOGGING_RULES;$QT_LOGGING_RULES"
+else
+  export QT_LOGGING_RULES="$DEFAULT_QT_LOGGING_RULES"
+fi
+DEFAULT_QS_LOG_ARGS=(--log-rules "$DEFAULT_QT_LOGGING_RULES")
 
 if [[ "${1:-}" == "--standalone" ]]; then
   if [[ -z "${2:-}" ]]; then
@@ -41,7 +55,7 @@ if [[ "${1:-}" == "--standalone" ]]; then
     SHELL_DIR="$SHELL_DIR/shell.qml"
   fi
 
-  exec quickshell --path "$SHELL_DIR" "$@"
+  exec quickshell "${DEFAULT_QS_LOG_ARGS[@]}" --path "$SHELL_DIR" "$@"
 fi
 
-exec quickshell -p "$ROOT_DIR" "$@"
+exec quickshell "${DEFAULT_QS_LOG_ARGS[@]}" -p "$ROOT_DIR" "$@"

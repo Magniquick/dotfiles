@@ -52,6 +52,7 @@ var (
 	}
 )
 
+// Client fetches lyrics from NetEase's desktop EAPI.
 type Client struct {
 	hc       *http.Client
 	cacheDir string
@@ -116,6 +117,7 @@ type scoredSong struct {
 	score int
 }
 
+// New creates a NetEase provider client.
 func New(cacheDir string) *Client {
 	cacheDir = strings.TrimSpace(cacheDir)
 	if cacheDir == "" {
@@ -127,14 +129,17 @@ func New(cacheDir string) *Client {
 	}
 }
 
+// Name returns the provider identifier.
 func (c *Client) Name() string {
 	return providerName
 }
 
+// Supports reports whether enough metadata is available for NetEase lookup.
 func (c *Client) Supports(req lyricsprovider.Request) bool {
 	return strings.TrimSpace(req.TrackName) != "" && strings.TrimSpace(req.ArtistName) != ""
 }
 
+// Fetch returns the best matching lyrics for the request.
 func (c *Client) Fetch(ctx context.Context, req lyricsprovider.Request) (*lyricsprovider.Result, error) {
 	if !c.Supports(req) {
 		return nil, nil
@@ -343,7 +348,7 @@ func (c *Client) request(ctx context.Context, path string, params map[string]any
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("netease api error (HTTP %d)", resp.StatusCode)
@@ -419,6 +424,7 @@ func (c *Client) writeCachedSession(state *sessionState) {
 }
 
 func (c *Client) bootstrapAnonymousSession(ctx context.Context) (*sessionState, error) {
+	//nolint:gosec // NetEase anonymous sessions expect one of these client fingerprints.
 	deviceID := deviceIDs[mathrand.IntN(len(deviceIDs))]
 	clientSign, err := randomClientSign()
 	if err != nil {
@@ -455,7 +461,7 @@ func (c *Client) bootstrapAnonymousSession(ctx context.Context) (*sessionState, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("netease anonymous login failed (HTTP %d)", resp.StatusCode)
@@ -564,6 +570,7 @@ func randomClientSign() (string, error) {
 	}
 	randomStr := make([]rune, 8)
 	for i := range randomStr {
+		//nolint:gosec // NetEase clientSign uses a non-secret desktop client fingerprint.
 		randomStr[i] = clientSignCharSet[mathrand.IntN(len(clientSignCharSet))]
 	}
 	hashPart, err := randomHex(32)
@@ -577,6 +584,7 @@ func randomWNMCID() string {
 	const letters = "abcdefghijklmnopqrstuvwxyz"
 	buf := make([]byte, 6)
 	for i := range buf {
+		//nolint:gosec // NetEase WNMCID is a protocol cookie fingerprint, not a secret.
 		buf[i] = letters[mathrand.IntN(len(letters))]
 	}
 	return string(buf) + "." + strconv.FormatInt(time.Now().Add(-5*time.Second).UnixMilli(), 10) + ".01.0"

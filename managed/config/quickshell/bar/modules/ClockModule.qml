@@ -9,7 +9,7 @@
  * - iCal cache for calendar events
  *
  * Dependencies:
- * - common/.env: Environment file with calendar URLs
+ * - Secret Service: CALENDAR_ICAL_URL
  */
 pragma ComponentBehavior: Bound
 import ".."
@@ -70,7 +70,6 @@ ModuleContainer {
                         active: root.tooltipActive
                         calendarClient: CalendarService.client
                         currentDate: clock.date
-                        refreshEnvFile: CalendarService.envFile
                         refreshDays: CalendarService.days
 
                         onDataLoaded: function () {

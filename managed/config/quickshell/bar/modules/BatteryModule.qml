@@ -24,6 +24,10 @@ ModuleContainer {
 
     property int healthPercent: -1
     property bool showTime: false
+    property bool chargeControlApplying: false
+    property bool chargeControlAvailable: false
+    property bool chargeControlWaitingForApplyRefresh: false
+    property string chargeControlMode: ""
 
     function normalizePercent(value) {
         if (!isFinite(value))
@@ -129,6 +133,48 @@ ModuleContainer {
     }
     function healthLabel() {
         return root.healthPercent >= 0 ? root.healthPercent + "%" : "—";
+    }
+    function chargeControlField(output, name, separator) {
+        const lines = (output || "").split("\n");
+        const prefix = name + separator;
+        for (const line of lines) {
+            if (line.indexOf(prefix) === 0)
+                return line.slice(prefix.length).trim();
+        }
+
+        return "";
+    }
+    function chargeControlIsLimit() {
+        return root.chargeControlMode === "limit";
+    }
+    function chargeControlBusy() {
+        return root.chargeControlApplying || chargeControlRunner.running || chargeControlConfigRunner.running;
+    }
+    function refreshChargeControl() {
+        if (root.chargeControlAvailable)
+            chargeControlConfigRunner.trigger();
+    }
+    function toggleChargeControlLimit() {
+        if (!root.chargeControlAvailable || root.chargeControlBusy() || root.chargeControlMode === "")
+            return;
+
+        root.chargeControlApplying = true;
+        root.chargeControlWaitingForApplyRefresh = false;
+        if (root.chargeControlIsLimit()) {
+            root.chargeControlMode = "auto";
+            chargeControlRunner.command = ["sh", "-c", "hp-charge-control config auto && hp-charge-control resume"];
+        } else {
+            root.chargeControlMode = "limit";
+            chargeControlRunner.command = ["sh", "-c", "hp-charge-control config limit 50 30 && hp-charge-control limit 50 30"];
+        }
+        chargeControlRunner.trigger();
+    }
+    function updateChargeControlConfig(output) {
+        root.chargeControlMode = root.chargeControlField(output, "MODE", "=").toLowerCase();
+        if (root.chargeControlWaitingForApplyRefresh) {
+            root.chargeControlWaitingForApplyRefresh = false;
+            root.chargeControlApplying = false;
+        }
     }
     function percentLabel(device) {
         if (!device || !device.ready)
@@ -262,6 +308,91 @@ ModuleContainer {
                 }
             }
 
+            // Charge Policy Section
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Config.space.xs
+
+                SectionHeader {
+                    text: "CHARGE POLICY"
+                }
+                Item {
+                    id: chargePolicyRow
+
+                    Layout.fillWidth: true
+                    implicitHeight: Config.space.xxl
+                    opacity: root.chargeControlAvailable && !root.chargeControlBusy() ? 1 : Config.state.disabledOpacity
+
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: Config.space.md
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            color: chargePolicyMouse.containsMouse && !root.chargeControlBusy() ? Config.color.on_surface : Config.color.on_surface_variant
+                            elide: Text.ElideRight
+                            font.family: Config.fontFamily
+                            font.pixelSize: Config.type.labelLarge.size
+                            font.weight: Config.type.labelLarge.weight
+                            renderType: Text.NativeRendering
+                            text: "Battery care"
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: Config.motion.duration.shortMs
+                                    easing.type: Config.motion.easing.standard
+                                }
+                            }
+                        }
+                        Rectangle {
+                            id: chargePolicyTrack
+
+                            Layout.alignment: Qt.AlignVCenter
+                            implicitHeight: Config.space.xl
+                            implicitWidth: Config.space.xxl + Config.space.lg
+                            antialiasing: true
+                            color: root.chargeControlBusy() ? Qt.alpha(Config.color.on_surface_variant, 0.18) : (root.chargeControlIsLimit() ? Config.color.primary : Qt.alpha(Config.color.on_surface_variant, chargePolicyMouse.containsMouse ? 0.36 : 0.24))
+                            radius: height / 2
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: Config.motion.duration.shortMs
+                                    easing.type: Config.motion.easing.standard
+                                }
+                            }
+
+                            Rectangle {
+                                height: parent.height - Config.space.xs
+                                width: height
+                                anchors.verticalCenter: parent.verticalCenter
+                                antialiasing: true
+                                color: root.chargeControlBusy() ? Config.color.surface_container_highest : (root.chargeControlIsLimit() ? Config.color.on_primary : Config.color.surface)
+                                radius: height / 2
+                                x: root.chargeControlIsLimit() ? chargePolicyTrack.width - width - (Config.space.xs / 2) : (Config.space.xs / 2)
+
+                                Behavior on x {
+                                    NumberAnimation {
+                                        duration: Config.motion.duration.shortMs
+                                        easing.type: Config.motion.easing.emphasized
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: chargePolicyMouse
+
+                        anchors.fill: parent
+                        cursorShape: root.chargeControlAvailable && !root.chargeControlBusy() && root.chargeControlMode !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        enabled: root.chargeControlAvailable && !root.chargeControlBusy() && root.chargeControlMode !== ""
+                        hoverEnabled: true
+
+                        onClicked: root.toggleChargeControlLimit()
+                    }
+                }
+            }
+
             // Health Section
             InfoRow {
                 Layout.fillWidth: true
@@ -274,10 +405,61 @@ ModuleContainer {
         }
     }
 
-    Component.onCompleted: root.refreshHealth()
+    CommandRunner {
+        id: chargeControlConfigRunner
+
+        command: ["hp-charge-control", "config", "show"]
+        enabled: root.chargeControlAvailable
+        intervalMs: 0
+        timeoutMs: 2000
+
+        onError: function(errorOutput, exitCode) {
+            root.chargeControlWaitingForApplyRefresh = false;
+            root.chargeControlApplying = false;
+        }
+        onRan: function(output) {
+            root.updateChargeControlConfig(output);
+        }
+        onTimeout: {
+            root.chargeControlWaitingForApplyRefresh = false;
+            root.chargeControlApplying = false;
+        }
+    }
+    CommandRunner {
+        id: chargeControlRunner
+
+        enabled: root.chargeControlAvailable
+        intervalMs: 0
+        timeoutMs: 5000
+
+        onError: function(errorOutput, exitCode) {
+            root.chargeControlWaitingForApplyRefresh = false;
+            root.chargeControlApplying = false;
+            root.refreshChargeControl();
+        }
+        onRan: function(output) {
+            root.chargeControlWaitingForApplyRefresh = true;
+            root.refreshChargeControl();
+        }
+        onTimeout: {
+            root.chargeControlWaitingForApplyRefresh = false;
+            root.chargeControlApplying = false;
+            root.refreshChargeControl();
+        }
+    }
+    Component.onCompleted: {
+        root.refreshHealth();
+        DependencyCheck.require("hp-charge-control", "BatteryModule", function(available) {
+            root.chargeControlAvailable = available;
+            if (available)
+                root.refreshChargeControl();
+        });
+    }
     onTooltipActiveChanged: {
-        if (root.tooltipActive)
+        if (root.tooltipActive) {
             root.refreshHealth();
+            root.refreshChargeControl();
+        }
     }
 
     Connections {

@@ -44,6 +44,19 @@ Item {
             composer.clearFocus();
     }
 
+    function setLatestVisibleToolExpanded(expanded) {
+        messageList.positionViewAtEnd();
+        messageList.forceLayout();
+        for (let i = messageList.count - 1; i >= 0; --i) {
+            const item = messageList.itemAtIndex(i);
+            if (!item || item.kind !== "tool")
+                continue;
+            messageList.setToolRowExpanded(item._messageId, item.tool, expanded);
+            return true;
+        }
+        return false;
+    }
+
     Item {
         id: chatArea
         anchors.top: parent.top
@@ -75,9 +88,40 @@ Item {
             clip: true
             model: root.messagesModel
             property string activeSelectionKey: ""
+            property var toolExpansionState: ({})
 
             // Follow output as it streams, but don't fight the user if they've scrolled up.
             property bool autoFollow: true
+
+            function toolRowKey(messageId, tool) {
+                const id = String(messageId || "");
+                if (id.length > 0)
+                    return id;
+                return String((tool || ({})).tool_call_id || "");
+            }
+
+            function toolRowExpanded(messageId, tool) {
+                const key = toolRowKey(messageId, tool);
+                return key.length > 0 && !!toolExpansionState[key];
+            }
+
+            function withToolExpansionValue(state, key, value) {
+                const next = {};
+                for (const existingKey in state)
+                    next[existingKey] = state[existingKey];
+                if (value)
+                    next[key] = true;
+                else
+                    delete next[key];
+                return next;
+            }
+
+            function setToolRowExpanded(messageId, tool, expanded) {
+                const key = toolRowKey(messageId, tool);
+                if (key.length === 0)
+                    return;
+                toolExpansionState = withToolExpansionValue(toolExpansionState, key, expanded);
+            }
 
             function maybeFollow() {
                 if (!autoFollow)
@@ -105,39 +149,77 @@ Item {
                 }
             }
 
-            delegate: Components.ChatMessage {
+            delegate: Item {
+                id: delegateRoot
                 required property int index
                 required property string messageId
                 required property string sender
                 required property string body
+                required property string kind
                 required property var metrics
                 required property var attachments
+                required property var tool
+                required property bool showHeader
 
                 width: messageList.width
-                messageIndex: index
-                // Expose stable ID for actions.
+                implicitHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
                 property string _messageId: messageId
-                role: sender
-                content: body
-                metrics: metrics
-                attachments: attachments
-                activeSelectionKey: messageList.activeSelectionKey
-                modelLabel: sender === "assistant" ? root.modelLabel : ""
-                moodIcon: root.moodIcon
-                moodName: root.moodName
-                // The backend inserts an assistant message up-front and streams into it.
-                // Treat the last assistant message as "streaming" while busy, and render a
-                // lightweight view to avoid expensive markdown/code-block reflows per chunk.
-                streaming: root.busy
+                property bool emptyAssistantPlaceholder: kind !== "tool"
                     && sender === "assistant"
-                    && index === (messageList.count - 1)
-                thinking: streaming && String(body || "").trim().length === 0
-                done: !streaming
+                    && String(body || "").trim().length === 0
+                    && !(root.busy && index === (messageList.count - 1))
 
-                onRegenerateRequested: root.regenerateRequested(_messageId)
-                onDeleteRequested: root.deleteRequested(_messageId)
-                onEditSaved: newContent => root.editRequested(_messageId, newContent)
-                onSelectionActivated: selectionKey => messageList.activeSelectionKey = selectionKey
+                Loader {
+                    id: contentLoader
+                    width: parent.width
+                    sourceComponent: delegateRoot.emptyAssistantPlaceholder
+                        ? null
+                        : (delegateRoot.kind === "tool" ? toolRowComponent : chatMessageComponent)
+                }
+
+                Component {
+                    id: chatMessageComponent
+
+                    Components.ChatMessage {
+                        width: delegateRoot.width
+                        messageIndex: delegateRoot.index
+                        role: delegateRoot.sender
+                        content: delegateRoot.body
+                        metrics: delegateRoot.metrics
+                        attachments: delegateRoot.attachments
+                        activeSelectionKey: messageList.activeSelectionKey
+                        modelLabel: delegateRoot.sender === "assistant" ? root.modelLabel : ""
+                        moodIcon: root.moodIcon
+                        moodName: root.moodName
+                        showHeader: delegateRoot.showHeader
+                        // The backend inserts an assistant message up-front and streams into it.
+                        // Treat the last assistant message as "streaming" while busy, and render a
+                        // lightweight view to avoid expensive markdown/code-block reflows per chunk.
+                        streaming: root.busy
+                            && delegateRoot.sender === "assistant"
+                            && delegateRoot.index === (messageList.count - 1)
+                        thinking: streaming && String(delegateRoot.body || "").trim().length === 0
+                        done: !streaming
+
+                        onRegenerateRequested: root.regenerateRequested(delegateRoot._messageId)
+                        onDeleteRequested: root.deleteRequested(delegateRoot._messageId)
+                        onEditSaved: newContent => root.editRequested(delegateRoot._messageId, newContent)
+                        onSelectionActivated: selectionKey => messageList.activeSelectionKey = selectionKey
+                    }
+                }
+
+                Component {
+                    id: toolRowComponent
+
+                    Components.ToolCallRow {
+                        width: delegateRoot.width
+                        tool: delegateRoot.tool
+                        expanded: messageList.toolRowExpanded(delegateRoot._messageId, delegateRoot.tool)
+                        moodIcon: root.moodIcon
+                        moodName: root.moodName
+                        onExpandedChangeRequested: expanded => messageList.setToolRowExpanded(delegateRoot._messageId, delegateRoot.tool, expanded)
+                    }
+                }
             }
 
         }

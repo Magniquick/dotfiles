@@ -19,7 +19,9 @@ Item {
     return (xdg.length > 0 ? xdg : home + "/.cache") + "/quickshell/latex";
   }
   readonly property bool readyToRender: root.completed && root.markdown.trim().length > 0
-  readonly property string renderRequestId: selectionKey + ":" + String(width) + ":" + String(markdown.length)
+  readonly property real renderScale: Math.max(1, Screen.devicePixelRatio || 1)
+  readonly property string renderRequestId: selectionKey + ":" + String(width) + ":" + String(markdown.length) + ":" + String(renderScale)
+  readonly property int bodyPixelSize: 13
 
   signal selectionActivated(string selectionKey)
 
@@ -45,9 +47,10 @@ Item {
       markdown,
       cacheRoot,
       Math.max(120, Math.floor(root.width)),
-      18,
+      bodyPixelSize,
       4,
-      String(textColor)
+      String(textColor),
+      renderScale
     );
   }
 
@@ -58,6 +61,10 @@ Item {
   onMarkdownChanged: startRender()
   onCompletedChanged: startRender()
   onWidthChanged: {
+    if (readyToRender)
+      startRender();
+  }
+  onRenderScaleChanged: {
     if (readyToRender)
       startRender();
   }
@@ -93,7 +100,7 @@ Item {
     color: root.textColor
     wrapMode: TextEdit.Wrap
     font.family: Common.Config.fontFamily
-    font.pixelSize: 13
+    font.pixelSize: root.bodyPixelSize
     readOnly: true
     selectByMouse: true
     cursorVisible: false
@@ -131,8 +138,8 @@ Item {
     textFormat: TextEdit.PlainText
     color: root.renderState === "error" ? root.errorColor : root.textColor
     wrapMode: TextEdit.Wrap
-    font.family: root.renderState === "loading" ? Common.Config.fontFamily : "JetBrainsMono NFP"
-    font.pixelSize: 13
+    font.family: root.renderState === "loading" ? Common.Config.fontFamily : "monospace"
+    font.pixelSize: root.bodyPixelSize
     readOnly: true
     selectByMouse: root.renderState === "error"
     cursorVisible: false

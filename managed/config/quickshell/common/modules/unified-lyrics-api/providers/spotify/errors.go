@@ -2,6 +2,7 @@ package spotify
 
 import "fmt"
 
+// Error describes a Spotify API failure.
 type Error struct {
 	Status  int
 	Message string

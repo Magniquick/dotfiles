@@ -66,6 +66,7 @@ Rectangle {
         font.family: Config.fontFamily
         font.pixelSize: Config.type.bodyLarge.size
         font.weight: Config.type.bodyLarge.weight
+        font.variableAxes: Config.fontVariableAxes(Config.type.bodyLarge.size, Config.type.bodyLarge.weight)
         text: root.title
       }
 
@@ -75,6 +76,7 @@ Rectangle {
         elide: Text.ElideRight
         font.family: Config.fontFamily
         font.pixelSize: Config.type.labelMedium.size
+        font.variableAxes: Config.fontVariableAxes(Config.type.labelMedium.size, Font.Normal)
         text: root.subtitle
         visible: root.subtitle.length > 0
       }
@@ -96,6 +98,7 @@ Rectangle {
         font.family: Config.fontFamily
         font.pixelSize: Config.type.labelSmall.size
         font.weight: Font.Bold
+        font.variableAxes: Config.fontVariableAxes(Config.type.labelSmall.size, Font.Bold)
         text: root.badgeText
       }
     }

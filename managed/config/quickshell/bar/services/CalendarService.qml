@@ -9,7 +9,6 @@ Item {
     id: root
     visible: false
 
-    readonly property string envFile: Config.envFile
     property int days: 180
 
     readonly property var client: calendarClient
@@ -40,7 +39,7 @@ Item {
 
     function refresh(reason) {
         root.refreshing = true;
-        calendarClient.refreshFromEnv(root.envFile, root.days);
+        calendarClient.refresh(root.days);
     }
 
     IcalCache {

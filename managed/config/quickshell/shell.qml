@@ -38,6 +38,43 @@ ShellRoot {
         }
     }
     IpcHandler {
+        target: "leftpanel"
+
+        function open() {
+            Bar.GlobalState.powermenuVisible = false;
+            Bar.GlobalState.overviewVisible = false;
+            Bar.GlobalState.leftPanelVisible = true;
+        }
+
+        function close() {
+            Bar.GlobalState.leftPanelVisible = false;
+        }
+
+        function toggle() {
+            Bar.GlobalState.toggleLeftPanel();
+        }
+
+        function status(): string {
+            return JSON.stringify({
+                visible: Bar.GlobalState.leftPanelVisible,
+                animating: shellRoot.leftPanelAnimating,
+                windowVisible: leftPanelWindow.visible
+            });
+        }
+
+        function expandLatestTool(): bool {
+            return leftPanel && leftPanel.setLatestVisibleToolExpanded
+                ? leftPanel.setLatestVisibleToolExpanded(true)
+                : false;
+        }
+
+        function collapseLatestTool(): bool {
+            return leftPanel && leftPanel.setLatestVisibleToolExpanded
+                ? leftPanel.setLatestVisibleToolExpanded(false)
+                : false;
+        }
+    }
+    IpcHandler {
         target: "hyprquickshot"
 
         function open() {
@@ -172,7 +209,6 @@ ShellRoot {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
     }
 
-    // Clock.ClockWidget {}
     LoggingCategory {
         defaultLogLevel: LoggingCategory.Critical
         name: "quickshell.dbus.properties"
@@ -209,7 +245,9 @@ ShellRoot {
     LazyLoader {
         id: hyprQuickshotLoader
 
-        active: true
+        active: Bar.GlobalState.hyprQuickshotVisible
+            || Bar.GlobalState.screenRecordingActive
+            || Bar.GlobalState.screenRecordingState !== "idle"
 
         source: Qt.resolvedUrl("hyprquickshot/HyprQuickshot.qml")
     }

@@ -4,13 +4,15 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+quickshell_root=managed/config/quickshell
+
 clang_format=${CLANG_FORMAT:-clang-format}
 if ! command -v "$clang_format" >/dev/null 2>&1; then
   echo "pre-commit: clang-format not found" >&2
   exit 1
 fi
 
-staged_files=$(
+staged_cpp_files=$(
   git diff --cached --name-only --diff-filter=ACMR |
     while IFS= read -r file; do
       case "$file" in
@@ -24,12 +26,15 @@ staged_files=$(
     done
 )
 
-if [ -z "$staged_files" ]; then
-  exit 0
+if [ -n "$staged_cpp_files" ]; then
+  echo "$staged_cpp_files" | while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    "$clang_format" -i "$file"
+    git add -- "$file"
+  done
 fi
 
-echo "$staged_files" | while IFS= read -r file; do
-  [ -n "$file" ] || continue
-  "$clang_format" -i "$file"
-  git add -- "$file"
-done
+if git diff --cached --name-only --diff-filter=ACMR |
+  grep -qE '^managed/config/quickshell/common/modules/(qs-go|unified-lyrics-api)/.*\.go$'; then
+  "$quickshell_root/tools/go-lint.sh"
+fi

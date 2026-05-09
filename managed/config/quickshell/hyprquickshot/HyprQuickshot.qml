@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtCore
+import QtCore as Core
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -26,7 +26,7 @@ Src.FreezeScreen {
     property var countdownCenter: Qt.point(width / 2, height / 2)
     property int countdownValue: root.countdownStartValue
     property bool grabReady: false
-    property var hyprlandMonitor: activeScreen ? Hyprland.monitorFor(activeScreen) : Hyprland.focusedMonitor
+    property var hyprlandMonitor: root.active ? (activeScreen ? Hyprland.monitorFor(activeScreen) : Hyprland.focusedMonitor) : null
     property string lastScreenshotPath: ""
     property bool lastScreenshotTemporary: false
     property string mode: "region"
@@ -39,6 +39,7 @@ Src.FreezeScreen {
     readonly property string recordAudioMode: settingsLoader.item ? settingsLoader.item.recordAudioMode : root._recordAudioModeFallback
     // qmllint enable missing-property
     property bool recordMode: recordingState !== "idle" || recordProcess.running
+    property var pendingRecordingPlan: null
     property var recordingSelection: null
     property string recordingState: "idle"
     property var regionSelectorItem: regionSelectorLoader.item
@@ -61,8 +62,8 @@ Src.FreezeScreen {
     property var debugCaptureRequests: ({})
     property var debugEventHistory: []
     property var windowSelectorItem: windowSelectorLoader.item
-    readonly property var allHyprlandToplevels: Hyprland.toplevels && Hyprland.toplevels.values ? Hyprland.toplevels.values : []
-    readonly property var workspaceToplevels: root.filterWorkspaceToplevels(root.allHyprlandToplevels, root.hyprlandMonitor)
+    readonly property var allHyprlandToplevels: root.active && Hyprland.toplevels && Hyprland.toplevels.values ? Hyprland.toplevels.values : []
+    readonly property var workspaceToplevels: root.active ? root.filterWorkspaceToplevels(root.allHyprlandToplevels, root.hyprlandMonitor) : []
     readonly property var liveWindowTargets: root.buildWindowTargetsFromSnapshot({
         activeWorkspace: hyprlandSnapshot.activeWorkspace,
         clients: hyprlandSnapshot.clients
@@ -471,7 +472,6 @@ Src.FreezeScreen {
         SharedCommon.GlobalState.screenRecordingPath = currentRecordingPath;
         SharedCommon.GlobalState.screenRecordingPid = recordProcess.processId === null || recordProcess.processId === undefined ? 0 : Number(recordProcess.processId);
         SharedCommon.GlobalState.screenRecordingState = recordingState;
-        SharedCommon.GlobalState.hyprQuickshotVisible = active;
     }
     function activate() {
         if (recordProcess.running) {
@@ -529,6 +529,8 @@ Src.FreezeScreen {
             return;
         }
         active = false;
+        if (SharedCommon.GlobalState.hyprQuickshotVisible)
+            SharedCommon.GlobalState.hyprQuickshotVisible = false;
         sessionVisible = false;
         grabReady = false;
         screenshotFailureKeepsSession = false;
@@ -761,19 +763,33 @@ Src.FreezeScreen {
             width: selection.width,
             height: selection.height
         });
+        root.pendingRecordingPlan = plan;
         currentRecordingPath = plan.outputPath;
-        currentRecordingAudioDevice = root.recordAudioMode === "monitor" ? "default monitor" : (root.recordAudioMode === "defaultMic" ? "default mic" : "");
-        recordProcess.command = Common.ProcessHelper.shell(plan.commandString);
-        recordProcess.running = false;
-        recordProcess.running = true;
+        currentRecordingAudioDevice = plan.audioDevice || (root.recordAudioMode === "monitor" ? "default monitor" : (root.recordAudioMode === "defaultMic" ? "default mic" : ""));
         recordingState = "recording";
         sessionVisible = false;
         awaitingScreenConfirm = false;
         recordingSelection = selection;
+        recordDirectoryProcess.command = ["mkdir", "-p", "--", plan.outputDir];
+        recordDirectoryProcess.running = false;
+        recordDirectoryProcess.running = true;
+    }
+    function launchRecordingPlan(plan) {
+        if (!plan || !plan.command || plan.command.length === 0) {
+            notifyRecordingFailure("Recording command could not be prepared");
+            stopRecordFlow();
+            return;
+        }
+        currentRecordingPath = plan.outputPath;
+        currentRecordingAudioDevice = plan.audioDevice || (root.recordAudioMode === "monitor" ? "default monitor" : (root.recordAudioMode === "defaultMic" ? "default mic" : ""));
+        recordProcess.command = plan.command;
+        recordProcess.running = false;
+        recordProcess.running = true;
     }
     function stopRecordFlow() {
         countdownTimer.stop();
         countdownValue = root.countdownStartValue;
+        pendingRecordingPlan = null;
         recordingState = "idle";
         recordingSelection = null;
         awaitingScreenConfirm = false;
@@ -909,10 +925,11 @@ Src.FreezeScreen {
     Loader {
         id: settingsLoader
         active: false
-        sourceComponent: Settings {
+        sourceComponent: Core.Settings {
             property bool saveToDisk: true
             property string recordAudioMode: "monitor"
             category: "Hyprquickshot"
+            location: Quickshell.shellPath("data/hyprquickshot.conf")
         }
     }
     HyprlandSnapshotProvider {
@@ -1211,6 +1228,35 @@ Src.FreezeScreen {
         }
     }
     Process {
+        id: recordDirectoryProcess
+        property string stderrText: ""
+        running: false
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: recordDirectoryProcess.stderrText = this.text
+        }
+        onRunningChanged: {
+            if (running)
+                recordDirectoryProcess.stderrText = "";
+        }
+        // qmllint disable signal-handler-parameters
+        onExited: function(code) {
+            const plan = root.pendingRecordingPlan;
+            root.pendingRecordingPlan = null;
+            if (!plan)
+                return;
+            if (code !== 0) {
+                const detail = recordDirectoryProcess.stderrText || `mkdir failed (code ${code})`;
+                root.notifyRecordingFailure(detail);
+                root.stopRecordFlow();
+                root.deactivate();
+                return;
+            }
+            root.launchRecordingPlan(plan);
+        }
+        // qmllint enable signal-handler-parameters
+    }
+    Process {
         id: recordProcess
         property string stderrText: ""
         property string stdoutText: ""
@@ -1226,9 +1272,6 @@ Src.FreezeScreen {
                 if (text === "")
                     return;
                 recordProcess.stdoutText = text;
-                const match = text.match(/audio_device:(.+)$/i);
-                if (match && match[1])
-                    root.currentRecordingAudioDevice = String(match[1]).trim();
             }
         }
         // qmllint disable signal-handler-parameters

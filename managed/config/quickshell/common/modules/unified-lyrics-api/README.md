@@ -32,7 +32,7 @@ UnifiedLyricsClient {
 
 Invokable:
 
-- `refreshFromEnv(envFile, spotifyTrackRef, trackName, artistName, albumName, lengthMicros): bool`
+- `refresh(spotifyTrackRef, trackName, artistName, albumName, lengthMicros): bool`
 
 Properties:
 

@@ -11,27 +11,10 @@ function safeParse(text) {
     }
 }
 
-function extractLastObjectText(text) {
-    if (!text)
-        return "";
-    const trimmed = String(text).trim();
-    const start = trimmed.lastIndexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start < 0 || end <= start)
-        return "";
-    return trimmed.slice(start, end + 1);
-}
-
 function parseObject(text) {
     const parsed = safeParse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
         return parsed;
-    const fallbackText = extractLastObjectText(text);
-    if (!fallbackText)
-        return null;
-    const fallbackParsed = safeParse(fallbackText);
-    if (fallbackParsed && typeof fallbackParsed === "object" && !Array.isArray(fallbackParsed))
-        return fallbackParsed;
     return null;
 }
 

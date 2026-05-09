@@ -14,6 +14,7 @@ option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Qml Concurrent)
 find_program(GO_EXECUTABLE go REQUIRED)
+file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}" UNIFIEDLYRICS_SOURCE_DIR)
 if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
     set(QMLPLUGINDUMP_EXECUTABLE "/usr/lib/qt6/bin/qmlplugindump")
 else()
@@ -32,7 +33,7 @@ string(JOIN " " UNIFIEDLYRICS_CGO_CXXFLAGS_STR ${UNIFIEDLYRICS_CGO_CXXFLAGS})
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/unifiedlyrics")
 set(UNIFIED_LYRICS_GO_LIB "${QML_MODULE_DIR}/libunifiedlyrics_go.so")
 file(GLOB_RECURSE UNIFIEDLYRICS_GO_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_LIST_DIR}/*.go"
+    "${UNIFIEDLYRICS_SOURCE_DIR}/*.go"
 )
 
 add_custom_command(
@@ -43,7 +44,7 @@ add_custom_command(
         "CGO_CXXFLAGS=${UNIFIEDLYRICS_CGO_CXXFLAGS_STR}"
         "${GO_EXECUTABLE}" build -buildmode=c-shared ${UNIFIEDLYRICS_GO_BUILD_FLAGS} -o "${UNIFIED_LYRICS_GO_LIB}" ./capi
     DEPENDS ${UNIFIEDLYRICS_GO_SOURCES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+    WORKING_DIRECTORY "${UNIFIEDLYRICS_SOURCE_DIR}"
     COMMENT "Building unified-lyrics Go shared library"
 )
 add_custom_target(unifiedlyrics_go_lib DEPENDS "${UNIFIED_LYRICS_GO_LIB}")

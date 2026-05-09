@@ -68,6 +68,9 @@ ModuleContainer {
     readonly property string screenApps: root.screenActive ? "Active" : ""
     property color screenColor: Config.color.primary
     property string screenIcon: "󰍹"
+    readonly property bool presentFrozen: PrivacyService.wlPresentFrozen
+    property color presentFreezeColor: Config.color.primary
+    property string presentFreezeIcon: ""
     readonly property string statusTooltip: {
         const micStatus = root.buildStatus("Mic", root.micApps);
         const camStatus = root.buildStatus("Cam", root.cameraApps);
@@ -93,11 +96,13 @@ ModuleContainer {
     }
     // statusTooltip is a binding; no imperative syncing needed.
 
-    collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive
+    collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive && !root.presentFrozen
     contentSpacing: Config.space.sm
-    tooltipHoverable: true
-    tooltipText: root.statusTooltip
-    tooltipTitle: "Privacy"
+    // tooltipHoverable: true
+    // tooltipText: root.statusTooltip
+    // tooltipTitle: "Privacy"
+
+    onClicked: PrivacyService.togglePresentFreeze()
 
     content: [
         Row {
@@ -123,37 +128,42 @@ ModuleContainer {
                 text: root.screenIcon
                 visible: root.screenActive
             }
-        }
-    ]
-    tooltipContent: Component {
-        ColumnLayout {
-            spacing: Config.space.sm
-
-            TooltipCard {
-                content: [
-                    InfoRow {
-                        label: "Mic"
-                        value: root.appLabel(root.micApps)
-                        valueColor: root.micActive ? root.micColor : Config.color.on_surface_variant
-                    },
-                    InfoRow {
-                        label: "Camera"
-                        value: root.appLabel(root.cameraApps)
-                        valueColor: root.cameraActive ? root.cameraColor : Config.color.on_surface_variant
-                    },
-                    InfoRow {
-                        label: "Location"
-                        value: root.appLabel(root.locationApps)
-                        valueColor: root.locationActive ? root.locationColor : Config.color.on_surface_variant
-                    },
-                    InfoRow {
-                        label: "Screen"
-                        value: root.appLabel(root.screenApps)
-                        valueColor: root.screenActive ? root.screenColor : Config.color.on_surface_variant
-                    }
-                ]
+            IconLabel {
+                color: root.presentFreezeColor
+                text: root.presentFreezeIcon
+                visible: root.presentFrozen
             }
         }
-    }
+    ]
+    // tooltipContent: Component {
+    //     ColumnLayout {
+    //         spacing: Config.space.sm
+    //
+    //         TooltipCard {
+    //             content: [
+    //                 InfoRow {
+    //                     label: "Mic"
+    //                     value: root.appLabel(root.micApps)
+    //                     valueColor: root.micActive ? root.micColor : Config.color.on_surface_variant
+    //                 },
+    //                 InfoRow {
+    //                     label: "Camera"
+    //                     value: root.appLabel(root.cameraApps)
+    //                     valueColor: root.cameraActive ? root.cameraColor : Config.color.on_surface_variant
+    //                 },
+    //                 InfoRow {
+    //                     label: "Location"
+    //                     value: root.appLabel(root.locationApps)
+    //                     valueColor: root.locationActive ? root.locationColor : Config.color.on_surface_variant
+    //                 },
+    //                 InfoRow {
+    //                     label: "Screen"
+    //                     value: root.appLabel(root.screenApps)
+    //                     valueColor: root.screenActive ? root.screenColor : Config.color.on_surface_variant
+    //                 }
+    //             ]
+    //         }
+    //     }
+    // }
 
 }

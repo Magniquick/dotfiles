@@ -12,10 +12,11 @@ endif()
 
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Network DBus)
 
 # Build the Go shared library once and keep it next to the QML module output.
 find_program(GO_EXECUTABLE go REQUIRED)
+file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}" QSGO_SOURCE_DIR)
 if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
     set(QMLPLUGINDUMP_EXECUTABLE "/usr/lib/qt6/bin/qmlplugindump")
 else()
@@ -35,8 +36,8 @@ set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/qsgo")
 set(QSGO_GO_LIB "${QML_MODULE_DIR}/libqsgo_go.so")
 
 file(GLOB_RECURSE QSGO_GO_SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/capi/*.go"
-    "${CMAKE_CURRENT_LIST_DIR}/internal/*.go"
+    "${QSGO_SOURCE_DIR}/capi/*.go"
+    "${QSGO_SOURCE_DIR}/internal/*.go"
 )
 
 add_custom_command(
@@ -46,7 +47,7 @@ add_custom_command(
         "CGO_CFLAGS=${QSGO_CGO_CFLAGS_STR}"
         "CGO_CXXFLAGS=${QSGO_CGO_CXXFLAGS_STR}"
         "${GO_EXECUTABLE}" build -buildmode=c-shared ${QSGO_GO_BUILD_FLAGS} -o "${QSGO_GO_LIB}" ./capi
-    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+    WORKING_DIRECTORY "${QSGO_SOURCE_DIR}"
     DEPENDS ${QSGO_GO_SOURCES}
     COMMENT "Building qs-go Go shared library"
 )
@@ -56,12 +57,13 @@ add_library(qsgo_plugin SHARED
     cpp/qsgo_plugin.cpp
     cpp/QsGoSysInfo.cpp
     cpp/QsGoBacklight.cpp
+    cpp/QsGoConfigResolver.cpp
     cpp/QsGoHyprlandSnapshot.cpp
     cpp/QsGoAiSession.cpp
-    cpp/QsGoAiModels.cpp
     cpp/QsGoPacman.cpp
     cpp/QsGoIcal.cpp
     cpp/QsGoTodoist.cpp
+    cpp/QsGoSystemdFailed.cpp
 )
 
 set_target_properties(qsgo_plugin
@@ -95,6 +97,7 @@ target_link_libraries(qsgo_plugin PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Network
+    Qt6::DBus
     "${QSGO_GO_LIB}"
 )
 

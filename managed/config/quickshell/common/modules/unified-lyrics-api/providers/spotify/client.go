@@ -18,13 +18,18 @@ import (
 )
 
 const (
+	//nolint:gosec // Public Spotify web API endpoint, not a credential.
 	defaultTokenURL      = "https://open.spotify.com/api/token"
 	defaultLyricsBaseURL = "https://spclient.wg.spotify.com/color-lyrics/v2/track/"
 	defaultServerTimeURL = "https://open.spotify.com/api/server-time"
 )
 
-var trackIDRegex = regexp.MustCompile(`(?i)(?:https?://open\.spotify\.com/)?(?:track/|track:)([A-Za-z0-9]+)`)
+var (
+	trackIDRegex     = regexp.MustCompile(`(?i)(?:https?://open\.spotify\.com/)?(?:track/|track:)([A-Za-z0-9]+)`)
+	bareTrackIDRegex = regexp.MustCompile(`^[A-Za-z0-9]{22}$`)
+)
 
+// Client fetches Spotify lyrics using an SP_DC session cookie.
 type Client struct {
 	spdc string
 
@@ -49,12 +54,15 @@ type Client struct {
 	insecureSpotifyTLS bool
 }
 
+// Option customizes a Client.
 type Option func(*Client)
 
+// WithHTTPClient sets the base HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.hc = hc }
 }
 
+// WithCacheDir sets the on-disk cache directory.
 func WithCacheDir(dir string) Option {
 	return func(c *Client) {
 		dir = strings.TrimSpace(dir)
@@ -65,14 +73,17 @@ func WithCacheDir(dir string) Option {
 	}
 }
 
+// WithLyricsCacheTTL sets how long cached lyrics remain fresh.
 func WithLyricsCacheTTL(ttl time.Duration) Option {
 	return func(c *Client) { c.lyricsCacheTTL = ttl }
 }
 
+// WithLyricsCacheEnabled toggles the lyrics cache.
 func WithLyricsCacheEnabled(enabled bool) Option {
 	return func(c *Client) { c.lyricsCacheEnabled = enabled }
 }
 
+// WithUserAgent sets both token and lyrics request user agents.
 func WithUserAgent(ua string) Option {
 	return func(c *Client) {
 		c.tokenUserAgent = ua
@@ -80,27 +91,33 @@ func WithUserAgent(ua string) Option {
 	}
 }
 
+// WithTokenUserAgent sets the token request user agent.
 func WithTokenUserAgent(ua string) Option {
 	return func(c *Client) { c.tokenUserAgent = ua }
 }
 
+// WithLyricsUserAgent sets the lyrics request user agent.
 func WithLyricsUserAgent(ua string) Option {
 	return func(c *Client) { c.lyricsUserAgent = ua }
 }
 
+// WithTokenTimeout sets the token and server-time request timeout.
 func WithTokenTimeout(d time.Duration) Option {
 	return func(c *Client) { c.tokenTimeout = d }
 }
 
+// WithInsecureSpotifyTLS toggles Spotify TLS verification.
 func WithInsecureSpotifyTLS(enabled bool) Option {
 	return func(c *Client) { c.insecureSpotifyTLS = enabled }
 }
 
+// New creates a Spotify provider client.
 func New(cacheDir string, opts ...Option) *Client {
 	cacheDir = strings.TrimSpace(cacheDir)
 	if cacheDir == "" {
 		cacheDir = cache.DefaultDir()
 	}
+	//nolint:gosec // User-agent and endpoint defaults are public client constants.
 	c := &Client{
 		hc:                 &http.Client{Timeout: 30 * time.Second},
 		tokenURL:           defaultTokenURL,
@@ -124,14 +141,17 @@ func New(cacheDir string, opts ...Option) *Client {
 	return c
 }
 
+// Name returns the provider identifier.
 func (c *Client) Name() string {
 	return providerName
 }
 
+// Supports reports whether the request has Spotify auth and track metadata.
 func (c *Client) Supports(req lyricsprovider.Request) bool {
 	return strings.TrimSpace(req.SPDC) != "" && strings.TrimSpace(req.SpotifyTrackRef) != ""
 }
 
+// Fetch returns Spotify lyrics for the requested track.
 func (c *Client) Fetch(ctx context.Context, req lyricsprovider.Request) (*lyricsprovider.Result, error) {
 	if !c.Supports(req) {
 		return nil, nil
@@ -177,6 +197,7 @@ func normalizeSyncType(syncType string, lines []lyricsprovider.Line) string {
 	return lyricsprovider.SyncTypeNone
 }
 
+// NewWithSPDC creates a client bound to an SP_DC cookie.
 func NewWithSPDC(spdc string, cacheDir string, opts ...Option) (*Client, error) {
 	spdc = strings.TrimSpace(spdc)
 	if spdc == "" {
@@ -217,10 +238,14 @@ func (c *Client) lyricsCacheEntryKey(trackID string) string {
 	return lyricsCacheKey(trackID)
 }
 
+// TrackIDFromURL extracts a Spotify track ID from a URL, URI, or bare ID.
 func TrackIDFromURL(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", fmt.Errorf("empty url")
+	}
+	if bareTrackIDRegex.MatchString(s) {
+		return s, nil
 	}
 
 	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
@@ -294,7 +319,7 @@ func (c *Client) getServerTimeSeconds(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return 0, &Error{Status: resp.StatusCode, Message: "failed to fetch server time"}
 	}
@@ -349,7 +374,7 @@ func (c *Client) fetchToken(ctx context.Context) (*TokenResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -404,6 +429,7 @@ func (c *Client) invalidateCachedToken() {
 	deleteCachePayload(c.cacheDir, c.tokenCacheEntryKey())
 }
 
+// EnsureToken returns a valid cached or freshly fetched Spotify token.
 func (c *Client) EnsureToken(ctx context.Context) (*TokenResponse, error) {
 	tr, err := c.readCachedToken()
 	if err == nil {
@@ -415,6 +441,7 @@ func (c *Client) EnsureToken(ctx context.Context) (*TokenResponse, error) {
 	return c.fetchToken(ctx)
 }
 
+// GetLyrics fetches Spotify lyrics for a track ID.
 func (c *Client) GetLyrics(ctx context.Context, trackID string) (*LyricsResponse, error) {
 	trackID = strings.TrimSpace(trackID)
 	if trackID == "" {
@@ -448,7 +475,7 @@ func (c *Client) GetLyrics(ctx context.Context, trackID string) (*LyricsResponse
 		c.invalidateCachedToken()
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.invalidateCachedToken()
@@ -486,6 +513,7 @@ func (c *Client) GetLyrics(ctx context.Context, trackID string) (*LyricsResponse
 	return &lr, nil
 }
 
+// GetLyricsFromURL fetches Spotify lyrics for a URL, URI, or bare track ID.
 func (c *Client) GetLyricsFromURL(ctx context.Context, trackURL string) (*LyricsResponse, error) {
 	id, err := TrackIDFromURL(trackURL)
 	if err != nil {

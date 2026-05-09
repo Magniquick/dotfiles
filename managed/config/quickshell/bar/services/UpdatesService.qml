@@ -19,6 +19,7 @@ Item {
     property string lastCheckedLabel: ""
     property string error: ""
     property bool refreshing: false
+    property bool periodicRefreshEnabled: false
     readonly property var updatesModel: provider
 
     function markNoUpdates() {
@@ -45,10 +46,10 @@ Item {
     }
 
     Timer {
-        interval: 30000
+        interval: 3600000
         repeat: true
-        running: true
-        triggeredOnStart: true
+        running: root.periodicRefreshEnabled
+        triggeredOnStart: false
 
         onTriggered: root.refresh("timer")
     }
@@ -65,6 +66,7 @@ Item {
 
     Component.onCompleted: {
         root.markNoUpdates();
+        root.refresh("startup");
     }
 
     Connections {

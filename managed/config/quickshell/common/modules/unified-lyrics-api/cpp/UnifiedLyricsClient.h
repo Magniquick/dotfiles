@@ -16,8 +16,7 @@ struct UnifiedLyricsBackendResult {
   QVariantList lines;
 };
 
-class UnifiedLyricsClient : public QObject
-{
+class UnifiedLyricsClient : public QObject {
   Q_OBJECT
 
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
@@ -30,23 +29,36 @@ class UnifiedLyricsClient : public QObject
   Q_PROPERTY(QVariantList lines READ lines NOTIFY linesChanged)
 
 public:
-  explicit UnifiedLyricsClient(QObject *parent = nullptr);
+  explicit UnifiedLyricsClient(QObject* parent = nullptr);
 
-  bool busy() const { return m_busy; }
-  bool loaded() const { return m_loaded; }
-  QString status() const { return m_status; }
-  QString error() const { return m_error; }
-  QString source() const { return m_source; }
-  QString syncType() const { return m_syncType; }
-  QVariantMap metadata() const { return m_metadata; }
-  QVariantList lines() const { return m_lines; }
+  bool busy() const {
+    return m_busy;
+  }
+  bool loaded() const {
+    return m_loaded;
+  }
+  QString status() const {
+    return m_status;
+  }
+  QString error() const {
+    return m_error;
+  }
+  QString source() const {
+    return m_source;
+  }
+  QString syncType() const {
+    return m_syncType;
+  }
+  QVariantMap metadata() const {
+    return m_metadata;
+  }
+  QVariantList lines() const {
+    return m_lines;
+  }
 
-  Q_INVOKABLE bool refreshFromEnv(const QString &envFile,
-                                  const QString &spotifyTrackRef,
-                                  const QString &trackName,
-                                  const QString &artistName,
-                                  const QString &albumName,
-                                  const QString &lengthMicros);
+  Q_INVOKABLE bool refresh(const QString& spotifyTrackRef, const QString& trackName,
+                           const QString& artistName, const QString& albumName,
+                           const QString& lengthMicros);
 
 signals:
   void busyChanged();
@@ -61,14 +73,13 @@ signals:
 private:
   void setBusy(bool busy);
   void setLoaded(bool loaded);
-  void setStatus(const QString &status);
-  void setError(const QString &error);
-  void setSource(const QString &source);
-  void setSyncType(const QString &syncType);
-  void setMetadata(const QVariantMap &metadata);
-  void setLines(const QVariantList &lines);
+  void setStatus(const QString& status);
+  void setError(const QString& error);
+  void setSource(const QString& source);
+  void setSyncType(const QString& syncType);
+  void setMetadata(const QVariantMap& metadata);
+  void setLines(const QVariantList& lines);
 
-  static QString extractSpDcFromEnvFile(const QString &envFile, QString *errOut);
   void startTimeout(int ms);
   void stopTimeout();
 

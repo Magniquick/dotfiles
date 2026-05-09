@@ -2,18 +2,19 @@
 package ical
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
-	"github.com/joho/godotenv"
+
+	"qs-go/internal/secrets"
 )
 
 // CacheMeta stores HTTP caching headers per URL.
@@ -33,15 +34,15 @@ type EventOut struct {
 
 // Output is the JSON payload returned by Refresh.
 type Output struct {
-	GeneratedAt  string                       `json:"generatedAt"`
-	Status       string                       `json:"status"`
-	Error        string                       `json:"error,omitempty"`
-	EventsByDay  map[string][]EventOut        `json:"eventsByDay"`
+	GeneratedAt string                `json:"generatedAt"`
+	Status      string                `json:"status"`
+	Error       string                `json:"error,omitempty"`
+	EventsByDay map[string][]EventOut `json:"eventsByDay"`
 }
 
 // State persists between calls to avoid re-fetching unchanged calendars.
 type State struct {
-	mu       sync.Mutex
+	mu        sync.Mutex
 	metaByURL map[string]CacheMeta
 	icsByURL  map[string]string
 }
@@ -51,21 +52,17 @@ var globalState = &State{
 	icsByURL:  make(map[string]string),
 }
 
-// Refresh fetches/re-fetches calendars from CALENDAR_ICAL_URL env var and returns JSON.
-func Refresh(envFile string, days int) string {
+// Refresh fetches/re-fetches calendars from CALENDAR_ICAL_URL in Secret Service and returns JSON.
+func Refresh(days int) string {
 	globalState.mu.Lock()
 	defer globalState.mu.Unlock()
 
-	if envFile != "" {
-		_ = godotenv.Overload(envFile)
-	}
-
-	urls := resolveURLs()
+	urls := resolveURLs(secrets.NewResolver())
 	if len(urls) == 0 {
 		b, _ := json.Marshal(Output{
 			GeneratedAt: time.Now().Format(time.RFC3339),
 			Status:      "error",
-			Error:       "Missing CALENDAR_ICAL_URL in .env",
+			Error:       "Missing CALENDAR_ICAL_URL in Secret Service",
 			EventsByDay: map[string][]EventOut{},
 		})
 		return string(b)
@@ -119,8 +116,11 @@ func Refresh(envFile string, days int) string {
 	return string(b)
 }
 
-func resolveURLs() []string {
-	env := os.Getenv("CALENDAR_ICAL_URL")
+func resolveURLs(resolver secrets.Resolver) []string {
+	if resolver == nil {
+		return nil
+	}
+	env, _ := resolver.Lookup("CALENDAR_ICAL_URL")
 	var urls []string
 	for _, u := range strings.Split(env, ",") {
 		if t := strings.TrimSpace(u); t != "" {
@@ -134,7 +134,7 @@ func resolveURLs() []string {
 // Returns status string and optional fatal error.
 func fetchCalendar(client *http.Client, url string) (string, error) {
 	meta := globalState.metaByURL[url]
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -149,7 +149,9 @@ func fetchCalendar(client *http.Client, url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusNotModified {
 		return "not_modified", nil
@@ -188,8 +190,8 @@ func fetchCalendar(client *http.Client, url string) (string, error) {
 }
 
 type parsedEvent struct {
-	event          EventOut
-	startDate      time.Time
+	event            EventOut
+	startDate        time.Time
 	endDateExclusive time.Time
 }
 
@@ -250,7 +252,6 @@ func parseEvent(event *ics.VEvent) (*parsedEvent, error) {
 		if endDt.Hour() == 0 && endDt.Minute() == 0 && endDt.Second() == 0 && endDt.After(startDt) {
 			endExclusive = endDt
 		} else {
-			endExclusive = endDt.AddDate(0, 0, 1)
 			endExclusive = time.Date(endDt.Year(), endDt.Month(), endDt.Day()+1, 0, 0, 0, 0, endDt.Location())
 		}
 	}

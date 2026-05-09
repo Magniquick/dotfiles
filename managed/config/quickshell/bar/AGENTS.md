@@ -4,79 +4,54 @@
 
 ## Project Structure & Module Organization
 
-- Entry point: `shell.qml` loads `BarWindow.qml` per screen; powermenu lives under `powermenu/` with `shell.qml` → `Powermenu.qml`.
-- Core UI pieces:
-  - `components/` (shared building blocks like `ModuleContainer.qml`, `TooltipPopup.qml`, `CommandRunner.qml`, `ActionChip.qml`, `JsonUtils.js`).
-  - `modules/` (bar modules such as `ClockModule.qml`, `WorkspaceGroup.qml`, `NetworkModule.qml`).
-  - Powermenu pieces: `powermenu/Powermenu.qml` plus `ActionPanel.qml`, `GreetingPane.qml`, `FooterStatus.qml`, `BunnyBlock.qml`, `ActionGrid.qml`, `PowermenuButton.qml`.
-- Basic file layout (top-level):
-  - `shell.qml`, `BarWindow.qml`, `Config.qml`, `Colors.qml`, `DependencyCheck.qml`
-  - `components/`, `modules/`, `powermenu/`
-  - `waybar/config.jsonc`, `waybar/style.css` (legacy)
-- Singletons (registered in `qmldir`):
-  - `Config.qml`: Design tokens (fonts, spacing, colors, slider constants)
-  - `Colors.qml`: Material palette + color roles
-  - `DependencyCheck.qml`: Centralized dependency checking with notify-send alerts
-- Runtime data sources/services:
-  - Brightness:
-    - Internal panel: `qsgo.BacklightProvider` (sysfs + udev, no polling)
-    - External monitors: `ddcutil` via `bar/services/BrightnessService.qml`
-  - MPRIS via `Quickshell.Services.Mpris` (ignore `playerctld`).
-  - Systemd failed units: `systemctl --failed` plus `busctl monitor`.
-  - Tray: `Quickshell.Services.SystemTray` (right-click opens menu).
-  - Arch icon: `waybar/scripts/status.sh` on tooltip hover.
-  - Updates: `qsgo` PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API).
-  - Privacy: `pw-dump` + `fuser /dev/video*` for camera on udev video4linux.
-  - Network: `nmcli` status/wifi; wired uses `/sys/class/net/<dev>/device/subsystem` to detect USB and `udevadm info` for a human-friendly USB NIC label (underscores → spaces).
+- Entry point: root `shell.qml` loads `bar/BarWindow.qml` once per screen via `Variants`.
+- `BarWindow.qml`: Top-layer Wayland bar with left/center/right rows.
+- `components/`: Shared bar primitives such as `ModuleContainer.qml`, `TooltipPopup.qml`, `CommandRunner.qml`, `ProcessMonitor.qml`, `ActionChip.qml`, `ActionIconButton.qml`, `TrafficGraph.qml`, and tooltip helpers.
+- `modules/`: User-facing bar modules and groups such as `StartMenuGroup`, `WorkspaceGroup`, `ControlsGroup`, `WirelessGroup`, `PanelGroup`, `MprisModule`, `NetworkModule`, `BluetoothModule`, `BatteryModule`, `ClockModule`, `UpdatesModule`, and `TrayModule`.
+- `services/`: Bar-scoped singleton backends registered in `bar/qmldir` (`BrightnessService`, `CalendarService`, `NetworkService`, `PrivacyService`, `SystemdFailedService`, `TodoistService`, `UpdatesService`).
+
+## Runtime Data Sources
+
+- Audio: `Quickshell.Services.Pipewire` in `WireplumberModule`.
+- Backlight: internal display through `qsgo.BacklightProvider`; external monitors through `ddcutil` in `BrightnessService`.
+- Bluetooth: `Quickshell.Bluetooth`; optional debug-only `dbus-monitor`/`busctl`/`ps` helpers can inspect discovery holders and librepods tray metadata.
+- Calendar: `qsgo.IcalCache` through `CalendarService`.
+- Failed units: `qsgo.SystemdFailedProvider` snapshots structured `systemctl --output=json` and refreshes from systemd D-Bus events.
+- MPRIS: `Quickshell.Services.Mpris`; lyrics come from `unifiedlyrics`.
+- Network: `Quickshell.Networking`; `ip` is used only for address/gateway details and sysfs/device metadata fills ethernet labels.
+- Privacy: `Quickshell.Services.Pipewire` for mic/screencast, `inotifywait`/`fuser`/`ps` for camera owners, and `wl-present toggle-freeze` for the privacy freeze control.
+- Updates: `qsgo.PacmanUpdatesProvider` (`checkupdates`, `yay -Qua`).
 
 ## UI / Design Notes
 
-- Catppuccin-inspired, but aim for intentional, bold layouts; avoid default system fonts—set explicit families in `Config`.
-- Use clear color direction (no purple-by-default bias); prefer gradients/patterns over flat fills when adding backgrounds.
-- Keep animations meaningful (open/close reveals, tooltip fades); avoid noisy micro-motions.
-- Tooltips anchor above targets, stay unclipped; bar modules can collapse when empty.
-- Powermenu overlay should animate cleanly, retain focus when opened, and hide on `Esc`/`q`.
-- Use `Config.color` / `Config.palette` so modules stay aligned with the shared palette.
+- Use `Config.color`, `Config.palette`, `Config.space`, `Config.type`, `Config.motion`, and `Config.shape` tokens.
+- Bar windows use `WlrLayershell.layer: WlrLayer.Top` and `WlrKeyboardFocus.None`.
+- Tooltips should anchor above targets, stay unclipped, and only keep expensive polling/animations active while visible.
+- Modules should collapse when empty rather than leaving dead space.
+- Use `Config.fontFamily` and `Config.iconFontFamily`; do not fall back to default system fonts for visible UI.
 
 ## Build, Test, and Development Commands
 
-- Run bar locally: `quickshell -c bar` (or `qs` here). Powermenu: `quickshell` (or `qs`) from repo root to load `powermenu/shell.qml`.
-- Manual reload: restart `quickshell` after QML changes. No automated tests.
+- Run the full shell from repo root with `./qs`.
+- Reload after QML changes with `bash tools/reload-quickshell.sh`; the happy path ends with no recent warnings/errors.
+- No automated test suite is currently defined.
 
 ## Coding Style & Naming Conventions
 
 - QML/JS: 2-space indentation, concise handlers, readable signal scopes.
 - Naming: QML types/IDs `CamelCase`; properties/functions `lowerCamelCase`; constants `UPPER_SNAKE`.
-- Keep powermenu names explicit (e.g., `powermenuVisible`); prefer small, focused components.
-- Shared colors live in `Config.color` / `Config.palette`; use `Quickshell.shellDir`/`Quickshell.shellPath()` (not deprecated `configDir`/`configPath`).
-- Avoid deprecated parameter injection in signal handlers; use `function(args)` handlers.
+- Shared colors live in `Config.color` / `Config.palette`; use `Quickshell.shellDir`/`Quickshell.shellPath()` instead of deprecated `configDir`/`configPath`.
+- Avoid deprecated parameter injection in signal handlers; use explicit `function(args)` handlers.
 
 ## Error Handling Patterns
 
-- **Dependency checking**: Use `DependencyCheck.require(cmd, module, callback)` for PATH commands, `DependencyCheck.requireExecutable(path, module, callback)` for scripts. Sends `notify-send` alert if missing.
-- **CommandRunner**: Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()` and `onRan(output)` signals. Stderr captured in `errorOutput` property.
-- **CommandRunner result handling**: Treat `output` as last-successful data; parse results in `onRan(output)`. Do not drive state from `onOutputChanged`.
-- **Process crash recovery**: Long-running monitors use exponential backoff restart:
-  - Properties: `monitorRestartAttempts`, `monitorDegraded`
-  - Timers: `monitorRestartTimer` (backoff), `monitorBackoffResetTimer` (60s stability reset)
-  - Backoff: 1s → 2s → 4s → ... → 30s max
-  - Modules with crash recovery: NetworkModule, NotificationModule, BacklightModule, SystemdFailedModule
+- **Dependency checking**: Use `DependencyCheck.require(cmd, module, callback)` for PATH commands and `DependencyCheck.requireExecutable(path, module, callback)` for scripts.
+- **CommandRunner**: Supports `timeoutMs`, `onError(errorOutput, exitCode)`, `onTimeout()`, and `onRan(output)`. Treat `output` as last-successful data and parse in `onRan(output)`.
+- **ProcessMonitor**: Use for long-running monitor commands that should restart with backoff. Gate monitors and timers when the owning UI is hidden if live monitoring is not required.
 
-## Testing Guidelines
+## Manual Checks
 
-- Manual checks:
-  - `Esc`/`q` close powermenu and it quits on dismiss.
-  - Buttons trigger expected system actions.
-  - Overlay animation/focus are correct; tray right-click menus open.
-  - Tooltips anchor above targets, stay unclipped; bar reload keeps module layout.
-  - Network tooltip shows USB NIC model + USB icon when subsystem is `usb`; polling resumes only while tooltip is open.
-
-## Commit & Pull Request Guidelines
-
-- Commits: short, imperative subjects (e.g., `Tighten esc shortcut`).
-- PRs: describe behavior changes, list manual checks, add screenshots/GIFs for UI changes.
-
-## Security & Configuration Notes
-
-- System actions use `systemctl`/`loginctl`; review permissions before expanding actions.
-- `WlrLayershell` uses Overlay + Exclusive keyboard focus; validate compositor compatibility when adjusting focus.
+- `Esc` closes left/right panels and powermenu when those surfaces are open.
+- Tooltips anchor correctly, remain unclipped, and stop hidden animations/timers.
+- Network/Bluetooth/Privacy/Updates modules reflect live service state after `bash tools/reload-quickshell.sh`.
+- Tray right-click menus open and notification/panel buttons still route through `GlobalState`.

@@ -4,6 +4,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStorageInfo>
@@ -96,37 +100,72 @@ QString runSmartctl(const QStringList& args) {
   return runCommand(QStringLiteral("sudo"), sudoArgs);
 }
 
-QString parseSmartctlValue(const QString& output, const QString& needle) {
-  const QStringList lines = output.split(QLatin1Char('\n'));
-  for (const QString& line : lines) {
-    if (!line.contains(needle))
-      continue;
-    const int index = line.indexOf(needle);
-    return line.mid(index + needle.size())
-        .trimmed()
-        .remove(QRegularExpression(QStringLiteral("^:+|:+$")));
-  }
+QJsonObject runSmartctlJson(const QStringList& args) {
+  QStringList jsonArgs{QStringLiteral("-j")};
+  jsonArgs << args;
+  const QString output = runSmartctl(jsonArgs);
+  if (output.isEmpty())
+    return {};
+  const QJsonDocument doc = QJsonDocument::fromJson(output.toUtf8());
+  return doc.isObject() ? doc.object() : QJsonObject{};
+}
+
+QString jsonNumberString(const QJsonValue& value) {
+  if (value.isDouble())
+    return QString::number(value.toInt());
+  if (value.isString())
+    return value.toString().trimmed();
   return {};
 }
 
-QString normalizeSmartToken(QString value) {
-  value = value.trimmed();
-  if (value.isEmpty())
-    return {};
-  const QStringList fields =
-      value.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-  if (!fields.isEmpty())
-    value = fields.first();
-  value = value.remove(QRegularExpression(QStringLiteral("^[():]+|[():]+$")));
-  return value.toUpper();
+int jsonIntValue(const QJsonValue& value, int fallback = 0) {
+  bool ok = false;
+  if (value.isDouble())
+    return value.toInt();
+  if (value.isString()) {
+    const int parsed = value.toString().trimmed().toInt(&ok, 0);
+    if (ok)
+      return parsed;
+  }
+  return fallback;
 }
 
-bool isZeroCriticalWarning(QString value) {
-  value = value.trimmed().toUpper();
-  if (value.startsWith(QStringLiteral("0X")))
-    value = value.mid(2);
-  value.remove(QRegularExpression(QStringLiteral("^0+")));
-  return value.isEmpty();
+QString smartWearLabel(const QJsonObject& smart) {
+  const QJsonObject nvme =
+      smart.value(QStringLiteral("nvme_smart_health_information_log")).toObject();
+  if (nvme.contains(QStringLiteral("percentage_used")))
+    return jsonNumberString(nvme.value(QStringLiteral("percentage_used"))) + QStringLiteral("%");
+
+  const QJsonObject attrs = smart.value(QStringLiteral("ata_smart_attributes")).toObject();
+  const QJsonArray table = attrs.value(QStringLiteral("table")).toArray();
+  for (const QJsonValue& value : table) {
+    const QJsonObject attr = value.toObject();
+    const QString name = attr.value(QStringLiteral("name")).toString();
+    if (!name.contains(QStringLiteral("Percentage_Used"), Qt::CaseInsensitive) &&
+        !name.contains(QStringLiteral("Percent_Lifetime"), Qt::CaseInsensitive))
+      continue;
+    const QJsonObject raw = attr.value(QStringLiteral("raw")).toObject();
+    const QString rawValue = jsonNumberString(raw.value(QStringLiteral("value")));
+    if (!rawValue.isEmpty())
+      return rawValue + QStringLiteral("%");
+  }
+  return QStringLiteral("Unknown");
+}
+
+QString smartHealthLabel(const QJsonObject& smart) {
+  const QJsonObject status = smart.value(QStringLiteral("smart_status")).toObject();
+  const bool hasPassed = status.contains(QStringLiteral("passed"));
+  const bool passed = status.value(QStringLiteral("passed")).toBool(false);
+  const QJsonObject nvme =
+      smart.value(QStringLiteral("nvme_smart_health_information_log")).toObject();
+  const int criticalWarning = jsonIntValue(nvme.value(QStringLiteral("critical_warning")), 0);
+  if (hasPassed && passed && criticalWarning == 0)
+    return QStringLiteral("Healthy");
+  if (hasPassed && !passed)
+    return QStringLiteral("Failed");
+  if (criticalWarning != 0)
+    return QStringLiteral("Warning (%1)").arg(criticalWarning);
+  return QStringLiteral("Unknown");
 }
 
 bool rootIsBtrfs() {
@@ -531,36 +570,16 @@ bool QsGoSysInfo::refresh() {
     {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
       if (m_diskHealthCache.isEmpty() || now - m_lastDiskHealthMs > (6LL * 60LL * 60LL * 1000LL)) {
-        const QString attrs = runSmartctl({QStringLiteral("--attributes"), diskDevice});
-        const QString healthOutput = runSmartctl(
-            {QStringLiteral("--health"), QStringLiteral("--tolerance=conservative"), diskDevice});
+        const QJsonObject smart =
+            runSmartctlJson({QStringLiteral("--attributes"), QStringLiteral("--health"),
+                             QStringLiteral("--tolerance=conservative"), diskDevice});
 
-        if (attrs.isEmpty() && healthOutput.isEmpty()) {
+        if (smart.isEmpty()) {
           m_diskHealthCache = QStringLiteral("Unknown (smartctl missing)");
           m_diskWearCache = QStringLiteral("Unknown");
         } else {
-          QString critWarn = parseSmartctlValue(attrs, QStringLiteral("Critical Warning:"));
-          if (critWarn.isEmpty())
-            critWarn = QStringLiteral("unknown");
-          QString wear = parseSmartctlValue(attrs, QStringLiteral("Percentage Used:"));
-          if (wear.isEmpty())
-            wear = QStringLiteral("Unknown");
-
-          QString healthResult = parseSmartctlValue(healthOutput, QStringLiteral("result"));
-          if (healthResult.isEmpty())
-            healthResult = parseSmartctlValue(healthOutput, QStringLiteral("SMART Health Status:"));
-          if (healthResult.isEmpty())
-            healthResult = QStringLiteral("unknown");
-
-          const QString healthNorm = normalizeSmartToken(healthResult);
-          const QString critWarnNorm = normalizeSmartToken(critWarn);
-          if (healthNorm == QStringLiteral("PASSED") && isZeroCriticalWarning(critWarnNorm))
-            m_diskHealthCache = QStringLiteral("Healthy");
-          else if (healthResult != QStringLiteral("unknown"))
-            m_diskHealthCache = QStringLiteral("%1 (%2)").arg(healthResult, critWarn);
-          else
-            m_diskHealthCache = QStringLiteral("Unknown (%1)").arg(critWarn);
-          m_diskWearCache = wear;
+          m_diskHealthCache = smartHealthLabel(smart);
+          m_diskWearCache = smartWearLabel(smart);
         }
         m_lastDiskHealthMs = now;
       }

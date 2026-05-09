@@ -19,6 +19,7 @@ RowLayout {
         font.letterSpacing: 1.5
         font.pixelSize: Config.type.labelSmall.size
         font.weight: Font.Black
+        font.variableAxes: Config.fontVariableAxes(Config.type.labelSmall.size, Font.Black)
     }
     Rectangle {
         Layout.alignment: Qt.AlignVCenter

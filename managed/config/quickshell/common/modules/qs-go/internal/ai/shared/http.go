@@ -2,6 +2,7 @@ package shared
 
 import "encoding/json"
 
+// ExtractErrorMessage returns a concise message from JSON error payloads or raw text.
 func ExtractErrorMessage(body []byte) string {
 	var v struct {
 		Error struct {

@@ -27,6 +27,7 @@ Item {
     property string activeCommand: ""
     property var availableModels: []
     property var availableMoods: []
+    property var resumeConversations: []
 
     property string footerLeftText: ""
     property string footerRightText: ""
@@ -45,6 +46,8 @@ Item {
     signal editRequested(string messageId, string newContent)
     signal modelSelected(string value)
     signal moodSelected(string value)
+    signal resumeSelected(string value)
+    signal resumeSearchChanged(string query)
     signal dismissCommandPickerRequested
 
     function scrollToEnd() {
@@ -71,6 +74,12 @@ Item {
     function clearTextFocus() {
         if (chatView && chatView.clearTextFocus)
             chatView.clearTextFocus();
+    }
+
+    function setLatestVisibleToolExpanded(expanded) {
+        return chatView && chatView.setLatestVisibleToolExpanded
+            ? chatView.setLatestVisibleToolExpanded(expanded)
+            : false;
     }
 
     Keys.onPressed: event => {
@@ -143,6 +152,7 @@ Item {
                     visible: root.showCommandPicker
 
                     readonly property bool isModelPicker: root.activeCommand === "model"
+                    readonly property bool isResumePicker: root.activeCommand === "resume"
 
                     MouseArea {
                         id: overlayDismissArea
@@ -162,14 +172,20 @@ Item {
                     Components.CommandPicker {
                         id: commandPicker
                         anchors.centerIn: parent
-                        command: parent.isModelPicker ? "/MODEL" : "/MOOD"
-                        options: parent.isModelPicker ? root.availableModels : root.availableMoods
+                        command: parent.isModelPicker ? "/MODEL" : (parent.isResumePicker ? "/RESUME" : "/MOOD")
+                        options: parent.isModelPicker ? root.availableModels : (parent.isResumePicker ? root.resumeConversations : root.availableMoods)
                         showAllToggle: parent.isModelPicker
                         visible: root.showCommandPicker
+                        onFilterTextChanged: {
+                            if (root.activeCommand === "resume")
+                                root.resumeSearchChanged(filterText);
+                        }
 
                         onOptionSelected: value => {
                             if (root.activeCommand === "model")
                                 root.modelSelected(value);
+                            else if (root.activeCommand === "resume")
+                                root.resumeSelected(value);
                             else
                                 root.moodSelected(value);
                         }

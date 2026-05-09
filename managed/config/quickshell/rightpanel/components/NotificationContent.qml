@@ -4,6 +4,7 @@ import Quickshell
 import "../../common/materialkit" as MK
 import "../../common" as Common
 import "../../common/components" as CommonComponents
+import "NotificationBodySanitizer.js" as BodySanitizer
 
 RowLayout {
     id: root
@@ -139,13 +140,12 @@ RowLayout {
         } else if ((appName || "").toLowerCase() === "kitty") {
             result.headerIconText = "\uf489";
         }
-        if (result.cleanBody.match(/<a\s+href="[^"]*web\.whatsapp\.com[^"]*">/i) !== null) {
+        if (BodySanitizer.containsWhatsAppLink(result.cleanBody)) {
             result.isWhatsApp = true;
             result.headerIconText = "\udb81\udda3";
             result.headerIconColor = "#25D366"; // Official WhatsApp brand color
-            result.cleanBody = result.cleanBody.replace(/^<a\s+href="[^"]*">[^<]*<\/a>\n*/i, "");
         }
-        result.cleanBody = result.cleanBody.trim().replace(/\n/g, "<br>");
+        result.cleanBody = BodySanitizer.normalizeBodyForStyledText(result.cleanBody);
         return result;
     }
 
@@ -351,11 +351,11 @@ RowLayout {
 
                         Text {
                             anchors.fill: parent
-                            text: "\uf00d"
+                            text: "×"
                             color: closeArea.containsMouse ? Common.Config.color.primary : Common.Config.color.on_surface
-                            font.family: Common.Config.iconFontFamily
-                            font.pointSize: 11
-                            font.weight: Font.Bold
+                            font.family: Common.Config.fontFamily
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
                             opacity: 0.95
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -456,7 +456,7 @@ RowLayout {
                     textFormat: TextEdit.PlainText
                     color: Common.Config.color.on_surface
                     wrapMode: TextEdit.Wrap
-                    font.family: "JetBrainsMono NFP"
+                    font.family: "monospace"
                     font.pointSize: 11
                     readOnly: true
                     selectByMouse: true
@@ -482,7 +482,7 @@ RowLayout {
                     text: root.hasDefaultAction ? "󰁜" : "\uea9c"
                     color: Common.Config.color.primary_fixed_dim
                     font.family: Common.Config.iconFontFamily
-                    font.pointSize: 12
+                    font.pointSize: root.hasDefaultAction ? 9 : 10
                 }
             }
 

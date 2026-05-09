@@ -6,7 +6,7 @@ extern "C" {
 
 /* ---------- Callback types ---------- */
 
-/* token callback: done=0 normal token, done=1 success/done, done=-1 error */
+/* token callback: done=0 normal token, done=1 success/done, done=2 event JSON, done=-1 error */
 typedef void (*QsGo_TokenFn)(void* ctx, const char* token, int done);
 
 /* ---------- SysInfo ---------- */
@@ -18,11 +18,16 @@ char* QsGo_Pacman_Sync(void);
 
 /* ---------- iCal ---------- */
 
-char* QsGo_Ical_Refresh(const char* envFile, int days);
+char* QsGo_Ical_Refresh(int days);
 
-/* ---------- AI models ---------- */
+/* ---------- systemd failed units ---------- */
 
-char* QsGo_AiModels_Refresh(const char* providerConfigJSON);
+char* QsGo_SystemdFailed_Refresh(void);
+
+/* ---------- Config / secrets resolver ---------- */
+
+char* QsGo_Config_Resolve(void);
+
 char* QsGo_AiMcp_Refresh(const char* configJSON);
 char* QsGo_AiMcp_GetPrompt(const char* configJSON, const char* serverID, const char* promptName,
                            const char* argsJSON);
@@ -38,11 +43,12 @@ int QsGo_AiChat_Stream(const char* modelID, const char* providerConfigJSON,
 
 void QsGo_AiChat_Cancel(int id);
 char* QsGo_AiChat_LastMetrics();
+char* QsGo_AiHistory_Apply(const char* actionJSON);
 
 /* ---------- Todoist ---------- */
 
-char* QsGo_Todoist_List(const char* envFile, const char* cachePath, int preferCache);
-char* QsGo_Todoist_Action(const char* envFile, const char* verb, const char* argsJSON);
+char* QsGo_Todoist_List(const char* cachePath, int preferCache);
+char* QsGo_Todoist_Action(const char* verb, const char* argsJSON);
 
 /* ---------- Memory ---------- */
 

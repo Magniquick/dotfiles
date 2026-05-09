@@ -97,7 +97,6 @@ ModuleContainer {
     property bool _lyricsPanelStickyVisible: false
     readonly property bool shouldShowLyricsPanel: hasLyrics || (_lyricsPanelStickyVisible && lyricsClient.busy)
     property real lyricsPanelReveal: shouldShowLyricsPanel ? 1 : 0
-    readonly property string lyricsEnvFile: Config.envFile
     readonly property string displaySubtitle: {
         if (root.trackArtist !== "" && root.trackAlbum !== "")
             return root.trackArtist + " • " + root.trackAlbum;
@@ -389,7 +388,7 @@ ModuleContainer {
         return text;
     }
 
-    function lyricCharProgress(segment, posMs) {
+    function lyricSegmentProgress(segment, posMs) {
         if (!segment)
             return 0;
         const text = segment.text !== undefined ? String(segment.text || "") : "";
@@ -400,34 +399,14 @@ ModuleContainer {
         if (!isFinite(start))
             return 0;
         if (!isFinite(end) || end <= start)
-            return posMs >= start ? text.length : 0;
+            return posMs >= start ? 1 : 0;
         if (posMs <= start)
             return 0;
         if (posMs >= end)
-            return text.length;
-        return Math.max(0, Math.min(text.length, (posMs - start) / (end - start) * text.length));
-    }
+            return 1;
 
-    function lyricSegmentSplit(text, progressChars) {
-        const source = String(text || "");
-        if (source === "")
-            return { done: "", pending: "" };
-
-        const clamped = Math.max(0, Math.min(source.length, progressChars));
-        const whole = Math.floor(clamped);
-        const fractional = clamped - whole;
-        let doneText = source.slice(0, whole);
-        let pendingText = source.slice(whole);
-
-        if (fractional > 0 && whole < source.length) {
-            doneText += source.charAt(whole);
-            pendingText = source.slice(whole + 1);
-        }
-
-        return {
-            done: doneText,
-            pending: pendingText
-        };
+        const linear = Math.max(0, Math.min(1, (posMs - start) / (end - start)));
+        return 1 - Math.pow(1 - linear, 3);
     }
 
     function lyricPlayedWidth(rowSegments, posMs) {
@@ -441,17 +420,17 @@ ModuleContainer {
             if (text === "")
                 continue;
 
-            const progressChars = root.lyricCharProgress(segment, posMs);
-            if (progressChars <= 0)
+            const segmentWidth = lyricSegmentMetrics.advanceWidth(text);
+            const progress = root.lyricSegmentProgress(segment, posMs);
+            if (progress <= 0)
                 break;
 
-            if (progressChars >= text.length) {
-                width += lyricSegmentMetrics.advanceWidth(text);
+            if (progress >= 1) {
+                width += segmentWidth;
                 continue;
             }
 
-            const split = root.lyricSegmentSplit(text, progressChars);
-            width += lyricSegmentMetrics.advanceWidth(split.done);
+            width += segmentWidth * progress;
             break;
         }
 
@@ -532,7 +511,7 @@ ModuleContainer {
 
         if (keyChanged || (!lyricsClient.loaded && !lyricsClient.busy)) {
             root._lyricsRequestKey = lookupKey;
-            lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, lengthMicros);
+            lyricsClient.refresh(ref, track, artist, album, lengthMicros);
         }
 
         root.updateLyricsModel();
@@ -814,7 +793,7 @@ ModuleContainer {
                         }
                         Loader {
                             anchors.fill: parent
-                            active: root.tooltipActive && root.hasArt && artImage.status === Image.Ready
+                            active: root.tooltipVisualActive && root.hasArt && artImage.status === Image.Ready
                             sourceComponent: OpacityMask {
                                 anchors.fill: parent
                                 cached: true
@@ -1505,7 +1484,7 @@ ModuleContainer {
         }
     }
     Timer {
-        interval: 200
+        interval: 33
         repeat: true
         running: root.tooltipActive && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing && root.visible
 

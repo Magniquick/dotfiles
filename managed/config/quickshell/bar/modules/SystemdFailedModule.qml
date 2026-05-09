@@ -4,49 +4,29 @@
  *
  * Features:
  * - Monitors both system and user systemd instances
- * - Real-time failed unit detection via D-Bus monitoring (4 parallel monitors)
- * - Automatic refresh on systemd state changes (750ms debounced)
+ * - Refreshes from a qs-go provider on startup, manually, and on systemd D-Bus events
  * - Displays count of failed units with error indicator
  * - Interactive tooltip listing all failed units
  * - Per-unit controls (restart, stop) via systemctl
- * - Automatic crash recovery for D-Bus monitors (exponential backoff)
- *
- * Monitoring Architecture:
- * - 4 D-Bus monitors running in parallel:
- *   1. System manager state changes (busctl monitor org.freedesktop.systemd1 --system)
- *   2. User manager state changes (busctl monitor org.freedesktop.systemd1 --user)
- *   3. System unit properties (busctl monitor org.freedesktop.systemd1 --system --match)
- *   4. User unit properties (busctl monitor org.freedesktop.systemd1 --user --match)
- * - Unified crash handler for all monitors
- * - Shared restart timer with exponential backoff (1s, 2s, 4s, 8s, up to 30s)
  *
  * Dependencies:
  * - systemctl: List and control systemd units
- * - busctl: D-Bus monitoring for real-time event detection
  * - systemd: System and service manager
  *
  * Configuration:
- * - eventDebounceMs: Event debounce interval (default: 750ms)
  * - debugLogging: Enable console debug output (default: false)
  *
  * Performance:
- * - Debounced refresh reduces redundant systemctl calls during rapid state changes
- * - Separate system/user monitoring prevents cross-contamination
- * - Property signal batching reduces unnecessary refreshes
- * - Event-driven updates only when state actually changes
+ * - Event-driven refresh avoids fixed-interval sampling
  *
  * Failed Unit Detection:
- * - System units: systemctl --failed --no-legend (system-wide services)
- * - User units: systemctl --user --failed --no-legend (user session services)
+ * - qs-go snapshots system/user failed units from structured systemctl JSON
+ * - systemd D-Bus manager signals trigger debounced refreshes
  * - Combined count displayed in bar
  * - Detailed unit list in tooltip with status and controls
  *
  * Error Handling:
- * - Unified crash handler for all 4 D-Bus monitors
- * - Exponential backoff prevents rapid restart loops
- * - Graceful degradation when busctl unavailable (falls back to polling)
- * - Safe parsing of systemctl output
- * - Console warnings on first crash only
+ * - Provider exposes snapshot errors through SystemdFailedService.error
  *
  * Unit Controls:
  * - Restart button: systemctl restart <unit> / systemctl --user restart <unit>
@@ -58,9 +38,8 @@
  * SystemdFailedModule {}
  *
  * @example
- * // Custom debounce and debug logging
+ * // Custom debug logging
  * SystemdFailedModule {
- *     eventDebounceMs: 1000
  *     debugLogging: true
  * }
  *
@@ -74,7 +53,6 @@ ModuleContainer {
     id: root
 
     property bool debugLogging: false
-    property int eventDebounceMs: 750
     readonly property int failedCount: SystemdFailedService.failedCount
     readonly property string lastRefreshedLabel: SystemdFailedService.lastRefreshedLabel
     readonly property int systemFailedCount: SystemdFailedService.systemFailedCount
@@ -112,12 +90,6 @@ ModuleContainer {
         property: "debugLogging"
         value: root.debugLogging
     }
-    Binding {
-        target: SystemdFailedService
-        property: "eventDebounceMs"
-        value: root.eventDebounceMs
-    }
-
     Component.onCompleted: {
         root.tooltipRefreshRequested.connect(function () {
             SystemdFailedService.refreshCounts("manual");

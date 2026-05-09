@@ -61,6 +61,12 @@ MK.Card {
     onOptionsChanged: root.recompute()
     onFilterTextChanged: root.recompute()
     onShowAllChanged: root.recompute()
+    onVisibleChanged: {
+        if (visible) {
+            root.filterText = "";
+            root.showAll = false;
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -322,14 +328,18 @@ MK.Card {
 
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x
                         spacing: 2
 
                         Text {
+                            width: parent.width
                             text: optionItem.modelData.label || ""
                             color: optionArea.containsMouse ? Common.Config.color.on_primary : optionItem.itemAccent
                             font.family: Common.Config.fontFamily
                             font.pixelSize: Common.Config.type.bodyMedium.size
                             font.weight: Font.Medium
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
 
                             Behavior on color {
                                 ColorAnimation {
@@ -339,11 +349,14 @@ MK.Card {
                         }
 
                         Text {
+                            width: parent.width
                             text: optionItem.modelData.description || ""
                             color: optionArea.containsMouse ? Qt.alpha(Common.Config.color.on_primary, 0.7) : Common.Config.color.on_surface_variant
                             font.family: Common.Config.fontFamily
                             font.pixelSize: Common.Config.type.bodySmall.size
                             visible: (optionItem.modelData.description || "").length > 0
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
 
                             Behavior on color {
                                 ColorAnimation {

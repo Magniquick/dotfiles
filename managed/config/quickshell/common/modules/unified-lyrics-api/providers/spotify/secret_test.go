@@ -14,7 +14,7 @@ func TestFetchLatestSecret_TransformsAndSelectsLatest(t *testing.T) {
 	encodedV1 := []int{72}
 	encodedV2 := []int{73}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, `{"2":%v,"1":%v}`, encodedV2, encodedV1)
 	}))
 	defer srv.Close()

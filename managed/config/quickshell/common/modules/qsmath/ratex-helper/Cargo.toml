@@ -1,0 +1,10 @@
+[package]
+name = "qsmath-render-svg"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratex-layout = "0.1.4"
+ratex-parser = "0.1.4"
+ratex-svg = { version = "0.1.4", features = ["standalone", "embed-fonts"] }
+ratex-types = "0.1.4"

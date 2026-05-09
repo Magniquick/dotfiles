@@ -62,7 +62,7 @@ Rectangle {
                     id: heart
 
                     color: leftPane.colors.error
-                    font.family: "JetBrainsMono NFP"
+                    font.family: "Symbols Nerd Font Mono"
                     font.pointSize: 12
                     text: ""
                     x: headlineWrap.heartOffsetX

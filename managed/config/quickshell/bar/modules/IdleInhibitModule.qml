@@ -117,63 +117,20 @@ ModuleContainer {
                     anchors.right: parent.right
                     spacing: Config.space.md
 
-                    Item {
-                        Layout.preferredHeight: Config.space.xxl * 2
-                        Layout.preferredWidth: Config.space.xxl * 2
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            color: Qt.alpha(root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant, 0.12)
-                            height: parent.height
-                            radius: height / 2
-                            width: parent.width
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            color: root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant
-                            font.family: Config.iconFontFamily
-                            font.pixelSize: Config.type.headlineLarge.size
-                            text: root.iconText
-                        }
+                    TooltipHeader {
+                        Layout.fillWidth: true
+                        icon: root.iconText
+                        iconColor: root.inhibitEnabled ? Config.color.primary : Config.color.on_surface_variant
+                        subtitle: root.inhibitEnabled ? "Awake mode enabled" : "Auto sleep enabled"
+                        title: "Caffeine"
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.space.none
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.space.xs
-
-                            Text {
-                                Layout.minimumWidth: 0
-                                color: Config.color.on_surface
-                                elide: Text.ElideRight
-                                font.family: Config.fontFamily
-                                font.pixelSize: Config.type.headlineSmall.size
-                                font.weight: Font.Bold
-                                text: "Caffeine"
-                            }
-
-                            Text {
-                                color: Config.color.on_surface_variant
-                                font.family: Config.iconFontFamily
-                                font.pixelSize: Config.type.labelLarge.size
-                                text: root.detailsExpanded ? "󰅀" : "󰅂"
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            color: Config.color.on_surface_variant
-                            elide: Text.ElideRight
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.labelMedium.size
-                            text: root.inhibitEnabled ? "Awake mode enabled" : "Auto sleep enabled"
-                        }
+                    Text {
+                        Layout.alignment: Qt.AlignVCenter
+                        color: Config.color.on_surface_variant
+                        font.family: Config.iconFontFamily
+                        font.pixelSize: Config.type.labelLarge.size
+                        text: root.detailsExpanded ? "󰅀" : "󰅂"
                     }
                 }
 

@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
 	apiSync "github.com/CnTeng/todoist-api-go/sync"
 	"github.com/CnTeng/todoist-api-go/todoist"
-	"github.com/joho/godotenv"
+
+	"qs-go/internal/secrets"
 )
 
 type taskOutput struct {
@@ -34,18 +34,14 @@ type listOutput struct {
 	Error       string                  `json:"error,omitempty"`
 }
 
-func readToken(envFile string) (string, error) {
-	if envFile != "" {
-		if env, err := godotenv.Read(envFile); err == nil {
-			if t := strings.TrimSpace(env["TODOIST_API_TOKEN"]); t != "" {
-				return t, nil
-			}
+func readToken() (string, error) {
+	resolver := secrets.NewResolver()
+	if token, ok := resolver.Lookup("TODOIST_API_TOKEN"); ok {
+		if t := strings.TrimSpace(token); t != "" {
+			return t, nil
 		}
 	}
-	if t := strings.TrimSpace(os.Getenv("TODOIST_API_TOKEN")); t != "" {
-		return t, nil
-	}
-	return "", fmt.Errorf("TODOIST_API_TOKEN not found in environment (.env)")
+	return "", fmt.Errorf("TODOIST_API_TOKEN not found in Secret Service")
 }
 
 func makeClient(token string) *todoist.Client {
@@ -212,13 +208,13 @@ func marshalOutput(out listOutput) string {
 }
 
 // ListTasks fetches all tasks and returns JSON.
-func ListTasks(envFile, cachePath string, preferCache bool) string {
+func ListTasks(cachePath string, preferCache bool) string {
 	cachedState, _ := readCacheState(cachePath)
 	if preferCache && cachedState != nil {
 		return marshalOutput(renderListOutput(cachedState, true, ""))
 	}
 
-	token, err := readToken(envFile)
+	token, err := readToken()
 	if err != nil {
 		if cachedState != nil {
 			return marshalOutput(renderListOutput(cachedState, true, err.Error()))
@@ -257,8 +253,8 @@ func ListTasks(envFile, cachePath string, preferCache bool) string {
 // Action executes a task action (close/delete/add/update) and returns JSON.
 // verb: "close" | "delete" | "add" | "update"
 // argsJSON: JSON object with action-specific fields.
-func Action(envFile, verb, argsJSON string) string {
-	token, err := readToken(envFile)
+func Action(verb, argsJSON string) string {
+	token, err := readToken()
 	if err != nil {
 		b, _ := json.Marshal(map[string]string{"error": err.Error()})
 		return string(b)
@@ -338,7 +334,10 @@ func taskDue(task *apiSync.Task, todayDate string) (*int64, *string, bool) {
 	if task.Due == nil || task.Due.Date == nil {
 		return nil, nil, false
 	}
-	dueAt := task.Due.Date.In(time.Local)
+	dueAt := *task.Due.Date
+	if task.Due.Timezone != nil {
+		dueAt = dueAt.In(time.Local)
+	}
 	dueUnix := dueAt.Unix()
 	dueDate := dateOnly(dueAt)
 	hasTime := dueAt.Hour() != 0 || dueAt.Minute() != 0 || dueAt.Second() != 0
