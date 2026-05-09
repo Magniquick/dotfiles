@@ -22,7 +22,7 @@ QtObject {
     readonly property int groupMarginX: space.none
     readonly property int groupModuleSpacing: space.none
     readonly property int groupPaddingX: space.xs
-    readonly property string iconFontFamily: "JetBrainsMono NFP"
+    readonly property string iconFontFamily: "Symbols Nerd Font Mono"
     readonly property int iconSize: type.bodyMedium.size
     readonly property string loginShell: {
         const shellValue = Quickshell.env("SHELL");

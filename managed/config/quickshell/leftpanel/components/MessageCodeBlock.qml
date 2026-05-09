@@ -196,7 +196,7 @@ MK.Card {
                         height: contentHeight
                         readOnly: !root.editing
                         selectByMouse: true
-                        font.family: "JetBrainsMono NFP"
+                        font.family: "monospace"
                         font.pixelSize: 12
                         color: Common.Config.color.on_surface
                         selectionColor: Qt.alpha(Common.Config.color.primary, 0.3)

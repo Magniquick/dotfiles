@@ -131,7 +131,7 @@ Item {
     textFormat: TextEdit.PlainText
     color: root.renderState === "error" ? root.errorColor : root.textColor
     wrapMode: TextEdit.Wrap
-    font.family: root.renderState === "loading" ? Common.Config.fontFamily : "JetBrainsMono NFP"
+    font.family: root.renderState === "loading" ? Common.Config.fontFamily : "monospace"
     font.pixelSize: 13
     readOnly: true
     selectByMouse: root.renderState === "error"

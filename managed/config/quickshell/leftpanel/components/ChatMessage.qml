@@ -454,7 +454,7 @@ Item {
                 textFormat: TextEdit.PlainText
                 color: Common.Config.color.on_surface
                 wrapMode: TextEdit.Wrap
-                font.family: "JetBrainsMono NFP"
+                font.family: "monospace"
                 font.pixelSize: 12
                 readOnly: true
                 selectByMouse: true

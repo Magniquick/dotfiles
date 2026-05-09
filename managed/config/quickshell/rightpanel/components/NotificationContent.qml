@@ -456,7 +456,7 @@ RowLayout {
                     textFormat: TextEdit.PlainText
                     color: Common.Config.color.on_surface
                     wrapMode: TextEdit.Wrap
-                    font.family: "JetBrainsMono NFP"
+                    font.family: "monospace"
                     font.pointSize: 11
                     readOnly: true
                     selectByMouse: true
