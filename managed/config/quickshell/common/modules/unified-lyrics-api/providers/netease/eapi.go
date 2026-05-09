@@ -3,7 +3,7 @@ package netease
 import (
 	"bytes"
 	"crypto/aes"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // NetEase EAPI signing requires MD5.
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	//nolint:gosec // Public NetEase EAPI protocol constant, not an application secret.
 	eapiKey        = "e82ckenh8dichen8"
 	deviceIDXorKey = "3go8&$8*3*3h0k(2)2"
 	eapiDelimiter  = "-36cd479b6b5-"
@@ -24,6 +25,7 @@ func encryptEapiParams(path string, params map[string]any) (string, error) {
 	}
 	signSrc := append([]byte("nobody"+path+"use"), payload...)
 	signSrc = append(signSrc, []byte("md5forencrypt")...)
+	//nolint:gosec // NetEase EAPI signs payloads with protocol-required MD5.
 	sign := md5.Sum(signSrc)
 
 	plain := make([]byte, 0, len(path)+len(payload)+128)
@@ -77,6 +79,9 @@ func pkcs7Pad(data []byte, blockSize int) []byte {
 	if padLen == 0 {
 		padLen = blockSize
 	}
+	if padLen < 1 || padLen > 255 {
+		return data
+	}
 	return append(data, bytes.Repeat([]byte{byte(padLen)}, padLen)...)
 }
 
@@ -101,6 +106,7 @@ func anonymousUsername(deviceID string) string {
 	for i := range deviceID {
 		xored[i] = deviceID[i] ^ deviceIDXorKey[i%len(deviceIDXorKey)]
 	}
+	//nolint:gosec // NetEase anonymous username fingerprint requires MD5.
 	digest := md5.Sum(xored)
 	combined := deviceID + " " + base64.StdEncoding.EncodeToString(digest[:])
 	return base64.StdEncoding.EncodeToString([]byte(combined))

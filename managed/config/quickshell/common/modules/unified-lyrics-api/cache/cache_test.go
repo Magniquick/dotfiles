@@ -46,7 +46,7 @@ func TestWritePayloadDisabledCacheNoops(t *testing.T) {
 
 func TestDeletePayloadDisabledCacheNoops(t *testing.T) {
 	for _, dir := range disabledCacheDirs() {
-		t.Run(dir, func(t *testing.T) {
+		t.Run(dir, func(_ *testing.T) {
 			DeletePayload(dir, "lyrics-key")
 		})
 	}

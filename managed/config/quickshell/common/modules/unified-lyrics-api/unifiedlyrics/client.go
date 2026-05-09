@@ -18,10 +18,13 @@ import (
 	"unified-lyrics-api/providers/spotify"
 )
 
+// Request describes the track metadata passed to lyric providers.
 type Request = lyricsprovider.Request
 
+// Line describes one normalized lyric line.
 type Line = lyricsprovider.Line
 
+// Result is the final lyric response returned to callers.
 type Result struct {
 	Source   string         `json:"source"`
 	SyncType string         `json:"syncType"`
@@ -29,15 +32,18 @@ type Result struct {
 	Metadata ResultMetadata `json:"metadata"`
 }
 
+// ResultMetadata describes the provider that produced the result.
 type ResultMetadata struct {
 	Provider string `json:"provider"`
 }
 
+// Client coordinates Spotify, NetEase, and LRCLIB providers.
 type Client struct {
 	cacheDir  string
 	providers []lyricsprovider.Provider
 }
 
+// New creates a unified lyrics client.
 func New(cacheDir string) *Client {
 	cacheDir = strings.TrimSpace(cacheDir)
 	if cacheDir == "" {
@@ -53,6 +59,7 @@ func New(cacheDir string) *Client {
 	}
 }
 
+// Fetch returns the best available lyrics for a request.
 func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	if c == nil {
 		return nil, errors.New("nil client")

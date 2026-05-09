@@ -9,6 +9,7 @@ import (
 
 var lrcTagRe = regexp.MustCompile(`\[(\d{1,2}:\d{2}(?:\.\d{1,3})?)\]`)
 
+// ParseSyncedLRC parses timestamped LRC text into normalized lyric lines.
 func ParseSyncedLRC(text string) []Line {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -56,6 +57,7 @@ func ParseSyncedLRC(text string) []Line {
 	return out
 }
 
+// ParsePlainText converts plain lyric text into unsynchronized lyric lines.
 func ParsePlainText(text string) []Line {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -74,13 +76,14 @@ func ParsePlainText(text string) []Line {
 	return out
 }
 
+// ParseLRCTimeToMs converts an LRC timestamp tag into milliseconds.
 func ParseLRCTimeToMs(tag string) int {
 	parts := strings.Split(tag, ":")
 	if len(parts) != 2 {
 		return -1
 	}
-	min, err := strconv.Atoi(parts[0])
-	if err != nil || min < 0 {
+	minutes, err := strconv.Atoi(parts[0])
+	if err != nil || minutes < 0 {
 		return -1
 	}
 
@@ -104,5 +107,5 @@ func ParseLRCTimeToMs(tag string) int {
 			ms = v
 		}
 	}
-	return (min*60+sec)*1000 + ms
+	return (minutes*60+sec)*1000 + ms
 }

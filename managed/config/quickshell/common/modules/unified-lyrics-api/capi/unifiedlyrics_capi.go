@@ -1,3 +1,4 @@
+// Package main exports the unified lyrics C ABI.
 package main
 
 /*
@@ -109,6 +110,7 @@ func freeSegments(segments *C.UnifiedLyricsSegment, count C.size_t) {
 	C.free(unsafe.Pointer(segments))
 }
 
+//revive:disable:var-naming C ABI export name must stay stable.
 //export UnifiedLyrics_GetLyrics
 func UnifiedLyrics_GetLyrics(spdc *C.char,
 	spotifyTrackRef *C.char,
@@ -181,6 +183,8 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	return out
 }
 
+//revive:enable:var-naming
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if value != "" {
@@ -190,6 +194,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+//revive:disable:var-naming C ABI export name must stay stable.
 //export UnifiedLyrics_FreeResult
 func UnifiedLyrics_FreeResult(out *C.UnifiedLyricsResult) {
 	if out == nil {
@@ -210,5 +215,7 @@ func UnifiedLyrics_FreeResult(out *C.UnifiedLyricsResult) {
 	freeLines(out.lines, out.lineCount)
 	C.free(unsafe.Pointer(out))
 }
+
+//revive:enable:var-naming
 
 func main() {}

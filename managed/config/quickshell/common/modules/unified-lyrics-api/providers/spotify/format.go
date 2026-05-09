@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// FormatMS formats milliseconds as an LRC timestamp.
 func FormatMS(milliseconds int64) string {
 	thSecs := milliseconds / 1000
 	minutes := thSecs / 60
@@ -13,6 +14,7 @@ func FormatMS(milliseconds int64) string {
 	return fmt.Sprintf("%02d:%02d.%02d", minutes, seconds, hundredths)
 }
 
+// FormatSRT formats milliseconds as an SRT timestamp.
 func FormatSRT(milliseconds int64) string {
 	hours := milliseconds / 3600000
 	minutes := (milliseconds % 3600000) / 60000
@@ -21,6 +23,7 @@ func FormatSRT(milliseconds int64) string {
 	return fmt.Sprintf("%02d:%02d:%02d,%03d", hours, minutes, seconds, ms)
 }
 
+// LinesToLRC converts Spotify lyric lines to LRC lines.
 func LinesToLRC(lines []Line) ([]LRCLine, error) {
 	out := make([]LRCLine, 0, len(lines))
 	for _, ln := range lines {
@@ -36,6 +39,7 @@ func LinesToLRC(lines []Line) ([]LRCLine, error) {
 	return out, nil
 }
 
+// LinesToSRT converts Spotify lyric lines to SRT caption rows.
 func LinesToSRT(lines []Line) ([]SRTLine, error) {
 	if len(lines) < 2 {
 		return []SRTLine{}, nil
@@ -60,6 +64,7 @@ func LinesToSRT(lines []Line) ([]SRTLine, error) {
 	return out, nil
 }
 
+// LinesToRaw converts Spotify lyric lines to plain text.
 func LinesToRaw(lines []Line) string {
 	var b strings.Builder
 	for _, ln := range lines {

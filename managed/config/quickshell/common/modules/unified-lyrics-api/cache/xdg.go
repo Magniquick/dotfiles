@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 )
 
+// DefaultDir returns the default cache directory for unified lyrics.
 func DefaultDir() string {
 	ucd, err := os.UserCacheDir()
 	if err == nil && ucd != "" {

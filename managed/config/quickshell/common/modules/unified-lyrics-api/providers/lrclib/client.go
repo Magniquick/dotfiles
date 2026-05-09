@@ -23,11 +23,13 @@ type apiResponse struct {
 	PlainLyrics  string `json:"plainLyrics"`
 }
 
+// Client fetches lyrics from LRCLIB.
 type Client struct {
 	hc      *http.Client
 	baseURL string
 }
 
+// New creates an LRCLIB provider client.
 func New() *Client {
 	return &Client{
 		hc:      &http.Client{Timeout: 8 * time.Second},
@@ -35,14 +37,17 @@ func New() *Client {
 	}
 }
 
+// Name returns the provider identifier.
 func (c *Client) Name() string {
 	return "lrclib"
 }
 
+// Supports reports whether enough metadata is available for LRCLIB lookup.
 func (c *Client) Supports(req lyricsprovider.Request) bool {
 	return strings.TrimSpace(req.TrackName) != "" && strings.TrimSpace(req.ArtistName) != ""
 }
 
+// Fetch returns the best LRCLIB lyrics for the request.
 func (c *Client) Fetch(ctx context.Context, req lyricsprovider.Request) (*lyricsprovider.Result, error) {
 	if !c.Supports(req) {
 		return nil, nil
@@ -72,7 +77,7 @@ func (c *Client) Fetch(ctx context.Context, req lyricsprovider.Request) (*lyrics
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("lyrics not found")

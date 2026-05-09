@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+//nolint:gosec // Public Spotify web-player secret dictionary URL, not a credential.
 const defaultSecretDictURL = "https://github.com/xyloflake/spot-secrets-go/blob/main/secrets/secretDict.json?raw=true"
 
 type secretCache struct {
@@ -108,7 +109,7 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDi
 	if err != nil {
 		return "", "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var body []byte
 	switch {
@@ -148,7 +149,7 @@ func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDi
 	var bld strings.Builder
 	for i, ch := range latest.Encoded {
 		decoded := ch ^ ((i % 33) + 9)
-		bld.WriteString(fmt.Sprintf("%d", decoded))
+		_, _ = fmt.Fprintf(&bld, "%d", decoded)
 	}
 	return bld.String(), latest.Version, nil
 }

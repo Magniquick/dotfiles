@@ -8,6 +8,7 @@ import (
 func TestCacheKeys_AreDeterministic(t *testing.T) {
 	spdc := "  sample_spdc  "
 	trackID := "AbC123"
+	//nolint:gosec // Test URL fixture, not a credential.
 	secretURL := "https://example.com/secret.json"
 
 	tokenA := tokenCacheKey(spdc)

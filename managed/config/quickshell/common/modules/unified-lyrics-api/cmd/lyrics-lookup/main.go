@@ -1,3 +1,4 @@
+// Command lyrics-lookup queries the unified lyrics provider stack.
 package main
 
 import (
@@ -54,11 +55,11 @@ func main() {
 	}
 
 	fmt.Printf("source=%s provider=%s syncType=%s lines=%d\n", res.Source, res.Metadata.Provider, res.SyncType, len(res.Lines))
-	max := limit
-	if max < 0 || max > len(res.Lines) {
-		max = len(res.Lines)
+	maxLines := limit
+	if maxLines < 0 || maxLines > len(res.Lines) {
+		maxLines = len(res.Lines)
 	}
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxLines; i++ {
 		line := res.Lines[i]
 		timing := strings.TrimSpace(line.StartTimeMs)
 		if end := strings.TrimSpace(line.EndTimeMs); end != "" {

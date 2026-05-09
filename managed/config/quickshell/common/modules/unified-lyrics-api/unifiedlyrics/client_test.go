@@ -24,7 +24,7 @@ func (p stubProvider) Name() string { return p.name }
 
 func (p stubProvider) Supports(lyricsprovider.Request) bool { return p.supports }
 
-func (p stubProvider) Fetch(ctx context.Context, req lyricsprovider.Request) (*lyricsprovider.Result, error) {
+func (p stubProvider) Fetch(ctx context.Context, _ lyricsprovider.Request) (*lyricsprovider.Result, error) {
 	if p.calls != nil {
 		*p.calls++
 	}
@@ -481,7 +481,7 @@ func TestFetch_DisabledCacheDoesNotStartLowerPriorityLRCLIB(t *testing.T) {
 			stubProvider{
 				name:     "lrclib",
 				supports: true,
-				fetch: func(ctx context.Context) (*lyricsprovider.Result, error) {
+				fetch: func(_ context.Context) (*lyricsprovider.Result, error) {
 					close(lrclibStarted)
 					return &lyricsprovider.Result{
 						Provider: "lrclib",
