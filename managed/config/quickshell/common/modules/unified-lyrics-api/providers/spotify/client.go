@@ -23,7 +23,10 @@ const (
 	defaultServerTimeURL = "https://open.spotify.com/api/server-time"
 )
 
-var trackIDRegex = regexp.MustCompile(`(?i)(?:https?://open\.spotify\.com/)?(?:track/|track:)([A-Za-z0-9]+)`)
+var (
+	trackIDRegex     = regexp.MustCompile(`(?i)(?:https?://open\.spotify\.com/)?(?:track/|track:)([A-Za-z0-9]+)`)
+	bareTrackIDRegex = regexp.MustCompile(`^[A-Za-z0-9]{22}$`)
+)
 
 type Client struct {
 	spdc string
@@ -221,6 +224,9 @@ func TrackIDFromURL(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", fmt.Errorf("empty url")
+	}
+	if bareTrackIDRegex.MatchString(s) {
+		return s, nil
 	}
 
 	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {

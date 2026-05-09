@@ -97,7 +97,6 @@ ModuleContainer {
     property bool _lyricsPanelStickyVisible: false
     readonly property bool shouldShowLyricsPanel: hasLyrics || (_lyricsPanelStickyVisible && lyricsClient.busy)
     property real lyricsPanelReveal: shouldShowLyricsPanel ? 1 : 0
-    readonly property string lyricsEnvFile: Config.envFile
     readonly property string displaySubtitle: {
         if (root.trackArtist !== "" && root.trackAlbum !== "")
             return root.trackArtist + " • " + root.trackAlbum;
@@ -512,7 +511,7 @@ ModuleContainer {
 
         if (keyChanged || (!lyricsClient.loaded && !lyricsClient.busy)) {
             root._lyricsRequestKey = lookupKey;
-            lyricsClient.refreshFromEnv(root.lyricsEnvFile, ref, track, artist, album, lengthMicros);
+            lyricsClient.refresh(ref, track, artist, album, lengthMicros);
         }
 
         root.updateLyricsModel();

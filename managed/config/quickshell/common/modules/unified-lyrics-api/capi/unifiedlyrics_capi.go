@@ -36,10 +36,20 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/zalando/go-keyring"
+
 	"unified-lyrics-api/unifiedlyrics"
 )
 
 var sharedClient = unifiedlyrics.New(os.Getenv("UNIFIED_LYRICS_CACHE_DIR"))
+
+func lookupSecret(key string) string {
+	value, err := keyring.Get("quickshell", key)
+	if err != nil {
+		return ""
+	}
+	return value
+}
 
 func cString(s string) *C.char {
 	if s == "" {
@@ -115,7 +125,7 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	defer cancel()
 
 	res, err := sharedClient.Fetch(ctx, unifiedlyrics.Request{
-		SPDC:            C.GoString(spdc),
+		SPDC:            firstNonEmpty(C.GoString(spdc), lookupSecret("SP_DC")),
 		SpotifyTrackRef: C.GoString(spotifyTrackRef),
 		TrackName:       C.GoString(trackName),
 		ArtistName:      C.GoString(artistName),
@@ -169,6 +179,15 @@ func UnifiedLyrics_GetLyrics(spdc *C.char,
 	out.lines = lines
 	out.lineCount = C.size_t(len(res.Lines))
 	return out
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 //export UnifiedLyrics_FreeResult

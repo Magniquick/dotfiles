@@ -37,12 +37,24 @@ func entryPath(cacheDir, logicalKey string) string {
 	return filepath.Join(cacheDir, "entries", name)
 }
 
+func cacheDisabled(cacheDir string) bool {
+	dir := strings.TrimSpace(cacheDir)
+	cleanDir := filepath.Clean(dir)
+	return dir == "/dev/null" ||
+		dir == os.DevNull ||
+		cleanDir == filepath.Clean("/dev/null") ||
+		cleanDir == filepath.Clean(os.DevNull)
+}
+
 func EntryPath(cacheDir, logicalKey string) string {
 	return entryPath(cacheDir, logicalKey)
 }
 
 func ReadPayload(cacheDir, logicalKey string) (json.RawMessage, int64, error) {
 	path := entryPath(cacheDir, logicalKey)
+	if cacheDisabled(cacheDir) {
+		return nil, 0, &os.PathError{Op: "open", Path: path, Err: os.ErrNotExist}
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, 0, err
@@ -65,6 +77,9 @@ func WritePayload(cacheDir, logicalKey string, payload []byte) error {
 	if strings.TrimSpace(cacheDir) == "" || strings.TrimSpace(logicalKey) == "" || len(payload) == 0 {
 		return nil
 	}
+	if cacheDisabled(cacheDir) {
+		return nil
+	}
 
 	env := Envelope{
 		Key:     logicalKey,
@@ -80,6 +95,9 @@ func WritePayload(cacheDir, logicalKey string, payload []byte) error {
 
 func DeletePayload(cacheDir, logicalKey string) {
 	if strings.TrimSpace(cacheDir) == "" || strings.TrimSpace(logicalKey) == "" {
+		return
+	}
+	if cacheDisabled(cacheDir) {
 		return
 	}
 	_ = os.Remove(entryPath(cacheDir, logicalKey))
