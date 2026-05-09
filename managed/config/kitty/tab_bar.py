@@ -29,6 +29,7 @@ EXE_ICON = {
     'cmake': '\uE624',
     'code': '\uE796',
     'code-insiders': '\uE796',
+    'codex': '\U000F06A9',
     'composer': '\uE783',
     'console': '\U000F07B7',
     'crontab': '\uF073',
