@@ -407,7 +407,7 @@ Item {
                                 readOnly: true
                                 selectByMouse: true
                                 cursorVisible: false
-                                activeFocusOnPress: false
+                                activeFocusOnPress: true
 
                                 onLinkActivated: link => Qt.openUrlExternally(link)
                                 onSelectedTextChanged: {
@@ -462,7 +462,7 @@ Item {
                 readOnly: true
                 selectByMouse: true
                 cursorVisible: false
-                activeFocusOnPress: false
+                activeFocusOnPress: true
 
                 onSelectedTextChanged: {
                     if (selectedText.length > 0)

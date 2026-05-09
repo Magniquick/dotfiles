@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
-
-MICROTEX_BIN_DEFAULTS=(
-  "${MICROTEX_BIN:-}"
-  "/opt/MicroTeX/LaTeX"
-  "/opt/illogical-impulse-microtex-git/LaTeX"
+RATEX_BIN_DEFAULTS=(
+  "${RATEX_RENDER_SVG_BIN:-}"
+  "${CARGO_HOME:-$HOME/.local/share/cargo}/bin/render-svg"
+  "$HOME/.local/share/cargo/bin/render-svg"
+  "$HOME/.cargo/bin/render-svg"
 )
 
 print_help() {
   cat <<'EOF'
 Usage: ./tools/render-latex.sh [options]
 
-Render a LaTeX expression to SVG using MicroTeX in headless mode.
+Render a LaTeX math expression to SVG using RaTeX render-svg.
 
 Input:
   --input TEX          LaTeX source as a literal string
@@ -27,12 +25,11 @@ Output:
 Rendering options:
   --textsize N         Font size in points (default: 20)
   --foreground COLOR   Foreground color (default: black)
-  --background COLOR   Background color (default: transparent)
-  --padding N          Padding in pixels (default: 8)
-  --maxwidth N         Maximum render width in pixels (default: 720)
+  --dpr N              Device pixel ratio for the generated SVG (default: 1)
+  --inline             Render with inline math style
 
 Environment:
-  MICROTEX_BIN         Override the MicroTeX binary path
+  RATEX_RENDER_SVG_BIN Override the render-svg binary path
 
 Examples:
   ./tools/render-latex.sh --input '\sqrt{x^2 + y^2}' --output /tmp/example.svg
@@ -40,22 +37,39 @@ Examples:
 EOF
 }
 
-find_microtex_bin() {
+find_ratex_bin() {
   local candidate
 
-  for candidate in "${MICROTEX_BIN_DEFAULTS[@]}"; do
+  if command -v render-svg >/dev/null 2>&1; then
+    command -v render-svg
+    return 0
+  fi
+
+  for candidate in "${RATEX_BIN_DEFAULTS[@]}"; do
     if [[ -n "${candidate}" && -x "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
       return 0
     fi
   done
 
-  if command -v LaTeX >/dev/null 2>&1; then
-    command -v LaTeX
-    return 0
-  fi
-
   return 1
+}
+
+strip_math_delimiters() {
+  local text="$1"
+  local length="${#text}"
+
+  if [[ "${text}" == \$\$* && "${text}" == *\$\$ && "${length}" -ge 4 ]]; then
+    printf '%s\n' "${text:2:length-4}"
+  elif [[ "${text}" == \$* && "${text}" == *\$ && "${length}" -ge 2 ]]; then
+    printf '%s\n' "${text:1:length-2}"
+  elif [[ "${text}" == "\\("* && "${text}" == *"\\)" && "${length}" -ge 4 ]]; then
+    printf '%s\n' "${text:2:length-4}"
+  elif [[ "${text}" == "\\["* && "${text}" == *"\\]" && "${length}" -ge 4 ]]; then
+    printf '%s\n' "${text:2:length-4}"
+  else
+    printf '%s\n' "${text}"
+  fi
 }
 
 input_text=""
@@ -63,9 +77,8 @@ input_file=""
 output_path=""
 textsize="20"
 foreground="black"
-background="transparent"
-padding="8"
-maxwidth="720"
+dpr="1"
+inline=false
 
 while (($# > 0)); do
   case "$1" in
@@ -89,17 +102,13 @@ while (($# > 0)); do
       foreground="${2:?missing value for --foreground}"
       shift 2
       ;;
-    --background)
-      background="${2:?missing value for --background}"
+    --dpr)
+      dpr="${2:?missing value for --dpr}"
       shift 2
       ;;
-    --padding)
-      padding="${2:?missing value for --padding}"
-      shift 2
-      ;;
-    --maxwidth)
-      maxwidth="${2:?missing value for --maxwidth}"
-      shift 2
+    --inline)
+      inline=true
+      shift
       ;;
     --help|-h)
       print_help
@@ -139,40 +148,48 @@ if [[ -z "${input_text}" ]]; then
   exit 2
 fi
 
-if ! microtex_bin="$(find_microtex_bin)"; then
+if ! ratex_bin="$(find_ratex_bin)"; then
   cat >&2 <<'EOF'
-MicroTeX binary not found.
+render-svg not found.
 
-Expected one of:
-  - $MICROTEX_BIN
-  - /opt/MicroTeX/LaTeX
-  - /opt/illogical-impulse-microtex-git/LaTeX
-  - LaTeX in PATH
-
-Install MicroTeX first, then rerun this tool.
+Install RaTeX first:
+  cargo install ratex-svg --bin render-svg --features 'cli embed-fonts'
 EOF
   exit 127
 fi
 
-mkdir -p "$(dirname "${output_path}")"
 output_abs="$(realpath -m "${output_path}")"
-microtex_dir="$(cd "$(dirname "${microtex_bin}")" && pwd)"
+mkdir -p "$(dirname "${output_abs}")"
+
+tmp_dir="$(mktemp -d)"
+stdout_file="$(mktemp)"
+stderr_file="$(mktemp)"
+trap 'rm -rf "${tmp_dir}" "${stdout_file}" "${stderr_file}"' EXIT
 
 cmd=(
-  "${microtex_bin}"
-  -headless
-  "-input=${input_text}"
-  "-output=${output_abs}"
-  "-textsize=${textsize}"
-  "-foreground=${foreground}"
-  "-background=${background}"
-  "-padding=${padding}"
-  "-maxwidth=${maxwidth}"
+  "${ratex_bin}"
+  --output-dir "${tmp_dir}"
+  --font-size "${textsize}"
+  --dpr "${dpr}"
+  --color "${foreground}"
 )
 
-(
-  cd "${microtex_dir}"
-  exec "${cmd[@]}"
-)
+if [[ "${inline}" == true ]]; then
+  cmd=( "${cmd[@]}" --inline )
+fi
 
+formula="$(strip_math_delimiters "${input_text}")"
+status=0
+printf '%s\n' "${formula}" | "${cmd[@]}" >"${stdout_file}" 2>"${stderr_file}" || status=$?
+
+if [[ "${status}" -ne 0 || ! -s "${tmp_dir}/0001.svg" ]]; then
+  cat "${stderr_file}" >&2
+  cat "${stdout_file}" >&2
+  if [[ "${status}" -ne 0 ]]; then
+    exit "${status}"
+  fi
+  exit 1
+fi
+
+cp "${tmp_dir}/0001.svg" "${output_abs}"
 printf '%s\n' "${output_abs}"
