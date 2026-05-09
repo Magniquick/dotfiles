@@ -105,39 +105,71 @@ Item {
                 }
             }
 
-            delegate: Components.ChatMessage {
+            delegate: Item {
+                id: delegateRoot
                 required property int index
                 required property string messageId
                 required property string sender
                 required property string body
+                required property string kind
                 required property var metrics
                 required property var attachments
+                required property var tool
 
                 width: messageList.width
-                messageIndex: index
-                // Expose stable ID for actions.
+                implicitHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
                 property string _messageId: messageId
-                role: sender
-                content: body
-                metrics: metrics
-                attachments: attachments
-                activeSelectionKey: messageList.activeSelectionKey
-                modelLabel: sender === "assistant" ? root.modelLabel : ""
-                moodIcon: root.moodIcon
-                moodName: root.moodName
-                // The backend inserts an assistant message up-front and streams into it.
-                // Treat the last assistant message as "streaming" while busy, and render a
-                // lightweight view to avoid expensive markdown/code-block reflows per chunk.
-                streaming: root.busy
+                property bool emptyAssistantPlaceholder: kind !== "tool"
                     && sender === "assistant"
-                    && index === (messageList.count - 1)
-                thinking: streaming && String(body || "").trim().length === 0
-                done: !streaming
+                    && String(body || "").trim().length === 0
+                    && !(root.busy && index === (messageList.count - 1))
 
-                onRegenerateRequested: root.regenerateRequested(_messageId)
-                onDeleteRequested: root.deleteRequested(_messageId)
-                onEditSaved: newContent => root.editRequested(_messageId, newContent)
-                onSelectionActivated: selectionKey => messageList.activeSelectionKey = selectionKey
+                Loader {
+                    id: contentLoader
+                    width: parent.width
+                    sourceComponent: delegateRoot.emptyAssistantPlaceholder
+                        ? null
+                        : (delegateRoot.kind === "tool" ? toolRowComponent : chatMessageComponent)
+                }
+
+                Component {
+                    id: chatMessageComponent
+
+                    Components.ChatMessage {
+                        width: delegateRoot.width
+                        messageIndex: delegateRoot.index
+                        role: delegateRoot.sender
+                        content: delegateRoot.body
+                        metrics: delegateRoot.metrics
+                        attachments: delegateRoot.attachments
+                        activeSelectionKey: messageList.activeSelectionKey
+                        modelLabel: delegateRoot.sender === "assistant" ? root.modelLabel : ""
+                        moodIcon: root.moodIcon
+                        moodName: root.moodName
+                        // The backend inserts an assistant message up-front and streams into it.
+                        // Treat the last assistant message as "streaming" while busy, and render a
+                        // lightweight view to avoid expensive markdown/code-block reflows per chunk.
+                        streaming: root.busy
+                            && delegateRoot.sender === "assistant"
+                            && delegateRoot.index === (messageList.count - 1)
+                        thinking: streaming && String(delegateRoot.body || "").trim().length === 0
+                        done: !streaming
+
+                        onRegenerateRequested: root.regenerateRequested(delegateRoot._messageId)
+                        onDeleteRequested: root.deleteRequested(delegateRoot._messageId)
+                        onEditSaved: newContent => root.editRequested(delegateRoot._messageId, newContent)
+                        onSelectionActivated: selectionKey => messageList.activeSelectionKey = selectionKey
+                    }
+                }
+
+                Component {
+                    id: toolRowComponent
+
+                    Components.ToolCallRow {
+                        width: delegateRoot.width
+                        tool: delegateRoot.tool
+                    }
+                }
             }
 
         }

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
@@ -8,6 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -156,11 +160,17 @@ func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
 	snapshot := defaultRuntime.refresh(parseConfig(configJSON))
 	out := make([]shared.ToolDescriptor, 0, len(snapshot.Tools))
 	for _, tool := range snapshot.Tools {
+		name := firstNonEmpty(tool.QualifiedName, qualifiedToolName(tool.ServerID, tool.Name))
+		if strings.TrimSpace(tool.ServerID) == "builtin" {
+			name = strings.TrimSpace(tool.Name)
+		}
 		out = append(out, shared.ToolDescriptor{
-			Name:        firstNonEmpty(tool.QualifiedName, qualifiedToolName(tool.ServerID, tool.Name)),
+			Name:        name,
 			Title:       tool.Title,
 			Description: tool.Description,
 			InputSchema: tool.InputSchema,
+			Kind:        builtinToolKind(tool),
+			Format:      builtinToolFormat(tool),
 			ServerID:    tool.ServerID,
 			ServerLabel: tool.ServerLabel,
 		})
@@ -171,8 +181,30 @@ func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
 	return out, nil
 }
 
+func builtinToolKind(tool ToolSnapshot) string {
+	if tool.ServerID == "builtin" && tool.Name == "apply_patch" {
+		return "freeform"
+	}
+	return ""
+}
+
+func builtinToolFormat(tool ToolSnapshot) map[string]any {
+	if tool.ServerID == "builtin" && tool.Name == "apply_patch" {
+		return map[string]any{
+			"type":       "grammar",
+			"syntax":     "lark",
+			"definition": applyPatchLarkGrammar,
+		}
+	}
+	return nil
+}
+
 func CallTool(configJSON string, serverID string, toolName string, arguments map[string]any) (shared.ToolResult, error) {
 	serverID, toolName = splitQualifiedToolName(serverID, toolName)
+	if strings.TrimSpace(serverID) == "builtin" || (strings.TrimSpace(serverID) == "" && isBuiltinTool(toolName)) {
+		return callBuiltinTool(toolName, arguments), nil
+	}
+
 	cfgs := parseConfig(configJSON)
 	if _, err := defaultRuntime.ensure(cfgs); err != nil {
 		return shared.ToolResult{}, err
@@ -530,12 +562,13 @@ func (r *runtime) populateLocked(conn *serverConn) {
 
 func (r *runtime) snapshotLocked() Snapshot {
 	out := Snapshot{
-		Servers:   make([]ServerSnapshot, 0, len(r.conns)),
+		Servers:   []ServerSnapshot{builtinServerSnapshot()},
 		Tools:     []ToolSnapshot{},
 		Prompts:   []PromptSnapshot{},
 		Resources: []ResourceSnapshot{},
 		Status:    "ready",
 	}
+	out.Tools = append(out.Tools, builtinToolSnapshots()...)
 	for _, conn := range r.conns {
 		if conn == nil {
 			continue
@@ -707,6 +740,561 @@ func configHash(cfg ServerConfig) string {
 
 func serverLabel(cfg ServerConfig) string {
 	return firstNonEmpty(cfg.Label, cfg.ID)
+}
+
+func builtinServerSnapshot() ServerSnapshot {
+	return ServerSnapshot{
+		ID:            "builtin",
+		Label:         "Leftpanel Built-ins",
+		URL:           "builtin://leftpanel",
+		Enabled:       true,
+		Connected:     true,
+		Status:        "connected",
+		ServerName:    "leftpanel-builtins",
+		ServerVersion: clientVersion,
+		ToolCount:     len(builtinToolSnapshots()),
+		Capabilities: map[string]any{
+			"tools": true,
+		},
+	}
+}
+
+func builtinToolSnapshots() []ToolSnapshot {
+	return []ToolSnapshot{
+		{
+			ServerID:      "builtin",
+			ServerLabel:   "Leftpanel Built-ins",
+			Name:          "shell_command",
+			QualifiedName: "builtin__shell_command",
+			Title:         "Shell command",
+			Description:   "Run a bubblewrap sandbox command. Inside the sandbox, $HOME and /workspace are the same writable directory; ~/.cache and ~/.local are also writable, and other host paths are read-only or unavailable.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"command": map[string]any{
+						"type":        "string",
+						"description": "The shell script to execute in the user's default shell.",
+					},
+					"workdir": map[string]any{
+						"type":        "string",
+						"description": "The working directory to execute the command in.",
+					},
+					"timeout_ms": map[string]any{
+						"type":        "number",
+						"description": "Optional timeout in milliseconds, capped at 15000.",
+					},
+					"login": map[string]any{
+						"type":        "boolean",
+						"description": "Whether to run the shell with login shell semantics. Accepted for Codex compatibility; leftpanel currently always runs bash -lc inside the sandbox.",
+					},
+					"sandbox_permissions": map[string]any{
+						"type":        "string",
+						"description": "Accepted for Codex compatibility. Leftpanel always uses its configured bubblewrap sandbox.",
+					},
+					"justification": map[string]any{
+						"type":        "string",
+						"description": "Accepted for Codex compatibility when sandbox_permissions would request escalation.",
+					},
+					"prefix_rule": map[string]any{
+						"type":        "array",
+						"items":       map[string]any{"type": "string"},
+						"description": "Accepted for Codex compatibility; leftpanel does not persist shell approval rules yet.",
+					},
+				},
+				"required": []any{"command"},
+			},
+		},
+		{
+			ServerID:      "builtin",
+			ServerLabel:   "Leftpanel Built-ins",
+			Name:          "apply_patch",
+			QualifiedName: "builtin__apply_patch",
+			Title:         "Apply patch",
+			Description:   "Edit files in the sandbox using the Codex apply_patch format. File paths must be relative to $HOME / /workspace.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"input": map[string]any{
+						"type":        "string",
+						"description": "Full apply_patch payload.",
+					},
+				},
+				"required": []any{"input"},
+			},
+			OutputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"changed_files": map[string]any{
+						"type":  "array",
+						"items": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+}
+
+func callBuiltinTool(toolName string, arguments map[string]any) shared.ToolResult {
+	switch strings.TrimSpace(toolName) {
+	case "shell_command", "shell_exec":
+		return callBuiltinShellExec(strings.TrimSpace(toolName), arguments)
+	case "apply_patch":
+		return callBuiltinApplyPatch(arguments)
+	default:
+		return shared.ToolResult{
+			Name:    toolName,
+			Text:    "Unknown built-in tool: " + toolName,
+			IsError: true,
+		}
+	}
+}
+
+func isBuiltinTool(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case "shell_command", "shell_exec", "apply_patch":
+		return true
+	default:
+		return false
+	}
+}
+
+func callBuiltinShellExec(toolName string, arguments map[string]any) shared.ToolResult {
+	if toolName == "" {
+		toolName = "shell_command"
+	}
+	command := strings.TrimSpace(fmt.Sprint(arguments["command"]))
+	if command == "" || command == "<nil>" {
+		return shellError(toolName, "command is required")
+	}
+
+	cwd := firstNonEmpty(stringArgument(arguments, "workdir"), stringArgument(arguments, "cwd"))
+
+	timeout := 15 * time.Second
+	if raw, ok := numericArgument(arguments["timeout_ms"]); ok && raw > 0 {
+		timeout = time.Duration(raw) * time.Millisecond
+	}
+	if timeout > 15*time.Second {
+		timeout = 15 * time.Second
+	}
+
+	sandboxRoot, err := shellSandboxRoot()
+	if err != nil {
+		return shellError(toolName, err.Error())
+	}
+	if err := os.MkdirAll(sandboxRoot, 0o755); err != nil {
+		return shellError(toolName, err.Error())
+	}
+	hostHome, err := os.UserHomeDir()
+	if err != nil {
+		return shellError(toolName, err.Error())
+	}
+	if err := os.MkdirAll(filepath.Join(hostHome, ".cache"), 0o755); err != nil {
+		return shellError(toolName, err.Error())
+	}
+	if err := os.MkdirAll(filepath.Join(hostHome, ".local"), 0o755); err != nil {
+		return shellError(toolName, err.Error())
+	}
+	cwd, err = normalizeShellCwd(cwd, hostHome)
+	if err != nil {
+		return shellError(toolName, err.Error())
+	}
+
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	args := []string{
+		"--unshare-all",
+		"--share-net",
+		"--die-with-parent",
+		"--new-session",
+		"--proc", "/proc",
+		"--dev", "/dev",
+		"--tmpfs", "/tmp",
+		"--dir", "/run",
+		"--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve",
+		"--dir", "/home",
+		"--bind", sandboxRoot, hostHome,
+		"--dir", filepath.Join(hostHome, ".cache"),
+		"--bind", filepath.Join(hostHome, ".cache"), filepath.Join(hostHome, ".cache"),
+		"--dir", filepath.Join(hostHome, ".local"),
+		"--bind", filepath.Join(hostHome, ".local"), filepath.Join(hostHome, ".local"),
+		"--symlink", hostHome, "/workspace",
+		"--ro-bind", "/usr", "/usr",
+		"--ro-bind", "/bin", "/bin",
+		"--ro-bind", "/lib", "/lib",
+		"--ro-bind-try", "/lib64", "/lib64",
+		"--ro-bind", "/etc", "/etc",
+		"--setenv", "HOME", hostHome,
+		"--setenv", "USER", os.Getenv("USER"),
+		"--setenv", "LOGNAME", os.Getenv("USER"),
+		"--setenv", "XDG_CACHE_HOME", filepath.Join(hostHome, ".cache"),
+		"--setenv", "PATH", firstNonEmpty(os.Getenv("PATH"), "/usr/local/bin:/usr/bin:/bin"),
+		"--setenv", "SSL_CERT_FILE", firstNonEmpty(os.Getenv("SSL_CERT_FILE"), "/etc/ssl/certs/ca-certificates.crt"),
+		"--chdir", cwd,
+		"--remount-ro", "/",
+		"--",
+		"/bin/bash", "-lc", command,
+	}
+	cmd := exec.CommandContext(ctx, "bwrap", args...)
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	err = cmd.Run()
+	timedOut := ctx.Err() == context.DeadlineExceeded
+	durationMS := time.Since(start).Milliseconds()
+	if timedOut {
+		return shared.ToolResult{
+			Name: toolName,
+			Text: codexShellCommandOutput(124, durationMS, "command timed out"),
+			Data: map[string]any{
+				"stdout":       "",
+				"stderr":       "",
+				"exit_code":    124,
+				"timed_out":    true,
+				"truncated":    false,
+				"cwd":          cwd,
+				"workdir":      cwd,
+				"duration_ms":  durationMS,
+				"sandbox_home": hostHome,
+				"workspace":    "/workspace",
+			},
+			IsError: true,
+		}
+	}
+
+	stdout, stdoutTruncated := truncateOutput(stdoutBuf.String(), 24*1024)
+	stderr, stderrTruncated := truncateOutput(stderrBuf.String(), 8*1024)
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else if stderr == "" {
+			stderr = err.Error()
+		}
+	}
+	data := map[string]any{
+		"stdout":       stdout,
+		"stderr":       stderr,
+		"exit_code":    exitCode,
+		"timed_out":    false,
+		"truncated":    stdoutTruncated || stderrTruncated,
+		"cwd":          cwd,
+		"workdir":      cwd,
+		"duration_ms":  durationMS,
+		"sandbox_home": hostHome,
+		"workspace":    "/workspace",
+	}
+	output := firstNonEmpty(stdout, stderr)
+	return shared.ToolResult{
+		Name:    toolName,
+		Text:    codexShellCommandOutput(exitCode, durationMS, output),
+		Data:    data,
+		IsError: exitCode != 0,
+	}
+}
+
+func codexShellCommandOutput(exitCode int, durationMS int64, output string) string {
+	durationSeconds := (float64(durationMS) / 1000.0)
+	rounded := float64(int(durationSeconds*10+0.5)) / 10
+	return fmt.Sprintf("Exit code: %d\nWall time: %.1f seconds\nOutput:\n%s", exitCode, rounded, output)
+}
+
+const applyPatchLarkGrammar = `start: begin_patch hunk+ end_patch
+begin_patch: "*** Begin Patch" LF
+end_patch: "*** End Patch" LF?
+
+hunk: add_hunk | delete_hunk | update_hunk
+add_hunk: "*** Add File: " filename LF add_line+
+delete_hunk: "*** Delete File: " filename LF
+update_hunk: "*** Update File: " filename LF change_move? change?
+
+filename: /(.+)/
+add_line: "+" /(.*)/ LF -> line
+
+change_move: "*** Move to: " filename LF
+change: (change_context | change_line)+ eof_line?
+change_context: ("@@" | "@@ " /(.+)/) LF
+change_line: ("+" | "-" | " ") /(.*)/ LF
+eof_line: "*** End of File" LF
+
+%import common.LF`
+
+func callBuiltinApplyPatch(arguments map[string]any) shared.ToolResult {
+	input := strings.TrimSpace(fmt.Sprint(arguments["input"]))
+	if input == "" || input == "<nil>" {
+		return shellError("apply_patch", "input is required")
+	}
+	sandboxRoot, err := shellSandboxRoot()
+	if err != nil {
+		return shellError("apply_patch", err.Error())
+	}
+	if err := os.MkdirAll(sandboxRoot, 0o755); err != nil {
+		return shellError("apply_patch", err.Error())
+	}
+
+	changed, err := applyPatchToSandbox(sandboxRoot, input)
+	if err != nil {
+		return shellError("apply_patch", err.Error())
+	}
+	return shared.ToolResult{
+		Name: "apply_patch",
+		Text: "Done!",
+		Data: map[string]any{
+			"changed_files": changed,
+		},
+	}
+}
+
+func applyPatchToSandbox(sandboxRoot string, input string) ([]string, error) {
+	lines := strings.SplitAfter(input, "\n")
+	if len(lines) < 2 || strings.TrimRight(lines[0], "\n") != "*** Begin Patch" {
+		return nil, fmt.Errorf("apply_patch input must start with *** Begin Patch")
+	}
+	i := 1
+	changed := []string{}
+	for i < len(lines) {
+		line := strings.TrimRight(lines[i], "\n")
+		switch {
+		case line == "*** End Patch":
+			return changed, nil
+		case strings.HasPrefix(line, "*** Add File: "):
+			path := strings.TrimSpace(strings.TrimPrefix(line, "*** Add File: "))
+			i++
+			content := strings.Builder{}
+			for i < len(lines) {
+				next := strings.TrimRight(lines[i], "\n")
+				if strings.HasPrefix(next, "*** ") {
+					break
+				}
+				if !strings.HasPrefix(lines[i], "+") {
+					return nil, fmt.Errorf("add file lines must start with +")
+				}
+				content.WriteString(strings.TrimPrefix(lines[i], "+"))
+				i++
+			}
+			target, err := sandboxPatchPath(sandboxRoot, path)
+			if err != nil {
+				return nil, err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(target, []byte(content.String()), 0o644); err != nil {
+				return nil, err
+			}
+			changed = append(changed, filepath.ToSlash(filepath.Clean(path)))
+		case strings.HasPrefix(line, "*** Delete File: "):
+			path := strings.TrimSpace(strings.TrimPrefix(line, "*** Delete File: "))
+			target, err := sandboxPatchPath(sandboxRoot, path)
+			if err != nil {
+				return nil, err
+			}
+			if err := os.Remove(target); err != nil {
+				return nil, err
+			}
+			changed = append(changed, filepath.ToSlash(filepath.Clean(path)))
+			i++
+		case strings.HasPrefix(line, "*** Update File: "):
+			path := strings.TrimSpace(strings.TrimPrefix(line, "*** Update File: "))
+			i++
+			newPath := ""
+			if i < len(lines) && strings.HasPrefix(strings.TrimRight(lines[i], "\n"), "*** Move to: ") {
+				newPath = strings.TrimSpace(strings.TrimPrefix(strings.TrimRight(lines[i], "\n"), "*** Move to: "))
+				i++
+			}
+			target, err := sandboxPatchPath(sandboxRoot, path)
+			if err != nil {
+				return nil, err
+			}
+			raw, err := os.ReadFile(target)
+			if err != nil {
+				return nil, err
+			}
+			content := string(raw)
+			for i < len(lines) {
+				next := strings.TrimRight(lines[i], "\n")
+				if strings.HasPrefix(next, "*** ") {
+					break
+				}
+				if !strings.HasPrefix(next, "@@") {
+					return nil, fmt.Errorf("update hunks must start with @@")
+				}
+				i++
+				oldText := strings.Builder{}
+				newText := strings.Builder{}
+				for i < len(lines) {
+					hunkLine := strings.TrimRight(lines[i], "\n")
+					if strings.HasPrefix(hunkLine, "*** ") || strings.HasPrefix(hunkLine, "@@") {
+						break
+					}
+					switch {
+					case strings.HasPrefix(lines[i], "-"):
+						oldText.WriteString(strings.TrimPrefix(lines[i], "-"))
+					case strings.HasPrefix(lines[i], "+"):
+						newText.WriteString(strings.TrimPrefix(lines[i], "+"))
+					case strings.HasPrefix(lines[i], " "):
+						text := strings.TrimPrefix(lines[i], " ")
+						oldText.WriteString(text)
+						newText.WriteString(text)
+					default:
+						return nil, fmt.Errorf("update hunk lines must start with space, -, or +")
+					}
+					i++
+				}
+				old := oldText.String()
+				if old == "" {
+					return nil, fmt.Errorf("update hunk must include context or removed lines")
+				}
+				if !strings.Contains(content, old) {
+					return nil, fmt.Errorf("update hunk did not match %s", path)
+				}
+				content = strings.Replace(content, old, newText.String(), 1)
+			}
+			writeTarget := target
+			changedPath := path
+			if newPath != "" {
+				writeTarget, err = sandboxPatchPath(sandboxRoot, newPath)
+				if err != nil {
+					return nil, err
+				}
+				changedPath = newPath
+			}
+			if err := os.MkdirAll(filepath.Dir(writeTarget), 0o755); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(writeTarget, []byte(content), 0o644); err != nil {
+				return nil, err
+			}
+			if newPath != "" && writeTarget != target {
+				if err := os.Remove(target); err != nil {
+					return nil, err
+				}
+			}
+			changed = append(changed, filepath.ToSlash(filepath.Clean(changedPath)))
+		default:
+			return nil, fmt.Errorf("unsupported apply_patch line: %s", line)
+		}
+	}
+	return nil, fmt.Errorf("apply_patch input must end with *** End Patch")
+}
+
+func sandboxPatchPath(sandboxRoot string, path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("patch path is required")
+	}
+	if filepath.IsAbs(path) {
+		return "", fmt.Errorf("patch paths must be relative")
+	}
+	root, err := filepath.Abs(sandboxRoot)
+	if err != nil {
+		return "", err
+	}
+	clean := filepath.Clean(path)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("patch paths must stay inside the sandbox")
+	}
+	target := filepath.Join(root, clean)
+	if !pathWithinRoot(root, target) {
+		return "", fmt.Errorf("patch paths must stay inside the sandbox")
+	}
+	if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("patch paths must not target symlinks")
+	}
+
+	existing := filepath.Dir(target)
+	for {
+		if _, err := os.Lstat(existing); err == nil {
+			break
+		}
+		next := filepath.Dir(existing)
+		if next == existing {
+			return "", fmt.Errorf("patch parent does not exist inside the sandbox")
+		}
+		existing = next
+	}
+	resolved, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return "", err
+	}
+	if !pathWithinRoot(root, resolved) {
+		return "", fmt.Errorf("patch paths must not traverse symlinks outside the sandbox")
+	}
+	return target, nil
+}
+
+func pathWithinRoot(root string, target string) bool {
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != "..")
+}
+
+func normalizeShellCwd(cwd string, home string) (string, error) {
+	if cwd == "" || cwd == "<nil>" {
+		return home, nil
+	}
+	if strings.HasPrefix(cwd, "/workspace") {
+		cwd = filepath.Join(home, strings.TrimPrefix(cwd, "/workspace"))
+	}
+	if !filepath.IsAbs(cwd) {
+		cwd = filepath.Join(home, cwd)
+	}
+	clean := filepath.Clean(cwd)
+	if clean == home || strings.HasPrefix(clean, home+string(os.PathSeparator)) || clean == "/tmp" || strings.HasPrefix(clean, "/tmp/") {
+		return clean, nil
+	}
+	return "", fmt.Errorf("cwd must be inside %s, /workspace, or /tmp", home)
+}
+
+func shellError(name, text string) shared.ToolResult {
+	return shared.ToolResult{Name: name, Text: text, IsError: true}
+}
+
+func numericArgument(v any) (int64, bool) {
+	switch x := v.(type) {
+	case int:
+		return int64(x), true
+	case int64:
+		return x, true
+	case float64:
+		return int64(x), true
+	case json.Number:
+		n, err := x.Int64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func shellSandboxRoot() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "tmp", "ai-sandbox"), nil
+}
+
+func stringArgument(args map[string]any, key string) string {
+	if args == nil {
+		return ""
+	}
+	value, ok := args[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func truncateOutput(text string, limit int) (string, bool) {
+	if len(text) <= limit {
+		return text, false
+	}
+	return text[:limit] + "\n[truncated]", true
 }
 
 func firstNonEmpty(values ...string) string {

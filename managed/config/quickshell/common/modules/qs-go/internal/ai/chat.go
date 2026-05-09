@@ -23,6 +23,7 @@ import (
 // TokenCallback is called for each streamed token.
 // done == 0: token
 // done == 1: success/done
+// done == 2: presentation event JSON
 // done == -1: error (token = error message)
 type TokenCallback func(token string, done int)
 
@@ -119,6 +120,9 @@ func Stream(
 			chunkCount++
 			cb(tok, 0)
 		}
+		onToolEvent := func(event toolUIEvent) {
+			cb(mustJSON(event), 2)
+		}
 
 		baseReq := shared.StreamRequest{
 			ModelID:      strings.TrimSpace(modelID),
@@ -146,7 +150,7 @@ func Stream(
 		var result shared.StreamResult
 		err = aimcp.WithStreamHandlers(mcpConfigJSON, samplingHandler, elicitationHandler, func() error {
 			var streamErr error
-			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken)
+			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken, onToolEvent)
 			return streamErr
 		})
 		totalMS := float64(time.Since(start).Microseconds()) / 1000.0
@@ -200,9 +204,10 @@ func streamWithTools(
 	baseReq shared.StreamRequest,
 	mcpConfigJSON string,
 	onToken func(string),
+	onToolEvent func(toolUIEvent),
 ) (shared.StreamResult, error) {
 	req := baseReq
-	if caps, ok := helpers.Query(baseReq.ModelID); ok && caps.SupportsTools {
+	if supportsTools(baseReq) {
 		tools, err := aimcp.ToolDescriptors(mcpConfigJSON)
 		if err == nil {
 			req.Tools = tools
@@ -243,6 +248,9 @@ func streamWithTools(
 				Sender:   "assistant",
 				ToolCall: &toolCall,
 			})
+			if onToolEvent != nil {
+				onToolEvent(buildToolStartEvent(toolCall))
+			}
 			toolResult, err := aimcp.CallTool(mcpConfigJSON, "", toolCall.Name, toolCall.Arguments)
 			if err != nil {
 				toolResult = shared.ToolResult{
@@ -253,6 +261,9 @@ func streamWithTools(
 				}
 			}
 			toolResult.ToolCallID = toolCall.ID
+			if onToolEvent != nil {
+				onToolEvent(buildToolDoneEvent(toolCall, toolResult))
+			}
 			history = append(history, shared.HistoryMessage{
 				Sender:     "user",
 				ToolResult: &toolResult,
@@ -261,6 +272,18 @@ func streamWithTools(
 	}
 
 	return combined, fmt.Errorf("too many MCP tool rounds")
+}
+
+func supportsTools(req shared.StreamRequest) bool {
+	if caps, ok := helpers.Query(req.ModelID); ok {
+		return caps.SupportsTools
+	}
+	switch strings.TrimSpace(req.Provider) {
+	case "local", "openai", "gemini":
+		return true
+	default:
+		return false
+	}
 }
 
 func sampleMcpRequest(

@@ -6,7 +6,7 @@ extern "C" {
 
 /* ---------- Callback types ---------- */
 
-/* token callback: done=0 normal token, done=1 success/done, done=-1 error */
+/* token callback: done=0 normal token, done=1 success/done, done=2 event JSON, done=-1 error */
 typedef void (*QsGo_TokenFn)(void* ctx, const char* token, int done);
 
 /* ---------- SysInfo ---------- */
