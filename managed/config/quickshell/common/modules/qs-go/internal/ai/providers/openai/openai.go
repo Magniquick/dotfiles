@@ -1,3 +1,4 @@
+// Package openai implements the OpenAI provider.
 package openai
 
 import (
@@ -9,12 +10,14 @@ import (
 	"qs-go/internal/ai/shared"
 )
 
+// Provider streams requests to OpenAI.
 type Provider struct{}
 
 func init() {
 	providers.Register(Provider{})
 }
 
+// Metadata returns OpenAI provider metadata shown in the UI.
 func (Provider) Metadata() shared.ProviderMetadata {
 	return shared.ProviderMetadata{
 		ID:          "openai",
@@ -23,6 +26,7 @@ func (Provider) Metadata() shared.ProviderMetadata {
 	}
 }
 
+// Stream sends a streaming Responses API request to OpenAI.
 func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken func(string)) (shared.StreamResult, error) {
 	baseURL := openAIBaseURL(req.Config)
 	input, err := oai.BuildResponsesInput(req.History, req.Message, req.Attachments, "OpenAI")

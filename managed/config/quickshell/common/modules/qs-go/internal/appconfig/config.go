@@ -12,24 +12,29 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// Config is the non-secret leftpanel configuration.
 type Config struct {
 	Model     ModelConfig               `toml:"model"`
 	Providers map[string]ProviderConfig `toml:"providers"`
 	Email     EmailConfig               `toml:"email"`
 }
 
+// ModelConfig contains the default model selection.
 type ModelConfig struct {
 	Default string `toml:"default"`
 }
 
+// ProviderConfig contains provider connection overrides.
 type ProviderConfig struct {
 	BaseURL string `toml:"base_url"`
 }
 
+// EmailConfig lists configured email accounts.
 type EmailConfig struct {
 	Accounts []EmailAccountConfig `toml:"accounts"`
 }
 
+// EmailAccountConfig describes one non-secret email account.
 type EmailAccountConfig struct {
 	ID       string `toml:"id"`
 	Provider string `toml:"provider"`
@@ -49,6 +54,7 @@ var (
 	}
 )
 
+// Current returns the active config source.
 func Current() (Config, error) {
 	configMu.RLock()
 	factory := configFactory
@@ -56,6 +62,7 @@ func Current() (Config, error) {
 	return factory()
 }
 
+// UseConfigForTest replaces the config source for a test.
 func UseConfigForTest(cfg Config) func() {
 	cfg = normalize(cfg)
 	configMu.Lock()
@@ -69,6 +76,7 @@ func UseConfigForTest(cfg Config) func() {
 	}
 }
 
+// Default returns the built-in config defaults.
 func Default() Config {
 	return Config{
 		Model: ModelConfig{Default: "local/gpt-5.4-mini"},
@@ -78,6 +86,7 @@ func Default() Config {
 	}
 }
 
+// Load reads config from path, returning defaults when the file is absent.
 func Load(path string) (Config, error) {
 	cfg := Default()
 	path = strings.TrimSpace(path)
@@ -93,6 +102,7 @@ func Load(path string) (Config, error) {
 	return normalize(cfg), nil
 }
 
+// DefaultPath discovers the leftpanel config path for the current shell checkout.
 func DefaultPath() string {
 	for _, key := range []string{"QS_SHELL_DIR", "QUICKSHELL_SHELL_DIR"} {
 		if path := configPathInDir(os.Getenv(key)); path != "" {
@@ -121,12 +131,14 @@ func configPathInDir(dir string) string {
 		return ""
 	}
 	candidate := filepath.Join(dir, "leftpanel", "config.toml")
+	//nolint:gosec // candidate is discovered by walking local shell config directories.
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
 	return ""
 }
 
+// PublicValues returns non-secret provider values as environment-style keys.
 func (c Config) PublicValues() map[string]string {
 	c = normalize(c)
 	values := map[string]string{}
@@ -146,6 +158,7 @@ type lookupResolver interface {
 	Lookup(key string) (string, bool)
 }
 
+// ResolveJSON returns public config and selected secrets as a JSON object.
 func ResolveJSON(resolver lookupResolver) string {
 	cfg, err := Current()
 	if err != nil {
@@ -166,6 +179,7 @@ func ResolveJSON(resolver lookupResolver) string {
 	return string(data)
 }
 
+// EmailEnv returns email account metadata as environment-style keys.
 func (c Config) EmailEnv() map[string]string {
 	values := map[string]string{}
 	ids := make([]string, 0, len(c.Email.Accounts))

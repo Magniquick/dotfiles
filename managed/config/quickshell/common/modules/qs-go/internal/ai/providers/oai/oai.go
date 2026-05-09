@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"qs-go/internal/ai/shared"
 )
 
+// BaseURL normalizes a configured provider base URL or returns the fallback.
 func BaseURL(configured, fallback string) string {
 	baseURL := strings.TrimSpace(configured)
 	if baseURL == "" {
@@ -22,6 +24,7 @@ func BaseURL(configured, fallback string) string {
 	return strings.TrimSuffix(baseURL, "/")
 }
 
+// StreamResponses posts a streaming Responses API request and parses the SSE stream.
 func StreamResponses(ctx context.Context, baseURL, apiKey string, payload map[string]any, onToken func(string)) (shared.StreamResult, error) {
 	body, _ := json.Marshal(payload)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/responses", bytes.NewReader(body))
@@ -35,7 +38,9 @@ func StreamResponses(ctx context.Context, baseURL, apiKey string, payload map[st
 	if err != nil {
 		return shared.StreamResult{}, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		return shared.StreamResult{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, shared.ExtractErrorMessage(raw))
@@ -43,35 +48,138 @@ func StreamResponses(ctx context.Context, baseURL, apiKey string, payload map[st
 	return ParseResponsesStream(resp.Body, onToken)
 }
 
+// BuildResponsesTools converts shared tool descriptors into Responses API tool payloads.
 func BuildResponsesTools(tools []shared.ToolDescriptor, includeWebSearch bool) []map[string]any {
 	out := make([]map[string]any, 0, len(tools)+1)
 	if includeWebSearch {
 		out = append(out, map[string]any{"type": "web_search_preview"})
 	}
+	namespaceGroups := map[string]*responsesNamespaceGroup{}
+	namespaceOrder := []string{}
+	hasDeferred := false
 	for _, tool := range tools {
 		if strings.TrimSpace(tool.Kind) == "freeform" {
-			out = append(out, map[string]any{
+			item := map[string]any{
 				"type":        "custom",
 				"name":        tool.Name,
 				"description": tool.Description,
 				"format":      tool.Format,
-			})
+			}
+			if tool.DeferLoading {
+				item["defer_loading"] = true
+				hasDeferred = true
+			}
+			out = append(out, item)
 			continue
 		}
-		out = append(out, map[string]any{
+		if namespace := strings.TrimSpace(tool.Namespace); namespace != "" {
+			group := namespaceGroups[namespace]
+			if group == nil {
+				group = &responsesNamespaceGroup{
+					name:        namespace,
+					description: firstNonEmpty(tool.NamespaceDescription, "Tools in the "+namespace+" namespace."),
+				}
+				namespaceGroups[namespace] = group
+				namespaceOrder = append(namespaceOrder, namespace)
+			}
+			if tool.DeferLoading {
+				hasDeferred = true
+			}
+			group.tools = append(group.tools, responsesFunctionTool(tool, responsesChildToolName(tool)))
+			continue
+		}
+		item := map[string]any{
 			"type":        "function",
 			"name":        tool.Name,
-			"description": tool.Description,
+			"description": responsesToolDescription(tool),
 			"parameters":  DefaultSchema(tool.InputSchema),
+			"strict":      false,
+		}
+		if tool.DeferLoading {
+			item["defer_loading"] = true
+			hasDeferred = true
+		}
+		out = append(out, item)
+	}
+	if hasDeferred {
+		out = append(out, map[string]any{"type": "tool_search"})
+	}
+	sort.Strings(namespaceOrder)
+	for _, namespace := range namespaceOrder {
+		group := namespaceGroups[namespace]
+		sort.Slice(group.tools, func(i, j int) bool {
+			return fmt.Sprint(group.tools[i]["name"]) < fmt.Sprint(group.tools[j]["name"])
+		})
+		out = append(out, map[string]any{
+			"type":        "namespace",
+			"description": group.description,
+			"name":        group.name,
+			"tools":       group.tools,
 		})
 	}
 	return out
 }
 
+type responsesNamespaceGroup struct {
+	name        string
+	description string
+	tools       []map[string]any
+}
+
+func responsesFunctionTool(tool shared.ToolDescriptor, name string) map[string]any {
+	item := map[string]any{
+		"type":        "function",
+		"description": responsesToolDescription(tool),
+		"name":        name,
+		"parameters":  DefaultSchema(tool.InputSchema),
+		"strict":      false,
+	}
+	if tool.DeferLoading {
+		item["defer_loading"] = true
+	}
+	return item
+}
+
+func responsesToolDescription(tool shared.ToolDescriptor) string {
+	return strings.TrimSpace(tool.Description)
+}
+
+func responsesChildToolName(tool shared.ToolDescriptor) string {
+	name := strings.TrimSpace(tool.Name)
+	if serverID := strings.TrimSpace(tool.ServerID); serverID != "" {
+		if child, ok := strings.CutPrefix(name, serverID+"__"); ok {
+			return strings.TrimSpace(child)
+		}
+	}
+	if namespaceServer := namespaceServerID(tool.Namespace); namespaceServer != "" {
+		if child, ok := strings.CutPrefix(name, namespaceServer+"__"); ok {
+			return strings.TrimSpace(child)
+		}
+	}
+	return name
+}
+
+func namespaceServerID(namespace string) string {
+	clean := strings.TrimSpace(namespace)
+	if !strings.HasPrefix(clean, "mcp__") || !strings.HasSuffix(clean, "__") {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(clean, "mcp__"), "__"))
+}
+
+// BuildResponsesInput converts chat history and the current user turn into Responses input items.
 func BuildResponsesInput(history []shared.HistoryMessage, message string, attachments []shared.Attachment, backendLabel string) ([]map[string]any, error) {
 	out := make([]map[string]any, 0, len(history)+1)
 	for _, item := range history {
+		if len(item.RawItems) > 0 {
+			out = append(out, cloneRawItems(item.RawItems)...)
+			continue
+		}
 		if item.ToolCall != nil {
+			if len(item.ToolCall.RawItems) > 0 {
+				out = append(out, cloneRawItems(item.ToolCall.RawItems)...)
+				continue
+			}
 			if strings.TrimSpace(item.ToolCall.Input) != "" {
 				out = append(out, map[string]any{
 					"type":    "custom_tool_call",
@@ -81,19 +189,20 @@ func BuildResponsesInput(history []shared.HistoryMessage, message string, attach
 				})
 				continue
 			}
-			out = append(out, map[string]any{
+			call := map[string]any{
 				"type":      "function_call",
 				"call_id":   item.ToolCall.ID,
 				"name":      item.ToolCall.Name,
 				"arguments": MustJSON(item.ToolCall.Arguments),
-			})
+			}
+			if namespace := strings.TrimSpace(item.ToolCall.Namespace); namespace != "" {
+				call["namespace"] = namespace
+			}
+			out = append(out, call)
 			continue
 		}
 		if item.ToolResult != nil {
-			output := strings.TrimSpace(item.ToolResult.Text)
-			if output == "" && len(item.ToolResult.Data) > 0 {
-				output = MustJSON(item.ToolResult.Data)
-			}
+			output := shared.ToolResultTranscriptOutput(*item.ToolResult)
 			if item.ToolResult.Name == "apply_patch" {
 				out = append(out, map[string]any{
 					"type":    "custom_tool_call_output",
@@ -130,6 +239,7 @@ func BuildResponsesInput(history []shared.HistoryMessage, message string, attach
 	return out, nil
 }
 
+// BuildResponsesContentParts converts message text and attachments into Responses content parts.
 func BuildResponsesContentParts(textType string, text string, attachments []shared.Attachment, backendLabel string) ([]map[string]any, error) {
 	parts := make([]map[string]any, 0, len(attachments)+1)
 	for _, attachment := range attachments {
@@ -151,6 +261,22 @@ func BuildResponsesContentParts(textType string, text string, attachments []shar
 	return parts, nil
 }
 
+func cloneRawItems(items []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if len(item) == 0 {
+			continue
+		}
+		next := map[string]any{}
+		for key, value := range item {
+			next[key] = value
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
+// ImageDataURI returns an image attachment as a data URI when the backend supports it.
 func ImageDataURI(attachment shared.Attachment, backendLabel string) (string, bool, error) {
 	bin, ok := shared.DecodeAttachmentBinary(attachment)
 	if !ok {
@@ -162,6 +288,7 @@ func ImageDataURI(attachment shared.Attachment, backendLabel string) (string, bo
 	return "data:" + bin.MIME + ";base64," + base64.StdEncoding.EncodeToString(bin.Data), true, nil
 }
 
+// DefaultSchema supplies the empty object schema required by Responses function tools.
 func DefaultSchema(schema map[string]any) map[string]any {
 	if len(schema) > 0 {
 		return schema
@@ -169,16 +296,20 @@ func DefaultSchema(schema map[string]any) map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{}}
 }
 
+// MustJSON serializes values for provider payloads that require JSON strings.
 func MustJSON(value any) string {
 	raw, _ := json.Marshal(value)
 	return string(raw)
 }
 
+// ParseResponsesStream reads Responses SSE events into a shared stream result.
 func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResult, error) {
 	reader := bufio.NewReader(r)
 	var out shared.StreamResult
 	var currentEvent string
 	seenCalls := map[string]bool{}
+	seenRaw := map[string]bool{}
+	pendingRawItems := []map[string]any{}
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -209,15 +340,15 @@ func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResul
 			}
 		case "response.output_item.done":
 			var chunk struct {
-				Item responseOutputItem `json:"item"`
+				Item map[string]any `json:"item"`
 			}
 			if json.Unmarshal([]byte(data), &chunk) == nil {
-				appendToolCall(&out, seenCalls, chunk.Item)
+				appendResponseOutputItem(&out, seenCalls, seenRaw, &pendingRawItems, chunk.Item)
 			}
 		case "response.completed":
 			var chunk struct {
 				Response struct {
-					Output []responseOutputItem `json:"output"`
+					Output []map[string]any `json:"output"`
 					Usage  struct {
 						InputTokens  int `json:"input_tokens"`
 						OutputTokens int `json:"output_tokens"`
@@ -228,7 +359,7 @@ func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResul
 				out.PromptTokens = chunk.Response.Usage.InputTokens
 				out.OutputTokens = chunk.Response.Usage.OutputTokens
 				for _, item := range chunk.Response.Output {
-					appendToolCall(&out, seenCalls, item)
+					appendResponseOutputItem(&out, seenCalls, seenRaw, &pendingRawItems, item)
 				}
 			}
 		}
@@ -236,6 +367,7 @@ func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResul
 	return out, nil
 }
 
+// NormalizeCompactOutput rewrites compacted local proxy output into replayable Responses items.
 func NormalizeCompactOutput(input []map[string]any) []map[string]any {
 	out := make([]map[string]any, len(input))
 	for i, item := range input {
@@ -258,14 +390,53 @@ func NormalizeCompactOutput(input []map[string]any) []map[string]any {
 }
 
 type responseOutputItem struct {
+	ID        string `json:"id"`
 	Type      string `json:"type"`
 	CallID    string `json:"call_id"`
+	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"`
 	Input     string `json:"input"`
 }
 
-func appendToolCall(out *shared.StreamResult, seen map[string]bool, item responseOutputItem) {
+func appendResponseOutputItem(out *shared.StreamResult, seenCalls map[string]bool, seenRaw map[string]bool, pendingRawItems *[]map[string]any, raw map[string]any) {
+	if len(raw) == 0 {
+		return
+	}
+	itemType := strings.TrimSpace(fmt.Sprint(raw["type"]))
+	if shouldPreserveRawOutputItem(itemType) {
+		key := rawOutputItemKey(raw)
+		if !seenRaw[key] {
+			seenRaw[key] = true
+			out.RawItems = append(out.RawItems, cloneRawItems([]map[string]any{raw})[0])
+			if itemType == "tool_search_call" || itemType == "tool_search_output" {
+				*pendingRawItems = append(*pendingRawItems, cloneRawItems([]map[string]any{raw})[0])
+			}
+		}
+	}
+	var item responseOutputItem
+	if data, err := json.Marshal(raw); err == nil {
+		_ = json.Unmarshal(data, &item)
+	}
+	appendToolCall(out, seenCalls, pendingRawItems, item, raw)
+}
+
+func shouldPreserveRawOutputItem(itemType string) bool {
+	return strings.TrimSpace(itemType) != ""
+}
+
+func rawOutputItemKey(raw map[string]any) string {
+	for _, key := range []string{"id", "call_id"} {
+		value := strings.TrimSpace(fmt.Sprint(raw[key]))
+		if value != "" && value != "<nil>" {
+			return strings.TrimSpace(fmt.Sprint(raw["type"])) + ":" + value
+		}
+	}
+	data, _ := json.Marshal(raw)
+	return string(data)
+}
+
+func appendToolCall(out *shared.StreamResult, seen map[string]bool, pendingRawItems *[]map[string]any, item responseOutputItem, raw map[string]any) {
 	if item.Type == "custom_tool_call" && strings.TrimSpace(item.Name) != "" {
 		key := firstNonEmpty(item.CallID, item.Name)
 		if seen[key] {
@@ -277,6 +448,7 @@ func appendToolCall(out *shared.StreamResult, seen map[string]bool, item respons
 			Name:      item.Name,
 			Arguments: map[string]any{"input": item.Input},
 			Input:     item.Input,
+			RawItems:  rawTraceForCall(pendingRawItems, raw),
 		})
 		return
 	}
@@ -292,7 +464,22 @@ func appendToolCall(out *shared.StreamResult, seen map[string]bool, item respons
 	if strings.TrimSpace(item.Arguments) != "" {
 		_ = json.Unmarshal([]byte(item.Arguments), &args)
 	}
-	out.ToolCalls = append(out.ToolCalls, shared.ToolCall{ID: item.CallID, Name: item.Name, Arguments: args})
+	out.ToolCalls = append(out.ToolCalls, shared.ToolCall{
+		ID:        item.CallID,
+		Namespace: item.Namespace,
+		Name:      item.Name,
+		Arguments: args,
+		RawItems:  rawTraceForCall(pendingRawItems, raw),
+	})
+}
+
+func rawTraceForCall(pendingRawItems *[]map[string]any, raw map[string]any) []map[string]any {
+	items := cloneRawItems(*pendingRawItems)
+	if len(raw) > 0 {
+		items = append(items, cloneRawItems([]map[string]any{raw})[0])
+	}
+	*pendingRawItems = nil
+	return items
 }
 
 func firstNonEmpty(values ...string) string {

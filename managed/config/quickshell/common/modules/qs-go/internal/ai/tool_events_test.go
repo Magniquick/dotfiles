@@ -26,8 +26,8 @@ func TestBuildToolStartEventForShellExec(t *testing.T) {
 	if event.Subtitle != "go test ./..." {
 		t.Fatalf("expected command subtitle, got %q", event.Subtitle)
 	}
-	if event.AgentPayload == "" || !strings.Contains(event.AgentPayload, `"type":"function_call"`) || !strings.Contains(event.AgentPayload, `\"command\":\"go test ./...\"`) {
-		t.Fatalf("expected Codex function_call payload with command, got %q", event.AgentPayload)
+	if raw := mustJSON(event); strings.Contains(raw, "agent_payload") || len(event.ReplayItems) != 0 {
+		t.Fatalf("tool start events should not carry stored replay/payload data, got %q", raw)
 	}
 }
 
@@ -65,8 +65,11 @@ func TestBuildToolDoneEventForShellExecNoOutput(t *testing.T) {
 	if event.DetailSections[0].Content != "(no output)" {
 		t.Fatalf("expected no-output stdout marker, got %#v", event.DetailSections)
 	}
-	if !strings.Contains(event.AgentPayload, `"type":"function_call_output"`) {
-		t.Fatalf("expected Codex function_call_output payload, got %q", event.AgentPayload)
+	if len(event.ReplayItems) != 1 || event.ReplayItems[0]["type"] != "function_call_output" {
+		t.Fatalf("expected only local tool output replay item, got %#v", event.ReplayItems)
+	}
+	if raw := mustJSON(event); strings.Contains(raw, "agent_payload") {
+		t.Fatalf("tool events should not store agent payloads, got %q", raw)
 	}
 }
 
@@ -147,15 +150,15 @@ func TestBuildToolDoneEventForApplyPatchStats(t *testing.T) {
 		!strings.Contains(event.DetailSections[1].Content, "+extra") {
 		t.Fatalf("expected unified diff content, got %q", event.DetailSections[1].Content)
 	}
-	if !strings.Contains(event.AgentPayload, `"type":"custom_tool_call"`) || !strings.Contains(event.AgentPayload, `"type":"custom_tool_call_output"`) {
-		t.Fatalf("expected Codex custom tool payload, got %#v", event)
+	if len(event.ReplayItems) != 1 || event.ReplayItems[0]["type"] != "custom_tool_call_output" {
+		t.Fatalf("expected only apply_patch output replay item, got %#v", event.ReplayItems)
 	}
-	if !strings.Contains(event.AgentPayload, `\n`) {
-		t.Fatalf("expected JSON-escaped newlines in Codex payload, got %q", event.AgentPayload)
+	if raw := mustJSON(event); strings.Contains(raw, "agent_payload") || strings.Contains(raw, "custom_tool_call\"") {
+		t.Fatalf("event should not store full custom-tool call payload, got %q", raw)
 	}
 }
 
-func TestBuildToolDoneEventCodexPayloadEscapesShellNewlines(t *testing.T) {
+func TestBuildToolDoneEventReplayItemsEscapeShellNewlines(t *testing.T) {
 	event := buildToolDoneEvent(
 		shared.ToolCall{
 			ID:        "call_shell",
@@ -169,12 +172,180 @@ func TestBuildToolDoneEventCodexPayloadEscapesShellNewlines(t *testing.T) {
 			Data:       map[string]any{"stdout": "hello\nsecond line\n", "stderr": "", "exit_code": 0},
 		},
 	)
+	replay := mustJSON(event.ReplayItems)
 
-	if !strings.Contains(event.AgentPayload, `"output":"hello\nsecond line"`) {
-		t.Fatalf("expected exact JSON string newline escaping in Codex output payload, got %q", event.AgentPayload)
+	if !strings.Contains(replay, `\"content\":[{\"text\":\"hello\\nsecond line\",\"type\":\"text\"}]`) {
+		t.Fatalf("expected replay output to include MCP content text, got %q", replay)
 	}
-	if strings.Contains(event.AgentPayload, "hello\nsecond line") {
-		t.Fatalf("Codex payload should contain escaped JSON newlines, not literal newlines: %q", event.AgentPayload)
+	if !strings.Contains(replay, `\"structuredContent\":{\"exit_code\":0`) || !strings.Contains(replay, `\"stdout\":\"hello\\nsecond line\\n\"`) {
+		t.Fatalf("expected replay output to include structured shell data, got %q", replay)
+	}
+	if strings.Contains(replay, "hello\nsecond line") {
+		t.Fatalf("replay output should contain escaped JSON newlines, not literal newlines: %q", replay)
+	}
+}
+
+func TestBuildToolDoneEventForGenericToolOnlyShowsModelVisibleOutput(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{
+			ID:   "call_email",
+			Name: "email__email_read",
+			Arguments: map[string]any{
+				"account": "navon",
+				"uid":     4938,
+			},
+		},
+		shared.ToolResult{
+			ToolCallID: "call_email",
+			Name:       "email__email_read",
+			Text:       "Short body summary",
+			Data: map[string]any{
+				"message": map[string]any{
+					"subject": "Status",
+					"uid":     4938,
+				},
+			},
+		},
+	)
+
+	if len(event.DetailSections) != 2 {
+		t.Fatalf("expected arguments and result sections, got %#v", event.DetailSections)
+	}
+	if event.DetailSections[1].Title != "Result" || event.DetailSections[1].Content != "Short body summary" {
+		t.Fatalf("expected model-visible result section, got %#v", event.DetailSections)
+	}
+	for _, section := range event.DetailSections {
+		if section.Title == "Data" {
+			t.Fatalf("generic tool UI should not duplicate structured payload as a Data section: %#v", event.DetailSections)
+		}
+	}
+	replay := mustJSON(event.ReplayItems)
+	if !strings.Contains(replay, `\"structuredContent\":{\"message\"`) {
+		t.Fatalf("replay output should include MCP-shaped structured content, got %q", replay)
+	}
+	if !strings.Contains(replay, `\"content\":[{\"text\":\"Short body summary\",\"type\":\"text\"}]`) {
+		t.Fatalf("expected replay output to send MCP content text, got %q", replay)
+	}
+}
+
+func TestBuildToolDoneEventKeepsMetaOutOfReplayItems(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{
+			ID:        "call_todoist",
+			Namespace: "mcp__todoist__",
+			Name:      "find-tasks",
+		},
+		shared.ToolResult{
+			ToolCallID:        "call_todoist",
+			Name:              "find-tasks",
+			Content:           []map[string]any{{"type": "text", "text": "1 task"}},
+			StructuredContent: map[string]any{"count": 1},
+			Meta:              map[string]any{"internal_cursor": "secret"},
+		},
+	)
+	replay := mustJSON(event.ReplayItems)
+
+	if strings.Contains(replay, "_meta") || strings.Contains(replay, "internal_cursor") {
+		t.Fatalf("replay items are sent back to the model and must not include _meta, got %q", replay)
+	}
+	if !strings.Contains(replay, `\"structuredContent\":{\"count\":1}`) {
+		t.Fatalf("expected model-visible structured content to remain, got %q", replay)
+	}
+	foundMetaSection := false
+	for _, section := range event.DetailSections {
+		if section.Title == "Metadata" && strings.Contains(section.Content, "internal_cursor") {
+			foundMetaSection = true
+		}
+	}
+	if !foundMetaSection {
+		t.Fatalf("UI detail sections should keep metadata, got %#v", event.DetailSections)
+	}
+}
+
+func TestBuildToolDoneEventUsesStructuredMetadataForRows(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{
+			ID:          "call_todoist",
+			Namespace:   "mcp__todoist__",
+			Name:        "find-tasks-by-date",
+			ServerID:    "todoist",
+			ServerLabel: "Todoist",
+			ToolTitle:   "Find tasks by date",
+			ReadOnly:    true,
+			Risk:        "read",
+			Arguments:   map[string]any{"startDate": "today"},
+		},
+		shared.ToolResult{
+			ToolCallID: "call_todoist",
+			Name:       "find-tasks-by-date",
+			Text:       "No results.",
+			DurationMS: 42,
+		},
+	)
+
+	if event.ServerID != "todoist" || event.ServerLabel != "Todoist" || event.Namespace != "mcp__todoist__" {
+		t.Fatalf("expected server metadata on event, got %#v", event)
+	}
+	if event.ToolTitle != "Find tasks by date" || !event.ReadOnly || event.Risk != "read" || event.DurationMS != 42 {
+		t.Fatalf("expected tool metadata on event, got %#v", event)
+	}
+}
+
+func TestBuildToolDoneEventOnlyStoresToolOutputReplayPayload(t *testing.T) {
+	call := shared.ToolCall{
+		ID:        "call_todoist",
+		Namespace: "mcp__todoist__",
+		Name:      "find-tasks-by-date",
+		Arguments: map[string]any{"startDate": "today"},
+		RawItems: []map[string]any{
+			{"type": "tool_search_call", "id": "ts_1", "execution": "server"},
+			{"type": "tool_search_output", "id": "tso_1", "tools": []any{}},
+			{"type": "function_call", "call_id": "call_todoist", "namespace": "mcp__todoist__", "name": "find-tasks-by-date", "arguments": `{"startDate":"today"}`},
+		},
+	}
+	event := buildToolDoneEvent(call, shared.ToolResult{ToolCallID: "call_todoist", Name: "find-tasks-by-date", Text: "ok"})
+	replay := mustJSON(event.ReplayItems)
+
+	if len(event.ReplayItems) != 1 || event.ReplayItems[0]["type"] != "function_call_output" {
+		t.Fatalf("expected only tool output replay item, got %#v", event.ReplayItems)
+	}
+	if strings.Contains(replay, "tool_search_call") || strings.Contains(replay, "tool_search_output") || strings.Contains(replay, `"function_call"`) {
+		t.Fatalf("raw search/model-output items should live in response_items, not tool payloads: %q", replay)
+	}
+}
+
+func TestBuildToolDoneEventUsesDisplayNameForQualifiedMCPTool(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{
+			ID:        "call_todoist",
+			Name:      "todoist__find-tasks-by-date",
+			Arguments: map[string]any{"startDate": "today"},
+		},
+		shared.ToolResult{
+			ToolCallID: "call_todoist",
+			Name:       "todoist__find-tasks-by-date",
+			Text:       "No results.",
+		},
+	)
+
+	if event.Summary != "called Todoist / find-tasks-by-date" {
+		t.Fatalf("qualified tool name should be display-only cleaned up, got %q", event.Summary)
+	}
+	if event.ToolName != "todoist__find-tasks-by-date" {
+		t.Fatalf("raw tool name should remain persisted for replay, got %q", event.ToolName)
+	}
+	if raw := mustJSON(event); strings.Contains(raw, "agent_payload") {
+		t.Fatalf("tool UI event should not store agent payload, got %q", raw)
+	}
+}
+
+func TestBuildToolDoneEventOmitsPresentationIcon(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{ID: "call_todoist", Namespace: "mcp__todoist__", Name: "find-tasks"},
+		shared.ToolResult{ToolCallID: "call_todoist", Name: "find-tasks", Text: "ok"},
+	)
+	if raw := mustJSON(event); strings.Contains(raw, `"icon"`) {
+		t.Fatalf("tool events should not persist presentation icons, got %q", raw)
 	}
 }
 
@@ -187,7 +358,7 @@ func TestBuildToolDoneEventForGenericFailure(t *testing.T) {
 	if event.Phase != "tool_error" || event.Status != "error" || !event.IsError {
 		t.Fatalf("unexpected error event: %#v", event)
 	}
-	if event.Summary != "failed server__lookup" || event.Subtitle != "boom" {
+	if event.Summary != "failed server / lookup" || event.Subtitle != "boom" {
 		t.Fatalf("unexpected generic failure copy: %#v", event)
 	}
 }

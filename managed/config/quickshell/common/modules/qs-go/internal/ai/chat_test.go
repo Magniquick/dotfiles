@@ -47,7 +47,7 @@ func TestStreamWithToolsUsesBuiltinsForLocalEvenWithoutCatalogCaps(t *testing.T)
 		RawModelID: "gpt-5.4-mini",
 		Provider:   "local",
 		Message:    "list files",
-	}, `[]`, func(string) {}, nil, nil)
+	}, `[]`, func(string) {}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestStreamWithToolsEmitsToolLifecycleEvents(t *testing.T) {
 		Message:    "call tool",
 	}, `[]`, func(string) {}, func(event toolUIEvent) {
 		events = append(events, event)
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

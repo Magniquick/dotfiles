@@ -1,7 +1,7 @@
 package ai
 
 import (
-	_ "qs-go/internal/ai/providers/gemini"
-	_ "qs-go/internal/ai/providers/local"
-	_ "qs-go/internal/ai/providers/openai"
+	_ "qs-go/internal/ai/providers/gemini" // register provider
+	_ "qs-go/internal/ai/providers/local"  // register provider
+	_ "qs-go/internal/ai/providers/openai" // register provider
 )

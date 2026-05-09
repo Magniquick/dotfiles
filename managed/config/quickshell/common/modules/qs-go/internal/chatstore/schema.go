@@ -58,6 +58,20 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   UNIQUE(message_id, tool_call_id)
 );
 
+CREATE TABLE IF NOT EXISTS response_items (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  turn_id TEXT NOT NULL,
+  turn_ordinal INTEGER NOT NULL,
+  item_ordinal INTEGER NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('model_output', 'tool_output')),
+  item_type TEXT NOT NULL DEFAULT '',
+  call_id TEXT NOT NULL DEFAULT '',
+  raw BLOB NOT NULL CHECK (json_valid(raw, 8)),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(conversation_id, turn_id, item_ordinal)
+);
+
 CREATE TABLE IF NOT EXISTS attachments (
   id TEXT PRIMARY KEY,
   message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -97,6 +111,12 @@ ON tool_calls(message_id);
 
 CREATE INDEX IF NOT EXISTS idx_tool_calls_name_status
 ON tool_calls(tool_name, status);
+
+CREATE INDEX IF NOT EXISTS idx_response_items_turn
+ON response_items(conversation_id, turn_ordinal, item_ordinal);
+
+CREATE INDEX IF NOT EXISTS idx_response_items_call
+ON response_items(conversation_id, call_id);
 
 CREATE INDEX IF NOT EXISTS idx_attachments_message
 ON attachments(message_id);

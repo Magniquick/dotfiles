@@ -1,3 +1,4 @@
+// Package mcp tests built-in MCP tool behavior.
 package mcp
 
 import (
@@ -93,6 +94,31 @@ func TestToolReadOnlyUsesMCPAnnotation(t *testing.T) {
 	}
 }
 
+func TestToolAnnotationRiskHints(t *testing.T) {
+	destructive := true
+	openWorld := false
+	tool := &sdk.Tool{Annotations: &sdk.ToolAnnotations{
+		DestructiveHint: &destructive,
+		OpenWorldHint:   &openWorld,
+		IdempotentHint:  true,
+	}}
+
+	if !toolDestructive(tool) || toolOpenWorld(tool) || !toolIdempotent(tool) {
+		t.Fatalf("expected destructive/idempotent/closed-world hints")
+	}
+	if riskForTool(false, true) != "destructive" || riskForTool(true, true) != "read" {
+		t.Fatalf("unexpected risk mapping")
+	}
+}
+
+func TestContentAsMapsPreservesMCPContentShape(t *testing.T) {
+	content := contentAsMaps([]sdk.Content{&sdk.TextContent{Text: "hello"}})
+
+	if len(content) != 1 || content[0]["type"] != "text" || content[0]["text"] != "hello" {
+		t.Fatalf("expected MCP text content map, got %#v", content)
+	}
+}
+
 func TestBuiltinApplyPatchAddsAndUpdatesSandboxFiles(t *testing.T) {
 	sandboxRoot, err := shellSandboxRoot()
 	if err != nil {
@@ -117,6 +143,7 @@ func TestBuiltinApplyPatchAddsAndUpdatesSandboxFiles(t *testing.T) {
 	if add.IsError {
 		t.Fatalf("apply_patch add should work: %#v", add)
 	}
+	//nolint:gosec // test reads the sandbox file path it just asked apply_patch to create.
 	raw, err := os.ReadFile(realPath)
 	if err != nil {
 		t.Fatalf("expected patched file: %v", err)
@@ -139,6 +166,7 @@ func TestBuiltinApplyPatchAddsAndUpdatesSandboxFiles(t *testing.T) {
 	if update.IsError {
 		t.Fatalf("apply_patch update should work: %#v", update)
 	}
+	//nolint:gosec // test reads the sandbox file path it just asked apply_patch to update.
 	raw, err = os.ReadFile(realPath)
 	if err != nil {
 		t.Fatalf("expected updated file: %v", err)
@@ -167,6 +195,7 @@ func TestBuiltinApplyPatchRejectsSymlinkEscape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sandbox root: %v", err)
 	}
+	//nolint:gosec // test creates a normal temporary sandbox directory.
 	if err := os.MkdirAll(sandboxRoot, 0o755); err != nil {
 		t.Fatalf("mkdir sandbox: %v", err)
 	}
@@ -239,6 +268,7 @@ func TestBuiltinShellExecUsesBubblewrapSandbox(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Remove(realPath)
 	})
+	//nolint:gosec // test reads the real sandbox file created by apply_patch.
 	raw, err := os.ReadFile(realPath)
 	if err != nil {
 		t.Fatalf("expected real sandbox file at %s: %v", realPath, err)

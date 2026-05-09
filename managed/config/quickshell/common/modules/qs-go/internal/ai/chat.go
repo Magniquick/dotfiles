@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -157,6 +159,15 @@ func Stream(
 		onToolEvent := func(event toolUIEvent) {
 			cb(mustJSON(event), 2)
 		}
+		onRawResponseItems := func(items []map[string]any) {
+			if len(items) == 0 {
+				return
+			}
+			cb(mustJSON(map[string]any{
+				"kind":  "raw_response_items",
+				"items": items,
+			}), 2)
+		}
 
 		baseReq := shared.StreamRequest{
 			ModelID:      strings.TrimSpace(modelID),
@@ -184,7 +195,7 @@ func Stream(
 		var result shared.StreamResult
 		err = aimcp.WithStreamHandlers(mcpConfigJSON, samplingHandler, elicitationHandler, func() error {
 			var streamErr error
-			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken, onToolEvent, metrics.beginProviderRound)
+			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken, onToolEvent, onRawResponseItems, metrics.beginProviderRound)
 			return streamErr
 		})
 		totalMS := metrics.totalMS()
@@ -239,6 +250,7 @@ func streamWithTools(
 	mcpConfigJSON string,
 	onToken func(string),
 	onToolEvent func(toolUIEvent),
+	onRawResponseItems func([]map[string]any),
 	onProviderRoundStart func(),
 ) (shared.StreamResult, error) {
 	req := baseReq
@@ -246,7 +258,12 @@ func streamWithTools(
 		tools, err := aimcp.ToolDescriptors(mcpConfigJSON)
 		if err == nil {
 			req.Tools = tools
+			log.Printf("qs-go ai: advertising tools provider=%s model=%s raw_model=%s count=%d", req.Provider, req.ModelID, req.RawModelID, len(tools))
+		} else {
+			log.Printf("qs-go ai: failed to build tool descriptors provider=%s model=%s raw_model=%s error=%s", req.Provider, req.ModelID, req.RawModelID, err)
 		}
+	} else {
+		log.Printf("qs-go ai: tools disabled provider=%s model=%s raw_model=%s", baseReq.Provider, baseReq.ModelID, baseReq.RawModelID)
 	}
 
 	history := append([]shared.HistoryMessage(nil), req.History...)
@@ -265,9 +282,13 @@ func streamWithTools(
 		result, err := prov.Stream(ctx, req, onToken)
 		combined.PromptTokens = result.PromptTokens
 		combined.OutputTokens += result.OutputTokens
+		combined.RawItems = append(combined.RawItems, result.RawItems...)
 		combined.StopReason = result.StopReason
 		if err != nil {
 			return combined, err
+		}
+		if onRawResponseItems != nil && len(result.RawItems) > 0 {
+			onRawResponseItems(result.RawItems)
 		}
 		if len(result.ToolCalls) == 0 {
 			return combined, nil
@@ -278,18 +299,29 @@ func streamWithTools(
 			Body:        message,
 			Attachments: attachments,
 		})
+		if len(result.RawItems) > 0 {
+			history = append(history, shared.HistoryMessage{
+				Sender:   "assistant",
+				RawItems: result.RawItems,
+			})
+		}
 		message = ""
 		attachments = nil
 
 		for _, toolCall := range result.ToolCalls {
-			history = append(history, shared.HistoryMessage{
-				Sender:   "assistant",
-				ToolCall: &toolCall,
-			})
+			enrichToolCall(&toolCall, req.Tools)
+			log.Printf("qs-go ai: model requested tool round=%d namespace=%q name=%q arg_keys=%v", round+1, toolCall.Namespace, toolCall.Name, mapKeys(toolCall.Arguments))
+			if len(result.RawItems) == 0 {
+				history = append(history, shared.HistoryMessage{
+					Sender:   "assistant",
+					ToolCall: &toolCall,
+				})
+			}
 			if onToolEvent != nil {
 				onToolEvent(buildToolStartEvent(toolCall))
 			}
-			toolResult, err := aimcp.CallTool(mcpConfigJSON, "", toolCall.Name, toolCall.Arguments)
+			toolStart := time.Now()
+			toolResult, err := aimcp.CallTool(mcpConfigJSON, toolCall.Namespace, toolCall.Name, toolCall.Arguments)
 			if err != nil {
 				toolResult = shared.ToolResult{
 					Name:       toolCall.Name,
@@ -298,7 +330,11 @@ func streamWithTools(
 					IsError:    true,
 				}
 			}
+			toolResult.DurationMS = time.Since(toolStart).Milliseconds()
 			toolResult.ToolCallID = toolCall.ID
+			if strings.TrimSpace(toolResult.Name) == "" {
+				toolResult.Name = toolCall.Name
+			}
 			if onToolEvent != nil {
 				onToolEvent(buildToolDoneEvent(toolCall, toolResult))
 			}
@@ -310,6 +346,65 @@ func streamWithTools(
 	}
 
 	return combined, fmt.Errorf("too many MCP tool rounds")
+}
+
+func enrichToolCall(call *shared.ToolCall, tools []shared.ToolDescriptor) {
+	if call == nil {
+		return
+	}
+	for _, tool := range tools {
+		if !toolDescriptorMatchesCall(tool, *call) {
+			continue
+		}
+		call.ServerID = tool.ServerID
+		call.ServerLabel = tool.ServerLabel
+		call.ToolTitle = firstNonEmpty(tool.Title, call.Name)
+		call.ReadOnly = tool.ReadOnly
+		call.Destructive = tool.Destructive
+		call.OpenWorld = tool.OpenWorld
+		call.Idempotent = tool.Idempotent
+		call.Risk = firstNonEmpty(tool.Risk, call.Risk)
+		if strings.TrimSpace(call.Namespace) == "" {
+			call.Namespace = tool.Namespace
+		}
+		return
+	}
+}
+
+func toolDescriptorMatchesCall(tool shared.ToolDescriptor, call shared.ToolCall) bool {
+	callName := strings.TrimSpace(call.Name)
+	if callName == "" {
+		return false
+	}
+	if strings.TrimSpace(tool.Namespace) != "" && strings.TrimSpace(call.Namespace) != "" && strings.TrimSpace(tool.Namespace) != strings.TrimSpace(call.Namespace) {
+		return false
+	}
+	if strings.TrimSpace(tool.Name) == callName {
+		return true
+	}
+	if child := descriptorChildName(tool); child != "" && child == callName {
+		return true
+	}
+	return false
+}
+
+func descriptorChildName(tool shared.ToolDescriptor) string {
+	name := strings.TrimSpace(tool.Name)
+	if serverID := strings.TrimSpace(tool.ServerID); serverID != "" {
+		if child, ok := strings.CutPrefix(name, serverID+"__"); ok {
+			return strings.TrimSpace(child)
+		}
+	}
+	return ""
+}
+
+func mapKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func supportsTools(req shared.StreamRequest) bool {
@@ -456,9 +551,32 @@ func convertMcpTools(tools []*mcp.Tool) []shared.ToolDescriptor {
 			Description: strings.TrimSpace(tool.Description),
 			InputSchema: asMap(tool.InputSchema),
 			ReadOnly:    tool.Annotations != nil && tool.Annotations.ReadOnlyHint,
+			Destructive: mcpToolDestructive(tool),
+			OpenWorld:   mcpToolOpenWorld(tool),
+			Idempotent:  tool.Annotations != nil && tool.Annotations.IdempotentHint,
 		})
 	}
 	return out
+}
+
+func mcpToolDestructive(tool *mcp.Tool) bool {
+	if tool == nil || tool.Annotations == nil {
+		return true
+	}
+	if tool.Annotations.ReadOnlyHint {
+		return false
+	}
+	if tool.Annotations.DestructiveHint == nil {
+		return true
+	}
+	return *tool.Annotations.DestructiveHint
+}
+
+func mcpToolOpenWorld(tool *mcp.Tool) bool {
+	if tool == nil || tool.Annotations == nil || tool.Annotations.OpenWorldHint == nil {
+		return true
+	}
+	return *tool.Annotations.OpenWorldHint
 }
 
 func asMap(value any) map[string]any {
@@ -489,12 +607,12 @@ func firstNonEmpty(values ...string) string {
 }
 
 func ensureAttachmentCapability(modelID string) error {
-	cap, ok := helpers.Query(modelID)
+	capabilities, ok := helpers.Query(modelID)
 	if !ok {
-		return fmt.Errorf("No capability metadata for model '%s'", modelID)
+		return fmt.Errorf("no capability metadata for model %q", modelID)
 	}
-	if !cap.SupportsImages {
-		return fmt.Errorf("Attachments are not supported by model '%s'", modelID)
+	if !capabilities.SupportsImages {
+		return fmt.Errorf("attachments are not supported by model %q", modelID)
 	}
 	return nil
 }

@@ -1,3 +1,4 @@
+// Package gemini implements the Google Gemini provider.
 package gemini
 
 import (
@@ -15,12 +16,14 @@ import (
 	"qs-go/internal/ai/shared"
 )
 
+// Provider streams requests to Gemini.
 type Provider struct{}
 
 func init() {
 	providers.Register(Provider{})
 }
 
+// Metadata returns Gemini provider metadata shown in the UI.
 func (Provider) Metadata() shared.ProviderMetadata {
 	return shared.ProviderMetadata{
 		ID:          "gemini",
@@ -29,6 +32,7 @@ func (Provider) Metadata() shared.ProviderMetadata {
 	}
 }
 
+// Stream sends a streaming request to Gemini.
 func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken func(string)) (shared.StreamResult, error) {
 	url := "https://generativelanguage.googleapis.com/v1beta/models/" + req.RawModelID + ":streamGenerateContent?alt=sse&key=" + strings.TrimSpace(req.Config.APIKey)
 	payload, err := buildPayloadForModel(req.RawModelID, req.SystemPrompt, req.History, req.Message, req.Attachments, req.Tools)
@@ -47,7 +51,9 @@ func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken fu
 	if err != nil {
 		return shared.StreamResult{}, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		return shared.StreamResult{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, shared.ExtractErrorMessage(raw))
@@ -147,14 +153,9 @@ func buildPayloadForModel(rawModelID string, systemPrompt string, history []shar
 			continue
 		}
 		if item.ToolResult != nil {
-			response := map[string]any{}
-			if len(item.ToolResult.Data) > 0 {
-				for key, value := range item.ToolResult.Data {
-					response[key] = value
-				}
-			}
-			if strings.TrimSpace(item.ToolResult.Text) != "" {
-				response["text"] = item.ToolResult.Text
+			response := shared.ToolResultTranscriptPayload(*item.ToolResult)
+			if len(response) == 0 {
+				response["result"] = ""
 			}
 			contents = append(contents, map[string]any{
 				"role": "user",

@@ -11,7 +11,7 @@ import (
 
 func TestRefreshUsesSecretResolverCalendarURL(t *testing.T) {
 	var hits int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
 		_, _ = w.Write([]byte("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"))
 	}))

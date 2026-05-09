@@ -44,6 +44,19 @@ Item {
             composer.clearFocus();
     }
 
+    function setLatestVisibleToolExpanded(expanded) {
+        messageList.positionViewAtEnd();
+        messageList.forceLayout();
+        for (let i = messageList.count - 1; i >= 0; --i) {
+            const item = messageList.itemAtIndex(i);
+            if (!item || item.kind !== "tool")
+                continue;
+            messageList.setToolRowExpanded(item._messageId, item.tool, expanded);
+            return true;
+        }
+        return false;
+    }
+
     Item {
         id: chatArea
         anchors.top: parent.top
@@ -75,9 +88,40 @@ Item {
             clip: true
             model: root.messagesModel
             property string activeSelectionKey: ""
+            property var toolExpansionState: ({})
 
             // Follow output as it streams, but don't fight the user if they've scrolled up.
             property bool autoFollow: true
+
+            function toolRowKey(messageId, tool) {
+                const id = String(messageId || "");
+                if (id.length > 0)
+                    return id;
+                return String((tool || ({})).tool_call_id || "");
+            }
+
+            function toolRowExpanded(messageId, tool) {
+                const key = toolRowKey(messageId, tool);
+                return key.length > 0 && !!toolExpansionState[key];
+            }
+
+            function withToolExpansionValue(state, key, value) {
+                const next = {};
+                for (const existingKey in state)
+                    next[existingKey] = state[existingKey];
+                if (value)
+                    next[key] = true;
+                else
+                    delete next[key];
+                return next;
+            }
+
+            function setToolRowExpanded(messageId, tool, expanded) {
+                const key = toolRowKey(messageId, tool);
+                if (key.length === 0)
+                    return;
+                toolExpansionState = withToolExpansionValue(toolExpansionState, key, expanded);
+            }
 
             function maybeFollow() {
                 if (!autoFollow)
@@ -170,8 +214,10 @@ Item {
                     Components.ToolCallRow {
                         width: delegateRoot.width
                         tool: delegateRoot.tool
+                        expanded: messageList.toolRowExpanded(delegateRoot._messageId, delegateRoot.tool)
                         moodIcon: root.moodIcon
                         moodName: root.moodName
+                        onExpandedChangeRequested: expanded => messageList.setToolRowExpanded(delegateRoot._messageId, delegateRoot.tool, expanded)
                     }
                 }
             }

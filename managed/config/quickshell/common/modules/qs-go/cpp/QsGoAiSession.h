@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
 #include <QColor>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QUuid>
@@ -26,6 +27,8 @@ class QsGoAiSession : public QAbstractListModel {
   Q_PROPERTY(QVariantList mcp_resources READ mcpResources NOTIFY mcpStateChanged)
   Q_PROPERTY(QString mcp_status READ mcpStatus NOTIFY mcpStateChanged)
   Q_PROPERTY(QString mcp_error READ mcpError NOTIFY mcpStateChanged)
+  Q_PROPERTY(
+      QVariantList resume_conversations READ resumeConversations NOTIFY resumeConversationsChanged)
 
 public:
   struct Message {
@@ -37,6 +40,17 @@ public:
     QVariantList attachments;
     QVariantMap tool;
     bool showHeader = true;
+  };
+
+  struct ReplayItem {
+    QString id;
+    QString turnId;
+    int turnOrdinal = 0;
+    int itemOrdinal = 0;
+    QString source;
+    QString itemType;
+    QString callId;
+    QJsonObject raw;
   };
 
   enum Roles {
@@ -99,6 +113,9 @@ public:
   QString mcpError() const {
     return m_mcpError;
   }
+  QVariantList resumeConversations() const {
+    return m_resumeConversations;
+  }
 
   void setModelId(const QString& v);
   void setSystemPrompt(const QString& v);
@@ -123,6 +140,8 @@ public:
   Q_INVOKABLE QVariantMap getMcpPrompt(const QString& serverId, const QString& promptName,
                                        const QVariantMap& arguments = QVariantMap{});
   Q_INVOKABLE QVariantMap readMcpResource(const QString& serverId, const QString& uri);
+  Q_INVOKABLE bool refreshResumeConversations(const QString& query = QString());
+  Q_INVOKABLE bool resumeConversation(const QString& conversationId);
 
 signals:
   void modelIdChanged();
@@ -136,16 +155,19 @@ signals:
 
   void openModelPickerRequested();
   void openMoodPickerRequested();
+  void openResumePickerRequested();
   void openMcpAddRequested();
   void scrollToEndRequested();
   void copyAllRequested(const QString& text);
   void streamDone();
+  void resumeConversationsChanged();
 
 private:
   static void tokenCallback(void* ctx, const char* token, int done);
   void startStream(const QString& text, const QVariantList& attachments);
   bool ensureHistoryConversation();
   bool createHistoryConversation();
+  bool resumeHistoryConversation(const QString& conversationId = QString());
   bool closeHistoryConversation();
   QVariantMap applyHistoryAction(const QVariantMap& action) const;
   QVariantMap messageToHistoryMap(const Message& msg, int ordinal,
@@ -154,17 +176,20 @@ private:
   void persistMessageAt(int row, const QString& statusOverride = QString(),
                         const QString& completedAt = QString());
   void persistToolCallAt(int row);
+  void persistResponseItems(const QJsonArray& items, const QString& source);
   void persistDeletedFromOrdinal(int ordinal);
   QVariantMap extraForMessage(const Message& msg) const;
   QVariantMap metricsForMessage(const Message& msg) const;
   QString utcNow() const;
   void restoreMessages(const QVariantList& messages);
+  void restoreReplayItems();
   QString buildHistoryJson() const;
   QByteArray buildProviderConfigJson() const;
   QByteArray buildMcpConfigJson() const;
   void refreshMcpStateAsync();
   QString activeProviderId() const;
   QVariantMap activeProviderConfig() const;
+  QVariantMap resumeOptionFromSummary(const QVariantMap& summary) const;
   int indexOfMessage(const QString& id) const;
   int indexOfToolCall(const QString& toolCallId) const;
   int lastAssistantChatIndex() const;
@@ -175,8 +200,12 @@ private:
   void handleSlashCommand(const QString& cmd);
 
   QList<Message> m_messages;
+  QList<ReplayItem> m_replayItems;
   int m_sessionId = -1;
   QString m_conversationId;
+  QString m_currentTurnId;
+  int m_currentTurnOrdinal = -1;
+  int m_nextReplayItemOrdinal = 0;
   bool m_historyLoaded = false;
   bool m_restoringHistory = false;
 
@@ -193,4 +222,5 @@ private:
   QVariantList m_mcpResources;
   QString m_mcpStatus;
   QString m_mcpError;
+  QVariantList m_resumeConversations;
 };

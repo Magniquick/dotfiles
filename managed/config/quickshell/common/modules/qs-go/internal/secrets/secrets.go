@@ -9,6 +9,7 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
+// DefaultService is the Secret Service namespace used by qs-go.
 const DefaultService = "quickshell"
 
 // Resolver is the lookup boundary for values stored in Secret Service.
@@ -31,6 +32,7 @@ var (
 	}
 )
 
+// NewResolver returns the current process-wide secret resolver.
 func NewResolver() Resolver {
 	resolverMu.RLock()
 	factory := resolverFactory
@@ -38,6 +40,7 @@ func NewResolver() Resolver {
 	return factory()
 }
 
+// NewKeyringResolver returns a Secret Service-backed resolver.
 func NewKeyringResolver(service string) Resolver {
 	service = strings.TrimSpace(service)
 	if service == "" {
@@ -46,6 +49,7 @@ func NewKeyringResolver(service string) Resolver {
 	return keyringResolver{service: service}
 }
 
+// NewMapResolver returns an in-memory resolver for tests.
 func NewMapResolver(values map[string]string) Resolver {
 	copyValues := make(map[string]string, len(values))
 	for key, value := range values {
@@ -54,6 +58,7 @@ func NewMapResolver(values map[string]string) Resolver {
 	return mapResolver{values: copyValues}
 }
 
+// UseResolverForTest replaces the resolver factory for a test.
 func UseResolverForTest(resolver Resolver) func() {
 	resolverMu.Lock()
 	previous := resolverFactory
@@ -83,6 +88,7 @@ func (r mapResolver) Lookup(key string) (string, bool) {
 	return value, ok
 }
 
+// Set writes a secret under the default service.
 func Set(key, value string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -91,6 +97,7 @@ func Set(key, value string) error {
 	return keyring.Set(DefaultService, key, value)
 }
 
+// Delete removes a secret under the default service.
 func Delete(key string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -103,6 +110,7 @@ func Delete(key string) error {
 	return err
 }
 
+// IsNotFound reports whether an error means the secret was absent.
 func IsNotFound(err error) bool {
 	return errors.Is(err, keyring.ErrNotFound)
 }

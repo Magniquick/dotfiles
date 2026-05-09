@@ -19,6 +19,12 @@ Item {
             panelView.clearTextFocus();
     }
 
+    function setLatestVisibleToolExpanded(expanded) {
+        return panelView && panelView.setLatestVisibleToolExpanded
+            ? panelView.setLatestVisibleToolExpanded(expanded)
+            : false;
+    }
+
     function setClipboardText(text) {
         // qmllint disable unqualified
         Quickshell.clipboardText = text;
@@ -119,6 +125,11 @@ Item {
             root.activeCommand = "mood";
             root.showCommandPicker = true;
         }
+        onOpenResumePickerRequested: {
+            root.showMcpAddDialog = false;
+            root.activeCommand = "resume";
+            root.showCommandPicker = true;
+        }
         onOpenMcpAddRequested: {
             root.showCommandPicker = false;
             root.showMcpAddDialog = true;
@@ -157,6 +168,7 @@ Item {
         activeCommand: root.activeCommand
         availableModels: root.availableModels
         availableMoods: root.availableMoods
+        resumeConversations: chatSession.resume_conversations
 
         footerDotColor: panelView.currentTabIndex === 0
             ? (root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error)
@@ -197,6 +209,15 @@ Item {
             root.showCommandPicker = false;
             panelView.scrollToEnd();
         }
+
+        onResumeSelected: value => {
+            if (chatSession.resumeConversation(value)) {
+                root.showCommandPicker = false;
+                panelView.scrollToEnd();
+            }
+        }
+
+        onResumeSearchChanged: query => chatSession.refreshResumeConversations(query)
     }
 
     Rectangle {

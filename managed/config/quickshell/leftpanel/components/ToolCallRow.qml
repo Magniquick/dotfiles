@@ -1,34 +1,39 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
-import "../../common/materialkit" as MK
 import "../../common" as Common
-import "./" as Components
 
 Item {
     id: root
 
     property var tool: ({})
     property bool expanded: false
-    property bool rawExpanded: false
     readonly property bool showAssistantHeader: !!tool.show_header
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
 
+    signal expandedChangeRequested(bool expanded)
+
     readonly property string status: String(tool.status || "")
     readonly property bool isError: !!tool.is_error || status === "error"
     readonly property bool isRunning: status === "running"
-    readonly property string summary: String(tool.summary || tool.tool_name || "tool call")
+    readonly property string serverId: String(tool.server_id || namespaceServerId(tool.namespace || ""))
+    readonly property string serverLabel: String(tool.server_label || serverDisplayName(serverId))
+    readonly property string toolTitle: String(tool.tool_title || tool.tool_name || "tool call")
+    readonly property string namespaceName: String(tool.namespace || "")
+    readonly property string risk: String(tool.risk || "")
+    readonly property bool readOnly: !!tool.read_only
+    readonly property int durationMs: Number(tool.duration_ms || 0)
+    readonly property string summary: String(tool.summary || toolTitle)
     readonly property string subtitle: String(tool.subtitle || "")
-    readonly property string iconText: String(tool.icon || (isError ? "!" : "•"))
+    readonly property string iconText: resolvedIconText()
     readonly property var detailSections: tool.detail_sections || []
-    readonly property string agentPayload: String(tool.agent_payload || "")
-    readonly property bool hasRaw: agentPayload.length > 0
     readonly property color rowColor: isError ? Common.Config.color.error : Common.Config.color.primary
     readonly property color onRowColor: isError ? Common.Config.color.on_error : Common.Config.color.on_primary
     readonly property color diffAdditionColor: "#3fb950"
     readonly property color diffDeletionColor: Common.Config.color.error
+    readonly property int detailPreviewChars: 6000
+    readonly property int detailPreviewLines: 80
 
     implicitWidth: parent ? parent.width : 320
     implicitHeight: wrapper.implicitHeight + 8
@@ -39,6 +44,80 @@ Item {
 
     function sectionContent(section) {
         return String(section && section.content ? section.content : "");
+    }
+
+    function sectionKind(section) {
+        return String(section && section.kind ? section.kind : "text");
+    }
+
+    function boundedText(value, charLimit, lineLimit) {
+        let text = String(value || "").replace(/\n+$/, "");
+        let truncated = false;
+
+        if (charLimit > 0 && text.length > charLimit) {
+            text = text.slice(0, charLimit);
+            truncated = true;
+        }
+
+        if (lineLimit > 0) {
+            const lines = text.split("\n");
+            if (lines.length > lineLimit) {
+                text = lines.slice(0, lineLimit).join("\n");
+                truncated = true;
+            }
+        }
+
+        return truncated ? text + "\n[truncated]" : text;
+    }
+
+    function sectionPreview(section) {
+        return boundedText(sectionContent(section), detailPreviewChars, detailPreviewLines);
+    }
+
+    function detailFontFamily(kind) {
+        return kind === "text" ? Common.Config.fontFamily : "JetBrains Mono";
+    }
+
+    function namespaceServerId(namespace) {
+        const clean = String(namespace || "");
+        if (clean.indexOf("mcp__") !== 0 || clean.lastIndexOf("__") !== clean.length - 2)
+            return "";
+        return clean.slice(5, -2);
+    }
+
+    function serverDisplayName(server) {
+        switch (String(server || "")) {
+        case "todoist":
+            return "Todoist";
+        case "email":
+            return "Email";
+        case "builtin":
+            return "Built-in";
+        default:
+            return String(server || "");
+        }
+    }
+
+    function resolvedIconText() {
+        if (root.isError)
+            return "!";
+
+        const toolName = String(root.tool.tool_name || "");
+        const server = root.serverId;
+
+        if (toolName === "shell_command" || toolName === "shell_exec" || toolName === "builtin__shell_command" || toolName === "builtin__shell_exec")
+            return "$";
+
+        if (toolName === "apply_patch" || toolName === "builtin__apply_patch")
+            return "±";
+
+        if (server === "email" || toolName.indexOf("email_") === 0 || toolName.indexOf("email__") === 0)
+            return "\uf0e0";
+
+        if (server === "todoist" || toolName.indexOf("todoist__") === 0)
+            return "󰄭";
+
+        return "•";
     }
 
     function htmlEscape(value) {
@@ -120,7 +199,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.expanded = !root.expanded
+                    onClicked: root.expandedChangeRequested(!root.expanded)
                 }
 
                 RowLayout {
@@ -152,41 +231,27 @@ Item {
                         Text {
                             id: summaryText
                             Layout.fillWidth: true
-                            text: root.richSummary(summaryMetrics.elidedText)
+                            text: root.richSummary(root.summary)
                             textFormat: Text.RichText
                             color: Common.Config.color.on_surface
+                            clip: true
                             maximumLineCount: 1
                             font.family: Common.Config.fontFamily
                             font.pixelSize: 13
                             font.weight: Font.DemiBold
-
-                            TextMetrics {
-                                id: summaryMetrics
-                                text: root.summary
-                                font: summaryText.font
-                                elide: Text.ElideRight
-                                elideWidth: Math.max(0, summaryText.width)
-                            }
                         }
 
                         Text {
                             id: subtitleText
                             Layout.fillWidth: true
                             visible: root.subtitle.length > 0
-                            text: subtitleMetrics.elidedText
+                            text: root.subtitle
                             color: Common.Config.color.on_surface_variant
                             opacity: 0.78
+                            clip: true
                             maximumLineCount: 1
                             font.family: Common.Config.fontFamily
                             font.pixelSize: 11
-
-                            TextMetrics {
-                                id: subtitleMetrics
-                                text: root.subtitle
-                                font: subtitleText.font
-                                elide: Text.ElideRight
-                                elideWidth: Math.max(0, subtitleText.width)
-                            }
                         }
                     }
 
@@ -209,151 +274,102 @@ Item {
                 }
             }
 
-            Rectangle {
+            Loader {
+                id: detailLoader
                 Layout.fillWidth: true
-                visible: root.expanded
-                implicitHeight: detailColumn.implicitHeight + 18
-                Layout.preferredHeight: visible ? implicitHeight : 0
-                radius: Common.Config.shape.corner.sm
-                color: Qt.alpha(Common.Config.color.surface_container_low, 0.82)
-                border.width: 1
-                border.color: Qt.alpha(root.rowColor, 0.14)
+                active: root.expanded
+                visible: active
+                Layout.preferredHeight: active && item ? item.implicitHeight : 0
+                sourceComponent: detailComponent
+            }
 
-                ColumnLayout {
-                    id: detailColumn
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        top: parent.top
-                        margins: 9
-                    }
-                    spacing: 9
+            Component {
+                id: detailComponent
 
-                    Repeater {
-                        model: root.detailSections
+                Rectangle {
+                    width: detailLoader.width
+                    implicitHeight: detailColumn.implicitHeight + 18
+                    radius: Common.Config.shape.corner.sm
+                    color: Qt.alpha(Common.Config.color.surface_container_low, 0.82)
+                    border.width: 1
+                    border.color: Qt.alpha(root.rowColor, 0.14)
 
-                        ColumnLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: 4
+                    ColumnLayout {
+                        id: detailColumn
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            top: parent.top
+                            margins: 9
+                        }
+                        spacing: 9
 
-                            Text {
-                                text: root.sectionTitle(parent.modelData).toUpperCase()
-                                color: Common.Config.color.on_surface_variant
-                                opacity: 0.62
-                                font.family: Common.Config.fontFamily
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                            }
+                        Repeater {
+                            model: root.detailSections
 
-                            Components.MessageCodeBlock {
-                                readonly property bool isDiff: String(parent.modelData.kind || "") === "diff"
-                                visible: isDiff
+                            ColumnLayout {
+                                id: sectionBlock
+                                required property var modelData
+                                readonly property string kind: root.sectionKind(modelData)
+                                readonly property string previewText: root.sectionPreview(modelData)
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: visible ? implicitHeight : 0
-                                code: root.sectionContent(parent.modelData)
-                                language: "diff"
-                            }
+                                spacing: 4
 
-                            TextArea {
-                                visible: String(parent.modelData.kind || "") !== "diff"
-                                Layout.fillWidth: true
-                                text: root.sectionContent(parent.modelData)
-                                textFormat: TextEdit.PlainText
-                                readOnly: true
-                                selectByMouse: true
-                                wrapMode: TextArea.Wrap
-                                color: Common.Config.color.on_surface
-                                selectedTextColor: Common.Config.color.on_primary
-                                selectionColor: Common.Config.color.primary
-                                font.family: String(parent.modelData.kind || "") === "text"
-                                    ? Common.Config.fontFamily
-                                    : "JetBrains Mono"
-                                font.pixelSize: 11
-                                padding: 8
-                                background: Rectangle {
+                                Text {
+                                    text: root.sectionTitle(parent.modelData).toUpperCase()
+                                    color: Common.Config.color.on_surface_variant
+                                    opacity: 0.62
+                                    font.family: Common.Config.fontFamily
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: Math.min(220, Math.max(42, detailText.contentHeight + 16))
                                     radius: Common.Config.shape.corner.xs
                                     color: Common.Config.color.surface
                                     border.width: 1
                                     border.color: Qt.alpha(Common.Config.color.on_surface, 0.07)
+
+                                    Flickable {
+                                        id: detailFlick
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        clip: true
+                                        contentWidth: width
+                                        contentHeight: detailText.contentHeight
+                                        boundsBehavior: Flickable.StopAtBounds
+                                        boundsMovement: Flickable.StopAtBounds
+                                        flickableDirection: Flickable.VerticalFlick
+                                        interactive: contentHeight > height
+
+                                        TextEdit {
+                                            id: detailText
+                                            width: detailFlick.width
+                                            text: sectionBlock.previewText
+                                            textFormat: TextEdit.PlainText
+                                            readOnly: true
+                                            selectByMouse: true
+                                            wrapMode: TextEdit.Wrap
+                                            color: Common.Config.color.on_surface
+                                            selectedTextColor: Common.Config.color.on_primary
+                                            selectionColor: Common.Config.color.primary
+                                            font.family: root.detailFontFamily(sectionBlock.kind)
+                                            font.pixelSize: 11
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    Text {
-                        visible: root.detailSections.length === 0
-                        text: root.isRunning ? "Waiting for result..." : "No cleaned details."
-                        color: Common.Config.color.on_surface_variant
-                        opacity: 0.7
-                        font.family: Common.Config.fontFamily
-                        font.pixelSize: 12
-                    }
-
-                    Rectangle {
-                        visible: root.hasRaw
-                        Layout.preferredWidth: rawLabel.implicitWidth + 22
-                        Layout.preferredHeight: 28
-                        radius: Common.Config.shape.corner.sm
-                        color: rawArea.containsMouse
-                            ? Qt.alpha(Common.Config.color.primary, 0.16)
-                            : Qt.alpha(Common.Config.color.primary, 0.09)
-                        border.width: 1
-                        border.color: Qt.alpha(Common.Config.color.primary, rawArea.containsMouse ? 0.42 : 0.24)
 
                         Text {
-                            id: rawLabel
-                            anchors.centerIn: parent
-                            text: root.rawExpanded ? "Hide Codex payload" : "Show Codex payload"
-                            color: Common.Config.color.primary
+                            visible: root.detailSections.length === 0
+                            text: root.isRunning ? "Waiting for result..." : "No cleaned details."
+                            color: Common.Config.color.on_surface_variant
+                            opacity: 0.7
                             font.family: Common.Config.fontFamily
-                            font.pixelSize: 11
-                            font.weight: Font.DemiBold
-                        }
-
-                        MK.HybridRipple {
-                            anchors.fill: parent
-                            color: Common.Config.color.primary
-                            pressX: rawArea.pressX
-                            pressY: rawArea.pressY
-                            pressed: rawArea.pressed
-                            radius: parent.radius
-                            stateOpacity: rawArea.containsMouse ? Common.Config.state.hoverOpacity : 0
-                        }
-
-                        MouseArea {
-                            id: rawArea
-                            property real pressX: width / 2
-                            property real pressY: height / 2
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.rawExpanded = !root.rawExpanded
-                            onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y }
-                        }
-                    }
-
-                    TextArea {
-                        Layout.fillWidth: true
-                        visible: root.hasRaw && root.rawExpanded
-                        Layout.preferredHeight: visible
-                            ? Math.min(260, Math.max(88, contentHeight + topPadding + bottomPadding + 2))
-                            : 0
-                        text: root.agentPayload
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextArea.Wrap
-                        color: Common.Config.color.on_surface
-                        selectedTextColor: Common.Config.color.on_primary
-                        selectionColor: Common.Config.color.primary
-                        font.family: "JetBrains Mono"
-                        font.pixelSize: 11
-                        padding: 8
-                        background: Rectangle {
-                            radius: Common.Config.shape.corner.xs
-                            color: Common.Config.color.surface
-                            border.width: 1
-                            border.color: Qt.alpha(Common.Config.color.on_surface, 0.07)
+                            font.pixelSize: 12
                         }
                     }
                 }

@@ -1,9 +1,12 @@
+// Package local implements the local OpenAI-compatible provider.
 package local
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -13,12 +16,14 @@ import (
 	"qs-go/internal/ai/shared"
 )
 
+// Provider streams Responses API requests through a local proxy.
 type Provider struct{}
 
 func init() {
 	providers.Register(Provider{})
 }
 
+// Metadata returns the local provider metadata shown in the UI.
 func (Provider) Metadata() shared.ProviderMetadata {
 	return shared.ProviderMetadata{
 		ID:          "local",
@@ -27,6 +32,7 @@ func (Provider) Metadata() shared.ProviderMetadata {
 	}
 }
 
+// Stream sends a request to the configured local Responses-compatible endpoint.
 func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken func(string)) (shared.StreamResult, error) {
 	baseURL := localBaseURL(req.Config)
 	input, err := oai.BuildResponsesInput(req.History, req.Message, req.Attachments, "Local")
@@ -44,10 +50,43 @@ func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken fu
 	}
 	tools := oai.BuildResponsesTools(req.Tools, true)
 	if len(tools) > 0 {
+		log.Printf("qs-go ai/local: responses tool payload %s", summarizeResponsesTools(tools))
 		payload["tools"] = tools
 		payload["tool_choice"] = "auto"
 	}
 	return oai.StreamResponses(ctx, baseURL, req.Config.APIKey, payload, onToken)
+}
+
+func summarizeResponsesTools(tools []map[string]any) string {
+	parts := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		kind := strings.TrimSpace(fmt.Sprint(tool["type"]))
+		name := strings.TrimSpace(fmt.Sprint(tool["name"]))
+		switch kind {
+		case "namespace":
+			children, _ := tool["tools"].([]map[string]any)
+			parts = append(parts, fmt.Sprintf("namespace:%s:tools=%d:sample=[%s]", name, len(children), sampleToolNames(children, 6)))
+		case "function", "custom":
+			parts = append(parts, kind+":"+name)
+		default:
+			parts = append(parts, kind)
+		}
+	}
+	return fmt.Sprintf("total=%d [%s]", len(tools), strings.Join(parts, ","))
+}
+
+func sampleToolNames(tools []map[string]any, limit int) string {
+	names := make([]string, 0, min(len(tools), limit))
+	for i, tool := range tools {
+		if i >= limit {
+			break
+		}
+		names = append(names, strings.TrimSpace(fmt.Sprint(tool["name"])))
+	}
+	if len(tools) > limit {
+		names = append(names, fmt.Sprintf("+%d", len(tools)-limit))
+	}
+	return strings.Join(names, ",")
 }
 
 func localBaseURL(cfg shared.ProviderConfig) string {
@@ -77,7 +116,9 @@ func compactInputIfLarge(ctx context.Context, baseURL string, apiKey string, mod
 	if err != nil {
 		return input
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return input
 	}

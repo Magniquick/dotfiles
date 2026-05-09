@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 )
 
 func TestEmailAccountsFromEnvSupportsMultipleAccountsAndGmailPreset(t *testing.T) {
+	//nolint:gosec // test uses fake email passwords to exercise env parsing.
 	accounts, err := emailAccountsFromEnv(map[string]string{
 		"EMAIL_ACCOUNTS":          "personal, work",
 		"EMAIL_PERSONAL_PROVIDER": "gmail",
@@ -52,7 +54,7 @@ func TestEmailAccountsFromEnvSupportsMultipleAccountsAndGmailPreset(t *testing.T
 }
 
 func TestRefreshIncludesEmailServerAndToolsWhenEnvConfigured(t *testing.T) {
-	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"})
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
 
 	var snapshot Snapshot
 	if err := json.Unmarshal([]byte(Refresh(`[]`)), &snapshot); err != nil {
@@ -90,34 +92,109 @@ func TestRefreshIncludesEmailServerAndToolsWhenEnvConfigured(t *testing.T) {
 	}
 }
 
-func TestToolDescriptorsExposeUnqualifiedEmailTools(t *testing.T) {
-	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"})
+func TestToolDescriptorsExposeEmailToolsInCodexNamespace(t *testing.T) {
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
 
 	tools, err := ToolDescriptors(`[]`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	servers := map[string]string{}
+	namespaces := map[string]string{}
+	namespaceDescriptions := map[string]string{}
+	fullInstructions := map[string]string{}
 	readOnly := map[string]bool{}
 	for _, tool := range tools {
 		servers[tool.Name] = tool.ServerID
+		namespaces[tool.Name] = tool.Namespace
+		namespaceDescriptions[tool.Name] = tool.NamespaceDescription
+		fullInstructions[tool.Name] = tool.FullInstructions
 		readOnly[tool.Name] = tool.ReadOnly
 	}
-	for _, name := range []string{"email_accounts", "email_search", "email_read"} {
+	for _, name := range []string{"email__email_accounts", "email__email_search", "email__email_read"} {
 		if servers[name] != "email" {
-			t.Fatalf("expected unqualified %s descriptor on email server, got %#v", name, servers)
+			t.Fatalf("expected qualified %s descriptor on email server, got %#v", name, servers)
+		}
+		if namespaces[name] != "mcp__email__" {
+			t.Fatalf("expected %s in email namespace, got %#v", name, namespaces)
+		}
+		if strings.Contains(namespaceDescriptions[name], "Email Accounts") {
+			t.Fatalf("namespace description should stay short, got %q", namespaceDescriptions[name])
+		}
+		if !strings.Contains(fullInstructions[name], "Email Accounts") {
+			t.Fatalf("expected full email instructions on descriptor, got %q", fullInstructions[name])
 		}
 		if !readOnly[name] {
 			t.Fatalf("expected %s to be marked read-only", name)
 		}
 	}
-	if servers["email_send"] != "" {
+	if servers["email__email_send"] != "" {
 		t.Fatalf("email_send must not be advertised by default, got %#v", servers)
 	}
 }
 
+func TestEmailToolSchemaEnumeratesConfiguredAccountIDs(t *testing.T) {
+	withTwoEmailAccounts(t)
+
+	var searchSchema map[string]any
+	for _, tool := range emailToolSnapshots() {
+		if tool.Name == "email_search" {
+			searchSchema = tool.InputSchema
+			break
+		}
+	}
+	if searchSchema == nil {
+		t.Fatalf("email_search schema missing")
+	}
+	properties := searchSchema["properties"].(map[string]any)
+	account := properties["account"].(map[string]any)
+	enum := account["enum"].([]any)
+	if !containsAny(enum, "iit") || !containsAny(enum, "navon") || !containsAny(enum, nil) {
+		t.Fatalf("account enum should expose configured ids plus null, got %#v", account)
+	}
+	description := account["description"].(string)
+	if !strings.Contains(description, "iit = IIT Mail") || !strings.Contains(description, "navon = Personal Mail") {
+		t.Fatalf("account description should map labels to ids, got %q", description)
+	}
+}
+
+func TestSelectEmailAccountDefaultsToPersonalAccount(t *testing.T) {
+	withTwoEmailAccounts(t)
+
+	for _, args := range []map[string]any{
+		nil,
+		{},
+		{"account": nil},
+		{"account": ""},
+		{"account": "default"},
+		{"account": "null"},
+	} {
+		account, err := selectEmailAccount(args)
+		if err != nil {
+			t.Fatalf("select account for %#v: %v", args, err)
+		}
+		if account.ID != "navon" {
+			t.Fatalf("default/null account should select navon for %#v, got %#v", args, account)
+		}
+	}
+}
+
+func TestSelectEmailAccountAcceptsPersonalAliases(t *testing.T) {
+	withTwoEmailAccounts(t)
+
+	for _, requested := range []string{"personal", "Personal Mail", "navonjohnlukose@gmail.com", "navon"} {
+		account, err := selectEmailAccount(map[string]any{"account": requested})
+		if err != nil {
+			t.Fatalf("select account %q: %v", requested, err)
+		}
+		if account.ID != "navon" {
+			t.Fatalf("expected %q to select navon, got %#v", requested, account)
+		}
+	}
+}
+
 func TestCallEmailAccountsDoesNotExposeSecrets(t *testing.T) {
-	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"})
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
 
 	result, err := CallTool(`[]`, "", "email_accounts", map[string]any{})
 	if err != nil {
@@ -136,7 +213,7 @@ func TestCallEmailAccountsDoesNotExposeSecrets(t *testing.T) {
 }
 
 func TestCallEmailSendIsDisabledByDefault(t *testing.T) {
-	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"})
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
 
 	result, err := CallTool(`[]`, "", "email_send", map[string]any{
 		"to":        "you@example.net",
@@ -148,6 +225,111 @@ func TestCallEmailSendIsDisabledByDefault(t *testing.T) {
 	}
 	if !result.IsError || !strings.Contains(strings.ToLower(result.Text), "disabled") {
 		t.Fatalf("expected disabled email_send error, got %#v", result)
+	}
+}
+
+func TestCallEmailSearchUsesGmailAPIRawQueryForGmailAccounts(t *testing.T) {
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
+	fake := &fakeGmailClient{
+		listResult: gmailListResult{
+			Messages: []gmailListedMessage{{ID: "gmail-msg-1", ThreadID: "thread-1"}},
+			Estimate: 7,
+		},
+		messages: map[string]gmailMessage{
+			"gmail-msg-1": {
+				ID:        "gmail-msg-1",
+				ThreadID:  "thread-1",
+				Subject:   "Quarterly report",
+				From:      "Alice <alice@example.com>",
+				To:        "Me <me@gmail.com>",
+				Date:      "2026-05-01T10:00:00Z",
+				MessageID: "<rfc-message-id@example.com>",
+				Snippet:   "Quarterly report snippet",
+			},
+		},
+	}
+	withGmailClientForTest(t, fake)
+
+	rawQuery := `from:alice@example.com subject:"quarterly report" has:attachment`
+	result, err := CallTool(`[]`, "", "email_search", map[string]any{
+		"account": "personal",
+		"query":   rawQuery,
+		"limit":   3,
+	})
+	if err != nil {
+		t.Fatalf("unexpected call error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected gmail search success, got %#v", result)
+	}
+	if fake.listQuery != rawQuery {
+		t.Fatalf("gmail search should pass raw query to Gmail API, got %q", fake.listQuery)
+	}
+	if fake.listLimit != 3 {
+		t.Fatalf("gmail search should pass capped limit to Gmail API, got %d", fake.listLimit)
+	}
+	if len(fake.getIDs) != 1 || fake.getIDs[0] != "gmail-msg-1" || fake.getIncludeBody[0] {
+		t.Fatalf("gmail search should fetch listed message details without bodies, got ids=%#v includeBody=%#v", fake.getIDs, fake.getIncludeBody)
+	}
+
+	data := result.Data
+	if data["matched_count"] != int64(7) || data["returned_count"] != 1 || data["limit"] != 3 {
+		t.Fatalf("gmail result counts should preserve existing shape, got %#v", data)
+	}
+	messages := data["messages"].([]map[string]any)
+	if len(messages) != 1 {
+		t.Fatalf("expected one returned message, got %#v", messages)
+	}
+	message := messages[0]
+	if _, ok := message["uid"]; ok {
+		t.Fatalf("gmail search messages should not invent IMAP uid: %#v", message)
+	}
+	if message["id"] != "gmail-msg-1" || message["gmail_id"] != "gmail-msg-1" || message["thread_id"] != "thread-1" {
+		t.Fatalf("gmail identity missing from search result: %#v", message)
+	}
+	if message["subject"] != "Quarterly report" || message["from"] != "Alice <alice@example.com>" || message["snippet"] != "Quarterly report snippet" {
+		t.Fatalf("gmail details missing from search result: %#v", message)
+	}
+}
+
+func TestCallEmailReadUsesGmailMessageIDForGmailAccounts(t *testing.T) {
+	withEmailConfig(t, map[string]string{"EMAIL_PERSONAL_PASSWORD": "gmail-app-password"}) //nolint:gosec // fake test password
+	fake := &fakeGmailClient{
+		messages: map[string]gmailMessage{
+			"gmail-msg-1": {
+				ID:            "gmail-msg-1",
+				ThreadID:      "thread-1",
+				Subject:       "Quarterly report",
+				From:          "Alice <alice@example.com>",
+				To:            "Me <me@gmail.com>",
+				Date:          "2026-05-01T10:00:00Z",
+				MessageID:     "<rfc-message-id@example.com>",
+				Snippet:       "Quarterly report snippet",
+				BodyText:      "body text",
+				BodyHTML:      "<p>body text</p>",
+				BodyTruncated: true,
+			},
+		},
+	}
+	withGmailClientForTest(t, fake)
+
+	result, err := CallTool(`[]`, "", "email_read", map[string]any{
+		"account":        "personal",
+		"id":             "gmail-msg-1",
+		"max_body_chars": 4096,
+	})
+	if err != nil {
+		t.Fatalf("unexpected call error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected gmail read success, got %#v", result)
+	}
+	if len(fake.getIDs) != 1 || fake.getIDs[0] != "gmail-msg-1" || !fake.getIncludeBody[0] || fake.getMaxBodyChars[0] != 4096 {
+		t.Fatalf("gmail read should fetch by Gmail id with body, got ids=%#v includeBody=%#v max=%#v", fake.getIDs, fake.getIncludeBody, fake.getMaxBodyChars)
+	}
+	message := result.Data["message"].(map[string]any)
+	if message["id"] != "gmail-msg-1" || message["body_text"] != "body text" || message["body_truncated"] != true {
+		t.Fatalf("gmail read returned unexpected message payload: %#v", message)
 	}
 }
 
@@ -215,6 +397,15 @@ func TestMailboxFromArgsUsesGmailLabelWhenMailboxIsAbsent(t *testing.T) {
 	}
 }
 
+func TestMailboxFromArgsForAccountMapsGmailAllAliases(t *testing.T) {
+	account := emailAccount{ID: "navon", Provider: "gmail"}
+	for _, mailbox := range []string{"ALL", "all", "All Mail", "all labels"} {
+		if got := mailboxFromArgsForAccount(account, map[string]any{"mailbox": mailbox}); got != "[Gmail]/All Mail" {
+			t.Fatalf("expected %q to map to Gmail All Mail, got %q", mailbox, got)
+		}
+	}
+}
+
 func TestLimitUIDsReportsMatchedCountBeforeCapping(t *testing.T) {
 	uids := []imap.UID{5, 4, 3, 2, 1}
 	limited, matched := limitUIDs(uids, 2)
@@ -245,4 +436,75 @@ func withEmailConfig(t *testing.T, secretValues map[string]string) {
 	})
 	t.Cleanup(configCleanup)
 	withEmailSecrets(t, secretValues)
+}
+
+func withTwoEmailAccounts(t *testing.T) {
+	t.Helper()
+	configCleanup := appconfig.UseConfigForTest(appconfig.Config{
+		Email: appconfig.EmailConfig{Accounts: []appconfig.EmailAccountConfig{
+			{
+				ID:       "iit",
+				Provider: "gmail",
+				Label:    "IIT Mail",
+				Address:  "24f2003934@ds.study.iitm.ac.in",
+				Username: "24f2003934@ds.study.iitm.ac.in",
+			},
+			{
+				ID:       "navon",
+				Provider: "gmail",
+				Label:    "Personal Mail",
+				Address:  "navonjohnlukose@gmail.com",
+				Username: "navonjohnlukose@gmail.com",
+			},
+		}},
+	})
+	t.Cleanup(configCleanup)
+	withEmailSecrets(t, map[string]string{
+		"EMAIL_IIT_PASSWORD":   "iit-password",
+		"EMAIL_NAVON_PASSWORD": "navon-password",
+	})
+}
+
+type fakeGmailClient struct {
+	listQuery  string
+	listLimit  int
+	listResult gmailListResult
+
+	getIDs          []string
+	getIncludeBody  []bool
+	getMaxBodyChars []int
+	messages        map[string]gmailMessage
+}
+
+func (c *fakeGmailClient) listMessages(_ context.Context, query string, limit int) (gmailListResult, error) {
+	c.listQuery = query
+	c.listLimit = limit
+	return c.listResult, nil
+}
+
+func (c *fakeGmailClient) getMessage(_ context.Context, id string, includeBody bool, maxBodyChars int) (gmailMessage, error) {
+	c.getIDs = append(c.getIDs, id)
+	c.getIncludeBody = append(c.getIncludeBody, includeBody)
+	c.getMaxBodyChars = append(c.getMaxBodyChars, maxBodyChars)
+	return c.messages[id], nil
+}
+
+func withGmailClientForTest(t *testing.T, client gmailClient) {
+	t.Helper()
+	original := newGmailClient
+	newGmailClient = func(context.Context, emailAccount) (gmailClient, error) {
+		return client, nil
+	}
+	t.Cleanup(func() {
+		newGmailClient = original
+	})
+}
+
+func containsAny(values []any, needle any) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }

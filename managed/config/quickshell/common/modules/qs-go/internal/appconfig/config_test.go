@@ -70,6 +70,7 @@ func TestDefaultKeepsLocalProvider(t *testing.T) {
 func TestDefaultPathUsesShellDirEnvironment(t *testing.T) {
 	shellDir := t.TempDir()
 	leftpanelDir := filepath.Join(shellDir, "leftpanel")
+	//nolint:gosec // test creates a normal temporary config directory.
 	if err := os.MkdirAll(leftpanelDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

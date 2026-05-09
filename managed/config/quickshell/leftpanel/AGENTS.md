@@ -4,29 +4,30 @@
 
 ## Overview
 
-This is a Quickshell panel for Hyprland/Wayland that provides an AI chat interface with multi-provider support (OpenAI and Gemini) and a metrics view. It runs as a left-side panel overlay.
+This is a Quickshell panel for Hyprland/Wayland that provides an AI chat interface with local/OpenAI/Gemini provider support, MCP tools, chat history/resume, and a metrics view. It runs as a left-side panel overlay.
 
 ## Running
 
-The panel is loaded by Quickshell automatically. To test changes, reload quickshell or restart it:
+The panel is loaded by the root shell automatically. To test changes, reload the main shell:
 
 ```bash
-quickshell
+bash tools/reload-quickshell.sh
 ```
 
 ## Architecture
 
 ### Entry Point
 
-- `shell.qml` - Creates a `PanelWindow` anchored to the left edge using WlrLayershell
+- Root `shell.qml` - Creates the left `PanelWindow`, focus grab, and slide animation, then loads `LeftPanel.qml`
 
 ### Main Component
 
 - `LeftPanel.qml` - Core panel logic containing:
   - Multi-provider AI chat backed by `qsgo.AiChatSession`
   - MCP-backed tool/prompt/resource runtime backed by `AiChatSession.mcp_*`
+  - Chat history restore and `/resume` picker backed by qs-go `internal/chatstore`
   - Mood system with configurable system prompts
-  - Slash commands (`/model`, `/mood`, `/clear`, `/help`, `/status`, `/mcp`, `/mcp add`)
+  - Slash commands (`/model`, `/mood`, `/resume`, `/clear`, `/help`, `/status`, `/mcp`, `/mcp add`)
   - Tab navigation between Chat and Metrics views
 
 ### Components (`./components/`)
@@ -34,7 +35,9 @@ quickshell
 - `ChatView.qml` - Message list with copy-all functionality
 - `ChatMessage.qml` - Individual message bubbles with copy button
 - `ChatComposer.qml` - Input field with command detection
-- `CommandPicker.qml` - Modal picker for models/moods with accent colors
+- `CommandPicker.qml` - Modal picker for models, moods, and resumable chats
+- `McpAddDialog.qml` - Minimal MCP server add wizard
+- `MessageCodeBlock.qml`, `MessageMathBlock.qml`, `ToolCallRow.qml` - Rich message rendering helpers
 - `NavPill.qml` - Tab navigation with connection status
 - `MetricsView.qml`, `StatCard.qml`, `CircularGauge.qml` - System metrics display
 
@@ -46,10 +49,11 @@ quickshell
 
 ### Data Files
 
-- `./system-prompts/moods.json` - Mood configurations with optional `default_model`
+- `./config.json` - Mood configurations with optional `default_model`
 - `./models.json` - Model picker entries, including recommended local/OpenAI/Gemini choices
 - `./mcp_servers.json` - MCP HTTP server definitions consumed by `services/McpConfig.qml`
-- `./assets/` - Provider logos (SVG for OpenAI, PNG for Gemini)
+- `./config.example.toml` - Tracked shape for ignored local `config.toml`
+- `./assets/` - Provider logos
 
 ## Key Patterns
 
@@ -61,7 +65,7 @@ Each entry should include `provider`, `provider_label`, `raw_id`, `label`, `desc
 
 ### Adding Moods
 
-Add to `./system-prompts/moods.json`:
+Add to `./config.json`:
 
 ```json
 { "name": "Name", "subtext": "Description", "icon": "\uf123", "default_model": "optional-model-id", "prompt": "System prompt..." }
@@ -69,7 +73,7 @@ Add to `./system-prompts/moods.json`:
 
 ### Provider Detection
 
-Model ids are canonical `provider/model`, for example `openai/gpt-4o` or `gemini/gemini-2.5-flash`.
+Model ids are canonical `provider/model`, for example `local/gpt-5.4-mini`, `openai/gpt-5.5`, or `gemini/gemini-2.5-flash`.
 
 Provider routing happens inside the `qs-go` provider registry, not in left-panel QML. Switching models still clears chat history.
 
@@ -80,7 +84,9 @@ The panel should treat provider config and catalog data as native QML objects/li
 - model config
 - command lists
 - attachments
+- tool calls
 - per-message metrics
+- resume conversation options
 
 `McpConfig.qml` loads `mcp_servers.json` as a typed list and passes it into `AiChatSession.mcp_config`. The session then exposes typed `mcp_servers`, `mcp_tools`, `mcp_prompts`, `mcp_resources`, `mcp_status`, and `mcp_error` properties for the rest of the panel.
 

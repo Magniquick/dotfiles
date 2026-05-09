@@ -4,6 +4,7 @@ import Quickshell
 import "../../common/materialkit" as MK
 import "../../common" as Common
 import "../../common/components" as CommonComponents
+import "NotificationBodySanitizer.js" as BodySanitizer
 
 RowLayout {
     id: root
@@ -139,13 +140,12 @@ RowLayout {
         } else if ((appName || "").toLowerCase() === "kitty") {
             result.headerIconText = "\uf489";
         }
-        if (result.cleanBody.match(/<a\s+href="[^"]*web\.whatsapp\.com[^"]*">/i) !== null) {
+        if (BodySanitizer.containsWhatsAppLink(result.cleanBody)) {
             result.isWhatsApp = true;
             result.headerIconText = "\udb81\udda3";
             result.headerIconColor = "#25D366"; // Official WhatsApp brand color
-            result.cleanBody = result.cleanBody.replace(/^<a\s+href="[^"]*">[^<]*<\/a>\n*/i, "");
         }
-        result.cleanBody = result.cleanBody.trim().replace(/\n/g, "<br>");
+        result.cleanBody = BodySanitizer.normalizeBodyForStyledText(result.cleanBody);
         return result;
     }
 

@@ -3,11 +3,12 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,7 +26,13 @@ import (
 
 const clientVersion = "v1.0.0"
 const hostedTodoistMCPURL = "https://ai.todoist.net/mcp"
+const remoteCatalogDeferToolThreshold = 10
+const remoteCatalogDeferByteThreshold = 24 * 1024
+const remoteCatalogCacheRefreshAfter = 6 * time.Hour
+const remoteCatalogCacheHardExpiry = 24 * time.Hour
+const remoteCatalogCacheVersion = 1
 
+// ServerConfig describes one configured MCP server.
 type ServerConfig struct {
 	ID          string            `json:"id"`
 	Label       string            `json:"label,omitempty"`
@@ -36,6 +43,7 @@ type ServerConfig struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 }
 
+// ServerSnapshot captures the current connection state for one MCP server.
 type ServerSnapshot struct {
 	ID            string         `json:"id"`
 	Label         string         `json:"label"`
@@ -53,6 +61,7 @@ type ServerSnapshot struct {
 	Capabilities  map[string]any `json:"capabilities,omitempty"`
 }
 
+// ToolSnapshot describes an MCP tool exposed to model providers.
 type ToolSnapshot struct {
 	ServerID      string         `json:"server_id"`
 	ServerLabel   string         `json:"server_label"`
@@ -63,8 +72,13 @@ type ToolSnapshot struct {
 	InputSchema   map[string]any `json:"input_schema,omitempty"`
 	OutputSchema  map[string]any `json:"output_schema,omitempty"`
 	ReadOnly      bool           `json:"read_only,omitempty"`
+	Destructive   bool           `json:"destructive,omitempty"`
+	OpenWorld     bool           `json:"open_world,omitempty"`
+	Idempotent    bool           `json:"idempotent,omitempty"`
+	Risk          string         `json:"risk,omitempty"`
 }
 
+// PromptSnapshot describes an MCP prompt exposed by a server.
 type PromptSnapshot struct {
 	ServerID    string      `json:"server_id"`
 	ServerLabel string      `json:"server_label"`
@@ -74,12 +88,14 @@ type PromptSnapshot struct {
 	Arguments   []PromptArg `json:"arguments,omitempty"`
 }
 
+// PromptArg describes one prompt argument.
 type PromptArg struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required"`
 }
 
+// ResourceSnapshot describes an MCP resource exposed by a server.
 type ResourceSnapshot struct {
 	ServerID    string `json:"server_id"`
 	ServerLabel string `json:"server_label"`
@@ -90,6 +106,7 @@ type ResourceSnapshot struct {
 	MIMEType    string `json:"mime_type,omitempty"`
 }
 
+// PromptResult is the provider-facing result of reading an MCP prompt.
 type PromptResult struct {
 	ServerID    string        `json:"server_id"`
 	ServerLabel string        `json:"server_label"`
@@ -98,17 +115,20 @@ type PromptResult struct {
 	Messages    []PromptEntry `json:"messages"`
 }
 
+// PromptEntry is one prompt message returned from an MCP server.
 type PromptEntry struct {
 	Role string `json:"role"`
 	Text string `json:"text"`
 }
 
+// ResourceReadResult is the provider-facing result of reading MCP resources.
 type ResourceReadResult struct {
 	ServerID    string          `json:"server_id"`
 	ServerLabel string          `json:"server_label"`
 	Contents    []ResourceEntry `json:"contents"`
 }
 
+// ResourceEntry is one MCP resource payload.
 type ResourceEntry struct {
 	URI      string `json:"uri"`
 	MIMEType string `json:"mime_type,omitempty"`
@@ -116,6 +136,7 @@ type ResourceEntry struct {
 	BlobB64  string `json:"blob_b64,omitempty"`
 }
 
+// Snapshot is the aggregate state of configured MCP servers.
 type Snapshot struct {
 	Servers   []ServerSnapshot   `json:"servers"`
 	Tools     []ToolSnapshot     `json:"tools"`
@@ -125,14 +146,18 @@ type Snapshot struct {
 	Error     string             `json:"error,omitempty"`
 }
 
+// SamplingHandler handles MCP sampling requests from servers.
 type SamplingHandler func(context.Context, *sdk.CreateMessageWithToolsRequest) (*sdk.CreateMessageWithToolsResult, error)
+
+// ElicitationHandler handles MCP elicitation requests from servers.
 type ElicitationHandler func(context.Context, *sdk.ElicitRequest) (*sdk.ElicitResult, error)
 
 type runtime struct {
 	mu sync.Mutex
 
-	configs map[string]ServerConfig
-	conns   map[string]*serverConn
+	configs    map[string]ServerConfig
+	conns      map[string]*serverConn
+	refreshing map[string]bool
 
 	sampling    SamplingHandler
 	elicitation ElicitationHandler
@@ -147,42 +172,182 @@ type serverConn struct {
 	tools     []ToolSnapshot
 	prompts   []PromptSnapshot
 	resources []ResourceSnapshot
+	cachedAt  time.Time
+}
+
+type cachedServerSnapshot struct {
+	Version   int                `json:"version"`
+	Hash      string             `json:"hash"`
+	CachedAt  time.Time          `json:"cached_at"`
+	Snapshot  ServerSnapshot     `json:"snapshot"`
+	Tools     []ToolSnapshot     `json:"tools"`
+	Prompts   []PromptSnapshot   `json:"prompts,omitempty"`
+	Resources []ResourceSnapshot `json:"resources,omitempty"`
 }
 
 var defaultRuntime = &runtime{
-	configs: map[string]ServerConfig{},
-	conns:   map[string]*serverConn{},
+	configs:    map[string]ServerConfig{},
+	conns:      map[string]*serverConn{},
+	refreshing: map[string]bool{},
 }
 
+// Refresh reconnects configured servers and returns a JSON snapshot.
 func Refresh(configJSON string) string {
 	snapshot := defaultRuntime.refresh(configuredServers(configJSON))
 	return mustJSON(snapshot)
 }
 
+// ToolDescriptors returns model-provider tool descriptors for configured MCP servers.
 func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
-	snapshot := defaultRuntime.refresh(configuredServers(configJSON))
+	snapshot := defaultRuntime.snapshotForToolDescriptors(configuredServers(configJSON))
+	log.Printf("qs-go ai/mcp: refresh status=%s error=%q servers=[%s] tools=%d", snapshot.Status, snapshot.Error, serverSummary(snapshot.Servers), len(snapshot.Tools))
+	return descriptorsFromSnapshot(snapshot)
+}
+
+func descriptorsFromSnapshot(snapshot Snapshot) ([]shared.ToolDescriptor, error) {
+	servers := make(map[string]ServerSnapshot, len(snapshot.Servers))
+	for _, server := range snapshot.Servers {
+		servers[strings.TrimSpace(server.ID)] = server
+	}
+	deferRemoteCatalog := shouldDeferRemoteCatalog(snapshot)
 	out := make([]shared.ToolDescriptor, 0, len(snapshot.Tools))
 	for _, tool := range snapshot.Tools {
+		server := servers[strings.TrimSpace(tool.ServerID)]
 		name := firstNonEmpty(tool.QualifiedName, qualifiedToolName(tool.ServerID, tool.Name))
 		if isLocalToolServer(tool.ServerID) {
 			name = strings.TrimSpace(tool.Name)
 		}
-		out = append(out, shared.ToolDescriptor{
-			Name:        name,
-			Title:       tool.Title,
-			Description: tool.Description,
-			InputSchema: tool.InputSchema,
-			Kind:        builtinToolKind(tool),
-			Format:      builtinToolFormat(tool),
-			ReadOnly:    tool.ReadOnly,
-			ServerID:    tool.ServerID,
-			ServerLabel: tool.ServerLabel,
-		})
+		descriptor := shared.ToolDescriptor{
+			Name:             name,
+			Title:            tool.Title,
+			Description:      tool.Description,
+			InputSchema:      tool.InputSchema,
+			Kind:             builtinToolKind(tool),
+			Format:           builtinToolFormat(tool),
+			ReadOnly:         tool.ReadOnly,
+			Destructive:      tool.Destructive,
+			OpenWorld:        tool.OpenWorld,
+			Idempotent:       tool.Idempotent,
+			Risk:             firstNonEmpty(tool.Risk, riskForTool(tool.ReadOnly, tool.Destructive)),
+			ServerID:         tool.ServerID,
+			ServerLabel:      tool.ServerLabel,
+			FullInstructions: strings.TrimSpace(server.Instructions),
+		}
+		if !isLocalToolServer(tool.ServerID) {
+			descriptor.Namespace = toolNamespace(tool.ServerID)
+			descriptor.NamespaceDescription = shortNamespaceDescription(server)
+			descriptor.DeferLoading = deferRemoteCatalog
+			descriptor.SearchText = descriptorSearchText(server, tool)
+		}
+		out = append(out, descriptor)
 	}
 	if len(out) == 0 && strings.TrimSpace(snapshot.Error) != "" {
 		return nil, errors.New(snapshot.Error)
 	}
 	return out, nil
+}
+
+func shouldDeferRemoteCatalog(snapshot Snapshot) bool {
+	remoteToolCount := 0
+	for _, server := range snapshot.Servers {
+		if isLocalToolServer(server.ID) {
+			continue
+		}
+		if server.ToolCount > 0 {
+			remoteToolCount += server.ToolCount
+		}
+	}
+	if remoteToolCount == 0 {
+		for _, tool := range snapshot.Tools {
+			if !isLocalToolServer(tool.ServerID) {
+				remoteToolCount++
+			}
+		}
+	}
+	if remoteToolCount > remoteCatalogDeferToolThreshold {
+		return true
+	}
+
+	remoteTools := make([]ToolSnapshot, 0, len(snapshot.Tools))
+	for _, tool := range snapshot.Tools {
+		if !isLocalToolServer(tool.ServerID) {
+			remoteTools = append(remoteTools, tool)
+		}
+	}
+	data, err := json.Marshal(remoteTools)
+	return err == nil && len(data) > remoteCatalogDeferByteThreshold
+}
+
+func shortNamespaceDescription(server ServerSnapshot) string {
+	switch strings.TrimSpace(server.ID) {
+	case "todoist":
+		return "Todoist tasks, projects, comments, labels, and account tools."
+	case emailServerID:
+		return "Read-only email account, search, and message-reading tools."
+	}
+	label := firstNonEmpty(server.Label, server.ServerName, server.ID)
+	if label == "" {
+		return "MCP tools."
+	}
+	return label + " MCP tools."
+}
+
+func descriptorSearchText(server ServerSnapshot, tool ToolSnapshot) string {
+	parts := []string{}
+	for _, value := range []string{
+		server.Label,
+		server.ServerName,
+		server.Instructions,
+		tool.Title,
+		tool.Description,
+		tool.Name,
+	} {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func riskForTool(readOnly bool, destructive bool) string {
+	if readOnly {
+		return "read"
+	}
+	if destructive {
+		return "destructive"
+	}
+	return "write"
+}
+
+func serverSummary(servers []ServerSnapshot) string {
+	parts := make([]string, 0, len(servers))
+	for _, server := range servers {
+		id := strings.TrimSpace(server.ID)
+		if id == "" {
+			id = strings.TrimSpace(server.Label)
+		}
+		status := strings.TrimSpace(server.Status)
+		if status == "" {
+			status = "unknown"
+		}
+		part := fmt.Sprintf("%s:%s:tools=%d", id, status, server.ToolCount)
+		if strings.TrimSpace(server.Error) != "" {
+			part += ":error"
+		}
+		parts = append(parts, part)
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, ",")
+}
+
+func mapKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func builtinToolKind(tool ToolSnapshot) string {
@@ -203,8 +368,10 @@ func builtinToolFormat(tool ToolSnapshot) map[string]any {
 	return nil
 }
 
+// CallTool invokes a local or remote MCP tool.
 func CallTool(configJSON string, serverID string, toolName string, arguments map[string]any) (shared.ToolResult, error) {
 	serverID, toolName = splitQualifiedToolName(serverID, toolName)
+	log.Printf("qs-go ai/mcp: call namespace_server=%q tool=%q arg_keys=%v", serverID, toolName, mapKeys(arguments))
 	if strings.TrimSpace(serverID) == emailServerID || (strings.TrimSpace(serverID) == "" && isEmailTool(toolName)) {
 		return callEmailTool(toolName, arguments), nil
 	}
@@ -235,21 +402,20 @@ func CallTool(configJSON string, serverID string, toolName string, arguments map
 		return shared.ToolResult{}, err
 	}
 
-	var data map[string]any
-	if res.StructuredContent != nil {
-		if mapped, ok := res.StructuredContent.(map[string]any); ok {
-			data = mapped
-		}
-	}
+	data := asMap(res.StructuredContent)
 
 	return shared.ToolResult{
-		Name:    toolName,
-		Text:    joinContent(res.Content),
-		Data:    data,
-		IsError: res.IsError,
+		Name:              toolName,
+		Text:              joinContent(res.Content),
+		Data:              data,
+		Content:           contentAsMaps(res.Content),
+		StructuredContent: data,
+		Meta:              map[string]any(res.Meta),
+		IsError:           res.IsError,
 	}, nil
 }
 
+// GetPrompt reads an MCP prompt and returns a JSON result.
 func GetPrompt(configJSON string, serverID string, promptName string, argsJSON string) string {
 	args := map[string]string{}
 	if strings.TrimSpace(argsJSON) != "" {
@@ -295,6 +461,7 @@ func GetPrompt(configJSON string, serverID string, promptName string, argsJSON s
 	return mustJSON(out)
 }
 
+// ReadResource reads an MCP resource and returns a JSON result.
 func ReadResource(configJSON string, serverID string, uri string) string {
 	cfgs := configuredServers(configJSON)
 	if _, err := defaultRuntime.ensure(cfgs); err != nil {
@@ -332,11 +499,8 @@ func ReadResource(configJSON string, serverID string, uri string) string {
 	return mustJSON(out)
 }
 
-func WithStreamHandlers(configJSON string, sampling SamplingHandler, elicitation ElicitationHandler, fn func() error) error {
-	if _, err := defaultRuntime.ensure(configuredServers(configJSON)); err != nil {
-		return err
-	}
-
+// WithStreamHandlers installs temporary MCP sampling and elicitation handlers.
+func WithStreamHandlers(_ string, sampling SamplingHandler, elicitation ElicitationHandler, fn func() error) error {
 	defaultRuntime.mu.Lock()
 	prevSampling := defaultRuntime.sampling
 	prevElicitation := defaultRuntime.elicitation
@@ -354,6 +518,60 @@ func WithStreamHandlers(configJSON string, sampling SamplingHandler, elicitation
 	return fn()
 }
 
+func (r *runtime) snapshotForToolDescriptors(cfgs []ServerConfig) Snapshot {
+	var refreshCfgs []ServerConfig
+
+	r.mu.Lock()
+	r.reconcileConfigsLocked(cfgs)
+	for _, cfg := range cfgs {
+		id := strings.TrimSpace(cfg.ID)
+		if id == "" {
+			continue
+		}
+		if !cfg.Enabled {
+			r.conns[id] = disabledServerConn(cfg)
+			continue
+		}
+
+		hash := configHash(cfg)
+		existing := r.conns[id]
+		if existing != nil && existing.hash == hash && existing.session != nil {
+			continue
+		}
+		if existing != nil && existing.hash == hash && !existing.cachedAt.IsZero() {
+			age := time.Since(existing.cachedAt)
+			if age < remoteCatalogCacheHardExpiry {
+				if age >= remoteCatalogCacheRefreshAfter {
+					refreshCfgs = append(refreshCfgs, cfg)
+				}
+				continue
+			}
+		}
+		if existing != nil && existing.session != nil {
+			_ = existing.session.Close()
+		}
+
+		conn, age, ok := loadCachedServerSnapshot(cfg, hash, time.Now())
+		if ok {
+			r.conns[id] = conn
+			if age >= remoteCatalogCacheRefreshAfter {
+				refreshCfgs = append(refreshCfgs, cfg)
+			}
+			continue
+		}
+
+		r.conns[id] = refreshingServerConn(cfg, hash)
+		refreshCfgs = append(refreshCfgs, cfg)
+	}
+	snapshot := r.snapshotLocked()
+	r.mu.Unlock()
+
+	for _, cfg := range refreshCfgs {
+		r.startBackgroundRefresh(cfg)
+	}
+	return snapshot
+}
+
 func (r *runtime) refresh(cfgs []ServerConfig) Snapshot {
 	result, err := r.ensure(cfgs)
 	if err != nil {
@@ -369,6 +587,40 @@ func (r *runtime) ensure(cfgs []ServerConfig) (Snapshot, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	r.reconcileConfigsLocked(cfgs)
+	var errs []string
+	for _, cfg := range cfgs {
+		if !cfg.Enabled {
+			r.conns[cfg.ID] = disabledServerConn(cfg)
+			continue
+		}
+		hash := configHash(cfg)
+		existing := r.conns[cfg.ID]
+		if existing != nil && existing.hash == hash && existing.session != nil {
+			continue
+		}
+		if existing != nil && existing.session != nil {
+			_ = existing.session.Close()
+		}
+		conn, err := r.connectLocked(cfg, hash)
+		r.conns[cfg.ID] = conn
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", cfg.ID, err))
+			continue
+		}
+		if err := saveCachedServerSnapshot(cfg, hash, conn, time.Now()); err != nil {
+			log.Printf("qs-go ai/mcp: failed to cache %s catalog: %v", cfg.ID, err)
+		}
+	}
+
+	snapshot := r.snapshotLocked()
+	if len(errs) > 0 {
+		return snapshot, errors.New(strings.Join(errs, "; "))
+	}
+	return snapshot, nil
+}
+
+func (r *runtime) reconcileConfigsLocked(cfgs []ServerConfig) {
 	next := make(map[string]ServerConfig, len(cfgs))
 	for _, cfg := range cfgs {
 		id := strings.TrimSpace(cfg.ID)
@@ -388,42 +640,36 @@ func (r *runtime) ensure(cfgs []ServerConfig) (Snapshot, error) {
 		delete(r.conns, id)
 	}
 	r.configs = next
-
-	var errs []string
-	for _, cfg := range cfgs {
-		if !cfg.Enabled {
-			r.conns[cfg.ID] = &serverConn{
-				cfg: cfg,
-				snapshot: ServerSnapshot{
-					ID:      cfg.ID,
-					Label:   serverLabel(cfg),
-					URL:     cfg.URL,
-					Enabled: cfg.Enabled,
-					Status:  "disabled",
-				},
-			}
-			continue
-		}
-		hash := configHash(cfg)
-		existing := r.conns[cfg.ID]
-		if existing != nil && existing.hash == hash && existing.session != nil {
-			continue
-		}
-		if existing != nil && existing.session != nil {
-			_ = existing.session.Close()
-		}
-		conn, err := r.connectLocked(cfg, hash)
-		r.conns[cfg.ID] = conn
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", cfg.ID, err))
-		}
+	if r.refreshing == nil {
+		r.refreshing = map[string]bool{}
 	}
+}
 
-	snapshot := r.snapshotLocked()
-	if len(errs) > 0 {
-		return snapshot, errors.New(strings.Join(errs, "; "))
+func disabledServerConn(cfg ServerConfig) *serverConn {
+	return &serverConn{
+		cfg: cfg,
+		snapshot: ServerSnapshot{
+			ID:      cfg.ID,
+			Label:   serverLabel(cfg),
+			URL:     cfg.URL,
+			Enabled: cfg.Enabled,
+			Status:  "disabled",
+		},
 	}
-	return snapshot, nil
+}
+
+func refreshingServerConn(cfg ServerConfig, hash string) *serverConn {
+	return &serverConn{
+		cfg:  cfg,
+		hash: hash,
+		snapshot: ServerSnapshot{
+			ID:      cfg.ID,
+			Label:   serverLabel(cfg),
+			URL:     cfg.URL,
+			Enabled: cfg.Enabled,
+			Status:  "refreshing",
+		},
+	}
 }
 
 func (r *runtime) connectLocked(cfg ServerConfig, hash string) (*serverConn, error) {
@@ -474,6 +720,52 @@ func (r *runtime) connectLocked(cfg ServerConfig, hash string) (*serverConn, err
 	return conn, nil
 }
 
+func (r *runtime) startBackgroundRefresh(cfg ServerConfig) {
+	hash := configHash(cfg)
+	key := strings.TrimSpace(cfg.ID) + "@" + hash
+
+	r.mu.Lock()
+	if r.refreshing == nil {
+		r.refreshing = map[string]bool{}
+	}
+	if r.refreshing[key] {
+		r.mu.Unlock()
+		return
+	}
+	r.refreshing[key] = true
+	r.mu.Unlock()
+
+	go func() {
+		conn, err := r.connectServer(cfg, hash)
+		if err == nil {
+			if cacheErr := saveCachedServerSnapshot(cfg, hash, conn, time.Now()); cacheErr != nil {
+				log.Printf("qs-go ai/mcp: failed to cache %s catalog: %v", cfg.ID, cacheErr)
+			}
+		} else {
+			log.Printf("qs-go ai/mcp: async refresh failed for %s: %v", cfg.ID, err)
+		}
+
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		delete(r.refreshing, key)
+		current, ok := r.configs[strings.TrimSpace(cfg.ID)]
+		if err != nil || !ok || configHash(current) != hash || !current.Enabled {
+			if conn != nil && conn.session != nil {
+				_ = conn.session.Close()
+			}
+			return
+		}
+		if existing := r.conns[strings.TrimSpace(cfg.ID)]; existing != nil && existing.session != nil {
+			_ = existing.session.Close()
+		}
+		r.conns[strings.TrimSpace(cfg.ID)] = conn
+	}()
+}
+
+func (r *runtime) connectServer(cfg ServerConfig, hash string) (*serverConn, error) {
+	return r.connectLocked(cfg, hash)
+}
+
 func (r *runtime) populateLocked(conn *serverConn) {
 	if conn == nil || conn.session == nil {
 		return
@@ -514,6 +806,10 @@ func (r *runtime) populateLocked(conn *serverConn) {
 				InputSchema:   asMap(tool.InputSchema),
 				OutputSchema:  asMap(tool.OutputSchema),
 				ReadOnly:      toolReadOnly(tool),
+				Destructive:   toolDestructive(tool),
+				OpenWorld:     toolOpenWorld(tool),
+				Idempotent:    toolIdempotent(tool),
+				Risk:          riskForTool(toolReadOnly(tool), toolDestructive(tool)),
 			})
 		}
 		conn.snapshot.ToolCount = len(conn.tools)
@@ -570,6 +866,30 @@ func (r *runtime) populateLocked(conn *serverConn) {
 
 func toolReadOnly(tool *sdk.Tool) bool {
 	return tool != nil && tool.Annotations != nil && tool.Annotations.ReadOnlyHint
+}
+
+func toolDestructive(tool *sdk.Tool) bool {
+	if tool == nil || tool.Annotations == nil {
+		return true
+	}
+	if tool.Annotations.ReadOnlyHint {
+		return false
+	}
+	if tool.Annotations.DestructiveHint == nil {
+		return true
+	}
+	return *tool.Annotations.DestructiveHint
+}
+
+func toolOpenWorld(tool *sdk.Tool) bool {
+	if tool == nil || tool.Annotations == nil || tool.Annotations.OpenWorldHint == nil {
+		return true
+	}
+	return *tool.Annotations.OpenWorldHint
+}
+
+func toolIdempotent(tool *sdk.Tool) bool {
+	return tool != nil && tool.Annotations != nil && tool.Annotations.IdempotentHint
 }
 
 func (r *runtime) snapshotLocked() Snapshot {
@@ -763,6 +1083,25 @@ func joinContent(content []sdk.Content) string {
 	return strings.Join(parts, "\n")
 }
 
+func contentAsMaps(content []sdk.Content) []map[string]any {
+	out := make([]map[string]any, 0, len(content))
+	for _, item := range content {
+		if item == nil {
+			continue
+		}
+		raw, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		var mapped map[string]any
+		if err := json.Unmarshal(raw, &mapped); err != nil || len(mapped) == 0 {
+			continue
+		}
+		out = append(out, mapped)
+	}
+	return out
+}
+
 func asMap(value any) map[string]any {
 	if value == nil {
 		return nil
@@ -782,8 +1121,140 @@ func asMap(value any) map[string]any {
 }
 
 func configHash(cfg ServerConfig) string {
-	raw, _ := json.Marshal(cfg)
-	return fmt.Sprintf("%x", sha1.Sum(raw))
+	tokenHash := ""
+	if strings.TrimSpace(cfg.BearerToken) != "" {
+		sum := sha256.Sum256([]byte(cfg.BearerToken))
+		tokenHash = fmt.Sprintf("%x", sum)
+	}
+	headers := cfg.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	raw, _ := json.Marshal(map[string]any{
+		"id":                cfg.ID,
+		"label":             cfg.Label,
+		"url":               cfg.URL,
+		"enabled":           cfg.Enabled,
+		"auto_connect":      cfg.AutoConnect,
+		"bearer_token_hash": tokenHash,
+		"headers":           headers,
+	})
+	sum := sha256.Sum256(raw)
+	return fmt.Sprintf("%x", sum)
+}
+
+var snapshotCacheRootOverride string
+
+func useSnapshotCacheRootForTest(root string) func() {
+	prev := snapshotCacheRootOverride
+	snapshotCacheRootOverride = root
+	return func() {
+		snapshotCacheRootOverride = prev
+	}
+}
+
+func loadCachedServerSnapshot(cfg ServerConfig, hash string, now time.Time) (*serverConn, time.Duration, bool) {
+	path, err := serverSnapshotCachePath(cfg, hash)
+	if err != nil {
+		return nil, 0, false
+	}
+	//nolint:gosec // path is built from the configured server ID and cache hash under the qs-go cache root.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, false
+	}
+	var cached cachedServerSnapshot
+	if err := json.Unmarshal(raw, &cached); err != nil {
+		return nil, 0, false
+	}
+	if cached.Version != remoteCatalogCacheVersion || cached.Hash != hash || cached.CachedAt.IsZero() {
+		return nil, 0, false
+	}
+	age := now.Sub(cached.CachedAt)
+	if age < 0 {
+		age = 0
+	}
+	if age >= remoteCatalogCacheHardExpiry {
+		return nil, age, false
+	}
+
+	snapshot := cached.Snapshot
+	snapshot.ID = firstNonEmpty(snapshot.ID, cfg.ID)
+	snapshot.Label = firstNonEmpty(snapshot.Label, serverLabel(cfg))
+	snapshot.URL = firstNonEmpty(snapshot.URL, cfg.URL)
+	snapshot.Enabled = cfg.Enabled
+	snapshot.Connected = false
+	snapshot.Status = "cached"
+	snapshot.ToolCount = len(cached.Tools)
+	snapshot.PromptCount = len(cached.Prompts)
+	snapshot.ResourceCount = len(cached.Resources)
+
+	return &serverConn{
+		cfg:       cfg,
+		hash:      hash,
+		snapshot:  snapshot,
+		tools:     cached.Tools,
+		prompts:   cached.Prompts,
+		resources: cached.Resources,
+		cachedAt:  cached.CachedAt,
+	}, age, true
+}
+
+func saveCachedServerSnapshot(cfg ServerConfig, hash string, conn *serverConn, cachedAt time.Time) error {
+	if conn == nil {
+		return nil
+	}
+	path, err := serverSnapshotCachePath(cfg, hash)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	snapshot := conn.snapshot
+	snapshot.Status = "connected"
+	snapshot.Connected = true
+	snapshot.ToolCount = len(conn.tools)
+	snapshot.PromptCount = len(conn.prompts)
+	snapshot.ResourceCount = len(conn.resources)
+	data, err := json.MarshalIndent(cachedServerSnapshot{
+		Version:   remoteCatalogCacheVersion,
+		Hash:      hash,
+		CachedAt:  cachedAt,
+		Snapshot:  snapshot,
+		Tools:     conn.tools,
+		Prompts:   conn.prompts,
+		Resources: conn.resources,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+func serverSnapshotCachePath(cfg ServerConfig, hash string) (string, error) {
+	root := strings.TrimSpace(snapshotCacheRootOverride)
+	if root == "" {
+		cacheRoot, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+		root = filepath.Join(cacheRoot, "quickshell", "leftpanel", "mcp", "servers")
+	}
+	return filepath.Join(root, safeCacheName(cfg.ID)+"-"+hash+".json"), nil
+}
+
+func safeCacheName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "server"
+	}
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '_'
+	}, value)
 }
 
 func serverLabel(cfg ServerConfig) string {
@@ -816,6 +1287,9 @@ func builtinToolSnapshots() []ToolSnapshot {
 			QualifiedName: "builtin__shell_command",
 			Title:         "Shell command",
 			Description:   "Run a bubblewrap sandbox command. Inside the sandbox, $HOME and /workspace are the same writable directory; ~/.cache and ~/.local are also writable, and other host paths are read-only or unavailable.",
+			Destructive:   true,
+			OpenWorld:     true,
+			Risk:          "destructive",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -859,6 +1333,8 @@ func builtinToolSnapshots() []ToolSnapshot {
 			QualifiedName: "builtin__apply_patch",
 			Title:         "Apply patch",
 			Description:   "Edit files in the sandbox using the Codex apply_patch format. File paths must be relative to $HOME / /workspace.",
+			Destructive:   true,
+			Risk:          "destructive",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -908,7 +1384,7 @@ func isBuiltinTool(toolName string) bool {
 
 func isLocalToolServer(serverID string) bool {
 	switch strings.TrimSpace(serverID) {
-	case "builtin", emailServerID:
+	case "builtin":
 		return true
 	default:
 		return false
@@ -938,6 +1414,7 @@ func callBuiltinShellExec(toolName string, arguments map[string]any) shared.Tool
 	if err != nil {
 		return shellError(toolName, err.Error())
 	}
+	//nolint:gosec // shell sandbox files are intentionally user-visible workspace files.
 	if err := os.MkdirAll(sandboxRoot, 0o755); err != nil {
 		return shellError(toolName, err.Error())
 	}
@@ -945,9 +1422,11 @@ func callBuiltinShellExec(toolName string, arguments map[string]any) shared.Tool
 	if err != nil {
 		return shellError(toolName, err.Error())
 	}
+	//nolint:gosec // bwrap needs these normal user directories available inside the sandbox.
 	if err := os.MkdirAll(filepath.Join(hostHome, ".cache"), 0o755); err != nil {
 		return shellError(toolName, err.Error())
 	}
+	//nolint:gosec // bwrap needs these normal user directories available inside the sandbox.
 	if err := os.MkdirAll(filepath.Join(hostHome, ".local"), 0o755); err != nil {
 		return shellError(toolName, err.Error())
 	}
@@ -993,6 +1472,7 @@ func callBuiltinShellExec(toolName string, arguments map[string]any) shared.Tool
 		"--",
 		"/bin/bash", "-lc", command,
 	}
+	//nolint:gosec // command text is executed inside a constrained bwrap tool sandbox by design.
 	cmd := exec.CommandContext(ctx, "bwrap", args...)
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
@@ -1088,6 +1568,7 @@ func callBuiltinApplyPatch(arguments map[string]any) shared.ToolResult {
 	if err != nil {
 		return shellError("apply_patch", err.Error())
 	}
+	//nolint:gosec // apply_patch writes normal user-visible files in the local sandbox.
 	if err := os.MkdirAll(sandboxRoot, 0o755); err != nil {
 		return shellError("apply_patch", err.Error())
 	}
@@ -1136,9 +1617,11 @@ func applyPatchToSandbox(sandboxRoot string, input string) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
+			//nolint:gosec // apply_patch creates normal workspace directories, not secret storage.
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return nil, err
 			}
+			//nolint:gosec // apply_patch creates normal workspace files, not secrets.
 			if err := os.WriteFile(target, []byte(content.String()), 0o644); err != nil {
 				return nil, err
 			}
@@ -1166,6 +1649,7 @@ func applyPatchToSandbox(sandboxRoot string, input string) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
+			//nolint:gosec // target has already been validated to stay inside the sandbox and avoid symlink escapes.
 			raw, err := os.ReadFile(target)
 			if err != nil {
 				return nil, err
@@ -1219,9 +1703,11 @@ func applyPatchToSandbox(sandboxRoot string, input string) ([]string, error) {
 				}
 				changedPath = newPath
 			}
+			//nolint:gosec // apply_patch updates normal workspace directories, not secret storage.
 			if err := os.MkdirAll(filepath.Dir(writeTarget), 0o755); err != nil {
 				return nil, err
 			}
+			//nolint:gosec // apply_patch updates normal workspace files, not secrets.
 			if err := os.WriteFile(writeTarget, []byte(content), 0o644); err != nil {
 				return nil, err
 			}
@@ -1372,13 +1858,37 @@ func qualifiedToolName(serverID string, toolName string) string {
 	return strings.TrimSpace(serverID) + "__" + strings.TrimSpace(toolName)
 }
 
+func toolNamespace(serverID string) string {
+	return "mcp__" + strings.TrimSpace(serverID) + "__"
+}
+
 func splitQualifiedToolName(serverID string, toolName string) (string, string) {
-	if strings.TrimSpace(serverID) != "" {
-		return strings.TrimSpace(serverID), strings.TrimSpace(toolName)
+	cleanServer := strings.TrimSpace(serverID)
+	cleanTool := strings.TrimSpace(toolName)
+	if serverFromNamespace := namespaceServerID(cleanServer); serverFromNamespace != "" {
+		return serverFromNamespace, unqualifiedToolForServer(serverFromNamespace, cleanTool)
 	}
-	parts := strings.SplitN(strings.TrimSpace(toolName), "__", 2)
+	if cleanServer != "" {
+		return cleanServer, cleanTool
+	}
+	parts := strings.SplitN(cleanTool, "__", 2)
 	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
 		return parts[0], parts[1]
 	}
-	return strings.TrimSpace(serverID), strings.TrimSpace(toolName)
+	return cleanServer, cleanTool
+}
+
+func namespaceServerID(namespace string) string {
+	clean := strings.TrimSpace(namespace)
+	if !strings.HasPrefix(clean, "mcp__") || !strings.HasSuffix(clean, "__") {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(clean, "mcp__"), "__"))
+}
+
+func unqualifiedToolForServer(serverID string, toolName string) string {
+	if child, ok := strings.CutPrefix(strings.TrimSpace(toolName), strings.TrimSpace(serverID)+"__"); ok {
+		return strings.TrimSpace(child)
+	}
+	return strings.TrimSpace(toolName)
 }

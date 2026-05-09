@@ -32,6 +32,7 @@ func readCacheState(cachePath string) (*cacheState, error) {
 		return nil, fmt.Errorf("empty cache path")
 	}
 
+	//nolint:gosec // cachePath is the local Todoist cache file selected by the caller.
 	b, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, err

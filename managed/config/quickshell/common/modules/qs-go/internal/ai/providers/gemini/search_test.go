@@ -57,3 +57,49 @@ func TestBuildPayloadDoesNotCombineGemini2SearchAndFunctions(t *testing.T) {
 		t.Fatalf("gemini 2.x must not combine googleSearch with functions: %#v", tools[0])
 	}
 }
+
+func TestBuildPayloadUsesSharedToolResultResponse(t *testing.T) {
+	payload, err := buildPayloadForModel(
+		"gemini-3.1-flash-lite-preview",
+		"system",
+		[]shared.HistoryMessage{
+			{
+				Sender: "assistant",
+				ToolCall: &shared.ToolCall{
+					ID:        "email__email_read",
+					Name:      "email__email_read",
+					Arguments: map[string]any{"uid": 4938},
+				},
+			},
+			{
+				Sender: "user",
+				ToolResult: &shared.ToolResult{
+					ToolCallID: "email__email_read",
+					Name:       "email__email_read",
+					Text:       "Short body summary",
+					Data: map[string]any{
+						"message": map[string]any{"subject": "Status"},
+					},
+				},
+			},
+		},
+		"",
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	contents := payload["contents"].([]map[string]any)
+	parts := contents[1]["parts"].([]map[string]any)
+	response := parts[0]["functionResponse"].(map[string]any)["response"].(map[string]any)
+	content := response["content"].([]map[string]any)
+	if content[0]["text"] != "Short body summary" {
+		t.Fatalf("expected MCP content text, got %#v", response)
+	}
+	structured := response["structuredContent"].(map[string]any)
+	if structured["message"].(map[string]any)["subject"] != "Status" {
+		t.Fatalf("expected structuredContent, got %#v", response)
+	}
+}

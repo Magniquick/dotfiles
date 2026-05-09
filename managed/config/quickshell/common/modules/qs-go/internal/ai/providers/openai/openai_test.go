@@ -41,10 +41,10 @@ func TestStreamUsesResponsesEndpoint(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, "event: response.output_text.delta\n")
-		fmt.Fprint(w, "data: {\"delta\":\"ok\"}\n\n")
-		fmt.Fprint(w, "event: response.completed\n")
-		fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":1},\"output\":[]}}\n\n")
+		mustFprint(t, w, "event: response.output_text.delta\n")
+		mustFprint(t, w, "data: {\"delta\":\"ok\"}\n\n")
+		mustFprint(t, w, "event: response.completed\n")
+		mustFprint(t, w, "data: {\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":1},\"output\":[]}}\n\n")
 	}))
 	defer server.Close()
 
@@ -74,6 +74,13 @@ func TestStreamUsesResponsesEndpoint(t *testing.T) {
 	}
 	if result.PromptTokens != 5 || result.OutputTokens != 1 {
 		t.Fatalf("unexpected usage: %#v", result)
+	}
+}
+
+func mustFprint(t *testing.T, w http.ResponseWriter, text string) {
+	t.Helper()
+	if _, err := fmt.Fprint(w, text); err != nil {
+		t.Fatalf("write response: %v", err)
 	}
 }
 

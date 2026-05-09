@@ -6,25 +6,33 @@ import (
 )
 
 type apiAction struct {
-	Action         string                  `json:"action"`
-	Conversation   OpenConversationOptions `json:"-"`
-	ConversationID string                  `json:"conversation_id"`
-	Ordinal        int                     `json:"ordinal"`
-	ModelID        string                  `json:"model_id"`
-	ProviderID     string                  `json:"provider_id"`
-	MoodID         string                  `json:"mood_id"`
-	MoodName       string                  `json:"mood_name"`
-	SystemPrompt   string                  `json:"system_prompt"`
-	Message        json.RawMessage         `json:"message"`
-	ToolCall       json.RawMessage         `json:"tool_call"`
-	MessageID      string                  `json:"message_id"`
+	Action                string                  `json:"action"`
+	Conversation          OpenConversationOptions `json:"-"`
+	ConversationID        string                  `json:"conversation_id"`
+	CurrentConversationID string                  `json:"current_conversation_id"`
+	Query                 string                  `json:"query"`
+	Limit                 int                     `json:"limit"`
+	Ordinal               int                     `json:"ordinal"`
+	ModelID               string                  `json:"model_id"`
+	ProviderID            string                  `json:"provider_id"`
+	MoodID                string                  `json:"mood_id"`
+	MoodName              string                  `json:"mood_name"`
+	SystemPrompt          string                  `json:"system_prompt"`
+	Message               json.RawMessage         `json:"message"`
+	ToolCall              json.RawMessage         `json:"tool_call"`
+	ResponseItems         json.RawMessage         `json:"response_items"`
+	MessageID             string                  `json:"message_id"`
+	TurnID                string                  `json:"turn_id"`
+	TurnOrdinal           int                     `json:"turn_ordinal"`
 }
 
 type apiResult struct {
-	OK           bool          `json:"ok"`
-	Error        string        `json:"error,omitempty"`
-	Conversation *Conversation `json:"conversation,omitempty"`
-	Messages     []Message     `json:"messages,omitempty"`
+	OK            bool                  `json:"ok"`
+	Error         string                `json:"error,omitempty"`
+	Conversation  *Conversation         `json:"conversation,omitempty"`
+	Conversations []ConversationSummary `json:"conversations,omitempty"`
+	Messages      []Message             `json:"messages,omitempty"`
+	ResponseItems []ResponseItem        `json:"response_items,omitempty"`
 }
 
 type apiMessage struct {
@@ -58,10 +66,26 @@ type apiToolCall struct {
 	UpdatedAt   string          `json:"updated_at"`
 }
 
+type apiResponseItem struct {
+	ID             string          `json:"id"`
+	ConversationID string          `json:"conversation_id"`
+	TurnID         string          `json:"turn_id"`
+	TurnOrdinal    int             `json:"turn_ordinal"`
+	ItemOrdinal    int             `json:"item_ordinal"`
+	Source         string          `json:"source"`
+	ItemType       string          `json:"item_type"`
+	CallID         string          `json:"call_id"`
+	Raw            json.RawMessage `json:"raw"`
+	RawJSON        json.RawMessage `json:"raw_json"`
+	CreatedAt      string          `json:"created_at"`
+}
+
+// ApplyJSON applies a chatstore action against the default database.
 func ApplyJSON(raw string) string {
 	return applyJSON("", raw)
 }
 
+// ApplyJSONWithPath applies a chatstore action against a specific database.
 func ApplyJSONWithPath(path string, raw string) string {
 	return applyJSON(path, raw)
 }
@@ -75,9 +99,24 @@ func applyJSON(path string, raw string) string {
 	if err != nil {
 		return encodeResult(apiResult{OK: false, Error: err.Error()})
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	switch strings.TrimSpace(action.Action) {
+	case "restore_conversation":
+		conv, ok, err := store.RestoreConversation(action.openOptions())
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		if !ok {
+			return encodeResult(apiResult{OK: true})
+		}
+		messages, err := store.ListMessages(conv.ID)
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		return encodeResult(apiResult{OK: true, Conversation: &conv, Messages: messages})
 	case "open_conversation":
 		conv, err := store.OpenConversation(action.openOptions())
 		if err != nil {
@@ -99,6 +138,18 @@ func applyJSON(path string, raw string) string {
 			return encodeResult(apiResult{OK: false, Error: err.Error()})
 		}
 		return encodeResult(apiResult{OK: true})
+	case "resume_conversation":
+		conv, messages, err := store.ResumeConversation(action.openOptions(), action.CurrentConversationID, action.ConversationID)
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		return encodeResult(apiResult{OK: true, Conversation: &conv, Messages: messages})
+	case "list_resume_conversations":
+		conversations, err := store.ListClosedConversations(action.openOptions(), action.CurrentConversationID, action.Query, action.Limit)
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		return encodeResult(apiResult{OK: true, Conversations: conversations})
 	case "upsert_message":
 		msg, err := decodeAPIMessage(action.Message)
 		if err != nil {
@@ -127,6 +178,21 @@ func applyJSON(path string, raw string) string {
 			return encodeResult(apiResult{OK: false, Error: err.Error()})
 		}
 		return encodeResult(apiResult{OK: true})
+	case "upsert_response_items":
+		items, err := decodeAPIResponseItems(action.ResponseItems)
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		if err := store.UpsertResponseItems(action.ConversationID, action.TurnID, action.TurnOrdinal, items); err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		return encodeResult(apiResult{OK: true})
+	case "list_response_items":
+		items, err := store.ListResponseItems(action.ConversationID)
+		if err != nil {
+			return encodeResult(apiResult{OK: false, Error: err.Error()})
+		}
+		return encodeResult(apiResult{OK: true, ResponseItems: items})
 	case "list_messages":
 		messages, err := store.ListMessages(action.ConversationID)
 		if err != nil {
@@ -189,6 +255,51 @@ func decodeAPIToolCall(raw json.RawMessage) (ToolCall, error) {
 		CreatedAt:   call.CreatedAt,
 		UpdatedAt:   call.UpdatedAt,
 	}, nil
+}
+
+func decodeAPIResponseItems(raw json.RawMessage) ([]ResponseItem, error) {
+	var items []apiResponseItem
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, err
+	}
+	out := make([]ResponseItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, ResponseItem{
+			ID:             item.ID,
+			ConversationID: item.ConversationID,
+			TurnID:         item.TurnID,
+			TurnOrdinal:    item.TurnOrdinal,
+			ItemOrdinal:    item.ItemOrdinal,
+			Source:         item.Source,
+			ItemType:       item.ItemType,
+			CallID:         item.CallID,
+			RawJSON:        responseItemRawJSON(item.Raw, item.RawJSON),
+			CreatedAt:      item.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
+func responseItemRawJSON(raw json.RawMessage, rawJSON json.RawMessage) string {
+	if text := flexibleJSONValue(raw); text != "" {
+		return text
+	}
+	if text := flexibleJSONValue(rawJSON); text != "" {
+		return text
+	}
+	return "{}"
+}
+
+func flexibleJSONValue(raw json.RawMessage) string {
+	raw = json.RawMessage(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		return jsonText(asString)
+	}
+	return jsonText(string(raw))
 }
 
 func flexibleJSON(raw json.RawMessage) string {

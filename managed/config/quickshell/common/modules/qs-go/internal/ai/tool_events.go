@@ -15,13 +15,19 @@ type toolUIEvent struct {
 	Phase          string              `json:"phase"`
 	ToolCallID     string              `json:"tool_call_id"`
 	ToolName       string              `json:"tool_name"`
+	ToolTitle      string              `json:"tool_title,omitempty"`
+	ServerID       string              `json:"server_id,omitempty"`
+	ServerLabel    string              `json:"server_label,omitempty"`
+	Namespace      string              `json:"namespace,omitempty"`
+	DurationMS     int64               `json:"duration_ms,omitempty"`
+	ReadOnly       bool                `json:"read_only,omitempty"`
+	Risk           string              `json:"risk,omitempty"`
 	Status         string              `json:"status"`
 	Summary        string              `json:"summary"`
 	Subtitle       string              `json:"subtitle,omitempty"`
-	Icon           string              `json:"icon,omitempty"`
 	IsError        bool                `json:"is_error,omitempty"`
 	DetailSections []toolDetailSection `json:"detail_sections,omitempty"`
-	AgentPayload   string              `json:"agent_payload,omitempty"`
+	ReplayItems    []map[string]any    `json:"replay_items,omitempty"`
 }
 
 type toolDetailSection struct {
@@ -31,30 +37,39 @@ type toolDetailSection struct {
 }
 
 func buildToolStartEvent(call shared.ToolCall) toolUIEvent {
+	displayName := toolCallDisplayName(call)
 	return toolUIEvent{
-		Kind:       "tool",
-		Phase:      "tool_start",
-		ToolCallID: call.ID,
-		ToolName:   call.Name,
-		Status:     "running",
-		Summary:    "running " + call.Name + "...",
-		Subtitle:   toolStartSubtitle(call),
-		Icon:       toolIcon(call.Name, false),
-		AgentPayload: mustJSON([]map[string]any{
-			codexToolCallItem(call),
-		}),
+		Kind:        "tool",
+		Phase:       "tool_start",
+		ToolCallID:  call.ID,
+		ToolName:    call.Name,
+		ToolTitle:   call.ToolTitle,
+		ServerID:    call.ServerID,
+		ServerLabel: call.ServerLabel,
+		Namespace:   call.Namespace,
+		ReadOnly:    call.ReadOnly,
+		Risk:        call.Risk,
+		Status:      "running",
+		Summary:     "running " + displayName + "...",
+		Subtitle:    toolStartSubtitle(call),
 	}
 }
 
 func buildToolDoneEvent(call shared.ToolCall, result shared.ToolResult) toolUIEvent {
 	event := toolUIEvent{
-		Kind:       "tool",
-		Phase:      "tool_done",
-		ToolCallID: firstNonEmpty(result.ToolCallID, call.ID),
-		ToolName:   firstNonEmpty(result.Name, call.Name),
-		Status:     "success",
-		Icon:       toolIcon(call.Name, result.IsError),
-		IsError:    result.IsError,
+		Kind:        "tool",
+		Phase:       "tool_done",
+		ToolCallID:  firstNonEmpty(result.ToolCallID, call.ID),
+		ToolName:    firstNonEmpty(result.Name, call.Name),
+		ToolTitle:   call.ToolTitle,
+		ServerID:    call.ServerID,
+		ServerLabel: call.ServerLabel,
+		Namespace:   call.Namespace,
+		DurationMS:  result.DurationMS,
+		ReadOnly:    call.ReadOnly,
+		Risk:        call.Risk,
+		Status:      "success",
+		IsError:     result.IsError,
 	}
 	if result.IsError {
 		event.Phase = "tool_error"
@@ -69,10 +84,7 @@ func buildToolDoneEvent(call shared.ToolCall, result shared.ToolResult) toolUIEv
 	default:
 		fillGenericToolEvent(&event, call, result)
 	}
-	event.AgentPayload = mustJSON([]map[string]any{
-		codexToolCallItem(call),
-		codexToolOutputItem(call, result),
-	})
+	event.ReplayItems = []map[string]any{codexToolOutputItem(call, result)}
 	return event
 }
 
@@ -134,62 +146,92 @@ func fillApplyPatchEvent(event *toolUIEvent, call shared.ToolCall, result shared
 }
 
 func fillGenericToolEvent(event *toolUIEvent, call shared.ToolCall, result shared.ToolResult) {
+	displayName := toolCallDisplayName(call)
 	if result.IsError {
-		event.Summary = "failed " + call.Name
+		event.Summary = "failed " + displayName
 		event.Subtitle = firstNonEmpty(result.Text, "tool returned an error")
 	} else {
-		event.Summary = "called " + call.Name
+		event.Summary = "called " + displayName
 		event.Subtitle = firstNonEmpty(result.Text, "completed")
 	}
 	sections := []toolDetailSection{}
 	if len(call.Arguments) > 0 {
 		sections = append(sections, toolDetailSection{Title: "Arguments", Content: mustJSON(call.Arguments), Kind: "json"})
 	}
-	if strings.TrimSpace(result.Text) != "" {
-		sections = append(sections, toolDetailSection{Title: "Result", Content: result.Text, Kind: "text"})
+	if text := toolResultDisplayText(result); strings.TrimSpace(text) != "" {
+		sections = append(sections, toolDetailSection{Title: "Result", Content: text, Kind: "text"})
 	}
-	if len(result.Data) > 0 {
-		sections = append(sections, toolDetailSection{Title: "Data", Content: mustJSON(result.Data), Kind: "json"})
+	if len(result.Meta) > 0 {
+		sections = append(sections, toolDetailSection{Title: "Metadata", Content: mustJSON(result.Meta), Kind: "json"})
 	}
 	event.DetailSections = sections
 }
 
-func toolIcon(name string, isError bool) string {
-	if isError {
-		return "!"
+func toolResultDisplayText(result shared.ToolResult) string {
+	if text := strings.TrimSpace(result.Text); text != "" {
+		return text
 	}
-	switch name {
-	case "shell_command", "builtin__shell_command", "shell_exec", "builtin__shell_exec":
-		return "$"
-	case "apply_patch", "builtin__apply_patch":
-		return "±"
-	default:
-		return "•"
-	}
-}
-
-func codexToolCallItem(call shared.ToolCall) map[string]any {
-	if strings.TrimSpace(call.Input) != "" {
-		return map[string]any{
-			"type":    "custom_tool_call",
-			"call_id": call.ID,
-			"name":    call.Name,
-			"input":   call.Input,
+	for _, item := range result.Content {
+		if strings.TrimSpace(fmt.Sprint(item["type"])) == "text" {
+			if text := strings.TrimSpace(fmt.Sprint(item["text"])); text != "" {
+				return text
+			}
 		}
 	}
-	return map[string]any{
-		"type":      "function_call",
-		"call_id":   call.ID,
-		"name":      call.Name,
-		"arguments": mustJSON(call.Arguments),
+	return ""
+}
+
+func toolCallDisplayName(call shared.ToolCall) string {
+	if server := namespaceServerDisplayID(call.Namespace); server != "" {
+		return toolServerDisplayName(server) + " / " + strings.TrimSpace(call.Name)
+	}
+	return toolDisplayName(call.Name)
+}
+
+func toolDisplayName(name string) string {
+	clean := strings.TrimSpace(name)
+	switch clean {
+	case "todoist_overview":
+		return "Todoist overview"
+	}
+	server, tool, ok := splitQualifiedDisplayName(clean)
+	if !ok {
+		return clean
+	}
+	return toolServerDisplayName(server) + " / " + tool
+}
+
+func namespaceServerDisplayID(namespace string) string {
+	clean := strings.TrimSpace(namespace)
+	if !strings.HasPrefix(clean, "mcp__") || !strings.HasSuffix(clean, "__") {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(clean, "mcp__"), "__"))
+}
+
+func splitQualifiedDisplayName(name string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(name), "__", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+}
+
+func toolServerDisplayName(server string) string {
+	switch strings.TrimSpace(server) {
+	case "todoist":
+		return "Todoist"
+	case "email":
+		return "Email"
+	case "builtin":
+		return "Built-in"
+	default:
+		return strings.TrimSpace(server)
 	}
 }
 
 func codexToolOutputItem(call shared.ToolCall, result shared.ToolResult) map[string]any {
-	output := strings.TrimSpace(result.Text)
-	if output == "" && len(result.Data) > 0 {
-		output = mustJSON(result.Data)
-	}
+	output := shared.ToolResultTranscriptOutput(result)
 	if call.Name == "apply_patch" || result.Name == "apply_patch" {
 		return map[string]any{
 			"type":    "custom_tool_call_output",
@@ -428,11 +470,11 @@ func changedFiles(result shared.ToolResult) []string {
 	return files
 }
 
-func excerpt(value string, max int) string {
-	if len(value) <= max {
+func excerpt(value string, maxLen int) string {
+	if len(value) <= maxLen {
 		return value
 	}
-	return value[:max] + "\n..."
+	return value[:maxLen] + "\n..."
 }
 
 func stringData(data map[string]any, key string) string {

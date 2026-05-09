@@ -30,12 +30,12 @@ func TestStreamResponsesTextDeltaAndUsage(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, "event: response.output_text.delta\n")
-		fmt.Fprint(w, "data: {\"delta\":\"hel\"}\n\n")
-		fmt.Fprint(w, "event: response.output_text.delta\n")
-		fmt.Fprint(w, "data: {\"delta\":\"lo\"}\n\n")
-		fmt.Fprint(w, "event: response.completed\n")
-		fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"input_tokens\":3,\"output_tokens\":2},\"output\":[]}}\n\n")
+		mustFprint(t, w, "event: response.output_text.delta\n")
+		mustFprint(t, w, "data: {\"delta\":\"hel\"}\n\n")
+		mustFprint(t, w, "event: response.output_text.delta\n")
+		mustFprint(t, w, "data: {\"delta\":\"lo\"}\n\n")
+		mustFprint(t, w, "event: response.completed\n")
+		mustFprint(t, w, "data: {\"response\":{\"usage\":{\"input_tokens\":3,\"output_tokens\":2},\"output\":[]}}\n\n")
 	}))
 	defer server.Close()
 
@@ -62,12 +62,12 @@ func TestStreamResponsesTextDeltaAndUsage(t *testing.T) {
 }
 
 func TestStreamResponsesFunctionCall(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, "event: response.output_item.done\n")
-		fmt.Fprint(w, "data: {\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"builtin__shell_exec\",\"arguments\":\"{\\\"command\\\":\\\"date\\\"}\"}}\n\n")
-		fmt.Fprint(w, "event: response.completed\n")
-		fmt.Fprint(w, "data: {\"response\":{\"output\":[]}}\n\n")
+		mustFprint(t, w, "event: response.output_item.done\n")
+		mustFprint(t, w, "data: {\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"builtin__shell_exec\",\"arguments\":\"{\\\"command\\\":\\\"date\\\"}\"}}\n\n")
+		mustFprint(t, w, "event: response.completed\n")
+		mustFprint(t, w, "data: {\"response\":{\"output\":[]}}\n\n")
 	}))
 	defer server.Close()
 
@@ -123,10 +123,10 @@ func TestStreamResponsesCustomApplyPatchTool(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: response.output_item.done\n")
-		fmt.Fprintf(w, "data: {\"item\":{\"type\":\"custom_tool_call\",\"call_id\":\"call_patch\",\"name\":\"apply_patch\",\"input\":%q}}\n\n", patch)
-		fmt.Fprint(w, "event: response.completed\n")
-		fmt.Fprint(w, "data: {\"response\":{\"output\":[]}}\n\n")
+		mustFprintf(t, w, "event: response.output_item.done\n")
+		mustFprintf(t, w, "data: {\"item\":{\"type\":\"custom_tool_call\",\"call_id\":\"call_patch\",\"name\":\"apply_patch\",\"input\":%q}}\n\n", patch)
+		mustFprint(t, w, "event: response.completed\n")
+		mustFprint(t, w, "data: {\"response\":{\"output\":[]}}\n\n")
 	}))
 	defer server.Close()
 
@@ -157,6 +157,20 @@ func TestStreamResponsesCustomApplyPatchTool(t *testing.T) {
 	}
 }
 
+func mustFprint(t *testing.T, w http.ResponseWriter, text string) {
+	t.Helper()
+	if _, err := fmt.Fprint(w, text); err != nil {
+		t.Fatalf("write response: %v", err)
+	}
+}
+
+func mustFprintf(t *testing.T, w http.ResponseWriter, format string, args ...any) {
+	t.Helper()
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		t.Fatalf("write response: %v", err)
+	}
+}
+
 func TestBuildInputUsesCustomToolCallOutputForApplyPatch(t *testing.T) {
 	input, err := oai.BuildResponsesInput([]shared.HistoryMessage{
 		{
@@ -182,8 +196,57 @@ func TestBuildInputUsesCustomToolCallOutputForApplyPatch(t *testing.T) {
 	if input[0]["type"] != "custom_tool_call" || input[0]["input"] == nil {
 		t.Fatalf("expected custom tool call item, got %#v", input[0])
 	}
-	if input[1]["type"] != "custom_tool_call_output" || input[1]["output"] != "Done!" {
+	if input[1]["type"] != "custom_tool_call_output" {
 		t.Fatalf("expected custom tool call output, got %#v", input[1])
+	}
+	var patchPayload map[string]any
+	if err := json.Unmarshal([]byte(input[1]["output"].(string)), &patchPayload); err != nil {
+		t.Fatalf("expected MCP-shaped output JSON, got %#v", input[1])
+	}
+	if patchPayload["content"].([]any)[0].(map[string]any)["text"] != "Done!" {
+		t.Fatalf("expected text content, got %#v", patchPayload)
+	}
+}
+
+func TestBuildInputUsesSharedToolResultOutput(t *testing.T) {
+	input, err := oai.BuildResponsesInput([]shared.HistoryMessage{
+		{
+			Sender: "assistant",
+			ToolCall: &shared.ToolCall{
+				ID:        "call_email",
+				Name:      "email__email_read",
+				Arguments: map[string]any{"uid": 4938},
+			},
+		},
+		{
+			Sender: "user",
+			ToolResult: &shared.ToolResult{
+				ToolCallID: "call_email",
+				Name:       "email__email_read",
+				Text:       "Short body summary",
+				Data: map[string]any{
+					"message": map[string]any{"subject": "Status"},
+				},
+			},
+		},
+	}, "", nil, "Local")
+	if err != nil {
+		t.Fatalf("build input: %v", err)
+	}
+
+	output, ok := input[1]["output"].(string)
+	if !ok {
+		t.Fatalf("expected string output, got %#v", input[1])
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("expected MCP-shaped output JSON, got %q", output)
+	}
+	if payload["content"].([]any)[0].(map[string]any)["text"] != "Short body summary" {
+		t.Fatalf("expected result content text, got %#v", payload)
+	}
+	if payload["structuredContent"].(map[string]any)["message"].(map[string]any)["subject"] != "Status" {
+		t.Fatalf("expected structured content, got %#v", payload)
 	}
 }
 
@@ -194,7 +257,7 @@ func TestStreamCompactsLargeInputBeforeResponsesRequest(t *testing.T) {
 		case "/responses/compact":
 			compactCalled = true
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"object":"response.compaction","output":[{"type":"message","role":"assistant","content":[{"type":"input_text","text":"summary"}]}]}`)
+			mustFprint(t, w, `{"object":"response.compaction","output":[{"type":"message","role":"assistant","content":[{"type":"input_text","text":"summary"}]}]}`)
 		case "/responses":
 			var payload map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -205,8 +268,8 @@ func TestStreamCompactsLargeInputBeforeResponsesRequest(t *testing.T) {
 				t.Fatalf("expected compacted input, got %d items", len(input))
 			}
 			w.Header().Set("Content-Type", "text/event-stream")
-			fmt.Fprint(w, "event: response.completed\n")
-			fmt.Fprint(w, "data: {\"response\":{\"output\":[]}}\n\n")
+			mustFprint(t, w, "event: response.completed\n")
+			mustFprint(t, w, "data: {\"response\":{\"output\":[]}}\n\n")
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}

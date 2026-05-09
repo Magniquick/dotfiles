@@ -1,3 +1,4 @@
+// Package helpers provides static model capability lookup helpers.
 package helpers
 
 import (
@@ -49,6 +50,7 @@ var staticCapabilities = map[string]shared.ModelCapabilities{
 	},
 }
 
+// Query returns capabilities for a canonical model ID.
 func Query(canonicalModelID string) (shared.ModelCapabilities, bool) {
 	value, ok := staticCapabilities[strings.TrimSpace(canonicalModelID)]
 	return value, ok

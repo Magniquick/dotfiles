@@ -2,6 +2,7 @@
 package ical
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -133,7 +134,7 @@ func resolveURLs(resolver secrets.Resolver) []string {
 // Returns status string and optional fatal error.
 func fetchCalendar(client *http.Client, url string) (string, error) {
 	meta := globalState.metaByURL[url]
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +149,9 @@ func fetchCalendar(client *http.Client, url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusNotModified {
 		return "not_modified", nil
@@ -249,7 +252,6 @@ func parseEvent(event *ics.VEvent) (*parsedEvent, error) {
 		if endDt.Hour() == 0 && endDt.Minute() == 0 && endDt.Second() == 0 && endDt.After(startDt) {
 			endExclusive = endDt
 		} else {
-			endExclusive = endDt.AddDate(0, 0, 1)
 			endExclusive = time.Date(endDt.Year(), endDt.Month(), endDt.Day()+1, 0, 0, 0, 0, endDt.Location())
 		}
 	}
