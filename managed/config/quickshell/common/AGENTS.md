@@ -18,11 +18,11 @@ Shared Quickshell theme/config primitives and utilities used across modules.
 ## Matugen Workflow
 
 - Template: `colors.json.template`
-- Output location: `Quickshell.dataPath("colors.json")`
+- Output location: `common/colors.json` beside `Colors.qml`; `Colors.qml` loads it with `Qt.resolvedUrl("colors.json")` and watches for changes.
 - Reload quickshell after generating new colors.
 
 ## Conventions
 
 - Use 2-space indentation.
 - Prefer `Common.Config` tokens for colors, spacing, motion, and typography.
-- Keep singletons stateless; no side effects outside explicit file I/O.
+- Keep config/type singletons side-effect-light; isolate mutable runtime state in `GlobalState.qml` or explicit service singletons.

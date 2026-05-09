@@ -27,6 +27,7 @@ Rectangle {
     property int paddingTop: Config.modulePaddingY
     readonly property color surfaceColor: root.backgroundTransparent ? "transparent" : root.backgroundColor
     readonly property bool tooltipActive: tooltipPopup.active
+    readonly property bool tooltipVisualActive: tooltipPopup.visualActive
     // If provided as a string, it must be a URL (opened via xdg-open).
     // If provided as a list, it's treated as an argv array and executed detached.
     property var tooltipBrowserLink: ""

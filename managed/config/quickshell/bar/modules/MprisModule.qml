@@ -793,7 +793,7 @@ ModuleContainer {
                         }
                         Loader {
                             anchors.fill: parent
-                            active: root.tooltipActive && root.hasArt && artImage.status === Image.Ready
+                            active: root.tooltipVisualActive && root.hasArt && artImage.status === Image.Ready
                             sourceComponent: OpacityMask {
                                 anchors.fill: parent
                                 cached: true

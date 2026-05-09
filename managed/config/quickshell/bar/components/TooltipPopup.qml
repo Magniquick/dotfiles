@@ -30,6 +30,7 @@ Item {
     property Item targetItem: null
     property string title: ""
     readonly property var contentItem: contentLoader.item
+    readonly property bool visualActive: popup.visible
     readonly property var window: targetItem ? targetItem.QsWindow.window : null
     property bool _anchorUpdatePending: false
 
