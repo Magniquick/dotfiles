@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QTextDocument>
 #include <QUrl>
+#include <QtMath>
 #include <QtConcurrent/QtConcurrent>
 
 #include <cairomm/context.h>
@@ -30,6 +31,7 @@
 #include <latex.h>
 #include <platform/cairo/graphic_cairo.h>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -53,6 +55,13 @@ struct RenderedMath {
   QString html;
 };
 
+struct RenderedSize {
+  qreal logicalWidth = 0;
+  qreal logicalHeight = 0;
+  qreal physicalWidth = 0;
+  qreal physicalHeight = 0;
+};
+
 std::mutex latexMutex;
 std::once_flag latexInitOnce;
 QString latexInitError;
@@ -62,11 +71,12 @@ tex::color toTexColor(const QColor& color) {
          ((color.green() & 0xff) << 8) | (color.blue() & 0xff);
 }
 
-QString formulaHash(const QString& formula, int maxWidth, const QColor& color) {
+QString formulaHash(const QString& formula, int maxWidth, const QColor& color, qreal renderScale) {
   QCryptographicHash hash(QCryptographicHash::Sha256);
   hash.addData(formula.toUtf8());
   hash.addData(QByteArray::number(maxWidth));
   hash.addData(color.name(QColor::HexArgb).toUtf8());
+  hash.addData(QByteArray::number(renderScale, 'f', 2));
   return QString::fromLatin1(hash.result().toHex());
 }
 
@@ -217,31 +227,60 @@ QString markdownWithPlaceholders(const std::vector<Segment>& segments) {
 }
 
 RenderedMath renderSegment(const Segment& segment, const QString& cacheDir, int maxWidth,
-                           qreal textSize, qreal padding, const QColor& foreground) {
+                           qreal textSize, qreal padding, const QColor& foreground,
+                           qreal renderScale) {
+  const qreal scale = std::max<qreal>(1.0, renderScale);
   const QString svgPath = cacheDir + QLatin1Char('/') +
-                          formulaHash(segment.text, maxWidth, foreground) + QStringLiteral(".svg");
+                          formulaHash(segment.text, maxWidth, foreground, scale) +
+                          QStringLiteral(".svg");
+
+  RenderedSize size;
 
   if (!QFile::exists(svgPath)) {
-    std::unique_ptr<tex::TeXRender> render(
-        tex::LaTeX::parse(segment.text.toStdWString(), maxWidth, static_cast<float>(textSize),
-                          static_cast<float>(textSize / 3.0), toTexColor(foreground)));
+    std::unique_ptr<tex::TeXRender> render(tex::LaTeX::parse(
+        segment.text.toStdWString(), qRound(maxWidth * scale), static_cast<float>(textSize * scale),
+        static_cast<float>((textSize * scale) / 3.0), toTexColor(foreground)));
 
-    const qreal width = render->getWidth() + padding * 2.0;
-    const qreal height = render->getHeight() + padding * 2.0;
-    auto surface = Cairo::SvgSurface::create(svgPath.toStdString(), width, height);
+    size.physicalWidth = render->getWidth() + padding * scale * 2.0;
+    size.physicalHeight = render->getHeight() + padding * scale * 2.0;
+    size.logicalWidth = size.physicalWidth / scale;
+    size.logicalHeight = size.physicalHeight / scale;
+
+    auto surface =
+        Cairo::SvgSurface::create(svgPath.toStdString(), size.physicalWidth, size.physicalHeight);
     auto context = Cairo::Context::create(surface);
     tex::Graphics2D_cairo g2(context);
-    render->draw(g2, padding, padding);
+    render->draw(g2, padding * scale, padding * scale);
     context->show_page();
+  } else {
+    QFile svg(svgPath);
+    if (svg.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      const QString header = QString::fromUtf8(svg.read(512));
+      static const QRegularExpression svgSizePattern(
+          R"regex(<svg[^>]*\bwidth="([0-9.]+)"[^>]*\bheight="([0-9.]+)")regex");
+      const QRegularExpressionMatch match = svgSizePattern.match(header);
+      if (match.hasMatch()) {
+        size.physicalWidth = match.captured(1).toDouble();
+        size.physicalHeight = match.captured(2).toDouble();
+        size.logicalWidth = size.physicalWidth / scale;
+        size.logicalHeight = size.physicalHeight / scale;
+      }
+    }
   }
 
   const QString url = QUrl::fromLocalFile(svgPath).toString().toHtmlEscaped();
+  const QString sizeAttrs = size.logicalWidth > 0 && size.logicalHeight > 0
+                                ? QStringLiteral(" width=\"%1\" height=\"%2\"")
+                                      .arg(qCeil(size.logicalWidth))
+                                      .arg(qCeil(size.logicalHeight))
+                                : QString();
   const QString style =
       segment.type == Segment::Type::DisplayMath
           ? QStringLiteral("display:block; margin:0.5em auto; max-width:100%;")
           : QStringLiteral("display:inline-block; vertical-align:middle; max-width:100%;");
 
-  return {segment.placeholder, QStringLiteral("<img src=\"%1\" style=\"%2\" />").arg(url, style)};
+  return {segment.placeholder,
+          QStringLiteral("<img src=\"%1\"%2 style=\"%3\" />").arg(url, sizeAttrs, style)};
 }
 
 QString injectRenderedMath(QString html, const std::vector<RenderedMath>& rendered) {
@@ -259,7 +298,7 @@ QString injectRenderedMath(QString html, const std::vector<RenderedMath>& render
 
 QString renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, int maxWidth,
                              qreal textSize, qreal padding, const QColor& foreground,
-                             QString* error) {
+                             qreal renderScale, QString* error) {
   if (!QDir().mkpath(cacheDir)) {
     if (error)
       *error = QStringLiteral("Failed to create cache directory: %1").arg(cacheDir);
@@ -296,7 +335,8 @@ QString renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, i
     if (segment.type == Segment::Type::Text)
       continue;
     try {
-      rendered.push_back(renderSegment(segment, cacheDir, maxWidth, textSize, padding, foreground));
+      rendered.push_back(
+          renderSegment(segment, cacheDir, maxWidth, textSize, padding, foreground, renderScale));
     } catch (const std::exception& exception) {
       if (error)
         *error = QString::fromUtf8(exception.what());
@@ -317,16 +357,17 @@ MathRenderer::MathRenderer(QObject* parent) : QObject(parent) {}
 
 void MathRenderer::renderMarkdown(const QString& requestId, const QString& markdown,
                                   const QString& cacheDir, int maxWidth, qreal textSize,
-                                  qreal padding, const QString& foreground) {
+                                  qreal padding, const QString& foreground, qreal renderScale) {
   QPointer<MathRenderer> self(this);
   (void)QtConcurrent::run([self, requestId, markdown, cacheDir, maxWidth, textSize, padding,
-                           foreground]() {
+                           foreground, renderScale]() {
     const QColor color(foreground);
     const QColor resolvedColor = color.isValid() ? color : QColor(QStringLiteral("#000000"));
+    const qreal resolvedScale = std::clamp<qreal>(renderScale, 1.0, 4.0);
     QString error;
-    const QString html = renderMarkdownToHtml(markdown, cacheDir, std::max(120, maxWidth),
-                                              textSize > 0 ? textSize : 18.0,
-                                              padding >= 0 ? padding : 4.0, resolvedColor, &error);
+    const QString html = renderMarkdownToHtml(
+        markdown, cacheDir, std::max(120, maxWidth), textSize > 0 ? textSize : 18.0,
+        padding >= 0 ? padding : 4.0, resolvedColor, resolvedScale, &error);
 
     if (!self)
       return;

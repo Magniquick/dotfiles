@@ -19,7 +19,8 @@ Item {
     return (xdg.length > 0 ? xdg : home + "/.cache") + "/quickshell/latex";
   }
   readonly property bool readyToRender: root.completed && root.markdown.trim().length > 0
-  readonly property string renderRequestId: selectionKey + ":" + String(width) + ":" + String(markdown.length)
+  readonly property real renderScale: Math.max(1, Screen.devicePixelRatio || 1)
+  readonly property string renderRequestId: selectionKey + ":" + String(width) + ":" + String(markdown.length) + ":" + String(renderScale)
 
   signal selectionActivated(string selectionKey)
 
@@ -47,7 +48,8 @@ Item {
       Math.max(120, Math.floor(root.width)),
       18,
       4,
-      String(textColor)
+      String(textColor),
+      renderScale
     );
   }
 
@@ -58,6 +60,10 @@ Item {
   onMarkdownChanged: startRender()
   onCompletedChanged: startRender()
   onWidthChanged: {
+    if (readyToRender)
+      startRender();
+  }
+  onRenderScaleChanged: {
     if (readyToRender)
       startRender();
   }
