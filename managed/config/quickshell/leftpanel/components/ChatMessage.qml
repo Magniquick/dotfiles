@@ -13,6 +13,7 @@ Item {
     property string modelLabel: ""
     property string moodIcon: "\uf4c4"
     property string moodName: "Assistant"
+    property bool showHeader: true
     property bool done: true
     property bool thinking: false
     property bool streaming: false
@@ -153,6 +154,8 @@ Item {
 
             // Header row with label and actions
             RowLayout {
+                visible: root.showHeader
+                Layout.preferredHeight: visible ? implicitHeight : 0
                 Layout.fillWidth: true
                 spacing: 6
 

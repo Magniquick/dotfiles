@@ -10,7 +10,6 @@ Item {
     id: root
     visible: false
 
-    readonly property string todoistEnvFile: Config.envFile
     readonly property string todoistCachePath: Quickshell.cachePath("todoist/tasks_cache.json")
 
     property var payload: ({})
@@ -85,7 +84,6 @@ Item {
 
     TodoistClient {
         id: client
-        env_file: String(root.todoistEnvFile)
         cache_path: String(root.todoistCachePath)
         prefer_cache: false
     }

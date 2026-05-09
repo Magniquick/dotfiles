@@ -10,7 +10,6 @@ import (
 
 type Provider interface {
 	Metadata() shared.ProviderMetadata
-	ListModels(ctx context.Context, cfg shared.ProviderConfig) ([]shared.ModelDescriptor, error)
 	Stream(ctx context.Context, req shared.StreamRequest, onToken func(string)) (shared.StreamResult, error)
 }
 

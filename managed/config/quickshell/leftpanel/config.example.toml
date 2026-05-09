@@ -1,0 +1,12 @@
+[model]
+default = "local/gpt-5.4-mini"
+
+[providers.local]
+base_url = "http://127.0.0.1:8317/v1"
+
+[[email.accounts]]
+id = "personal"
+provider = "gmail"
+label = "Personal Mail"
+address = "you@example.com"
+username = "you@example.com"

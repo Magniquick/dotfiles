@@ -23,7 +23,7 @@ quickshell
 ### Main Component
 
 - `LeftPanel.qml` - Core panel logic containing:
-  - Multi-provider AI chat backed by `qsgo.AiChatSession` / `qsgo.AiModelCatalog`
+  - Multi-provider AI chat backed by `qsgo.AiChatSession`
   - MCP-backed tool/prompt/resource runtime backed by `AiChatSession.mcp_*`
   - Mood system with configurable system prompts
   - Slash commands (`/model`, `/mood`, `/clear`, `/help`, `/status`, `/mcp`, `/mcp add`)
@@ -47,6 +47,7 @@ quickshell
 ### Data Files
 
 - `./system-prompts/moods.json` - Mood configurations with optional `default_model`
+- `./models.json` - Model picker entries, including recommended local/OpenAI/Gemini choices
 - `./mcp_servers.json` - MCP HTTP server definitions consumed by `services/McpConfig.qml`
 - `./assets/` - Provider logos (SVG for OpenAI, PNG for Gemini)
 
@@ -54,14 +55,9 @@ quickshell
 
 ### Adding Models
 
-The model list is provided by `qsgo.AiModelCatalog` and exposed to QML as typed provider entries through the `providers` property.
+Add entries to `./models.json`. `services/ModelConfig.qml` reads the file and exposes typed picker options with canonical `provider/model` values.
 
-Catalog shape:
-
-- `providers`: provider-grouped entries with `id`, `label`, `enabled`, `recommended_models`, and `models`
-- each model includes canonical `id` in `provider/model` form, raw provider model id, description, recommendation flag, and structured `capabilities`
-
-Fallback/recommended models are provider-defined in the `qs-go` AI backend, not in left-panel QML.
+Each entry should include `provider`, `provider_label`, `raw_id`, `label`, `description`, and `recommended`. Optional `capabilities` can override the default image/tool/multimodal flags.
 
 ### Adding Moods
 
@@ -81,7 +77,7 @@ The panel should treat provider config and catalog data as native QML objects/li
 
 - provider config
 - MCP server config
-- model catalogs
+- model config
 - command lists
 - attachments
 - per-message metrics
@@ -90,18 +86,27 @@ The panel should treat provider config and catalog data as native QML objects/li
 
 `/mcp add` opens an in-panel wizard that appends a minimal server entry to `mcp_servers.json`, generates a unique `id`, and refreshes the live MCP runtime. The wizard only captures URL and optional label; auth and headers remain manual JSON edits.
 
-### Environment Variables
+The runtime also exposes local built-in MCP servers that do not come from `mcp_servers.json`:
 
-- `OPENAI_API_KEY` - OpenAI API key
-- `OPENAI_BASE_URL` - Optional OpenAI-compatible base URL override
-- `GEMINI_API_KEY` - Gemini API key
-- `OPENAI_MODEL` - Default model; may be raw legacy id or canonical `provider/model`
+- `builtin` / `Leftpanel Built-ins`: `shell_command`, `apply_patch`
+- `email` / `Email Accounts`: `email_accounts`, `email_search`, `email_read`
 
-`EnvLoader.qml` normalizes the default model to canonical `provider/model` form and builds the typed `providerConfig` map consumed by `AiChatSession` and `AiModelCatalog`.
+Email metadata is read from ignored local TOML at `leftpanel/config.toml`; use `leftpanel/config.example.toml` for the tracked shape. Email passwords are read from Secret Service via qs-go `internal/secrets`, not from QML or `mcp_servers.json`. The default email MCP surface is read-only; send is not advertised and direct `email_send` calls return a disabled error.
+
+### Config And Secrets
+
+- Secret Service service name: `quickshell`.
+- Secret keys: `OPENAI_API_KEY`, `GEMINI_API_KEY`, optional `LOCAL_API_KEY`, `TODOIST_API_TOKEN`, `CALENDAR_ICAL_URL`, `SP_DC`, and `EMAIL_<ID>_PASSWORD`.
+- TOML config: `leftpanel/config.toml` stores non-secret model/provider/email metadata.
+- Gmail email accounts only need `provider = "gmail"` plus identity fields; qs-go defaults IMAP to `imap.gmail.com:993` with TLS.
+
+`EnvLoader.qml` reads values through qs-go `ConfigResolver`, normalizes the default model to canonical `provider/model` form, and builds the typed `providerConfig` map consumed by `AiChatSession` and `ModelConfig.qml`. Do not parse local config or Secret Service directly in QML.
+
+Todoist uses the hosted streamable MCP endpoint at `https://ai.todoist.net/mcp`. The Go MCP runtime reads `TODOIST_API_TOKEN` from Secret Service and connects with `Authorization: Bearer <token>`. Do not add an `npx` Todoist MCP server.
 
 ### MCP Server Definitions
 
-`leftpanel/mcp_servers.json` is an array of objects with:
+`leftpanel/mcp_servers.json` is for optional custom MCP endpoints. It is merged after resolver-provided servers and is an array of objects with:
 
 - `id`
 - `label`

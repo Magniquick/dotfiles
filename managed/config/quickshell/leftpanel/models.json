@@ -1,0 +1,68 @@
+{
+  "models": [
+    {
+      "provider": "local",
+      "provider_label": "Local",
+      "raw_id": "gpt-5.5",
+      "label": "GPT-5.5",
+      "description": "Frontier model through the local proxy",
+      "recommended": true
+    },
+    {
+      "provider": "local",
+      "provider_label": "Local",
+      "raw_id": "gpt-5.4-mini",
+      "label": "GPT-5.4 Mini",
+      "description": "Default local proxy model",
+      "recommended": true
+    },
+    {
+      "provider": "local",
+      "provider_label": "Local",
+      "raw_id": "gpt-5.3-codex",
+      "label": "GPT-5.3 Codex",
+      "description": "Coding-optimized model through the local proxy",
+      "recommended": true
+    },
+    {
+      "provider": "openai",
+      "provider_label": "OpenAI",
+      "raw_id": "gpt-5.5",
+      "label": "GPT-5.5",
+      "description": "Frontier model",
+      "recommended": true
+    },
+    {
+      "provider": "openai",
+      "provider_label": "OpenAI",
+      "raw_id": "gpt-5.4-mini",
+      "label": "GPT-5.4 Mini",
+      "description": "Fast GPT-5.4 variant",
+      "recommended": true
+    },
+    {
+      "provider": "openai",
+      "provider_label": "OpenAI",
+      "raw_id": "gpt-5.3-codex",
+      "label": "GPT-5.3 Codex",
+      "description": "Coding-optimized model",
+      "recommended": true
+    },
+    {
+      "provider": "gemini",
+      "provider_label": "Gemini",
+      "raw_id": "gemini-2.5-flash",
+      "label": "Gemini 2.5 Flash",
+      "description": "Google's latest flash model",
+      "recommended": true
+    },
+    {
+      "provider": "gemini",
+      "provider_label": "Gemini",
+      "raw_id": "gemini-2.0-flash",
+      "label": "Gemini 2.0 Flash",
+      "description": "Google's fast multimodal model",
+      "recommended": true
+    }
+  ]
+}

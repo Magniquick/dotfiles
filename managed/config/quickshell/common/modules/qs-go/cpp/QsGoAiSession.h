@@ -36,6 +36,7 @@ public:
     QVariantMap metrics;
     QVariantList attachments;
     QVariantMap tool;
+    bool showHeader = true;
   };
 
   enum Roles {
@@ -45,7 +46,8 @@ public:
     KindRole,
     MetricsRole,
     AttachmentsRole,
-    ToolRole
+    ToolRole,
+    ShowHeaderRole
   };
 
   explicit QsGoAiSession(QObject* parent = nullptr);
@@ -116,6 +118,7 @@ public:
   Q_INVOKABLE QString copyAllText() const;
   Q_INVOKABLE QVariantList pasteImageFromClipboard();
   Q_INVOKABLE QVariantList pasteAttachmentFromClipboard();
+  Q_INVOKABLE bool restoreHistory();
   Q_INVOKABLE bool refreshMcp();
   Q_INVOKABLE QVariantMap getMcpPrompt(const QString& serverId, const QString& promptName,
                                        const QVariantMap& arguments = QVariantMap{});
@@ -141,6 +144,21 @@ signals:
 private:
   static void tokenCallback(void* ctx, const char* token, int done);
   void startStream(const QString& text, const QVariantList& attachments);
+  bool ensureHistoryConversation();
+  bool createHistoryConversation();
+  bool closeHistoryConversation();
+  QVariantMap applyHistoryAction(const QVariantMap& action) const;
+  QVariantMap messageToHistoryMap(const Message& msg, int ordinal,
+                                  const QString& statusOverride = QString(),
+                                  const QString& completedAt = QString()) const;
+  void persistMessageAt(int row, const QString& statusOverride = QString(),
+                        const QString& completedAt = QString());
+  void persistToolCallAt(int row);
+  void persistDeletedFromOrdinal(int ordinal);
+  QVariantMap extraForMessage(const Message& msg) const;
+  QVariantMap metricsForMessage(const Message& msg) const;
+  QString utcNow() const;
+  void restoreMessages(const QVariantList& messages);
   QString buildHistoryJson() const;
   QByteArray buildProviderConfigJson() const;
   QByteArray buildMcpConfigJson() const;
@@ -158,6 +176,9 @@ private:
 
   QList<Message> m_messages;
   int m_sessionId = -1;
+  QString m_conversationId;
+  bool m_historyLoaded = false;
+  bool m_restoringHistory = false;
 
   QString m_modelId;
   QString m_systemPrompt;

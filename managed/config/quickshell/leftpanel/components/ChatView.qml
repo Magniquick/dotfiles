@@ -115,6 +115,7 @@ Item {
                 required property var metrics
                 required property var attachments
                 required property var tool
+                required property bool showHeader
 
                 width: messageList.width
                 implicitHeight: contentLoader.item ? contentLoader.item.implicitHeight : 0
@@ -146,6 +147,7 @@ Item {
                         modelLabel: delegateRoot.sender === "assistant" ? root.modelLabel : ""
                         moodIcon: root.moodIcon
                         moodName: root.moodName
+                        showHeader: delegateRoot.showHeader
                         // The backend inserts an assistant message up-front and streams into it.
                         // Treat the last assistant message as "streaming" while busy, and render a
                         // lightweight view to avoid expensive markdown/code-block reflows per chunk.
@@ -168,6 +170,8 @@ Item {
                     Components.ToolCallRow {
                         width: delegateRoot.width
                         tool: delegateRoot.tool
+                        moodIcon: root.moodIcon
+                        moodName: root.moodName
                     }
                 }
             }

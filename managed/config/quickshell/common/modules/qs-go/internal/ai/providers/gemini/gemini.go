@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"qs-go/internal/ai/providers"
 	"qs-go/internal/ai/shared"
@@ -27,29 +26,14 @@ func (Provider) Metadata() shared.ProviderMetadata {
 		ID:          "gemini",
 		Label:       "Gemini",
 		Description: "Google Gemini multimodal inference",
-		RecommendedRawID: []string{
-			"gemini-2.5-flash",
-			"gemini-2.0-flash",
-		},
-		FallbackModels: []shared.ModelDescriptor{
-			{RawID: "gemini-2.5-flash", Label: "Gemini 2.5 Flash", Description: "Google's latest flash model"},
-			{RawID: "gemini-2.0-flash", Label: "Gemini 2.0 Flash", Description: "Google's fast multimodal model"},
-		},
 	}
 }
 
 func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken func(string)) (shared.StreamResult, error) {
 	url := "https://generativelanguage.googleapis.com/v1beta/models/" + req.RawModelID + ":streamGenerateContent?alt=sse&key=" + strings.TrimSpace(req.Config.APIKey)
-	payload, err := buildPayload(req.SystemPrompt, req.History, req.Message, req.Attachments)
+	payload, err := buildPayloadForModel(req.RawModelID, req.SystemPrompt, req.History, req.Message, req.Attachments, req.Tools)
 	if err != nil {
 		return shared.StreamResult{}, err
-	}
-	if len(req.Tools) > 0 {
-		payload["tools"] = []map[string]any{
-			{
-				"functionDeclarations": buildToolDeclarations(req.Tools),
-			},
-		}
 	}
 	body, _ := json.Marshal(payload)
 
@@ -137,80 +121,25 @@ func (Provider) Stream(ctx context.Context, req shared.StreamRequest, onToken fu
 	return out, nil
 }
 
-func (Provider) ListModels(ctx context.Context, cfg shared.ProviderConfig) ([]shared.ModelDescriptor, error) {
-	url := "https://generativelanguage.googleapis.com/v1beta/models?key=" + strings.TrimSpace(cfg.APIKey)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, shared.ExtractErrorMessage(raw))
-	}
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	var payload struct {
-		Models []struct {
-			Name                       string   `json:"name"`
-			DisplayName                string   `json:"displayName"`
-			Description                string   `json:"description"`
-			SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, err
-	}
-
-	models := make([]shared.ModelDescriptor, 0, len(payload.Models))
-	for _, model := range payload.Models {
-		id := strings.TrimPrefix(strings.TrimSpace(model.Name), "models/")
-		if !strings.HasPrefix(id, "gemini-") {
-			continue
-		}
-		supportsChat := false
-		for _, method := range model.SupportedGenerationMethods {
-			if method == "generateContent" {
-				supportsChat = true
-				break
-			}
-		}
-		if !supportsChat {
-			continue
-		}
-		label := strings.TrimSpace(model.DisplayName)
-		if label == "" {
-			label = id
-		}
-		models = append(models, shared.ModelDescriptor{
-			RawID:        id,
-			Label:        label,
-			Description:  strings.TrimSpace(model.Description),
-			Provider:     "gemini",
-			Capabilities: shared.ModelCapabilities{},
-		})
-	}
-	return models, nil
+func buildPayload(systemPrompt string, history []shared.HistoryMessage, message string, attachments []shared.Attachment) (map[string]any, error) {
+	return buildPayloadForModel("", systemPrompt, history, message, attachments, nil)
 }
 
-func buildPayload(systemPrompt string, history []shared.HistoryMessage, message string, attachments []shared.Attachment) (map[string]any, error) {
+func buildPayloadForModel(rawModelID string, systemPrompt string, history []shared.HistoryMessage, message string, attachments []shared.Attachment, tools []shared.ToolDescriptor) (map[string]any, error) {
 	contents := make([]map[string]any, 0, len(history)+1)
 	for _, item := range history {
 		if item.ToolCall != nil {
+			args := item.ToolCall.Arguments
+			if strings.TrimSpace(item.ToolCall.Input) != "" && len(args) == 0 {
+				args = map[string]any{"input": item.ToolCall.Input}
+			}
 			contents = append(contents, map[string]any{
 				"role": "model",
 				"parts": []map[string]any{
 					{
 						"functionCall": map[string]any{
 							"name": item.ToolCall.Name,
-							"args": normalizeSchemaMap(item.ToolCall.Arguments),
+							"args": normalizeSchemaMap(args),
 						},
 					},
 				},
@@ -264,16 +193,52 @@ func buildPayload(systemPrompt string, history []shared.HistoryMessage, message 
 			"parts": []map[string]any{{"text": systemPrompt}},
 		}
 	}
+	if searchEnabledForModel(rawModelID) {
+		payload["tools"] = append(payloadTools(payload), map[string]any{"googleSearch": map[string]any{}})
+	}
+	if len(tools) > 0 {
+		payload["tools"] = append(payloadTools(payload), map[string]any{
+			"functionDeclarations": buildToolDeclarations(tools),
+		})
+	}
+	if supportsCombinedServerTools(rawModelID) && len(tools) > 0 {
+		payload["toolConfig"] = map[string]any{
+			"includeServerSideToolInvocations": true,
+		}
+	}
 	return payload, nil
+}
+
+func payloadTools(payload map[string]any) []map[string]any {
+	if existing, ok := payload["tools"].([]map[string]any); ok {
+		return existing
+	}
+	return []map[string]any{}
+}
+
+func searchEnabledForModel(rawModelID string) bool {
+	id := strings.TrimSpace(rawModelID)
+	if id == "" {
+		return false
+	}
+	return supportsCombinedServerTools(id)
+}
+
+func supportsCombinedServerTools(rawModelID string) bool {
+	return strings.HasPrefix(strings.TrimSpace(rawModelID), "gemini-3")
 }
 
 func buildToolDeclarations(tools []shared.ToolDescriptor) []map[string]any {
 	out := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
+		schema := defaultSchema(tool.InputSchema)
+		if strings.TrimSpace(tool.Kind) == "freeform" {
+			schema = freeformFallbackSchema()
+		}
 		out = append(out, map[string]any{
 			"name":        tool.Name,
 			"description": tool.Description,
-			"parameters":  defaultSchema(tool.InputSchema),
+			"parameters":  schema,
 		})
 	}
 	return out
@@ -286,6 +251,19 @@ func defaultSchema(schema map[string]any) map[string]any {
 	return map[string]any{
 		"type":       "object",
 		"properties": map[string]any{},
+	}
+}
+
+func freeformFallbackSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"input": map[string]any{
+				"type":        "string",
+				"description": "Raw freeform tool input.",
+			},
+		},
+		"required": []string{"input"},
 	}
 }
 

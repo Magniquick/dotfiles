@@ -5,7 +5,24 @@ import (
 	"time"
 
 	apiSync "github.com/CnTeng/todoist-api-go/sync"
+
+	"qs-go/internal/secrets"
 )
+
+func TestReadTokenUsesSecretResolver(t *testing.T) {
+	cleanup := secrets.UseResolverForTest(secrets.NewMapResolver(map[string]string{
+		"TODOIST_API_TOKEN": "secret-token",
+	}))
+	defer cleanup()
+
+	got, err := readToken()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "secret-token" {
+		t.Fatalf("expected secret token, got %q", got)
+	}
+}
 
 func TestTaskDueKeepsFloatingTodoistTime(t *testing.T) {
 	originalLocal := time.Local

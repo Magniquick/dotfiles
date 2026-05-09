@@ -20,9 +20,11 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"qs-go/internal/ai/shared"
+	"qs-go/internal/secrets"
 )
 
 const clientVersion = "v1.0.0"
+const hostedTodoistMCPURL = "https://ai.todoist.net/mcp"
 
 type ServerConfig struct {
 	ID          string            `json:"id"`
@@ -60,6 +62,7 @@ type ToolSnapshot struct {
 	Description   string         `json:"description,omitempty"`
 	InputSchema   map[string]any `json:"input_schema,omitempty"`
 	OutputSchema  map[string]any `json:"output_schema,omitempty"`
+	ReadOnly      bool           `json:"read_only,omitempty"`
 }
 
 type PromptSnapshot struct {
@@ -152,16 +155,16 @@ var defaultRuntime = &runtime{
 }
 
 func Refresh(configJSON string) string {
-	snapshot := defaultRuntime.refresh(parseConfig(configJSON))
+	snapshot := defaultRuntime.refresh(configuredServers(configJSON))
 	return mustJSON(snapshot)
 }
 
 func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
-	snapshot := defaultRuntime.refresh(parseConfig(configJSON))
+	snapshot := defaultRuntime.refresh(configuredServers(configJSON))
 	out := make([]shared.ToolDescriptor, 0, len(snapshot.Tools))
 	for _, tool := range snapshot.Tools {
 		name := firstNonEmpty(tool.QualifiedName, qualifiedToolName(tool.ServerID, tool.Name))
-		if strings.TrimSpace(tool.ServerID) == "builtin" {
+		if isLocalToolServer(tool.ServerID) {
 			name = strings.TrimSpace(tool.Name)
 		}
 		out = append(out, shared.ToolDescriptor{
@@ -171,6 +174,7 @@ func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
 			InputSchema: tool.InputSchema,
 			Kind:        builtinToolKind(tool),
 			Format:      builtinToolFormat(tool),
+			ReadOnly:    tool.ReadOnly,
 			ServerID:    tool.ServerID,
 			ServerLabel: tool.ServerLabel,
 		})
@@ -201,11 +205,14 @@ func builtinToolFormat(tool ToolSnapshot) map[string]any {
 
 func CallTool(configJSON string, serverID string, toolName string, arguments map[string]any) (shared.ToolResult, error) {
 	serverID, toolName = splitQualifiedToolName(serverID, toolName)
+	if strings.TrimSpace(serverID) == emailServerID || (strings.TrimSpace(serverID) == "" && isEmailTool(toolName)) {
+		return callEmailTool(toolName, arguments), nil
+	}
 	if strings.TrimSpace(serverID) == "builtin" || (strings.TrimSpace(serverID) == "" && isBuiltinTool(toolName)) {
 		return callBuiltinTool(toolName, arguments), nil
 	}
 
-	cfgs := parseConfig(configJSON)
+	cfgs := configuredServers(configJSON)
 	if _, err := defaultRuntime.ensure(cfgs); err != nil {
 		return shared.ToolResult{}, err
 	}
@@ -249,7 +256,7 @@ func GetPrompt(configJSON string, serverID string, promptName string, argsJSON s
 		_ = json.Unmarshal([]byte(argsJSON), &args)
 	}
 
-	cfgs := parseConfig(configJSON)
+	cfgs := configuredServers(configJSON)
 	if _, err := defaultRuntime.ensure(cfgs); err != nil {
 		return mustJSON(map[string]any{"error": err.Error()})
 	}
@@ -289,7 +296,7 @@ func GetPrompt(configJSON string, serverID string, promptName string, argsJSON s
 }
 
 func ReadResource(configJSON string, serverID string, uri string) string {
-	cfgs := parseConfig(configJSON)
+	cfgs := configuredServers(configJSON)
 	if _, err := defaultRuntime.ensure(cfgs); err != nil {
 		return mustJSON(map[string]any{"error": err.Error()})
 	}
@@ -326,7 +333,7 @@ func ReadResource(configJSON string, serverID string, uri string) string {
 }
 
 func WithStreamHandlers(configJSON string, sampling SamplingHandler, elicitation ElicitationHandler, fn func() error) error {
-	if _, err := defaultRuntime.ensure(parseConfig(configJSON)); err != nil {
+	if _, err := defaultRuntime.ensure(configuredServers(configJSON)); err != nil {
 		return err
 	}
 
@@ -506,6 +513,7 @@ func (r *runtime) populateLocked(conn *serverConn) {
 				Description:   strings.TrimSpace(tool.Description),
 				InputSchema:   asMap(tool.InputSchema),
 				OutputSchema:  asMap(tool.OutputSchema),
+				ReadOnly:      toolReadOnly(tool),
 			})
 		}
 		conn.snapshot.ToolCount = len(conn.tools)
@@ -560,6 +568,10 @@ func (r *runtime) populateLocked(conn *serverConn) {
 	}
 }
 
+func toolReadOnly(tool *sdk.Tool) bool {
+	return tool != nil && tool.Annotations != nil && tool.Annotations.ReadOnlyHint
+}
+
 func (r *runtime) snapshotLocked() Snapshot {
 	out := Snapshot{
 		Servers:   []ServerSnapshot{builtinServerSnapshot()},
@@ -569,6 +581,8 @@ func (r *runtime) snapshotLocked() Snapshot {
 		Status:    "ready",
 	}
 	out.Tools = append(out.Tools, builtinToolSnapshots()...)
+	out.Servers = append(out.Servers, emailServerSnapshot())
+	out.Tools = append(out.Tools, emailToolSnapshots()...)
 	for _, conn := range r.conns {
 		if conn == nil {
 			continue
@@ -664,6 +678,40 @@ func parseConfig(configJSON string) []ServerConfig {
 		out = append(out, cfg)
 	}
 	return out
+}
+
+func configuredServers(configJSON string) []ServerConfig {
+	return withHostedTodoist(parseConfig(configJSON), secrets.NewResolver())
+}
+
+func withHostedTodoist(cfgs []ServerConfig, resolver secrets.Resolver) []ServerConfig {
+	if resolver == nil {
+		return cfgs
+	}
+	token, ok := resolver.Lookup("TODOIST_API_TOKEN")
+	if !ok || strings.TrimSpace(token) == "" || hasHostedTodoist(cfgs) {
+		return cfgs
+	}
+	next := make([]ServerConfig, 0, len(cfgs)+1)
+	next = append(next, cfgs...)
+	next = append(next, ServerConfig{
+		ID:          "todoist",
+		Label:       "Todoist",
+		URL:         hostedTodoistMCPURL,
+		Enabled:     true,
+		AutoConnect: true,
+		BearerToken: strings.TrimSpace(token),
+	})
+	return next
+}
+
+func hasHostedTodoist(cfgs []ServerConfig) bool {
+	for _, cfg := range cfgs {
+		if strings.EqualFold(strings.TrimSpace(cfg.URL), hostedTodoistMCPURL) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeArgs(in map[string]any) map[string]any {
@@ -852,6 +900,15 @@ func callBuiltinTool(toolName string, arguments map[string]any) shared.ToolResul
 func isBuiltinTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
 	case "shell_command", "shell_exec", "apply_patch":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalToolServer(serverID string) bool {
+	switch strings.TrimSpace(serverID) {
+	case "builtin", emailServerID:
 		return true
 	default:
 		return false

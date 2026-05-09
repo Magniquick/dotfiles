@@ -1,0 +1,26 @@
+#include "QsGoConfigResolver.h"
+#include "qsgo_go_api.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+
+QsGoConfigResolver::QsGoConfigResolver(QObject* parent) : QObject(parent) {}
+
+bool QsGoConfigResolver::refresh() {
+  char* raw = QsGo_Config_Resolve();
+  QByteArray json(raw);
+  QsGo_Free(raw);
+
+  const QJsonDocument doc = QJsonDocument::fromJson(json);
+  if (!doc.isObject()) {
+    return false;
+  }
+
+  const QVariantMap next = doc.object().toVariantMap();
+  if (next == m_values) {
+    return true;
+  }
+  m_values = next;
+  emit valuesChanged();
+  return true;
+}

@@ -16,8 +16,11 @@ import (
 	"unsafe"
 
 	"qs-go/internal/ai"
+	"qs-go/internal/appconfig"
+	"qs-go/internal/chatstore"
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
+	"qs-go/internal/secrets"
 	"qs-go/internal/todoist"
 )
 
@@ -36,15 +39,15 @@ func QsGo_Pacman_Sync() *C.char {
 // ----- iCal -----
 
 //export QsGo_Ical_Refresh
-func QsGo_Ical_Refresh(envFile *C.char, days C.int) *C.char {
-	return C.CString(ical.Refresh(C.GoString(envFile), int(days)))
+func QsGo_Ical_Refresh(days C.int) *C.char {
+	return C.CString(ical.Refresh(int(days)))
 }
 
-// ----- AI models -----
+// ----- Config / secrets resolver -----
 
-//export QsGo_AiModels_Refresh
-func QsGo_AiModels_Refresh(providerConfigJSON *C.char) *C.char {
-	return C.CString(ai.RefreshCatalog(C.GoString(providerConfigJSON)))
+//export QsGo_Config_Resolve
+func QsGo_Config_Resolve() *C.char {
+	return C.CString(appconfig.ResolveJSON(secrets.NewResolver()))
 }
 
 //export QsGo_AiMcp_Refresh
@@ -106,16 +109,21 @@ func QsGo_AiChat_LastMetrics() *C.char {
 	return C.CString(ai.LastMetricsJSON())
 }
 
+//export QsGo_AiHistory_Apply
+func QsGo_AiHistory_Apply(actionJSON *C.char) *C.char {
+	return C.CString(chatstore.ApplyJSON(C.GoString(actionJSON)))
+}
+
 // ----- Todoist -----
 
 //export QsGo_Todoist_List
-func QsGo_Todoist_List(envFile, cachePath *C.char, preferCache C.int) *C.char {
-	return C.CString(todoist.ListTasks(C.GoString(envFile), C.GoString(cachePath), preferCache != 0))
+func QsGo_Todoist_List(cachePath *C.char, preferCache C.int) *C.char {
+	return C.CString(todoist.ListTasks(C.GoString(cachePath), preferCache != 0))
 }
 
 //export QsGo_Todoist_Action
-func QsGo_Todoist_Action(envFile, verb, argsJSON *C.char) *C.char {
-	return C.CString(todoist.Action(C.GoString(envFile), C.GoString(verb), C.GoString(argsJSON)))
+func QsGo_Todoist_Action(verb, argsJSON *C.char) *C.char {
+	return C.CString(todoist.Action(C.GoString(verb), C.GoString(argsJSON)))
 }
 
 // ----- Memory management -----

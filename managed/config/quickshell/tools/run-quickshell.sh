@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+export QS_SHELL_DIR="$ROOT_DIR"
 
 QSGO_QML_DIR="$ROOT_DIR/common/modules/qs-go/build/qml"
 QSCAPTURE_QML_DIR="$ROOT_DIR/common/modules/qs-capture/build/qml"

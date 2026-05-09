@@ -59,11 +59,44 @@ func TestBuildToolDoneEventForShellExecNoOutput(t *testing.T) {
 	if event.Subtitle != "exit 0 · no stdout" {
 		t.Fatalf("unexpected subtitle: %q", event.Subtitle)
 	}
-	if len(event.DetailSections) != 2 {
-		t.Fatalf("expected command and result sections, got %#v", event.DetailSections)
+	if len(event.DetailSections) != 1 || event.DetailSections[0].Title != "Stdout" {
+		t.Fatalf("expected stdout-only section, got %#v", event.DetailSections)
+	}
+	if event.DetailSections[0].Content != "(no output)" {
+		t.Fatalf("expected no-output stdout marker, got %#v", event.DetailSections)
 	}
 	if !strings.Contains(event.AgentPayload, `"type":"function_call_output"`) {
 		t.Fatalf("expected Codex function_call_output payload, got %q", event.AgentPayload)
+	}
+}
+
+func TestBuildToolDoneEventForShellExecShowsOnlyStdoutDetails(t *testing.T) {
+	event := buildToolDoneEvent(
+		shared.ToolCall{
+			ID:        "call_shell",
+			Name:      "shell_command",
+			Arguments: map[string]any{"command": "printf hello"},
+		},
+		shared.ToolResult{
+			ToolCallID: "call_shell",
+			Name:       "shell_command",
+			Data: map[string]any{
+				"exit_code": 0,
+				"stdout":    "hello\n",
+				"stderr":    "warning\n",
+				"cwd":       "/workspace",
+			},
+		},
+	)
+
+	if len(event.DetailSections) != 1 {
+		t.Fatalf("expected one stdout detail section, got %#v", event.DetailSections)
+	}
+	if event.DetailSections[0].Content != "hello" {
+		t.Fatalf("expected stdout only, got %q", event.DetailSections[0].Content)
+	}
+	if strings.Contains(event.DetailSections[0].Content, "stderr") || strings.Contains(event.DetailSections[0].Content, "exit code") {
+		t.Fatalf("stdout dropdown should not include command metadata: %q", event.DetailSections[0].Content)
 	}
 }
 
@@ -103,6 +136,16 @@ func TestBuildToolDoneEventForApplyPatchStats(t *testing.T) {
 	}
 	if len(event.DetailSections) == 0 || !strings.Contains(event.DetailSections[0].Content, "docs/smoke-note.md   +2 -0") {
 		t.Fatalf("expected per-file stats, got %#v", event.DetailSections)
+	}
+	if len(event.DetailSections) < 2 || event.DetailSections[1].Title != "Diff" || event.DetailSections[1].Kind != "diff" {
+		t.Fatalf("expected rendered diff section, got %#v", event.DetailSections)
+	}
+	if !strings.Contains(event.DetailSections[1].Content, "diff --git a/docs/smoke-note.md b/docs/smoke-note.md") ||
+		!strings.Contains(event.DetailSections[1].Content, "--- /dev/null") ||
+		!strings.Contains(event.DetailSections[1].Content, "+++ b/docs/smoke-note.md") ||
+		!strings.Contains(event.DetailSections[1].Content, "-old") ||
+		!strings.Contains(event.DetailSections[1].Content, "+extra") {
+		t.Fatalf("expected unified diff content, got %q", event.DetailSections[1].Content)
 	}
 	if !strings.Contains(event.AgentPayload, `"type":"custom_tool_call"`) || !strings.Contains(event.AgentPayload, `"type":"custom_tool_call_output"`) {
 		t.Fatalf("expected Codex custom tool payload, got %#v", event)

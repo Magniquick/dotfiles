@@ -43,6 +43,46 @@ type sessionEntry struct {
 	cancel context.CancelFunc
 }
 
+type streamMetricTracker struct {
+	now        func() time.Time
+	turnStart  time.Time
+	roundStart time.Time
+	chunkCount int
+	ttfMS      float64
+}
+
+func newStreamMetricTracker(now func() time.Time) *streamMetricTracker {
+	if now == nil {
+		now = time.Now
+	}
+	start := now()
+	return &streamMetricTracker{
+		now:        now,
+		turnStart:  start,
+		roundStart: start,
+		ttfMS:      -1,
+	}
+}
+
+func (t *streamMetricTracker) beginProviderRound() {
+	t.roundStart = t.now()
+}
+
+func (t *streamMetricTracker) observeToken(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	if t.chunkCount == 0 {
+		t.ttfMS = float64(t.now().Sub(t.roundStart).Microseconds()) / 1000.0
+	}
+	t.chunkCount++
+	return true
+}
+
+func (t *streamMetricTracker) totalMS() float64 {
+	return float64(t.now().Sub(t.turnStart).Microseconds()) / 1000.0
+}
+
 var (
 	sessionIDCounter int32
 	sessions         sync.Map // int32 → *sessionEntry
@@ -107,17 +147,11 @@ func Stream(
 			}
 		}
 
-		start := time.Now()
-		var chunkCount int
-		ttf := -1.0
+		metrics := newStreamMetricTracker(time.Now)
 		onToken := func(tok string) {
-			if tok == "" {
+			if !metrics.observeToken(tok) {
 				return
 			}
-			if chunkCount == 0 {
-				ttf = float64(time.Since(start).Microseconds()) / 1000.0
-			}
-			chunkCount++
 			cb(tok, 0)
 		}
 		onToolEvent := func(event toolUIEvent) {
@@ -150,19 +184,19 @@ func Stream(
 		var result shared.StreamResult
 		err = aimcp.WithStreamHandlers(mcpConfigJSON, samplingHandler, elicitationHandler, func() error {
 			var streamErr error
-			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken, onToolEvent)
+			result, streamErr = streamWithTools(ctx, prov, baseReq, mcpConfigJSON, onToken, onToolEvent, metrics.beginProviderRound)
 			return streamErr
 		})
-		totalMS := float64(time.Since(start).Microseconds()) / 1000.0
+		totalMS := metrics.totalMS()
 
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				storeMetrics(SessionMetrics{
 					Model:        modelID,
-					ChunkCount:   chunkCount,
+					ChunkCount:   metrics.chunkCount,
 					PromptTokens: result.PromptTokens,
 					OutputTokens: result.OutputTokens,
-					TTFMS:        ttf,
+					TTFMS:        metrics.ttfMS,
 					TotalMS:      totalMS,
 					Finished:     false,
 				})
@@ -171,10 +205,10 @@ func Stream(
 			msg := err.Error()
 			storeMetrics(SessionMetrics{
 				Model:        modelID,
-				ChunkCount:   chunkCount,
+				ChunkCount:   metrics.chunkCount,
 				PromptTokens: result.PromptTokens,
 				OutputTokens: result.OutputTokens,
-				TTFMS:        ttf,
+				TTFMS:        metrics.ttfMS,
 				TotalMS:      totalMS,
 				Finished:     false,
 				Error:        msg,
@@ -185,10 +219,10 @@ func Stream(
 
 		storeMetrics(SessionMetrics{
 			Model:        modelID,
-			ChunkCount:   chunkCount,
+			ChunkCount:   metrics.chunkCount,
 			PromptTokens: result.PromptTokens,
 			OutputTokens: result.OutputTokens,
-			TTFMS:        ttf,
+			TTFMS:        metrics.ttfMS,
 			TotalMS:      totalMS,
 			Finished:     true,
 		})
@@ -205,6 +239,7 @@ func streamWithTools(
 	mcpConfigJSON string,
 	onToken func(string),
 	onToolEvent func(toolUIEvent),
+	onProviderRoundStart func(),
 ) (shared.StreamResult, error) {
 	req := baseReq
 	if supportsTools(baseReq) {
@@ -224,6 +259,9 @@ func streamWithTools(
 		req.Message = message
 		req.Attachments = attachments
 
+		if onProviderRoundStart != nil {
+			onProviderRoundStart()
+		}
 		result, err := prov.Stream(ctx, req, onToken)
 		combined.PromptTokens = result.PromptTokens
 		combined.OutputTokens += result.OutputTokens
@@ -417,6 +455,7 @@ func convertMcpTools(tools []*mcp.Tool) []shared.ToolDescriptor {
 			Title:       strings.TrimSpace(tool.Title),
 			Description: strings.TrimSpace(tool.Description),
 			InputSchema: asMap(tool.InputSchema),
+			ReadOnly:    tool.Annotations != nil && tool.Annotations.ReadOnlyHint,
 		})
 	}
 	return out

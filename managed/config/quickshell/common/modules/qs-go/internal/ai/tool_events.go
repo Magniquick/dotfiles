@@ -102,8 +102,7 @@ func fillShellExecEvent(event *toolUIEvent, call shared.ToolCall, result shared.
 	event.Summary = "ran " + command
 	event.Subtitle = shellResultSubtitle(result)
 	event.DetailSections = []toolDetailSection{
-		{Title: "Command", Content: command, Kind: "code"},
-		{Title: "Result", Content: shellResultDetails(result), Kind: "code"},
+		{Title: "Stdout", Content: shellResultDetails(result), Kind: "code"},
 	}
 	if event.IsError && event.Subtitle == "" {
 		event.Subtitle = firstNonEmpty(result.Text, "failed")
@@ -125,8 +124,8 @@ func fillApplyPatchEvent(event *toolUIEvent, call shared.ToolCall, result shared
 	} else if files := changedFiles(result); len(files) > 0 {
 		sections = append(sections, toolDetailSection{Title: "Changed files", Content: strings.Join(files, "\n"), Kind: "code"})
 	}
-	if strings.TrimSpace(input) != "" {
-		sections = append(sections, toolDetailSection{Title: "Patch", Content: excerpt(input, 6000), Kind: "code"})
+	if diff := applyPatchAsUnifiedDiff(input); diff != "" {
+		sections = append(sections, toolDetailSection{Title: "Diff", Content: excerpt(diff, 10000), Kind: "diff"})
 	}
 	if result.IsError && strings.TrimSpace(result.Text) != "" {
 		sections = append(sections, toolDetailSection{Title: "Error", Content: result.Text, Kind: "code"})
@@ -242,21 +241,11 @@ func shellResultSubtitle(result shared.ToolResult) string {
 
 func shellResultDetails(result shared.ToolResult) string {
 	data := result.Data
-	lines := []string{
-		fmt.Sprintf("exit code: %d", intData(data, "exit_code", 0)),
-		"stdout: " + outputOrEmpty(stringData(data, "stdout")),
-		"stderr: " + outputOrEmpty(stringData(data, "stderr")),
+	stdout := stringData(data, "stdout")
+	if strings.TrimSpace(stdout) == "" && strings.TrimSpace(result.Text) != "" {
+		stdout = result.Text
 	}
-	if cwd := stringData(data, "cwd"); cwd != "" {
-		lines = append(lines, "cwd: "+cwd)
-	}
-	if boolData(data, "timed_out") {
-		lines = append(lines, "timed out: true")
-	}
-	if boolData(data, "truncated") {
-		lines = append(lines, "truncated: true")
-	}
-	return strings.Join(lines, "\n")
+	return outputOrEmpty(stdout)
 }
 
 func outputOrEmpty(value string) string {
@@ -361,6 +350,62 @@ func patchStatsTable(stats []patchFileStats) string {
 		lines = append(lines, fmt.Sprintf("%s   +%d -%d", stat.Path, stat.Additions, stat.Deletions))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func applyPatchAsUnifiedDiff(input string) string {
+	lines := strings.Split(input, "\n")
+	var out []string
+	current := ""
+	seenFile := false
+
+	startFile := func(path, mode string) {
+		clean := cleanPatchPath(path)
+		if clean == "" {
+			current = ""
+			return
+		}
+		if seenFile {
+			out = append(out, "")
+		}
+		seenFile = true
+		current = clean
+		out = append(out, fmt.Sprintf("diff --git a/%s b/%s", clean, clean))
+		switch mode {
+		case "add":
+			out = append(out, "new file", "--- /dev/null", "+++ b/"+clean)
+		case "delete":
+			out = append(out, "deleted file", "--- a/"+clean, "+++ /dev/null")
+		default:
+			out = append(out, "--- a/"+clean, "+++ b/"+clean)
+		}
+	}
+
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "*** Add File: "):
+			startFile(strings.TrimSpace(strings.TrimPrefix(line, "*** Add File: ")), "add")
+		case strings.HasPrefix(line, "*** Update File: "):
+			startFile(strings.TrimSpace(strings.TrimPrefix(line, "*** Update File: ")), "update")
+		case strings.HasPrefix(line, "*** Delete File: "):
+			startFile(strings.TrimSpace(strings.TrimPrefix(line, "*** Delete File: ")), "delete")
+		case strings.HasPrefix(line, "*** Move to: "):
+			next := cleanPatchPath(strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: ")))
+			if current != "" && next != "" {
+				out = append(out, "rename to "+next)
+				current = next
+			}
+		case strings.HasPrefix(line, "*** "):
+			current = ""
+		case current != "" && strings.HasPrefix(line, "@@"):
+			out = append(out, line)
+		case current != "" && (strings.HasPrefix(line, "+") ||
+			strings.HasPrefix(line, "-") ||
+			strings.HasPrefix(line, " ")):
+			out = append(out, line)
+		}
+	}
+
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 func changedFiles(result shared.ToolResult) []string {

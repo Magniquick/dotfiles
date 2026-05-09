@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <QBuffer>
 #include <QClipboard>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QPalette>
 #include <QImage>
@@ -51,6 +52,8 @@ QVariant QsGoAiSession::data(const QModelIndex& index, int role) const {
       return msg.attachments;
     case ToolRole:
       return msg.tool;
+    case ShowHeaderRole:
+      return msg.showHeader;
     default:
       return {};
   }
@@ -58,9 +61,9 @@ QVariant QsGoAiSession::data(const QModelIndex& index, int role) const {
 
 QHash<int, QByteArray> QsGoAiSession::roleNames() const {
   return {
-      {IdRole, "messageId"}, {SenderRole, "sender"},   {BodyRole, "body"},
-      {KindRole, "kind"},    {MetricsRole, "metrics"}, {AttachmentsRole, "attachments"},
-      {ToolRole, "tool"},
+      {IdRole, "messageId"}, {SenderRole, "sender"},         {BodyRole, "body"},
+      {KindRole, "kind"},    {MetricsRole, "metrics"},       {AttachmentsRole, "attachments"},
+      {ToolRole, "tool"},    {ShowHeaderRole, "showHeader"},
   };
 }
 
@@ -140,6 +143,11 @@ void QsGoAiSession::submitInputWithAttachments(const QString& text,
 }
 
 void QsGoAiSession::startStream(const QString& text, const QVariantList& attachments) {
+  if (!ensureHistoryConversation()) {
+    setError(QStringLiteral("Failed to open conversation history"));
+    return;
+  }
+
   // Build history from current messages BEFORE appending new ones.
   const QString histJson = buildHistoryJson();
   const QByteArray providerConfigJson = buildProviderConfigJson();
@@ -153,6 +161,7 @@ void QsGoAiSession::startStream(const QString& text, const QVariantList& attachm
   m_messages.append({QUuid::createUuid().toString(QUuid::WithoutBraces), "user", text, "chat",
                      QVariantMap{}, attachments});
   endInsertRows();
+  persistMessageAt(userRow, QStringLiteral("complete"), utcNow());
 
   // Append empty assistant message (filled by tokens).
   const int asstRow = m_messages.size();
@@ -160,6 +169,7 @@ void QsGoAiSession::startStream(const QString& text, const QVariantList& attachm
   m_messages.append(
       {QUuid::createUuid().toString(QUuid::WithoutBraces), "assistant", QString(), "chat"});
   endInsertRows();
+  persistMessageAt(asstRow, QStringLiteral("streaming"));
 
   emit scrollToEndRequested();
 
@@ -204,6 +214,7 @@ void QsGoAiSession::regenerate(const QString& messageId) {
 
   const QString userText = m_messages.at(userIdx).body;
   const QVariantList userAttachments = m_messages.at(userIdx).attachments;
+  persistDeletedFromOrdinal(userIdx);
 
   // Remove from userIdx onwards.
   beginRemoveRows({}, userIdx, m_messages.size() - 1);
@@ -218,6 +229,8 @@ void QsGoAiSession::deleteMessage(const QString& messageId) {
   const int idx = indexOfMessage(messageId);
   if (idx < 0)
     return;
+  applyHistoryAction(QVariantMap{{QStringLiteral("action"), QStringLiteral("mark_message_deleted")},
+                                 {QStringLiteral("message_id"), messageId}});
   beginRemoveRows({}, idx, idx);
   m_messages.removeAt(idx);
   endRemoveRows();
@@ -230,9 +243,11 @@ void QsGoAiSession::editMessage(const QString& messageId, const QString& newBody
   m_messages[idx].body = newBody;
   const QModelIndex mi = index(idx, 0);
   emit dataChanged(mi, mi, {BodyRole});
+  persistMessageAt(idx, QStringLiteral("complete"));
 }
 
 void QsGoAiSession::resetForModelSwitch(const QString& newModelId) {
+  closeHistoryConversation();
   if (!m_messages.isEmpty()) {
     beginRemoveRows({}, 0, m_messages.size() - 1);
     m_messages.clear();
@@ -245,14 +260,17 @@ void QsGoAiSession::resetForModelSwitch(const QString& newModelId) {
   setBusy(false);
   setError(QString());
   setStatus(QString());
+  createHistoryConversation();
 }
 
 void QsGoAiSession::appendInfo(const QString& text) {
+  ensureHistoryConversation();
   const int row = m_messages.size();
   beginInsertRows({}, row, row);
   m_messages.append(
       {QUuid::createUuid().toString(QUuid::WithoutBraces), "assistant", text, "info"});
   endInsertRows();
+  persistMessageAt(row, QStringLiteral("complete"), utcNow());
   emit scrollToEndRequested();
 }
 
@@ -341,11 +359,13 @@ QVariantList QsGoAiSession::commands() const {
 
 void QsGoAiSession::handleSlashCommand(const QString& cmd) {
   if (cmd == QStringLiteral("/clear")) {
+    closeHistoryConversation();
     if (!m_messages.isEmpty()) {
       beginRemoveRows({}, 0, m_messages.size() - 1);
       m_messages.clear();
       endRemoveRows();
     }
+    createHistoryConversation();
   } else if (cmd == QStringLiteral("/model")) {
     emit openModelPickerRequested();
   } else if (cmd == QStringLiteral("/mood")) {
@@ -538,6 +558,221 @@ void QsGoAiSession::handleSlashCommand(const QString& cmd) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+bool QsGoAiSession::restoreHistory() {
+  if (m_historyLoaded)
+    return true;
+
+  const QVariantMap result = applyHistoryAction(QVariantMap{
+      {QStringLiteral("action"), QStringLiteral("open_conversation")},
+      {QStringLiteral("model_id"), m_modelId},
+      {QStringLiteral("provider_id"), activeProviderId()},
+      {QStringLiteral("system_prompt"), m_systemPrompt},
+  });
+  if (!result.value(QStringLiteral("ok")).toBool())
+    return false;
+
+  const QVariantMap conv = result.value(QStringLiteral("conversation")).toMap();
+  m_conversationId = conv.value(QStringLiteral("id")).toString();
+  restoreMessages(result.value(QStringLiteral("messages")).toList());
+  m_historyLoaded = true;
+  return !m_conversationId.isEmpty();
+}
+
+bool QsGoAiSession::ensureHistoryConversation() {
+  if (!m_conversationId.isEmpty())
+    return true;
+  return restoreHistory();
+}
+
+bool QsGoAiSession::createHistoryConversation() {
+  const QVariantMap result = applyHistoryAction(QVariantMap{
+      {QStringLiteral("action"), QStringLiteral("create_conversation")},
+      {QStringLiteral("model_id"), m_modelId},
+      {QStringLiteral("provider_id"), activeProviderId()},
+      {QStringLiteral("system_prompt"), m_systemPrompt},
+  });
+  if (!result.value(QStringLiteral("ok")).toBool())
+    return false;
+  const QVariantMap conv = result.value(QStringLiteral("conversation")).toMap();
+  m_conversationId = conv.value(QStringLiteral("id")).toString();
+  m_historyLoaded = true;
+  return !m_conversationId.isEmpty();
+}
+
+bool QsGoAiSession::closeHistoryConversation() {
+  if (m_conversationId.isEmpty())
+    return true;
+  const QVariantMap result = applyHistoryAction(QVariantMap{
+      {QStringLiteral("action"), QStringLiteral("close_conversation")},
+      {QStringLiteral("conversation_id"), m_conversationId},
+  });
+  m_conversationId.clear();
+  m_historyLoaded = false;
+  return result.value(QStringLiteral("ok")).toBool();
+}
+
+QVariantMap QsGoAiSession::applyHistoryAction(const QVariantMap& action) const {
+  const QByteArray rawAction = QJsonDocument::fromVariant(action).toJson(QJsonDocument::Compact);
+  char* raw = QsGo_AiHistory_Apply(rawAction.constData());
+  const QByteArray rawResult(raw ? raw : "");
+  QsGo_Free(raw);
+
+  const QJsonDocument doc = QJsonDocument::fromJson(rawResult);
+  if (!doc.isObject())
+    return QVariantMap{{QStringLiteral("ok"), false},
+                       {QStringLiteral("error"), QStringLiteral("invalid history response")}};
+  return doc.object().toVariantMap();
+}
+
+QVariantMap QsGoAiSession::messageToHistoryMap(const Message& msg, int ordinal,
+                                               const QString& statusOverride,
+                                               const QString& completedAt) const {
+  const QString status =
+      statusOverride.isEmpty()
+          ? (msg.kind == QStringLiteral("chat") && msg.sender == QStringLiteral("assistant") &&
+                     msg.body.isEmpty()
+                 ? QStringLiteral("streaming")
+                 : QStringLiteral("complete"))
+          : statusOverride;
+  QVariantMap out{
+      {QStringLiteral("id"), msg.id},
+      {QStringLiteral("conversation_id"), m_conversationId},
+      {QStringLiteral("ordinal"), ordinal},
+      {QStringLiteral("sender"), msg.sender},
+      {QStringLiteral("kind"), msg.kind},
+      {QStringLiteral("status"), status},
+      {QStringLiteral("body"), msg.body},
+      {QStringLiteral("metrics_json"), metricsForMessage(msg)},
+      {QStringLiteral("extra_json"), extraForMessage(msg)},
+  };
+  if (!completedAt.isEmpty())
+    out.insert(QStringLiteral("completed_at"), completedAt);
+  if (status == QStringLiteral("complete") || status == QStringLiteral("error"))
+    out.insert(QStringLiteral("updated_at"), utcNow());
+  return out;
+}
+
+void QsGoAiSession::persistMessageAt(int row, const QString& statusOverride,
+                                     const QString& completedAt) {
+  if (m_restoringHistory || row < 0 || row >= m_messages.size())
+    return;
+  if (!ensureHistoryConversation())
+    return;
+  const Message& msg = m_messages.at(row);
+  applyHistoryAction(QVariantMap{
+      {QStringLiteral("action"), QStringLiteral("upsert_message")},
+      {QStringLiteral("message"), messageToHistoryMap(msg, row, statusOverride, completedAt)},
+  });
+}
+
+void QsGoAiSession::persistToolCallAt(int row) {
+  if (m_restoringHistory || row < 0 || row >= m_messages.size())
+    return;
+  const Message& msg = m_messages.at(row);
+  if (msg.kind != QStringLiteral("tool") || msg.tool.isEmpty())
+    return;
+
+  QVariantMap payload = msg.tool;
+  payload.remove(QStringLiteral("show_header"));
+  const QString phase = payload.value(QStringLiteral("phase")).toString();
+  const QString toolCallId = payload.value(QStringLiteral("tool_call_id")).toString();
+  const QString status = payload.value(QStringLiteral("status")).toString();
+  const QVariantMap toolCall{
+      {QStringLiteral("id"), toolCallId.isEmpty() ? msg.id : toolCallId},
+      {QStringLiteral("message_id"), msg.id},
+      {QStringLiteral("tool_call_id"), toolCallId.isEmpty() ? msg.id : toolCallId},
+      {QStringLiteral("tool_name"), payload.value(QStringLiteral("tool_name")).toString()},
+      {QStringLiteral("phase"), phase.isEmpty() ? QStringLiteral("tool_start") : phase},
+      {QStringLiteral("status"), status.isEmpty() ? QStringLiteral("running") : status},
+      {QStringLiteral("is_error"), payload.value(QStringLiteral("is_error")).toBool()},
+      {QStringLiteral("summary"), payload.value(QStringLiteral("summary")).toString()},
+      {QStringLiteral("subtitle"), payload.value(QStringLiteral("subtitle")).toString()},
+      {QStringLiteral("payload_json"), payload},
+      {QStringLiteral("updated_at"), utcNow()},
+  };
+  applyHistoryAction(QVariantMap{{QStringLiteral("action"), QStringLiteral("upsert_tool_call")},
+                                 {QStringLiteral("tool_call"), toolCall}});
+}
+
+void QsGoAiSession::persistDeletedFromOrdinal(int ordinal) {
+  if (m_conversationId.isEmpty())
+    return;
+  applyHistoryAction(QVariantMap{{QStringLiteral("action"), QStringLiteral("delete_from_ordinal")},
+                                 {QStringLiteral("conversation_id"), m_conversationId},
+                                 {QStringLiteral("ordinal"), ordinal}});
+}
+
+QVariantMap QsGoAiSession::extraForMessage(const Message& msg) const {
+  QVariantMap out;
+  if (!msg.attachments.isEmpty())
+    out.insert(QStringLiteral("attachments"), msg.attachments);
+  return out;
+}
+
+QVariantMap QsGoAiSession::metricsForMessage(const Message& msg) const {
+  return msg.metrics;
+}
+
+QString QsGoAiSession::utcNow() const {
+  return QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss.zzzZ"));
+}
+
+void QsGoAiSession::restoreMessages(const QVariantList& messages) {
+  if (messages.isEmpty() || !m_messages.isEmpty())
+    return;
+
+  m_restoringHistory = true;
+  beginInsertRows({}, 0, messages.size() - 1);
+  for (const QVariant& item : messages) {
+    const QVariantMap raw = item.toMap();
+    Message msg;
+    msg.id = raw.value(QStringLiteral("id")).toString();
+    msg.sender = raw.value(QStringLiteral("sender")).toString();
+    msg.kind = raw.value(QStringLiteral("kind")).toString();
+    msg.body = raw.value(QStringLiteral("body")).toString();
+
+    const QJsonDocument metricsDoc =
+        QJsonDocument::fromJson(raw.value(QStringLiteral("metrics_json")).toString().toUtf8());
+    msg.metrics = metricsDoc.isObject() ? metricsDoc.object().toVariantMap() : QVariantMap{};
+
+    const QJsonDocument extraDoc =
+        QJsonDocument::fromJson(raw.value(QStringLiteral("extra_json")).toString().toUtf8());
+    const QVariantMap extra =
+        extraDoc.isObject() ? extraDoc.object().toVariantMap() : QVariantMap{};
+    msg.attachments = extra.value(QStringLiteral("attachments")).toList();
+
+    const QVariantList toolCalls = raw.value(QStringLiteral("tool_calls")).toList();
+    if (!toolCalls.isEmpty()) {
+      const QVariantMap call = toolCalls.first().toMap();
+      const QJsonDocument payloadDoc =
+          QJsonDocument::fromJson(call.value(QStringLiteral("payload_json")).toString().toUtf8());
+      msg.tool = payloadDoc.isObject() ? payloadDoc.object().toVariantMap() : QVariantMap{};
+    }
+
+    bool showHeader = true;
+    if (!m_messages.isEmpty()) {
+      const Message& previous = m_messages.last();
+      if (msg.kind == QStringLiteral("tool")) {
+        if (previous.kind == QStringLiteral("tool"))
+          showHeader = false;
+        else if (previous.kind == QStringLiteral("chat") &&
+                 previous.sender == QStringLiteral("assistant"))
+          showHeader = previous.body.trimmed().isEmpty();
+      } else if (msg.kind == QStringLiteral("chat") && msg.sender == QStringLiteral("assistant") &&
+                 previous.kind == QStringLiteral("tool")) {
+        showHeader = false;
+      }
+    }
+    msg.showHeader = showHeader;
+    if (msg.kind == QStringLiteral("tool"))
+      msg.tool.insert(QStringLiteral("show_header"), showHeader);
+    m_messages.append(msg);
+  }
+  endInsertRows();
+  m_restoringHistory = false;
+  emit scrollToEndRequested();
+}
+
 QString QsGoAiSession::buildHistoryJson() const {
   QJsonArray arr;
   for (const Message& msg : m_messages) {
@@ -672,17 +907,38 @@ void QsGoAiSession::handleToolEventJson(const QString& json) {
     const QString rowId =
         toolCallId.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : toolCallId;
     const int row = m_messages.size();
+    bool showHeader = true;
+    if (row > 0) {
+      const Message& previous = m_messages.at(row - 1);
+      if (previous.kind == QStringLiteral("tool")) {
+        showHeader = false;
+      } else if (previous.kind == QStringLiteral("chat") &&
+                 previous.sender == QStringLiteral("assistant")) {
+        showHeader = previous.body.trimmed().isEmpty();
+      }
+    }
+    tool.insert(QStringLiteral("show_header"), showHeader);
     beginInsertRows({}, row, row);
     m_messages.append({rowId, QStringLiteral("tool"), QString(), QStringLiteral("tool"),
-                       QVariantMap{}, QVariantList{}, tool});
+                       QVariantMap{}, QVariantList{}, tool, showHeader});
     endInsertRows();
+    persistMessageAt(row, phase == QStringLiteral("tool_start") ? QStringLiteral("streaming")
+                                                                : QStringLiteral("complete"));
+    persistToolCallAt(row);
     emit scrollToEndRequested();
     return;
   }
 
+  tool.insert(QStringLiteral("show_header"),
+              m_messages[existing].tool.value(QStringLiteral("show_header"), false));
   m_messages[existing].tool = tool;
   const QModelIndex idx = index(existing, 0);
   emit dataChanged(idx, idx, {ToolRole});
+  persistMessageAt(existing,
+                   tool.value(QStringLiteral("is_error")).toBool() ? QStringLiteral("error")
+                                                                   : QStringLiteral("complete"),
+                   utcNow());
+  persistToolCallAt(existing);
   emit scrollToEndRequested();
 }
 
@@ -712,6 +968,7 @@ void QsGoAiSession::tokenCallback(void* ctx, const char* token, int done) {
               QsGo_Free(raw);
               const QModelIndex idx = self->index(metricsRow, 0);
               emit self->dataChanged(idx, idx, {MetricsRole});
+              self->persistMessageAt(metricsRow, QStringLiteral("complete"), self->utcNow());
             }
           }
 
@@ -731,17 +988,20 @@ void QsGoAiSession::tokenCallback(void* ctx, const char* token, int done) {
               self->m_messages[row].body = QStringLiteral("⚠ ") + tok;
             const QModelIndex idx = self->index(row, 0);
             emit self->dataChanged(idx, idx, {BodyRole});
+            self->persistMessageAt(row, QStringLiteral("error"), self->utcNow());
           }
         } else {
           // Normal token: append to last assistant message.
           int row = self->m_messages.size() - 1;
           if (row < 0 || self->m_messages.at(row).sender != QStringLiteral("assistant") ||
               self->m_messages.at(row).kind != QStringLiteral("chat")) {
+            const bool showHeader =
+                row < 0 || self->m_messages.at(row).kind != QStringLiteral("tool");
             row = self->m_messages.size();
             self->beginInsertRows({}, row, row);
             self->m_messages.append({QUuid::createUuid().toString(QUuid::WithoutBraces),
-                                     QStringLiteral("assistant"), QString(),
-                                     QStringLiteral("chat")});
+                                     QStringLiteral("assistant"), QString(), QStringLiteral("chat"),
+                                     QVariantMap{}, QVariantList{}, QVariantMap{}, showHeader});
             self->endInsertRows();
           }
           self->m_messages[row].body += tok;

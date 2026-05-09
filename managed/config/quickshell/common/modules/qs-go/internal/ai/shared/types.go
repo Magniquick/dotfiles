@@ -30,37 +30,10 @@ type ModelCapabilities struct {
 	MaxOutputTokens    int  `json:"max_output_tokens,omitempty"`
 }
 
-type ModelDescriptor struct {
-	ID           string            `json:"id"`
-	RawID        string            `json:"raw_id"`
-	Provider     string            `json:"provider"`
-	Label        string            `json:"label"`
-	Description  string            `json:"description,omitempty"`
-	Recommended  bool              `json:"recommended"`
-	Capabilities ModelCapabilities `json:"capabilities"`
-}
-
-type ProviderCatalog struct {
-	ID                string            `json:"id"`
-	Label             string            `json:"label"`
-	Description       string            `json:"description,omitempty"`
-	Enabled           bool              `json:"enabled"`
-	RecommendedModels []ModelDescriptor `json:"recommended_models"`
-	Models            []ModelDescriptor `json:"models"`
-}
-
-type CatalogPayload struct {
-	Providers []ProviderCatalog `json:"providers"`
-	Status    string            `json:"status"`
-	Error     string            `json:"error,omitempty"`
-}
-
 type ProviderMetadata struct {
-	ID               string
-	Label            string
-	Description      string
-	RecommendedRawID []string
-	FallbackModels   []ModelDescriptor
+	ID          string
+	Label       string
+	Description string
 }
 
 type StreamRequest struct {
@@ -87,6 +60,9 @@ type ToolDescriptor struct {
 	Title       string         `json:"title,omitempty"`
 	Description string         `json:"description,omitempty"`
 	InputSchema map[string]any `json:"input_schema,omitempty"`
+	Kind        string         `json:"kind,omitempty"`
+	Format      map[string]any `json:"format,omitempty"`
+	ReadOnly    bool           `json:"read_only,omitempty"`
 	ServerID    string         `json:"server_id,omitempty"`
 	ServerLabel string         `json:"server_label,omitempty"`
 }
@@ -95,6 +71,7 @@ type ToolCall struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
 	Arguments map[string]any `json:"arguments,omitempty"`
+	Input     string         `json:"input,omitempty"`
 }
 
 type ToolResult struct {

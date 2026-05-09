@@ -10,7 +10,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"qs-go/internal/secrets"
 )
+
+func TestMain(m *testing.M) {
+	cleanup := secrets.UseResolverForTest(secrets.NewMapResolver(nil))
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
+}
 
 func TestRefreshIncludesBuiltinServerAndTools(t *testing.T) {
 	var snapshot Snapshot
@@ -70,6 +81,15 @@ func TestToolDescriptorsIncludesBuiltinsWithoutRemoteConfig(t *testing.T) {
 	}
 	if names["builtin__date_time"] {
 		t.Fatalf("date_time should not be exposed as a builtin descriptor: %#v", names)
+	}
+}
+
+func TestToolReadOnlyUsesMCPAnnotation(t *testing.T) {
+	if !toolReadOnly(&sdk.Tool{Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}) {
+		t.Fatalf("expected readOnlyHint to mark tool read-only")
+	}
+	if toolReadOnly(&sdk.Tool{}) {
+		t.Fatalf("missing readOnlyHint must not mark tool read-only")
 	}
 }
 
