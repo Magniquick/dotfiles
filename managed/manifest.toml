@@ -66,6 +66,28 @@
 
 [[entries]]
   group = "config"
+  relative_path = "gtk-3.0/settings.ini"
+  digest = "584b1015f436d9b35080a00ee89cd3726efa239c8a14d9be77ef855dd7efe868"
+  size = 76
+  mode = 420
+  mtime_ns = 1777584373344664566
+  type = "file"
+  uid = 1000
+  gid = 1000
+
+[[entries]]
+  group = "config"
+  relative_path = "gtk-4.0/settings.ini"
+  digest = "584b1015f436d9b35080a00ee89cd3726efa239c8a14d9be77ef855dd7efe868"
+  size = 76
+  mode = 420
+  mtime_ns = 1777584373345664569
+  type = "file"
+  uid = 1000
+  gid = 1000
+
+[[entries]]
+  group = "config"
   relative_path = "hypr"
   digest = "5eb108a63265960b13085daf207609685b27b3677cef36f57318b94a9bccd0dc"
   size = 0
