@@ -7,7 +7,7 @@ Text {
     renderType: Text.NativeRendering
     font.family: Config.fontFamily
     font.pixelSize: Config.type.bodyMedium.size
-    font.weight: Config.type.bodyMedium.weight
+    font.weight: Font.Medium
     maximumLineCount: 1
     verticalAlignment: Text.AlignVCenter
 }

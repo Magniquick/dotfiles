@@ -338,7 +338,10 @@ func taskDue(task *apiSync.Task, todayDate string) (*int64, *string, bool) {
 	if task.Due == nil || task.Due.Date == nil {
 		return nil, nil, false
 	}
-	dueAt := task.Due.Date.In(time.Local)
+	dueAt := *task.Due.Date
+	if task.Due.Timezone != nil {
+		dueAt = dueAt.In(time.Local)
+	}
 	dueUnix := dueAt.Unix()
 	dueDate := dateOnly(dueAt)
 	hasTime := dueAt.Hour() != 0 || dueAt.Minute() != 0 || dueAt.Second() != 0

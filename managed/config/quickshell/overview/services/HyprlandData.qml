@@ -19,6 +19,8 @@ Singleton {
     property var activeWorkspace: null
     property var monitors: []
     property var layers: ({})
+    property bool needsWindowRefreshOnOpen: false
+    property bool needsOverviewRefreshOnOpen: false
     property bool pendingWindowsUpdate: false
     property bool pendingMonitorsUpdate: false
     property bool pendingLayersUpdate: false
@@ -104,10 +106,23 @@ Singleton {
 
         function onRawEvent(event) {
             const eventName = `${event?.name ?? event?.event ?? event?.type ?? ""}`;
-            if (["openlayer", "closelayer", "screencast"].includes(eventName))
+            if (["openlayer", "closelayer", "screencast", "windowtitlev2"].includes(eventName))
                 return;
 
-            if (eventName === "openwindow" || eventName === "closewindow" || eventName === "movewindow" || eventName === "movewindowv2" || eventName === "windowtitle") {
+            if (!GlobalStates.overviewOpen) {
+                if (eventName === "windowtitle")
+                    needsWindowRefreshOnOpen = true;
+                else
+                    needsOverviewRefreshOnOpen = true;
+                return;
+            }
+
+            if (eventName === "windowtitle") {
+                scheduleUpdates(true, false, false, false, false);
+                return;
+            }
+
+            if (eventName === "openwindow" || eventName === "closewindow" || eventName === "movewindow" || eventName === "movewindowv2") {
                 scheduleUpdates(true, false, false, true, false);
                 return;
             }
@@ -123,6 +138,25 @@ Singleton {
             }
 
             scheduleUpdates(true, true, true, true, true);
+        }
+    }
+
+    Connections {
+        target: GlobalStates
+
+        function onOverviewOpenChanged() {
+            if (!GlobalStates.overviewOpen)
+                return;
+            if (root.needsOverviewRefreshOnOpen) {
+                root.needsOverviewRefreshOnOpen = false;
+                root.needsWindowRefreshOnOpen = false;
+                root.scheduleUpdates(true, true, true, true, true);
+                return;
+            }
+            if (root.needsWindowRefreshOnOpen) {
+                root.needsWindowRefreshOnOpen = false;
+                root.scheduleUpdates(true, false, false, false, false);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ This directory contains native/QML modules consumed by the Quickshell config (Wa
 - `qs-go/`: Go → CGO → C++ Qt plugin (import: `qsgo`). **Primary native module.**
 - `unified-lyrics-api/`: Go helper + C++ QML plugin with transparent Spotify/LRCLIB fallback.
 - `../materialkit/`: Local MaterialKit QML primitives (Pane/Card/Button/IconButton/Slider/Progress/Ripple).
-- `rounded-polygon-qmljs/`: JS/QML shape helpers (vendored).
+- `rounded_polygon_qmljs/`: JS/QML shape helpers tracked as a git submodule.
 
 Related entry points live above this folder (examples: `shell.qml`, `bar/`, `powermenu/`, `hyprquickshot/`).
 

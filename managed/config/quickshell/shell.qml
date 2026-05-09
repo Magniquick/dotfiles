@@ -172,7 +172,6 @@ ShellRoot {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
     }
 
-    // Clock.ClockWidget {}
     LoggingCategory {
         defaultLogLevel: LoggingCategory.Critical
         name: "quickshell.dbus.properties"
@@ -209,7 +208,9 @@ ShellRoot {
     LazyLoader {
         id: hyprQuickshotLoader
 
-        active: true
+        active: Bar.GlobalState.hyprQuickshotVisible
+            || Bar.GlobalState.screenRecordingActive
+            || Bar.GlobalState.screenRecordingState !== "idle"
 
         source: Qt.resolvedUrl("hyprquickshot/HyprQuickshot.qml")
     }

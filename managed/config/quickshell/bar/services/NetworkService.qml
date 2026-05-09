@@ -4,7 +4,6 @@ import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
 import "../components"
-import "network/Parsers.js" as Parsers
 
 Item {
     id: root
@@ -47,6 +46,7 @@ Item {
     property double lastRxBytes: 0
     property double lastTxBytes: 0
     property double lastTrafficSampleMs: 0
+    property bool trafficBaselineReady: false
     // Traffic sampling can be triggered by multiple paths (initial refresh + timer).
     // Guard against tiny deltas that produce absurd spikes, and smooth rates for a less jittery UI.
     property int minTrafficSampleDeltaMs: 600
@@ -331,6 +331,12 @@ Item {
         sourceSwitchTimeoutTimer.stop();
     }
 
+    function refreshNativeStateFromSignal() {
+        root.syncNativeState();
+        if (root.tooltipActive)
+            root.refreshSources();
+    }
+
     function applyEthernetSubsystem(subsystem) {
         const cleanedSubsystem = (subsystem || "").trim();
         root.ethernetSubsystem = cleanedSubsystem;
@@ -352,18 +358,22 @@ Item {
             root.gateway = "";
             return;
         }
-        const details = Parsers.parseIpDetails(text.trim().split("\n"));
-        root.ipAddress = details.ipAddress;
-        root.gateway = details.gateway;
-    }
 
-    function updateTraffic(text) {
-        if (!text || text.trim() === "")
-            return;
-        const parsed = Parsers.parseTrafficBytes(text.trim().split("\n"));
-        if (!parsed.valid)
-            return;
-        root.updateTrafficRates(parsed.rxBytes, parsed.txBytes, Date.now());
+        let ipValue = "";
+        let gatewayValue = "";
+        const lines = text.trim().split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            const parts = lines[i].split(":");
+            const key = parts[0];
+            const value = parts.slice(1).join(":");
+            if (key.indexOf("IP4.ADDRESS") === 0 && ipValue === "")
+                ipValue = value;
+            else if (key === "IP4.GATEWAY")
+                gatewayValue = value;
+        }
+
+        root.ipAddress = ipValue;
+        root.gateway = gatewayValue;
     }
 
     function readTrafficSample() {
@@ -375,7 +385,12 @@ Item {
         const tx = txBytesFile.text().trim();
         if (!rx || !tx)
             return;
-        root.updateTraffic(rx + "\n" + tx);
+
+        const rxBytes = parseFloat(rx);
+        const txBytes = parseFloat(tx);
+        if (!isFinite(rxBytes) || !isFinite(txBytes))
+            return;
+        root.updateTrafficRates(rxBytes, txBytes, Date.now());
     }
 
     function resetTraffic() {
@@ -384,6 +399,7 @@ Item {
         root.lastRxBytes = 0;
         root.lastTxBytes = 0;
         root.lastTrafficSampleMs = 0;
+        root.trafficBaselineReady = false;
         root.resetTrafficHistory();
     }
 
@@ -429,32 +445,40 @@ Item {
     }
 
     function updateTrafficRates(rxBytes, txBytes, now) {
-        if (root.lastTrafficSampleMs > 0 && now > root.lastTrafficSampleMs) {
-            const deltaMs = (now - root.lastTrafficSampleMs);
-            if (deltaMs < root.minTrafficSampleDeltaMs) {
-                // Too soon since last sample: update baseline but don't recompute rate.
-                root.lastRxBytes = rxBytes;
-                root.lastTxBytes = txBytes;
-                root.lastTrafficSampleMs = now;
-                return;
-            }
-            const deltaSeconds = deltaMs / 1000;
-            const rxDelta = rxBytes - root.lastRxBytes;
-            const txDelta = txBytes - root.lastTxBytes;
-            if (rxDelta >= 0 && txDelta >= 0 && deltaSeconds > 0) {
-                const rxInstant = rxDelta / deltaSeconds;
-                const txInstant = txDelta / deltaSeconds;
-                root.rxBytesPerSec = root.applyEma(root.rxBytesPerSec, rxInstant, root.trafficEmaAlpha);
-                root.txBytesPerSec = root.applyEma(root.txBytesPerSec, txInstant, root.trafficEmaAlpha);
-                root.pushTrafficSample(root.rxBytesPerSec, root.txBytesPerSec);
-            } else {
-                root.rxBytesPerSec = 0;
-                root.txBytesPerSec = 0;
-                root.pushTrafficSample(0, 0);
-            }
-        } else if (root.lastTrafficSampleMs <= 0) {
+        if (!root.trafficBaselineReady || root.lastTrafficSampleMs <= 0 || now <= root.lastTrafficSampleMs) {
+            root.rxBytesPerSec = 0;
+            root.txBytesPerSec = 0;
+            root.lastRxBytes = rxBytes;
+            root.lastTxBytes = txBytes;
+            root.lastTrafficSampleMs = now;
+            root.trafficBaselineReady = true;
+            return;
+        }
+
+        const deltaMs = now - root.lastTrafficSampleMs;
+        if (deltaMs < root.minTrafficSampleDeltaMs) {
+            // Too soon since last sample: update baseline but don't recompute rate.
+            root.lastRxBytes = rxBytes;
+            root.lastTxBytes = txBytes;
+            root.lastTrafficSampleMs = now;
+            return;
+        }
+
+        const deltaSeconds = deltaMs / 1000;
+        const rxDelta = rxBytes - root.lastRxBytes;
+        const txDelta = txBytes - root.lastTxBytes;
+        if (rxDelta >= 0 && txDelta >= 0 && deltaSeconds > 0) {
+            const rxInstant = rxDelta / deltaSeconds;
+            const txInstant = txDelta / deltaSeconds;
+            root.rxBytesPerSec = root.applyEma(root.rxBytesPerSec, rxInstant, root.trafficEmaAlpha);
+            root.txBytesPerSec = root.applyEma(root.txBytesPerSec, txInstant, root.trafficEmaAlpha);
+            root.pushTrafficSample(root.rxBytesPerSec, root.txBytesPerSec);
+        } else {
+            root.rxBytesPerSec = 0;
+            root.txBytesPerSec = 0;
             root.pushTrafficSample(0, 0);
         }
+
         root.lastRxBytes = rxBytes;
         root.lastTxBytes = txBytes;
         root.lastTrafficSampleMs = now;
@@ -495,15 +519,104 @@ Item {
         }
     }
 
-    Timer {
-        interval: 2000
-        repeat: true
-        running: root.nativeNetworkBackend
+    Connections {
+        target: Networking
 
-        onTriggered: {
-            root.syncNativeState();
-            if (root.tooltipActive)
-                root.refreshSources();
+        function onWifiEnabledChanged() {
+            root.refreshNativeStateFromSignal();
+        }
+
+        function onWifiHardwareEnabledChanged() {
+            root.refreshNativeStateFromSignal();
+        }
+    }
+
+    Connections {
+        target: Networking.devices
+
+        function onObjectInsertedPost(object, index) {
+            root.refreshNativeStateFromSignal();
+        }
+
+        function onObjectRemovedPost(object, index) {
+            root.refreshNativeStateFromSignal();
+        }
+    }
+
+    Repeater {
+        model: root.nativeNetworkBackend ? Networking.devices : null
+
+        delegate: Item {
+            id: deviceWatcher
+
+            required property var modelData
+
+            Connections {
+                target: deviceWatcher.modelData
+
+                function onConnectedChanged() {
+                    root.refreshNativeStateFromSignal();
+                }
+
+                function onNameChanged() {
+                    root.refreshNativeStateFromSignal();
+                }
+
+                function onStateChanged() {
+                    root.refreshNativeStateFromSignal();
+                }
+
+                function onNmStateChanged() {
+                    root.refreshNativeStateFromSignal();
+                }
+            }
+
+            Connections {
+                target: deviceWatcher.modelData && deviceWatcher.modelData.networks ? deviceWatcher.modelData.networks : null
+
+                function onObjectInsertedPost(object, index) {
+                    root.refreshNativeStateFromSignal();
+                }
+
+                function onObjectRemovedPost(object, index) {
+                    root.refreshNativeStateFromSignal();
+                }
+            }
+
+            Repeater {
+                model: deviceWatcher.modelData && deviceWatcher.modelData.networks ? deviceWatcher.modelData.networks : null
+
+                delegate: Item {
+                    id: networkWatcher
+
+                    required property var modelData
+
+                    Connections {
+                        target: networkWatcher.modelData
+
+                        function onConnectedChanged() {
+                            root.refreshNativeStateFromSignal();
+                        }
+
+                        function onKnownChanged() {
+                            if (root.tooltipActive)
+                                root.refreshSources();
+                        }
+
+                        function onStateChanged() {
+                            root.refreshNativeStateFromSignal();
+                        }
+
+                        function onStateChangingChanged() {
+                            root.refreshNativeStateFromSignal();
+                        }
+
+                        function onSignalStrengthChanged() {
+                            root.refreshNativeStateFromSignal();
+                        }
+                    }
+                }
+            }
         }
     }
 

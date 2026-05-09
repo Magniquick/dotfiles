@@ -1,6 +1,6 @@
 # Deutan Experiments (Mocha)
 
-This doc records the deutan (deuteranopia) experiments used to create the `mocha-experimental-*` variants from `mocha.json`.
+This doc records the deutan (deuteranopia) experiments used to create the archived `mocha-experimental-*` variants from `mocha.json`.
 
 ## Findings
 
@@ -66,7 +66,7 @@ def daltonize_deutan(rgb_linear):
 
 ## Files
 
-- `mocha.json`: base Catppuccin Mocha palette.
-- `mocha-experimental.json`: daltonized accents (first pass).
-- `mocha-experimental-v2.json`: Machado simulation only.
-- `mocha-experimental-v3.json`: Machado simulation + daltonization.
+- `archived/mocha.json`: base Catppuccin Mocha palette.
+- `archived/mocha-experimental.json`: daltonized accents (first pass).
+- `archived/mocha-experimental-v2.json`: Machado simulation only.
+- `archived/mocha-experimental-v3.json`: Machado simulation + daltonization.

@@ -120,6 +120,19 @@ Item {
         id: popup
 
         property real reveal: root.active ? 1 : 0
+        Component.onCompleted: {
+            if (root.active) {
+                popup.reveal = 1;
+            } else {
+                popup.reveal = 0;
+            }
+        }
+        Connections {
+            target: root
+            function onActiveChanged() {
+                popup.reveal = root.active ? 1 : 0;
+            }
+        }
 
         color: "transparent"
         implicitHeight: body.implicitHeight
@@ -128,8 +141,16 @@ Item {
 
         Behavior on reveal {
             NumberAnimation {
-                duration: Config.motion.duration.medium
-                easing.type: Config.motion.easing.emphasized
+                id: revealAnimation
+                // Snap open when a tooltip is reopened during the dismiss animation.
+                duration: {
+                    if (!root.active)
+                        return Config.motion.duration.shortMs;
+                    if (popup.reveal > 0 && popup.reveal < 1)
+                        return 0;
+                    return Config.motion.duration.medium;
+                }
+                easing.type: root.active ? Config.motion.easing.standard : Easing.InCubic
             }
         }
 
@@ -166,7 +187,7 @@ Item {
             }
             implicitWidth: layout.implicitWidth + Config.tooltipPadding * 2
             opacity: popup.reveal
-            scale: 0.95 + (0.05 * popup.reveal)
+            scale: 0.9 + (0.1 * popup.reveal)
             transformOrigin: Item.Top
             y: Config.motion.distance.large * (1 - popup.reveal)
 

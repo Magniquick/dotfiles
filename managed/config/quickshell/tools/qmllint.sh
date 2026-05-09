@@ -69,7 +69,6 @@ add_qmldir "$ROOT_DIR/qmldir"
 add_qmldir "$ROOT_DIR/common/qmldir"
 add_qmldir "$ROOT_DIR/common/materialkit/qmldir"
 add_qmldir "$ROOT_DIR/bar/qmldir"
-add_qmldir "$ROOT_DIR/sysclock/qmldir"
 prepare_quickshell_qmllint_overrides
 
 extra_args=()

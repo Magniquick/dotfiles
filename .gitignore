@@ -223,3 +223,5 @@ go.work
 /managed/config/kitty/current-theme.conf
 /managed/config/quickshell/common/colors.json
 /managed/.dotbak/
+
+/managed/etc/brave/policies/managed/20_theme.json

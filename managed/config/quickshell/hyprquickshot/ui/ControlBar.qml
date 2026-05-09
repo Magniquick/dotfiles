@@ -1,11 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Quickshell.Widgets
 import "../common/materialkit" as MK
 
 import "../common" as Common
 
-WrapperRectangle {
+Rectangle {
     id: root
 
     required property var colors
@@ -34,6 +33,7 @@ WrapperRectangle {
     property Item hoveredTooltipTarget: null
     property string hoveredTooltipText: ""
     property string hoveredTooltipTitle: ""
+    property real margin: 8
 
     function audioModeGlyph(mode) {
         if (mode === "defaultMic")
@@ -80,7 +80,8 @@ WrapperRectangle {
     }
 
     color: Qt.alpha(root.colors.surface, 0.93)
-    margin: 8
+    implicitWidth: contentRoot.implicitWidth + root.margin * 2
+    implicitHeight: contentRoot.implicitHeight + root.margin * 2
     radius: 12
     opacity: root.recordingState === "recording" ? 0 : 1
     visible: opacity > 0.05
@@ -102,6 +103,7 @@ WrapperRectangle {
 
     Item {
         id: contentRoot
+        anchors.centerIn: parent
         implicitWidth: settingRow.implicitWidth
         implicitHeight: settingRow.implicitHeight
 

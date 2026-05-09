@@ -18,7 +18,7 @@ The Quickshell binary locally tracks the master branch.
 - Main shell (bar + panels + clock + panels): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
 - HyprQuickshot (screenshot utility): run the main shell with `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
-- Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for a manual reload with fresh warnings/errors, or restart `quickshell` for a full process restart
+- Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for the normal manual check. It restarts `quickshell.service`, waits briefly, then prints recent warnings/errors.
 - Global config is at `quickshell.conf`
 
 **Native modules (Rust/Go/C++):**
@@ -198,7 +198,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 ## Testing
 
-**No automated tests.** Manual verification should usually use `bash tools/reload-quickshell.sh` to trigger a reload and inspect fresh warnings/errors. Use a full `./qs` restart only when you specifically need to verify cold startup or process-launch behavior.
+**No automated tests.** Manual verification should usually use `bash tools/reload-quickshell.sh`; the happy path is a service restart followed by "No warnings or errors" from the recent log tail.
 - In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
 - **Lockscreen safety**: Never terminate/kill a running lockscreen instance unless authentication has succeeded and the session unlock path is executing. Do not use timeout/force-kill smoke tests (`timeout ... quickshell --path lockscreen`) against active lock sessions, as this can leave Hyprland in an invalid lock state.
 

@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtCore
+import Qt.labs.settings as LabsSettings
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -26,7 +26,7 @@ Src.FreezeScreen {
     property var countdownCenter: Qt.point(width / 2, height / 2)
     property int countdownValue: root.countdownStartValue
     property bool grabReady: false
-    property var hyprlandMonitor: activeScreen ? Hyprland.monitorFor(activeScreen) : Hyprland.focusedMonitor
+    property var hyprlandMonitor: root.active ? (activeScreen ? Hyprland.monitorFor(activeScreen) : Hyprland.focusedMonitor) : null
     property string lastScreenshotPath: ""
     property bool lastScreenshotTemporary: false
     property string mode: "region"
@@ -61,8 +61,8 @@ Src.FreezeScreen {
     property var debugCaptureRequests: ({})
     property var debugEventHistory: []
     property var windowSelectorItem: windowSelectorLoader.item
-    readonly property var allHyprlandToplevels: Hyprland.toplevels && Hyprland.toplevels.values ? Hyprland.toplevels.values : []
-    readonly property var workspaceToplevels: root.filterWorkspaceToplevels(root.allHyprlandToplevels, root.hyprlandMonitor)
+    readonly property var allHyprlandToplevels: root.active && Hyprland.toplevels && Hyprland.toplevels.values ? Hyprland.toplevels.values : []
+    readonly property var workspaceToplevels: root.active ? root.filterWorkspaceToplevels(root.allHyprlandToplevels, root.hyprlandMonitor) : []
     readonly property var liveWindowTargets: root.buildWindowTargetsFromSnapshot({
         activeWorkspace: hyprlandSnapshot.activeWorkspace,
         clients: hyprlandSnapshot.clients
@@ -909,10 +909,11 @@ Src.FreezeScreen {
     Loader {
         id: settingsLoader
         active: false
-        sourceComponent: Settings {
+        sourceComponent: LabsSettings.Settings {
             property bool saveToDisk: true
             property string recordAudioMode: "monitor"
             category: "Hyprquickshot"
+            fileName: Quickshell.shellPath("data/hyprquickshot.conf")
         }
     }
     HyprlandSnapshotProvider {

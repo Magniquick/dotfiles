@@ -22,7 +22,8 @@ WlSessionLockSurface {
   readonly property string powermenuLauncher: Quickshell.shellPath("../tools/run-quickshell.sh")
   readonly property string currentUser: Quickshell.env("USER") || "user"
   readonly property url profileImageSource: Qt.resolvedUrl("assets/pfp.png")
-  readonly property string mondDisplayFontFamily: "Anurati"
+  readonly property string clockDisplayFontFamily: "Google Sans Flex"
+  readonly property string mondDisplayFontFamily: Common.Config.fontFamily
   property string wallpaperPath: ""
   property bool powerMenuVisible: false
   property bool advancedPowerOptions: false
@@ -466,9 +467,16 @@ WlSessionLockSurface {
               return hours + ":" + minutes;
             }
             color: root.colors.on_surface
-            font.pixelSize: 90
-            font.family: Common.Config.fontFamily
-            font.weight: Font.DemiBold
+            font.pixelSize: 96
+            font.family: root.clockDisplayFontFamily
+            font.weight: Font.Bold
+            font.variableAxes: {
+              "wght": 700,
+              "wdth": 108,
+              "GRAD": 70,
+              "ROND": 70,
+              "slnt": 0
+            }
           }
 
           Text {

@@ -247,7 +247,8 @@ ModuleContainer {
                             }
                             TooltipPopup {
                                 enabled: !menuPopup.visible && (trayItem.modelData.tooltipTitle || trayItem.modelData.tooltipDescription || "") !== ""
-                                open: toolTipArea.containsMouse
+                                open: trayHover.hovered || toolTipArea.containsMouse
+                                hoverable: true
                                 targetItem: trayItem
 
                                 contentComponent: Component {
