@@ -7,3 +7,5 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/home/magni/Documents/Appimages
 ExecStart=/usr/bin/env bash /home/magni/Documents/Appimages/update_appimages.sh
+Restart=on-failure
+RestartSec=3min

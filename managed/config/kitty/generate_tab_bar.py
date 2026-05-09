@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "pyyaml>=6.0.3",
+# ]
+# ///
 """Fetch tmux-nerd-font-window-name icon map and generate tab_bar.py for kitty."""
 
 import urllib.request
@@ -10,6 +16,7 @@ OUT = Path(__file__).parent / 'tab_bar.py'
 
 # Local overrides — survives regeneration
 EXTRA_ICONS = {
+    'codex': '\U000F06A9',  # 󰚩
     'micro': '\U000F11E7',  # 󱇧
 }
 

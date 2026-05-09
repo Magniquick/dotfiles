@@ -30,6 +30,11 @@
       "opacity": 0.7
    },
    "providers": {
+      "@c4n4m1/store.vicinae.zoxide-recent-directories": {
+         "preferences": {
+            "application": "kitty"
+         }
+      },
       "@sovereign/store.vicinae.awww-switcher": {
          "preferences": {
             "wallpaperPath": "~/Pictures/Wallpapers",

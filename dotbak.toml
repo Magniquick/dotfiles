@@ -1,20 +1,18 @@
-[groups.config]
-base = "~/.config"
-entries = ["atuin", "brave-flags.conf", "captive-browser.toml", "dconf", "dunst", "environment.d", "hypr", "kitty", "metapac", "micro/colorschemes", "micro/settings.json", "nautilus", "quickshell", "rofi", "swaync", "sys64", "systemd", "user-dirs.dirs", "user-dirs.locale", "uwsm", "vicinae", "waybar"]
-
-[groups.etc]
-base = "/etc"
-entries = ["brave/policies/managed"]
-
-[groups.home]
-base = "~"
-entries = ["Templates"]
-
-[groups.local]
-base = "~/.local"
-entries = ["bin", "share/applications", "share/dbus-1/services/org.freedesktop.Notifications.service", "share/icons/Adwaita"]
+[groups]
+  [groups.config]
+    base = "~/.config"
+    entries = ["atuin", "brave-flags.conf", "captive-browser.toml", "dconf", "dunst", "environment.d", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini", "hypr", "kitty", "metapac", "micro/colorschemes", "micro/settings.json", "nautilus", "quickshell", "rofi", "swaync", "sys64", "systemd", "user-dirs.dirs", "user-dirs.locale", "uwsm", "vicinae", "waybar"]
+  [groups.etc]
+    base = "/etc"
+    entries = ["brave/policies/managed"]
+  [groups.home]
+    base = "~"
+    entries = ["Templates"]
+  [groups.local]
+    base = "~/.local"
+    entries = ["bin", "share/applications", "share/dbus-1/services/org.freedesktop.Notifications.service", "share/icons/Adwaita"]
 
 [settings]
-dot_prefix_style = "underscore"
-managed_root = "./managed"
-manifest_path = "./managed/manifest.toml"
+  dot_prefix_style = "underscore"
+  managed_root = "./managed"
+  manifest_path = "./managed/manifest.toml"
