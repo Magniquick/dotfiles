@@ -11,7 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/api v0.278.0
+	google.golang.org/api v0.279.0
 	modernc.org/sqlite v1.50.0
 )
 
