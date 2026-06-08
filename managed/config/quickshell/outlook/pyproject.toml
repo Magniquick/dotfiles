@@ -1,0 +1,30 @@
+[project]
+name = "outlook-internal"
+version = "0.1.0"
+description = "Local client for the Outlook Web internal APIs captured from the signed-in browser session."
+requires-python = ">=3.11"
+dependencies = [
+  "niquests>=3.14.0",
+  "playwright>=1.53.0",
+]
+
+[project.scripts]
+outlook-internal = "outlook_internal.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -2,4 +2,4 @@
 
 set -eu
 
-qs ipc -p $(realpath ~/.config/quickshell) call lockscreen lock
+qs ipc -p "$(realpath ~/.config/quickshell)" call lockscreen lock

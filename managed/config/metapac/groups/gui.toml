@@ -17,7 +17,6 @@ arch = { packages = [
 	"hyprpaper",
 	"eww",
 	"dunst",
-	"hypridle",
 	"hyprlock",
 	"hyprshot",
 	"zbar",

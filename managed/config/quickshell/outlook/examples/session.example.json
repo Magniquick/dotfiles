@@ -1,0 +1,14 @@
+{
+  "base_url": "https://outlook.cloud.microsoft",
+  "login_url": "https://outlook.office.com/mail/?login_hint=navon.mitmpl2024%40learner.manipal.edu",
+  "account": "navon.mitmpl2024@learner.manipal.edu",
+  "tenant_id": "29bebd42-f1ff-4c3d-9688-067e3460dc1f",
+  "puid_anchor": "PUID:10032003B5C6FBDC@29bebd42-f1ff-4c3d-9688-067e3460dc1f",
+  "authorization": "Bearer <redacted>",
+  "x_owa_canary": "<redacted>",
+  "x_owa_sessionid": "<uuid>",
+  "x_client_version": "20260501001.10",
+  "x_clientid": "<browser-client-id>",
+  "owa_app_id": "9199bf20-a13f-4107-85dc-02114787ef48",
+  "captured_at": "2026-05-09T16:50:00Z"
+}

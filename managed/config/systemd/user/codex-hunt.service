@@ -3,6 +3,6 @@ Description=Codex auth hunt — scrape GitHub + validate tokens
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/uv run /home/magni/Projects/codex-hunt/hunt.py --dump-valid /home/magni/.local/state/cli-proxy-api/auths
+ExecStart=/usr/bin/uv run /home/magni/Projects/codex-hunt/hunt.py --dump-valid /home/magni/.local/state/cli-proxy-api/auths --manual-dir /home/magni/Projects/codex-hunt/manual_auth
 WorkingDirectory=/home/magni/Projects/codex-hunt
 Environment=HOME=/home/magni
