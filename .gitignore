@@ -1,5 +1,6 @@
 credentials.json
 **/.qmlls.ini
+**/.playwright-mcp/
 # Created by https://www.toptal.com/developers/gitignore/api/dotenv,rust,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=dotenv,rust,python
 
