@@ -53,10 +53,20 @@ send_notification() {
     fi
 }
 
-action=$(send_notification "$summary" "$body" "$icon" -t "$ocr_action_timeout_ms" --action=default=Show --action=ocr=OCR --wait 2>/dev/null || true)
+action=$(send_notification "$summary" "$body" "$icon" -t "$ocr_action_timeout_ms" --action=default=Show --action=edit=Edit --action=ocr=OCR --wait 2>/dev/null || true)
 
 if [ "$action" = "default" ]; then
     show_file "$icon"
+    exit 0
+fi
+
+if [ "$action" = "edit" ]; then
+    if [ -z "$icon" ] || [ ! -f "$icon" ]; then
+        send_notification "Edit failed" "Screenshot file not found" ""
+        exit 0
+    fi
+
+    gradia "$icon" >/dev/null 2>&1 &
     exit 0
 fi
 

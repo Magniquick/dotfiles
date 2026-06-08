@@ -12,57 +12,57 @@ import "../components"
 import QtQuick
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property var screen
+  property var screen
 
-    backgroundColor: Config.barModuleBackground
-    contentSpacing: 0
-    marginTop: Config.outerGaps
-    paddingBottom: 0
-    paddingLeft: Config.groupPaddingX
-    paddingRight: Config.groupPaddingX
-    paddingTop: 0
+  backgroundColor: Config.barModuleBackground
+  contentSpacing: 0
+  marginTop: Config.outerGaps
+  paddingBottom: 0
+  paddingLeft: Config.groupPaddingX
+  paddingRight: Config.groupPaddingX
+  paddingTop: 0
 
-    content: [
-        WireplumberModule {
-            backgroundColor: "transparent"
-            marginBottom: 0
-            marginLeft: 0
-            marginRight: 0
-            marginTop: 0
-        },
-        BacklightModule {
-            screen: root.screen
-            backgroundColor: "transparent"
-            marginBottom: 0
-            marginLeft: 0
-            marginRight: 0
-            marginTop: 0
-        },
-        ScreenRecordingModule {
-            backgroundColor: "transparent"
-            marginBottom: 0
-            marginLeft: 0
-            marginRight: 0
-            marginTop: 0
-        },
-        Loader {
-            active: Config.enablePrivacyModule
-            sourceComponent: privacyComponent
-            visible: active
-        }
-    ]
-
-    Component {
-        id: privacyComponent
-
-        PrivacyModule {
-            backgroundColor: "transparent"
-            marginBottom: 0
-            marginLeft: 0
-            marginRight: 0
-            marginTop: 0
-        }
+  content: [
+    WireplumberModule {
+      backgroundColor: "transparent"
+      marginBottom: 0
+      marginLeft: 0
+      marginRight: 0
+      marginTop: 0
+    },
+    BacklightModule {
+      screen: root.screen
+      backgroundColor: "transparent"
+      marginBottom: 0
+      marginLeft: 0
+      marginRight: 0
+      marginTop: 0
+    },
+    ScreenRecordingModule {
+      backgroundColor: "transparent"
+      marginBottom: 0
+      marginLeft: 0
+      marginRight: 0
+      marginTop: 0
+    },
+    Loader {
+      active: Config.enablePrivacyModule
+      sourceComponent: privacyComponent
+      visible: active
     }
+  ]
+
+  Component {
+    id: privacyComponent
+
+    PrivacyModule {
+      backgroundColor: "transparent"
+      marginBottom: 0
+      marginLeft: 0
+      marginRight: 0
+      marginTop: 0
+    }
+  }
 }

@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -49,7 +48,7 @@ func TestStreamUsesResponsesEndpoint(t *testing.T) {
 	defer server.Close()
 
 	var got strings.Builder
-	result, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	result, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID:   "gpt-5.4-mini",
 		SystemPrompt: "be brief",
 		Config:       shared.ProviderConfig{APIKey: "test-key", BaseURL: server.URL},
@@ -59,7 +58,7 @@ func TestStreamUsesResponsesEndpoint(t *testing.T) {
 			B64:  base64.StdEncoding.EncodeToString(img),
 		}},
 		Tools: []shared.ToolDescriptor{{
-			Name:        "shell_exec",
+			Name:        "shell_command",
 			Description: "Run a shell command",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 		}},
@@ -85,7 +84,7 @@ func mustFprint(t *testing.T, w http.ResponseWriter, text string) {
 }
 
 func TestStreamRejectsNonImageAttachment(t *testing.T) {
-	_, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	_, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID: "gpt-5.4-mini",
 		Config:     shared.ProviderConfig{APIKey: "test-key", BaseURL: "http://127.0.0.1:1"},
 		Message:    "read",

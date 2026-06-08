@@ -2,85 +2,39 @@ import ".."
 import "../../common/materialkit" as MK
 import QtQuick
 
-Rectangle {
-    id: root
+MK.ClickableSurface {
+  id: root
 
-    property bool active: false
-    property color activeColor: Config.color.primary
-    property color borderColor: Config.color.outline
-    default property alias content: contentItem.data
-    property real disabledOpacity: Config.state.disabledOpacity
-    property color hoverColor: Config.color.surface_container_high
-    property real hoverScale: 1.02
-    property bool hoverScaleEnabled: false
-    property bool hovered: false
-    property color inactiveColor: Config.color.surface_variant
-    property bool pressed: false
+  property bool active: false
+  property color activeColor: Config.color.primary
+  property color borderColor: Config.color.outline
+  property color hoverColor: Config.color.surface_container_high
+  property real hoverScale: 1.02
+  property bool hoverScaleEnabled: false
+  property color inactiveColor: Config.color.surface_variant
 
-    signal clicked
+  antialiasing: true
+  backgroundColor: root.active ? root.activeColor : root.inactiveColor
+  border.color: root.active ? root.activeColor : root.borderColor
+  border.width: root.active ? 0 : 1
+  disabledOpacity: Config.state.disabledOpacity
+  hoverBackgroundColor: root.active ? root.activeColor : root.hoverColor
+  pressedBackgroundColor: root.hoverBackgroundColor
+  rippleColor: Config.color.on_surface
+  rippleStateLayerEnabled: false
+  rippleStateOpacity: 0
+  scale: root.hoverScaleEnabled && root.hovered ? root.hoverScale : 1
 
-    antialiasing: true
-    border.color: root.active ? root.activeColor : root.borderColor
-    border.width: root.active ? 0 : 1
-    color: root.active ? root.activeColor : (root.hovered ? root.hoverColor : root.inactiveColor)
-    opacity: root.enabled ? 1 : root.disabledOpacity
-    scale: root.hoverScaleEnabled && root.hovered ? root.hoverScale : 1
-
-    Behavior on border.color {
-        ColorAnimation {
-            duration: Config.motion.duration.shortMs
-            easing.type: Config.motion.easing.standard
-        }
+  Behavior on border.color {
+    ColorAnimation {
+      duration: Config.motion.duration.shortMs
+      easing.type: Config.motion.easing.standard
     }
-    Behavior on color {
-        ColorAnimation {
-            duration: Config.motion.duration.shortMs
-            easing.type: Config.motion.easing.standard
-        }
+  }
+  Behavior on scale {
+    NumberAnimation {
+      duration: Config.motion.duration.shortMs
+      easing.type: Config.motion.easing.standard
     }
-    Behavior on scale {
-        NumberAnimation {
-            duration: Config.motion.duration.shortMs
-            easing.type: Config.motion.easing.standard
-        }
-    }
-
-    Item {
-        id: contentItem
-
-        anchors.fill: parent
-    }
-    MK.HybridRipple {
-        anchors.fill: parent
-        color: Config.color.on_surface
-        pressX: mouseArea.pressX
-        pressY: mouseArea.pressY
-        pressed: mouseArea.pressed
-        radius: root.radius
-        stateLayerEnabled: false
-        stateOpacity: 0
-    }
-    MouseArea {
-        id: mouseArea
-
-        property real pressX: width / 2
-        property real pressY: height / 2
-
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        hoverEnabled: true
-
-        onClicked: root.clicked()
-        onEntered: root.hovered = true
-        onExited: {
-            root.hovered = false;
-            root.pressed = false;
-        }
-        onPressed: function(mouse) {
-            pressX = mouse.x;
-            pressY = mouse.y;
-            root.pressed = true;
-        }
-        onReleased: root.pressed = false
-    }
+  }
 }

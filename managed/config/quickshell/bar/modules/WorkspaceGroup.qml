@@ -13,43 +13,41 @@ import "../components"
 import QtQuick
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property var screen
+  property var screen
 
-    backgroundColor: Config.barModuleBackground
-    clip: true
-    contentSpacing: 0
-    marginLeft: 0
-    marginRight: 0
-    marginTop: Config.outerGaps
-    minHeight: 0
-    paddingBottom: 0
-    paddingLeft: 0
-    paddingRight: 0
-    paddingTop: 0
+  backgroundColor: Config.barModuleBackground
+  clip: true
+  contentSpacing: 0
+  marginLeft: 0
+  marginRight: 0
+  marginTop: Config.outerGaps
+  minHeight: 0
+  paddingBottom: 0
+  paddingLeft: 0
+  paddingRight: 0
+  paddingTop: 0
 
-    content: [
-        DrawerGroup {
-            duration: Config.motion.duration.medium
+  content: [
+    DrawerGroup {
+      duration: Config.motion.duration.medium
 
-            alwaysContent: [
-                WorkspacesModule {
-                    screen: root.screen
-                }
-            ]
-            drawerContent: [
-                SpecialWorkspacesModule {
-                    iconMap: ({
-                            "magic": "",
-                            "spotify": "",
-                            "whatsapp": "󰖣"
-                        })
-                    screen: root.screen
+      alwaysContent: [
+        WorkspacesModule {
+          screen: root.screen
         }
-    ]
-
-}
-    ]
-
+      ]
+      drawerContent: [
+        SpecialWorkspacesModule {
+          iconMap: ({
+              "magic": "",
+              "spotify": "",
+              "whatsapp": "󰖣"
+            })
+          screen: root.screen
+        }
+      ]
+    }
+  ]
 }

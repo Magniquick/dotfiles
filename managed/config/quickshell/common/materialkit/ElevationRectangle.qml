@@ -11,8 +11,8 @@ Item {
 
   readonly property real resolvedRadius: {
     if (corners && corners.radius !== undefined)
-      return Math.max(0, Number(corners.radius) || 0);
-    return Math.max(0, Number(radius) || 0);
+      return Math.max(0, Number(corners.radius) || 0)
+    return Math.max(0, Number(radius) || 0)
   }
 
   implicitWidth: fillRect.implicitWidth

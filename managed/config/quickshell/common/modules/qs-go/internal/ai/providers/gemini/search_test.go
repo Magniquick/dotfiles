@@ -13,7 +13,7 @@ func TestBuildPayloadCombinesGemini3SearchAndFunctions(t *testing.T) {
 		nil,
 		"search and call tools",
 		nil,
-		[]shared.ToolDescriptor{{Name: "builtin__shell_exec", Description: "Run shell"}},
+		[]shared.ToolDescriptor{{Name: "builtin__shell_command", Description: "Run shell"}},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -41,7 +41,7 @@ func TestBuildPayloadDoesNotCombineGemini2SearchAndFunctions(t *testing.T) {
 		nil,
 		"call tools",
 		nil,
-		[]shared.ToolDescriptor{{Name: "builtin__shell_exec", Description: "Run shell"}},
+		[]shared.ToolDescriptor{{Name: "builtin__shell_command", Description: "Run shell"}},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

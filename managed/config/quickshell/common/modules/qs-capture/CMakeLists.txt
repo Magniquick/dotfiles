@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(qscapture LANGUAGES C CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
@@ -12,6 +13,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Concurrent)
 if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
@@ -96,9 +98,7 @@ target_compile_definitions(qscapture_plugin PRIVATE
     GRIM_LITTLE_ENDIAN=1
 )
 
-if(QS_NATIVE_CPU)
-    target_compile_options(qscapture_plugin PRIVATE -march=native -mtune=native)
-endif()
+qs_apply_common_compile_options(qscapture_plugin)
 
 target_link_libraries(qscapture_plugin PRIVATE
     Qt6::Core

@@ -102,7 +102,7 @@ Email metadata is read from ignored local TOML at `leftpanel/config.toml`; use `
 ### Config And Secrets
 
 - Secret Service service name: `quickshell`.
-- Secret keys: `OPENAI_API_KEY`, `GEMINI_API_KEY`, optional `LOCAL_API_KEY`, `TODOIST_API_TOKEN`, `CALENDAR_ICAL_URL`, `SP_DC`, and `EMAIL_<ID>_PASSWORD`.
+- Secret keys: `OPENAI_API_KEY`, `GEMINI_API_KEY`, optional `LOCAL_API_KEY`, `TODOIST_API_TOKEN`, `SP_DC`, shared Google OAuth keys `GOOGLE_<ID>_TOKEN_JSON` / `GOOGLE_<ID>_CLIENT_ID` / `GOOGLE_<ID>_CLIENT_SECRET`, and `EMAIL_<ID>_PASSWORD` only for non-Gmail IMAP accounts.
 - TOML config: `leftpanel/config.toml` stores non-secret model/provider/email metadata.
 - Gmail email accounts only need `provider = "gmail"` plus identity fields; qs-go defaults IMAP to `imap.gmail.com:993` with TLS.
 

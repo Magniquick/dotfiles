@@ -20,7 +20,7 @@ func TestLyricsCache_Roundtrip(t *testing.T) {
 		t.Fatalf("writeLyricsCache: %v", err)
 	}
 
-	if _, err := os.Stat(cacheEntryPath(dir, key)); err != nil {
+	if _, err := os.Stat(cache.EntryPath(dir, key)); err != nil {
 		t.Fatalf("cache file missing: %v", err)
 	}
 
@@ -42,8 +42,7 @@ func TestLyricsCache_TTLExpiry(t *testing.T) {
 	key := lyricsCacheKey(trackID)
 
 	payload, err := json.Marshal(lyricsCache{
-		SavedAt: 1,
-		Body:    json.RawMessage(`{"lyrics":{"syncType":"LINE_SYNCED","lines":[{"startTimeMs":"1000","words":"hello","syllables":[],"endTimeMs":"2000"}]}}`),
+		Body: json.RawMessage(`{"lyrics":{"syncType":"LINE_SYNCED","lines":[{"startTimeMs":"1000","words":"hello","syllables":[],"endTimeMs":"2000"}]}}`),
 	})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -56,7 +55,7 @@ func TestLyricsCache_TTLExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal envelope: %v", err)
 	}
-	path := cacheEntryPath(dir, key)
+	path := cache.EntryPath(dir, key)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

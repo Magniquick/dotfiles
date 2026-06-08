@@ -1,10 +1,11 @@
 package ai
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"qs-go/internal/ai/shared"
@@ -77,7 +78,7 @@ func buildToolDoneEvent(call shared.ToolCall, result shared.ToolResult) toolUIEv
 	}
 
 	switch call.Name {
-	case "shell_command", "builtin__shell_command", "shell_exec", "builtin__shell_exec":
+	case "shell_command", "builtin__shell_command":
 		fillShellExecEvent(&event, call, result)
 	case "apply_patch", "builtin__apply_patch":
 		fillApplyPatchEvent(&event, call, result)
@@ -90,7 +91,7 @@ func buildToolDoneEvent(call shared.ToolCall, result shared.ToolResult) toolUIEv
 
 func toolStartSubtitle(call shared.ToolCall) string {
 	switch call.Name {
-	case "shell_command", "builtin__shell_command", "shell_exec", "builtin__shell_exec":
+	case "shell_command", "builtin__shell_command":
 		return firstNonEmpty(stringArg(call.Arguments, "command"), stringArg(call.Arguments, "cmd"))
 	case "apply_patch", "builtin__apply_patch":
 		stats := parseApplyPatchStats(firstNonEmpty(call.Input, stringArg(call.Arguments, "input")))
@@ -338,7 +339,9 @@ func parseApplyPatchStats(input string) []patchFileStats {
 	for _, stat := range statsByPath {
 		stats = append(stats, *stat)
 	}
-	sort.Slice(stats, func(i, j int) bool { return stats[i].Path < stats[j].Path })
+	slices.SortFunc(stats, func(a, b patchFileStats) int {
+		return cmp.Compare(a.Path, b.Path)
+	})
 	return stats
 }
 
@@ -466,7 +469,7 @@ func changedFiles(result shared.ToolResult) []string {
 	default:
 		files = append(files, fmt.Sprint(value))
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 	return files
 }
 

@@ -14,20 +14,20 @@ public:
   explicit QsGoBacklight(QObject* parent = nullptr);
   ~QsGoBacklight() override;
 
-  bool available() const {
+  [[nodiscard]] auto available() const -> bool {
     return !m_device.isEmpty();
   }
-  int brightnessPercent() const {
+  [[nodiscard]] auto brightnessPercent() const -> int {
     return m_brightnessPercent;
   }
-  QString device() const {
+  [[nodiscard]] auto device() const -> QString {
     return m_device;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
 
-  Q_INVOKABLE bool setBrightness(int percent);
+  Q_INVOKABLE auto setBrightness(int percent) -> bool;
 
   // Start/stop the udev monitor.
   Q_INVOKABLE void start();
@@ -35,7 +35,7 @@ public:
   Q_INVOKABLE void stopMonitor();
 
   // Read current value without starting the monitor.
-  Q_INVOKABLE bool refresh();
+  Q_INVOKABLE auto refresh() -> bool;
 
 signals:
   void availableChanged();
@@ -45,8 +45,8 @@ signals:
 
 private:
   void applyState(int percent, const QString& device, const QString& error);
-  QString deviceDirectory() const;
-  QString brightnessPath() const;
+  [[nodiscard]] static auto deviceDirectory() -> QString;
+  [[nodiscard]] static auto brightnessPath() -> QString;
   void ensureWatcher();
   void clearWatcher();
 

@@ -6,82 +6,82 @@ import Quickshell
 import Quickshell.Wayland
 
 PanelWindow {
-    id: root
+  id: root
 
-    property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginBottom * 2
-    property var modelData
-    property var targetScreen: modelData
+  property int contentHeight: content.implicitHeight + Config.barPadding * 2 + Config.moduleMarginBottom * 2
+  property var modelData
+  property var targetScreen: modelData
 
-    // A bar should sit above normal clients; Background can end up behind
-    // tiled/fullscreen windows depending on compositor behavior.
-    WlrLayershell.layer: WlrLayer.Top
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    anchors.left: true
-    anchors.right: true
-    anchors.top: true
-    color: "transparent"
-    exclusiveZone: implicitHeight
-    implicitHeight: Math.max(Config.barHeight, root.contentHeight)
-    screen: root.targetScreen
+  // A bar should sit above normal clients; Background can end up behind
+  // tiled/fullscreen windows depending on compositor behavior.
+  WlrLayershell.layer: WlrLayer.Top
+  WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+  anchors.left: true
+  anchors.right: true
+  anchors.top: true
+  color: "transparent"
+  exclusiveZone: implicitHeight
+  implicitHeight: Math.max(Config.barHeight, root.contentHeight)
+  screen: root.targetScreen
 
-    Rectangle {
-        anchors.fill: parent
-        color: Config.barBackground
+  Rectangle {
+    anchors.fill: parent
+    color: Config.barBackground
+  }
+  Item {
+    id: content
+
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    anchors.leftMargin: Config.barPadding
+    anchors.rightMargin: Config.barPadding
+    anchors.topMargin: Config.barPadding
+    anchors.bottomMargin: Config.barPadding + Config.spaceHalfXs
+    implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
+
+    RowLayout {
+      id: leftRow
+
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Config.moduleSpacing
+
+      StartMenuGroup {}
+      WorkspaceGroup {
+        screen: root.targetScreen
+      }
     }
-    Item {
-        id: content
+    RowLayout {
+      id: centerRow
 
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: Config.barPadding
-        anchors.rightMargin: Config.barPadding
-        anchors.topMargin: Config.barPadding
-        anchors.bottomMargin: Config.barPadding + Config.spaceHalfXs
-        implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Config.moduleSpacing
 
-        RowLayout {
-            id: leftRow
-
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Config.moduleSpacing
-
-            StartMenuGroup {}
-            WorkspaceGroup {
-                screen: root.targetScreen
-            }
-        }
-        RowLayout {
-            id: centerRow
-
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Config.moduleSpacing
-
-            MprisModule {}
-        }
-        RowLayout {
-            id: rightRow
-
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Config.moduleSpacing
-
-            IdleInhibitModule {
-                targetWindow: root
-            }
-            ControlsGroup {
-                screen: root.targetScreen
-            }
-            WirelessGroup {}
-            BatteryModule {}
-            ToDoModule {}
-            ClockModule {}
-            PanelGroup {
-                parentWindow: root
-            }
-        }
+      MprisModule {}
     }
+    RowLayout {
+      id: rightRow
+
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Config.moduleSpacing
+
+      IdleInhibitModule {
+        targetWindow: root
+      }
+      ControlsGroup {
+        screen: root.targetScreen
+      }
+      WirelessGroup {}
+      BatteryModule {}
+      ToDoModule {}
+      ClockModule {}
+      PanelGroup {
+        parentWindow: root
+      }
+    }
+  }
 }

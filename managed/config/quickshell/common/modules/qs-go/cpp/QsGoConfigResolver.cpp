@@ -6,9 +6,9 @@
 
 QsGoConfigResolver::QsGoConfigResolver(QObject* parent) : QObject(parent) {}
 
-bool QsGoConfigResolver::refresh() {
+auto QsGoConfigResolver::refresh() -> bool {
   char* raw = QsGo_Config_Resolve();
-  QByteArray json(raw);
+  QByteArray const json(raw);
   QsGo_Free(raw);
 
   const QJsonDocument doc = QJsonDocument::fromJson(json);

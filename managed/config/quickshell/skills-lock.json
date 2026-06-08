@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "skills": {
+    "golang-benchmark": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-benchmark/SKILL.md",
+      "computedHash": "8536132b33bb500e62bc4114ca0156e82d77ddab905da9ccf5330a961e239219"
+    },
+    "golang-cli": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-cli/SKILL.md",
+      "computedHash": "1901746f0c3c32b219ee06c750e386c2bbdb76978419b8d662aad68cb6759eb6"
+    },
+    "golang-code-style": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-code-style/SKILL.md",
+      "computedHash": "c26ad2e38dd3ae57eb90ddca25eff2e1237375325bd67eff3d1444e2597baac5"
+    },
+    "golang-concurrency": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-concurrency/SKILL.md",
+      "computedHash": "ea108cab6e74c483dbbeb5f9c2fb325940992fcf47be4032993896ab5885f8f3"
+    },
+    "golang-context": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-context/SKILL.md",
+      "computedHash": "17351f3065a9857759db7f279f693eeacb9a4d6c84ddac5c9c74a08ca1d04b62"
+    },
+    "golang-data-structures": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-data-structures/SKILL.md",
+      "computedHash": "4ddf662fb905cf69dc9e9c4a0804128774fd98924766343a5e9595e601e5642e"
+    },
+    "golang-dependency-injection": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-dependency-injection/SKILL.md",
+      "computedHash": "87fb814da5061426943e66fd732c533083ce091227d6029dd6cdf8477061006a"
+    },
+    "golang-dependency-management": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-dependency-management/SKILL.md",
+      "computedHash": "83ffa9eae6d8c083919f292d236e76e1b2a7b1ba7affdc3685479e3a8290c151"
+    },
+    "golang-design-patterns": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-design-patterns/SKILL.md",
+      "computedHash": "acd8b8e303b8a1d2804492c0f601f9412b74299d5317cc66bd644803c959b24e"
+    },
+    "golang-documentation": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-documentation/SKILL.md",
+      "computedHash": "99edf0e397d4823328f9a12e453bf3c0acc73159349bdd6667e4e025802e66c5"
+    },
+    "golang-error-handling": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-error-handling/SKILL.md",
+      "computedHash": "b6b4ca52091c8b6142d79c13a92a50dad6e9514fcc527b7e354dfbd16a4146f6"
+    },
+    "golang-lint": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-lint/SKILL.md",
+      "computedHash": "2d397eae35b11da7a944e6c540cb37a1e97cd0ab438074401d8c2cab28798795"
+    },
+    "golang-modernize": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-modernize/SKILL.md",
+      "computedHash": "95c816a8037715ccc152bf0dcb08eb6d745a10a3a680f76ca5e333b198ddef1e"
+    },
+    "golang-naming": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-naming/SKILL.md",
+      "computedHash": "f7d583621b8163f11f028e2469963428525bbe03ff910e56999fd0671298aaf9"
+    },
+    "golang-performance": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-performance/SKILL.md",
+      "computedHash": "aa6e17b3fc3d22def2c60f1bc36359860253d376bdea361735074509d662e5ba"
+    },
+    "golang-popular-libraries": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-popular-libraries/SKILL.md",
+      "computedHash": "8823c753fa3822f99ba0e324d8e90903a92e2ed589daebb1989b4319bc3c6286"
+    },
+    "golang-project-layout": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-project-layout/SKILL.md",
+      "computedHash": "544cbea84a766c9f29e50634d004741e5665d69a9beae6ea3cb79ed56adea05c"
+    },
+    "golang-safety": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-safety/SKILL.md",
+      "computedHash": "f3d548b3e46de7c7e1e1bdac60a8329d45ecd3b896afc5947427142a2beb1768"
+    },
+    "golang-testing": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-testing/SKILL.md",
+      "computedHash": "489cf0a9043fb1ba37aa408163c994ebe1f2fa4d6d7cb1859217ddf0a78f7a61"
+    },
+    "golang-troubleshooting": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-troubleshooting/SKILL.md",
+      "computedHash": "9e866993a43e83c54dafc568c6846ab80dfa4488dc11114eeb597b930d17db44"
+    },
+    "qt-cpp-docs": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-cpp-docs/SKILL.md",
+      "computedHash": "d1cd15ea7f284cd41ee0a8563ddda94a13695c6670fd4f95eae3bf23641e72f2"
+    },
+    "qt-cpp-review": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-cpp-review/SKILL.md",
+      "computedHash": "b1e0f87faf4fb912c93e4dca74790071be22627c334e52662da6fffc4ec8d0b7"
+    },
+    "qt-qml": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-qml/SKILL.md",
+      "computedHash": "3d66a02d1e6f32e977dfff5041aac680ca988a5a9b0023230942001eb0a02471"
+    },
+    "qt-qml-docs": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-qml-docs/SKILL.md",
+      "computedHash": "870800eba1e6686b75a8eb5b4be4aa1b3704f79b9a0f6ae0efd2264258bbf33d"
+    },
+    "qt-qml-profiler": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-qml-profiler/SKILL.md",
+      "computedHash": "2094f245c9dbb05112614d449fb4fbcdef52dd4f5dc77f6571e9aa321d54d22b"
+    },
+    "qt-qml-review": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-qml-review/SKILL.md",
+      "computedHash": "d1b8191ab8491673dd508cd5c5501de2070b443cf186d8ace3bda8dd5a844658"
+    },
+    "qt-ui-design": {
+      "source": "TheQtCompanyRnD/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/qt-ui-design/SKILL.md",
+      "computedHash": "152a8aa244cc4a49654dc509cb693672d07ad43eed91e4078ccae5ad99049f78"
+    }
+  }
+}

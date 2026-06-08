@@ -33,40 +33,40 @@ Item {
   opacity: root.enabled ? 1 : 0.45
 
   function clamped(v) {
-    return Math.max(root.minimum, Math.min(root.maximum, v));
+    return Math.max(root.minimum, Math.min(root.maximum, v))
   }
 
   function snapped(v) {
     if (root.steps <= 1 || root.maximum <= root.minimum)
-      return clamped(v);
+      return clamped(v)
 
-    const stepSize = (root.maximum - root.minimum) / (root.steps - 1);
+    const stepSize = (root.maximum - root.minimum) / (root.steps - 1)
     if (stepSize <= 0)
-      return root.minimum;
+      return root.minimum
 
-    const snappedValue = Math.round((v - root.minimum) / stepSize) * stepSize + root.minimum;
-    return clamped(snappedValue);
+    const snappedValue = Math.round((v - root.minimum) / stepSize) * stepSize + root.minimum
+    return clamped(snappedValue)
   }
 
   function ratioFor(v) {
     if (root.maximum <= root.minimum)
-      return 0;
-    return (clamped(v) - root.minimum) / (root.maximum - root.minimum);
+      return 0
+    return (clamped(v) - root.minimum) / (root.maximum - root.minimum)
   }
 
   function valueForX(xPos) {
     if (track.width <= 0)
-      return root.minimum;
-    const ratio = Math.max(0, Math.min(1, (xPos - track.x) / track.width));
-    return root.minimum + ratio * (root.maximum - root.minimum);
+      return root.minimum
+    const ratio = Math.max(0, Math.min(1, (xPos - track.x) / track.width))
+    return root.minimum + ratio * (root.maximum - root.minimum)
   }
 
   function setFromX(xPos) {
-    const next = snapped(valueForX(xPos));
+    const next = snapped(valueForX(xPos))
     if (next === root.value)
-      return;
-    root.value = next;
-    root.userChanged(next);
+      return
+    root.value = next
+    root.userChanged(next)
   }
 
   Rectangle {
@@ -169,18 +169,18 @@ Item {
     enabled: root.enabled
     hoverEnabled: true
 
-    onPressed: function(mouse) {
-      root.setFromX(mouse.x);
+    onPressed: function (mouse) {
+      root.setFromX(mouse.x)
     }
 
-    onPositionChanged: function(mouse) {
+    onPositionChanged: function (mouse) {
       if (!pressed)
-        return;
-      root.setFromX(mouse.x);
+        return
+      root.setFromX(mouse.x)
     }
 
     onReleased: {
-      root.dragEnded(root.value);
+      root.dragEnded(root.value)
     }
   }
 }

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QObject>
 #include <QDBusObjectPath>
+#include <QObject>
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
@@ -22,32 +22,32 @@ class QsGoSystemdFailed : public QObject {
 public:
   explicit QsGoSystemdFailed(QObject* parent = nullptr);
 
-  int systemFailedCount() const {
+  [[nodiscard]] auto systemFailedCount() const -> int {
     return m_systemFailedCount;
   }
-  int userFailedCount() const {
+  [[nodiscard]] auto userFailedCount() const -> int {
     return m_userFailedCount;
   }
-  int failedCount() const {
+  [[nodiscard]] auto failedCount() const -> int {
     return m_failedCount;
   }
-  QVariantList systemFailedUnits() const {
+  [[nodiscard]] auto systemFailedUnits() const -> QVariantList {
     return m_systemFailedUnits;
   }
-  QVariantList userFailedUnits() const {
+  [[nodiscard]] auto userFailedUnits() const -> QVariantList {
     return m_userFailedUnits;
   }
-  QString lastChecked() const {
+  [[nodiscard]] auto lastChecked() const -> QString {
     return m_lastChecked;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
-  bool refreshing() const {
+  [[nodiscard]] auto refreshing() const -> bool {
     return m_refreshing;
   }
 
-  Q_INVOKABLE bool refresh();
+  Q_INVOKABLE auto refresh() -> bool;
   Q_INVOKABLE void start();
 
 signals:
@@ -66,13 +66,13 @@ private slots:
                            const QString& result);
   void onSystemdUnitChanged(const QString& unit, const QDBusObjectPath& path);
 
-private:
   void connectSystemdSignals();
   void scheduleRefresh();
   void applyJson(const QByteArray& json);
-  QVariantList parseUnits(const QJsonValue& value) const;
+  [[nodiscard]] static auto parseUnits(const QJsonValue& value) -> QVariantList;
   void setRefreshing(bool refreshing);
 
+private:
   int m_systemFailedCount = 0;
   int m_userFailedCount = 0;
   int m_failedCount = 0;

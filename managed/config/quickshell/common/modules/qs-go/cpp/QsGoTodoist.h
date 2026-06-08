@@ -14,30 +14,30 @@ class QsGoTodoist : public QObject {
 public:
   explicit QsGoTodoist(QObject* parent = nullptr);
 
-  QString data() const {
+  [[nodiscard]] auto data() const -> QString {
     return m_data;
   }
-  bool loading() const {
+  [[nodiscard]] auto loading() const -> bool {
     return m_loading;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
-  QString lastUpdated() const {
+  [[nodiscard]] auto lastUpdated() const -> QString {
     return m_lastUpdated;
   }
-  QString cachePath() const {
+  [[nodiscard]] auto cachePath() const -> QString {
     return m_cachePath;
   }
-  bool preferCache() const {
+  [[nodiscard]] auto preferCache() const -> bool {
     return m_preferCache;
   }
 
   void setCachePath(const QString& v);
   void setPreferCache(bool v);
 
-  Q_INVOKABLE bool refresh();
-  Q_INVOKABLE bool action(const QString& verb, const QString& argsJson);
+  Q_INVOKABLE auto refresh() -> bool;
+  Q_INVOKABLE auto action(const QString& verb, const QString& argsJson) -> bool;
 
 signals:
   void dataChanged();

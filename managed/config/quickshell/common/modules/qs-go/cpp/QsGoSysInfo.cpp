@@ -1,4 +1,5 @@
 #include "QsGoSysInfo.h"
+#include "qsgo_go_api.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -9,12 +10,8 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QProcess>
-#include <QRegularExpression>
-#include <QStorageInfo>
 #include <QStringList>
-#include <QTextStream>
 #include <QThreadPool>
-#include <QVector>
 
 #include <fcntl.h>
 #include <linux/btrfs.h>
@@ -35,14 +32,15 @@ struct BtrfsUsageMetrics {
   int worstPct = 0;
 };
 
-QString readTrimmedFile(const QString& path) {
+auto readTrimmedFile(const QString& path) -> QString {
   QFile file(path);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     return {};
+  }
   return QString::fromUtf8(file.readAll()).trimmed();
 }
 
-QString defaultDiskDevice() {
+auto defaultDiskDevice() -> QString {
   static const QStringList candidates = {
       QStringLiteral("/dev/nvme0n1"),
       QStringLiteral("/dev/nvme0"),
@@ -50,17 +48,18 @@ QString defaultDiskDevice() {
       QStringLiteral("/dev/vda"),
   };
   for (const QString& path : candidates) {
-    if (QFileInfo::exists(path))
+    if (QFileInfo::exists(path)) {
       return path;
+    }
   }
   return QStringLiteral("/dev/nvme0n1");
 }
 
-QString formatGiB(double kib) {
+auto formatGiB(double kib) -> QString {
   return QString::number(kib / 1024.0 / 1024.0, 'f', 1) + QStringLiteral("GB");
 }
 
-QString formatUptime(quint64 total) {
+auto formatUptime(quint64 total) -> QString {
   const quint64 days = total / 86400;
   quint64 rem = total % 86400;
   const quint64 hours = rem / 3600;
@@ -68,73 +67,85 @@ QString formatUptime(quint64 total) {
   const quint64 minutes = rem / 60;
 
   QStringList parts;
-  if (days > 0)
+  if (days > 0) {
     parts << QStringLiteral("%1 %2").arg(days).arg(days == 1 ? QStringLiteral("day")
                                                              : QStringLiteral("days"));
-  if (hours > 0)
+  }
+  if (hours > 0) {
     parts << QStringLiteral("%1 %2").arg(hours).arg(hours == 1 ? QStringLiteral("hour")
                                                                : QStringLiteral("hours"));
-  if (minutes > 0 || parts.isEmpty())
+  }
+  if (minutes > 0 || parts.isEmpty()) {
     parts << QStringLiteral("%1 %2").arg(minutes).arg(minutes == 1 ? QStringLiteral("minute")
                                                                    : QStringLiteral("minutes"));
+  }
   return parts.join(QStringLiteral(", "));
 }
 
-QString runCommand(const QString& program, const QStringList& args) {
+auto runCommand(const QString& program, const QStringList& args) -> QString {
   QProcess process;
   process.start(program, args);
-  if (!process.waitForFinished(10000))
+  if (!process.waitForFinished(10000)) {
     return {};
-  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
+  }
+  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
     return {};
+  }
   return QString::fromUtf8(process.readAllStandardOutput());
 }
 
-QString runSmartctl(const QStringList& args) {
+auto runSmartctl(const QStringList& args) -> QString {
   QString output = runCommand(QStringLiteral("smartctl"), args);
-  if (!output.isEmpty())
+  if (!output.isEmpty()) {
     return output;
+  }
   QStringList sudoArgs;
   sudoArgs << QStringLiteral("-n") << QStringLiteral("smartctl");
   sudoArgs << args;
   return runCommand(QStringLiteral("sudo"), sudoArgs);
 }
 
-QJsonObject runSmartctlJson(const QStringList& args) {
+auto runSmartctlJson(const QStringList& args) -> QJsonObject {
   QStringList jsonArgs{QStringLiteral("-j")};
   jsonArgs << args;
   const QString output = runSmartctl(jsonArgs);
-  if (output.isEmpty())
+  if (output.isEmpty()) {
     return {};
+  }
   const QJsonDocument doc = QJsonDocument::fromJson(output.toUtf8());
   return doc.isObject() ? doc.object() : QJsonObject{};
 }
 
-QString jsonNumberString(const QJsonValue& value) {
-  if (value.isDouble())
+auto jsonNumberString(const QJsonValue& value) -> QString {
+  if (value.isDouble()) {
     return QString::number(value.toInt());
-  if (value.isString())
+  }
+  if (value.isString()) {
     return value.toString().trimmed();
+  }
   return {};
 }
 
-int jsonIntValue(const QJsonValue& value, int fallback = 0) {
+auto jsonIntValue(const QJsonValue& value, int fallback = 0) -> int {
   bool ok = false;
-  if (value.isDouble())
+  if (value.isDouble()) {
     return value.toInt();
+  }
   if (value.isString()) {
     const int parsed = value.toString().trimmed().toInt(&ok, 0);
-    if (ok)
+    if (ok) {
       return parsed;
+    }
   }
   return fallback;
 }
 
-QString smartWearLabel(const QJsonObject& smart) {
+auto smartWearLabel(const QJsonObject& smart) -> QString {
   const QJsonObject nvme =
       smart.value(QStringLiteral("nvme_smart_health_information_log")).toObject();
-  if (nvme.contains(QStringLiteral("percentage_used")))
+  if (nvme.contains(QStringLiteral("percentage_used"))) {
     return jsonNumberString(nvme.value(QStringLiteral("percentage_used"))) + QStringLiteral("%");
+  }
 
   const QJsonObject attrs = smart.value(QStringLiteral("ata_smart_attributes")).toObject();
   const QJsonArray table = attrs.value(QStringLiteral("table")).toArray();
@@ -142,106 +153,109 @@ QString smartWearLabel(const QJsonObject& smart) {
     const QJsonObject attr = value.toObject();
     const QString name = attr.value(QStringLiteral("name")).toString();
     if (!name.contains(QStringLiteral("Percentage_Used"), Qt::CaseInsensitive) &&
-        !name.contains(QStringLiteral("Percent_Lifetime"), Qt::CaseInsensitive))
+        !name.contains(QStringLiteral("Percent_Lifetime"), Qt::CaseInsensitive)) {
       continue;
+    }
     const QJsonObject raw = attr.value(QStringLiteral("raw")).toObject();
     const QString rawValue = jsonNumberString(raw.value(QStringLiteral("value")));
-    if (!rawValue.isEmpty())
+    if (!rawValue.isEmpty()) {
       return rawValue + QStringLiteral("%");
+    }
   }
   return QStringLiteral("Unknown");
 }
 
-QString smartHealthLabel(const QJsonObject& smart) {
+auto smartHealthLabel(const QJsonObject& smart) -> QString {
   const QJsonObject status = smart.value(QStringLiteral("smart_status")).toObject();
   const bool hasPassed = status.contains(QStringLiteral("passed"));
   const bool passed = status.value(QStringLiteral("passed")).toBool(false);
   const QJsonObject nvme =
       smart.value(QStringLiteral("nvme_smart_health_information_log")).toObject();
   const int criticalWarning = jsonIntValue(nvme.value(QStringLiteral("critical_warning")), 0);
-  if (hasPassed && passed && criticalWarning == 0)
+  if (hasPassed && passed && criticalWarning == 0) {
     return QStringLiteral("Healthy");
-  if (hasPassed && !passed)
+  }
+  if (hasPassed && !passed) {
     return QStringLiteral("Failed");
-  if (criticalWarning != 0)
+  }
+  if (criticalWarning != 0) {
     return QStringLiteral("Warning (%1)").arg(criticalWarning);
+  }
   return QStringLiteral("Unknown");
 }
 
-bool rootIsBtrfs() {
-  const QString mounts = readTrimmedFile(QStringLiteral("/proc/self/mounts"));
-  const QStringList lines = mounts.split(QLatin1Char('\n'));
-  for (const QString& line : lines) {
-    const QStringList fields =
-        line.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-    if (fields.size() >= 3 && fields.at(1) == QStringLiteral("/"))
-      return fields.at(2) == QStringLiteral("btrfs");
-  }
-  return false;
-}
-
-int btrfsCopiesForFlags(quint64 flags) {
-  if (flags & BTRFS_BLOCK_GROUP_RAID1C4)
+auto btrfsCopiesForFlags(quint64 flags) -> int {
+  if ((flags & BTRFS_BLOCK_GROUP_RAID1C4) != 0U) {
     return 4;
-  if (flags & BTRFS_BLOCK_GROUP_RAID1C3)
+  }
+  if ((flags & BTRFS_BLOCK_GROUP_RAID1C3) != 0U) {
     return 3;
-  if (flags & BTRFS_BLOCK_GROUP_RAID10)
+  }
+  if ((flags & BTRFS_BLOCK_GROUP_RAID10) != 0U) {
     return 2;
-  if (flags & BTRFS_BLOCK_GROUP_RAID1)
+  }
+  if ((flags & BTRFS_BLOCK_GROUP_RAID1) != 0U) {
     return 2;
-  if (flags & BTRFS_BLOCK_GROUP_DUP)
+  }
+  if ((flags & BTRFS_BLOCK_GROUP_DUP) != 0U) {
     return 2;
-  if (flags & BTRFS_BLOCK_GROUP_RAID56_MASK)
+  }
+  if ((flags & BTRFS_BLOCK_GROUP_RAID56_MASK) != 0U) {
     return 0;
+  }
   return 1;
 }
 
-bool loadBtrfsSpaceInfo(int fd, QByteArray& storage) {
+auto loadBtrfsSpaceInfo(int fd, QByteArray& storage) -> bool {
   struct btrfs_ioctl_space_args header{};
-  if (ioctl(fd, BTRFS_IOC_SPACE_INFO, &header) < 0)
+  if (ioctl(fd, BTRFS_IOC_SPACE_INFO, &header) < 0) {
     return false;
-  if (header.total_spaces == 0)
+  }
+  if (header.total_spaces == 0) {
     return false;
+  }
 
-  storage.resize(int(sizeof(struct btrfs_ioctl_space_args) +
-                     header.total_spaces * sizeof(struct btrfs_ioctl_space_info)));
+  storage.resize(static_cast<int>(sizeof(struct btrfs_ioctl_space_args) +
+                                  (header.total_spaces * sizeof(struct btrfs_ioctl_space_info))));
   auto* args = reinterpret_cast<struct btrfs_ioctl_space_args*>(storage.data());
-  memset(args, 0, size_t(storage.size()));
+  memset(args, 0, static_cast<size_t>(storage.size()));
   args->space_slots = header.total_spaces;
-  if (ioctl(fd, BTRFS_IOC_SPACE_INFO, args) < 0)
-    return false;
-  return true;
+  return ioctl(fd, BTRFS_IOC_SPACE_INFO, args) >= 0;
 }
 
-quint64 loadBtrfsDeviceSize(int fd) {
+auto loadBtrfsDeviceSize(int fd) -> quint64 {
   struct btrfs_ioctl_fs_info_args fsInfo{};
-  if (ioctl(fd, BTRFS_IOC_FS_INFO, &fsInfo) < 0)
+  if (ioctl(fd, BTRFS_IOC_FS_INFO, &fsInfo) < 0) {
     return 0;
+  }
 
   quint64 totalSize = 0;
   for (quint64 devid = 1; devid <= fsInfo.max_id; ++devid) {
     struct btrfs_ioctl_dev_info_args deviceInfo{};
     deviceInfo.devid = devid;
-    if (ioctl(fd, BTRFS_IOC_DEV_INFO, &deviceInfo) == 0)
-      totalSize += quint64(deviceInfo.total_bytes);
+    if (ioctl(fd, BTRFS_IOC_DEV_INFO, &deviceInfo) == 0) {
+      totalSize += static_cast<quint64>(deviceInfo.total_bytes);
+    }
   }
   return totalSize;
 }
 
-BtrfsUsageMetrics readBtrfsUsageMetrics() {
+auto readBtrfsUsageMetrics() -> BtrfsUsageMetrics {
   BtrfsUsageMetrics metrics;
 
   const int fd = ::open("/", O_RDONLY | O_CLOEXEC);
-  if (fd < 0)
+  if (fd < 0) {
     return metrics;
+  }
 
   QByteArray storage;
   const bool spaceOk = loadBtrfsSpaceInfo(fd, storage);
   const quint64 totalSize = loadBtrfsDeviceSize(fd);
   ::close(fd);
 
-  if (!spaceOk || totalSize == 0)
+  if (!spaceOk || totalSize == 0) {
     return metrics;
+  }
 
   const auto* spaceArgs =
       reinterpret_cast<const struct btrfs_ioctl_space_args*>(storage.constData());
@@ -263,15 +277,17 @@ BtrfsUsageMetrics readBtrfsUsageMetrics() {
     const auto& space = spaceArgs->spaces[i];
     const quint64 flags = space.flags;
     const int copies = btrfsCopiesForFlags(flags);
-    if (copies == 0)
+    if (copies == 0) {
       return metrics;
+    }
 
-    if (copies > maxDataRatio)
-      maxDataRatio = double(copies);
+    if (copies > maxDataRatio) {
+      maxDataRatio = static_cast<double>(copies);
+    }
 
-    if (flags & BTRFS_SPACE_INFO_GLOBAL_RSV) {
-      globalReserve = quint64(space.total_bytes);
-      globalReserveUsed = quint64(space.used_bytes);
+    if ((flags & BTRFS_SPACE_INFO_GLOBAL_RSV) != 0U) {
+      globalReserve = static_cast<quint64>(space.total_bytes);
+      globalReserveUsed = static_cast<quint64>(space.used_bytes);
     }
 
     if ((flags & (BTRFS_BLOCK_GROUP_DATA | BTRFS_BLOCK_GROUP_METADATA)) ==
@@ -279,37 +295,40 @@ BtrfsUsageMetrics readBtrfsUsageMetrics() {
       mixed = true;
     }
 
-    if (flags & BTRFS_BLOCK_GROUP_DATA) {
-      rawDataUsed += quint64(space.used_bytes) * quint64(copies);
-      rawDataChunks += quint64(space.total_bytes) * quint64(copies);
-      logicalDataChunks += quint64(space.total_bytes);
+    if ((flags & BTRFS_BLOCK_GROUP_DATA) != 0U) {
+      rawDataUsed += static_cast<quint64>(space.used_bytes) * static_cast<quint64>(copies);
+      rawDataChunks += static_cast<quint64>(space.total_bytes) * static_cast<quint64>(copies);
+      logicalDataChunks += static_cast<quint64>(space.total_bytes);
     }
-    if (flags & BTRFS_BLOCK_GROUP_METADATA) {
-      rawMetadataUsed += quint64(space.used_bytes) * quint64(copies);
-      rawMetadataChunks += quint64(space.total_bytes) * quint64(copies);
-      logicalMetadataChunks += quint64(space.total_bytes);
+    if ((flags & BTRFS_BLOCK_GROUP_METADATA) != 0U) {
+      rawMetadataUsed += static_cast<quint64>(space.used_bytes) * static_cast<quint64>(copies);
+      rawMetadataChunks += static_cast<quint64>(space.total_bytes) * static_cast<quint64>(copies);
+      logicalMetadataChunks += static_cast<quint64>(space.total_bytes);
     }
-    if (flags & BTRFS_BLOCK_GROUP_SYSTEM) {
-      rawSystemUsed += quint64(space.used_bytes) * quint64(copies);
-      rawSystemChunks += quint64(space.total_bytes) * quint64(copies);
+    if ((flags & BTRFS_BLOCK_GROUP_SYSTEM) != 0U) {
+      rawSystemUsed += static_cast<quint64>(space.used_bytes) * static_cast<quint64>(copies);
+      rawSystemChunks += static_cast<quint64>(space.total_bytes) * static_cast<quint64>(copies);
     }
   }
 
   const quint64 rawTotalChunks = rawDataChunks + rawSystemChunks + (mixed ? 0 : rawMetadataChunks);
   const quint64 rawTotalUsed = rawDataUsed + rawSystemUsed + (mixed ? 0 : rawMetadataUsed);
   const quint64 rawTotalUnused = totalSize > rawTotalChunks ? totalSize - rawTotalChunks : 0;
-  if (logicalDataChunks == 0 || rawDataChunks == 0)
+  if (logicalDataChunks == 0 || rawDataChunks == 0) {
     return metrics;
+  }
 
-  const double dataRatio = double(rawDataChunks) / double(logicalDataChunks);
-  double freeEstimated = double(rawDataChunks - rawDataUsed) / dataRatio;
-  if (mixed)
-    freeEstimated -=
-        double(globalReserve > globalReserveUsed ? globalReserve - globalReserveUsed : 0);
+  const double dataRatio =
+      static_cast<double>(rawDataChunks) / static_cast<double>(logicalDataChunks);
+  double freeEstimated = static_cast<double>(rawDataChunks - rawDataUsed) / dataRatio;
+  if (mixed) {
+    freeEstimated -= static_cast<double>(
+        globalReserve > globalReserveUsed ? globalReserve - globalReserveUsed : 0);
+  }
   double freeMin = freeEstimated;
   if (rawTotalUnused >= BTRFS_MIN_UNALLOCATED_THRESH) {
-    freeEstimated += double(rawTotalUnused) / dataRatio;
-    freeMin += double(rawTotalUnused) / maxDataRatio;
+    freeEstimated += static_cast<double>(rawTotalUnused) / dataRatio;
+    freeMin += static_cast<double>(rawTotalUnused) / maxDataRatio;
   }
 
   freeEstimated = qMax(0.0, freeEstimated);
@@ -318,8 +337,9 @@ BtrfsUsageMetrics readBtrfsUsageMetrics() {
   metrics.available = true;
   metrics.freeEstGiB = freeEstimated / 1024.0 / 1024.0 / 1024.0;
   metrics.freeMinGiB = freeMin / 1024.0 / 1024.0 / 1024.0;
-  metrics.usedPct = int((100.0 * double(rawTotalUsed)) / double(totalSize));
-  metrics.worstPct = int((1.0 - (freeMin / double(totalSize))) * 100.0);
+  metrics.usedPct = static_cast<int>((100.0 * static_cast<double>(rawTotalUsed)) /
+                                     static_cast<double>(totalSize));
+  metrics.worstPct = static_cast<int>((1.0 - (freeMin / static_cast<double>(totalSize))) * 100.0);
   metrics.usedPct = qBound(0, metrics.usedPct, 100);
   metrics.worstPct = qBound(0, metrics.worstPct, 100);
   return metrics;
@@ -328,14 +348,16 @@ BtrfsUsageMetrics readBtrfsUsageMetrics() {
 } // namespace
 
 QsGoSysInfo::QsGoSysInfo(QObject* parent) : QObject(parent) {
-  if (m_diskDevice.isEmpty())
+  if (m_diskDevice.isEmpty()) {
     m_diskDevice = defaultDiskDevice();
+  }
 }
 
 void QsGoSysInfo::setDiskDevice(const QString& value) {
   const QString next = value.isEmpty() ? defaultDiskDevice() : value;
-  if (m_diskDevice == next)
+  if (m_diskDevice == next) {
     return;
+  }
   m_diskDevice = next;
   emit diskDeviceChanged();
 }
@@ -349,8 +371,8 @@ void QsGoSysInfo::applySnapshot(double cpu, int mem, const QString& memUsed,
                                 double psiMemSome, double psiMemFull, double psiIoSome,
                                 double psiIoFull, const QString& error) {
 #define SET_SCALAR(member, value, signalName)                                                      \
-  if (member != value) {                                                                           \
-    member = value;                                                                                \
+  if ((member) != (value)) {                                                                       \
+    (member) = value;                                                                              \
     emit signalName();                                                                             \
   }
 
@@ -400,62 +422,51 @@ void QsGoSysInfo::applySnapshot(double cpu, int mem, const QString& memUsed,
   }
 }
 
-bool QsGoSysInfo::refresh() {
+auto QsGoSysInfo::refresh() -> bool {
   const QString diskDevice = m_diskDevice.isEmpty() ? defaultDiskDevice() : m_diskDevice;
-  QThreadPool::globalInstance()->start([this, diskDevice]() {
+  QThreadPool::globalInstance()->start([this, diskDevice]() -> void {
     QStringList errors;
 
-    double cpu = m_cpu;
-    quint64 total = 0;
-    quint64 idle = 0;
-    {
-      const QString line =
-          readTrimmedFile(QStringLiteral("/proc/stat")).section(QLatin1Char('\n'), 0, 0);
-      const QStringList fields =
-          line.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-      if (fields.size() >= 5 && fields.first() == QStringLiteral("cpu")) {
-        QVector<quint64> values;
-        for (int i = 1; i < fields.size(); ++i)
-          values.append(fields.at(i).toULongLong());
-        for (quint64 value : values)
-          total += value;
-        if (values.size() >= 5)
-          idle = values.at(3) + values.at(4);
-        if (m_lastCpuTotal != 0 && total > m_lastCpuTotal) {
-          const quint64 dt = total - m_lastCpuTotal;
-          const quint64 di = qMin(idle - m_lastCpuIdle, dt);
-          cpu = 100.0 * (1.0 - (double(di) / double(dt)));
-        }
-      } else {
-        errors << QStringLiteral("malformed /proc/stat");
+    char* rawStats = QsGo_SysStats_Snapshot();
+    QByteArray const statsJson(rawStats);
+    QsGo_Free(rawStats);
+    const QJsonDocument statsDoc = QJsonDocument::fromJson(statsJson);
+    const QJsonObject stats = statsDoc.isObject() ? statsDoc.object() : QJsonObject{};
+    if (stats.isEmpty()) {
+      errors << QStringLiteral("invalid sysstats response");
+    }
+
+    const QJsonArray statsErrors = stats.value(QLatin1String("errors")).toArray();
+    for (const QJsonValue& value : statsErrors) {
+      const QString error = value.toString().trimmed();
+      if (!error.isEmpty()) {
+        errors << error;
       }
+    }
+
+    double cpu = m_cpu;
+    const double total = stats.value(QLatin1String("cpu_total")).toDouble();
+    const double idle = stats.value(QLatin1String("cpu_idle")).toDouble();
+    if (m_lastCpuTotal != 0.0 && total > m_lastCpuTotal) {
+      const double dt = total - m_lastCpuTotal;
+      const double di = qBound(0.0, idle - m_lastCpuIdle, dt);
+      cpu = 100.0 * (1.0 - (di / dt));
     }
 
     int mem = 0;
     QString memUsed;
     QString memTotal;
     {
-      quint64 totalKB = 0;
-      quint64 availKB = 0;
-      const QStringList lines =
-          readTrimmedFile(QStringLiteral("/proc/meminfo")).split(QLatin1Char('\n'));
-      for (const QString& line : lines) {
-        if (line.startsWith(QStringLiteral("MemTotal:")))
-          totalKB = line.mid(QStringLiteral("MemTotal:").size())
-                        .trimmed()
-                        .section(QLatin1Char(' '), 0, 0)
-                        .toULongLong();
-        else if (line.startsWith(QStringLiteral("MemAvailable:")))
-          availKB = line.mid(QStringLiteral("MemAvailable:").size())
-                        .trimmed()
-                        .section(QLatin1Char(' '), 0, 0)
-                        .toULongLong();
-      }
+      const quint64 totalKB =
+          static_cast<quint64>(qMax(0.0, stats.value(QLatin1String("mem_total_kib")).toDouble()));
+      const quint64 availKB = static_cast<quint64>(
+          qMax(0.0, stats.value(QLatin1String("mem_available_kib")).toDouble()));
       if (totalKB > 0) {
         const quint64 usedKB = totalKB - availKB;
-        mem = int((100.0 * double(usedKB)) / double(totalKB));
-        memUsed = formatGiB(double(usedKB));
-        memTotal = formatGiB(double(totalKB));
+        mem =
+            static_cast<int>((100.0 * static_cast<double>(usedKB)) / static_cast<double>(totalKB));
+        memUsed = formatGiB(static_cast<double>(usedKB));
+        memTotal = formatGiB(static_cast<double>(totalKB));
       } else {
         errors << QStringLiteral("MemTotal is zero");
       }
@@ -465,11 +476,14 @@ bool QsGoSysInfo::refresh() {
     {
       struct statvfs stats{};
       if (statvfs("/", &stats) == 0) {
-        const double totalBytes = double(stats.f_blocks) * double(stats.f_frsize);
-        const double availBytes = double(stats.f_bavail) * double(stats.f_frsize);
+        const double totalBytes =
+            static_cast<double>(stats.f_blocks) * static_cast<double>(stats.f_frsize);
+        const double availBytes =
+            static_cast<double>(stats.f_bavail) * static_cast<double>(stats.f_frsize);
         const double usedBytes = totalBytes - availBytes;
-        if (totalBytes > 0.0)
-          disk = int((100.0 * usedBytes) / totalBytes);
+        if (totalBytes > 0.0) {
+          disk = static_cast<int>((100.0 * usedBytes) / totalBytes);
+        }
       } else {
         errors << QStringLiteral("failed to stat filesystem");
       }
@@ -479,7 +493,7 @@ bool QsGoSysInfo::refresh() {
     double diskBtrfsFreeEst = 0;
     double diskBtrfsFreeMin = 0;
     int diskWorstCase = disk;
-    if (rootIsBtrfs()) {
+    if (stats.value(QLatin1String("root_fs_type")).toString() == QStringLiteral("btrfs")) {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
       if (now - m_lastBtrfsMs > 30000) {
         const BtrfsUsageMetrics metrics = readBtrfsUsageMetrics();
@@ -520,50 +534,29 @@ bool QsGoSysInfo::refresh() {
         const QString zoneDir = QStringLiteral("/sys/class/thermal/") + entry;
         if (readTrimmedFile(zoneDir + QStringLiteral("/type")) == QStringLiteral("x86_pkg_temp")) {
           temp = readZoneTemp(zoneDir);
-          if (temp > 0.0)
+          if (temp > 0.0) {
             break;
+          }
         }
       }
       if (temp <= 0.0) {
         for (const QString& entry : thermalEntries) {
           temp = readZoneTemp(QStringLiteral("/sys/class/thermal/") + entry);
-          if (temp > 0.0)
+          if (temp > 0.0) {
             break;
+          }
         }
       }
     }
 
-    QString uptime;
-    {
-      bool ok = false;
-      const double secs = readTrimmedFile(QStringLiteral("/proc/uptime"))
-                              .section(QLatin1Char(' '), 0, 0)
-                              .toDouble(&ok);
-      uptime = ok ? formatUptime(quint64(secs)) : QString();
-    }
-
-    auto readPsi = [](const QString& path) -> QPair<double, double> {
-      double some = 0.0;
-      double full = 0.0;
-      const QStringList lines = readTrimmedFile(path).split(QLatin1Char('\n'));
-      for (const QString& line : lines) {
-        const QStringList fields =
-            line.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-        for (const QString& field : fields) {
-          if (!field.startsWith(QStringLiteral("avg10=")))
-            continue;
-          const double value = field.mid(QStringLiteral("avg10=").size()).toDouble();
-          if (line.startsWith(QStringLiteral("some")))
-            some = value;
-          else
-            full = value;
-        }
-      }
-      return {some, full};
-    };
-    const auto psiCpu = readPsi(QStringLiteral("/proc/pressure/cpu"));
-    const auto psiMem = readPsi(QStringLiteral("/proc/pressure/memory"));
-    const auto psiIo = readPsi(QStringLiteral("/proc/pressure/io"));
+    const QString uptime = formatUptime(
+        static_cast<quint64>(qMax(0.0, stats.value(QLatin1String("uptime_seconds")).toDouble())));
+    const double psiCpuSome = stats.value(QLatin1String("psi_cpu_some")).toDouble();
+    const double psiCpuFull = stats.value(QLatin1String("psi_cpu_full")).toDouble();
+    const double psiMemSome = stats.value(QLatin1String("psi_mem_some")).toDouble();
+    const double psiMemFull = stats.value(QLatin1String("psi_mem_full")).toDouble();
+    const double psiIoSome = stats.value(QLatin1String("psi_io_some")).toDouble();
+    const double psiIoFull = stats.value(QLatin1String("psi_io_full")).toDouble();
 
     QString diskHealth = m_diskHealthCache;
     QString diskWear = m_diskWearCache;
@@ -591,14 +584,15 @@ bool QsGoSysInfo::refresh() {
     QMetaObject::invokeMethod(
         this,
         [this, cpu, mem, memUsed, memTotal, disk, diskWorstCase, diskBtrfsAvailable,
-         diskBtrfsFreeEst, diskBtrfsFreeMin, diskHealth, diskWear, diskDevice, temp, uptime, psiCpu,
-         psiMem, psiIo, error, total, idle]() {
+         diskBtrfsFreeEst, diskBtrfsFreeMin, diskHealth, diskWear, diskDevice, temp, uptime,
+         psiCpuSome, psiCpuFull, psiMemSome, psiMemFull, psiIoSome, psiIoFull, error, total,
+         idle]() -> void {
           m_lastCpuTotal = total;
           m_lastCpuIdle = idle;
           applySnapshot(cpu, mem, memUsed, memTotal, disk, diskWorstCase, diskBtrfsAvailable,
                         diskBtrfsFreeEst, diskBtrfsFreeMin, diskHealth, diskWear, diskDevice, temp,
-                        uptime, psiCpu.first, psiCpu.second, psiMem.first, psiMem.second,
-                        psiIo.first, psiIo.second, error);
+                        uptime, psiCpuSome, psiCpuFull, psiMemSome, psiMemFull, psiIoSome,
+                        psiIoFull, error);
         },
         Qt::QueuedConnection);
   });

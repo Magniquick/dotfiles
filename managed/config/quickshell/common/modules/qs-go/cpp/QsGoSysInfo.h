@@ -29,73 +29,73 @@ class QsGoSysInfo : public QObject {
 public:
   explicit QsGoSysInfo(QObject* parent = nullptr);
 
-  double cpu() const {
+  [[nodiscard]] auto cpu() const -> double {
     return m_cpu;
   }
-  int mem() const {
+  [[nodiscard]] auto mem() const -> int {
     return m_mem;
   }
-  QString memUsed() const {
+  [[nodiscard]] auto memUsed() const -> QString {
     return m_memUsed;
   }
-  QString memTotal() const {
+  [[nodiscard]] auto memTotal() const -> QString {
     return m_memTotal;
   }
-  int disk() const {
+  [[nodiscard]] auto disk() const -> int {
     return m_disk;
   }
-  int diskWorstCase() const {
+  [[nodiscard]] auto diskWorstCase() const -> int {
     return m_diskWorstCase;
   }
-  bool diskBtrfsAvailable() const {
+  [[nodiscard]] auto diskBtrfsAvailable() const -> bool {
     return m_diskBtrfsAvailable;
   }
-  double diskBtrfsFreeEst() const {
+  [[nodiscard]] auto diskBtrfsFreeEst() const -> double {
     return m_diskBtrfsFreeEst;
   }
-  double diskBtrfsFreeMin() const {
+  [[nodiscard]] auto diskBtrfsFreeMin() const -> double {
     return m_diskBtrfsFreeMin;
   }
-  QString diskHealth() const {
+  [[nodiscard]] auto diskHealth() const -> QString {
     return m_diskHealth;
   }
-  QString diskWear() const {
+  [[nodiscard]] auto diskWear() const -> QString {
     return m_diskWear;
   }
-  QString diskDevice() const {
+  [[nodiscard]] auto diskDevice() const -> QString {
     return m_diskDevice;
   }
-  double temp() const {
+  [[nodiscard]] auto temp() const -> double {
     return m_temp;
   }
-  QString uptime() const {
+  [[nodiscard]] auto uptime() const -> QString {
     return m_uptime;
   }
-  double psiCpuSome() const {
+  [[nodiscard]] auto psiCpuSome() const -> double {
     return m_psiCpuSome;
   }
-  double psiCpuFull() const {
+  [[nodiscard]] auto psiCpuFull() const -> double {
     return m_psiCpuFull;
   }
-  double psiMemSome() const {
+  [[nodiscard]] auto psiMemSome() const -> double {
     return m_psiMemSome;
   }
-  double psiMemFull() const {
+  [[nodiscard]] auto psiMemFull() const -> double {
     return m_psiMemFull;
   }
-  double psiIoSome() const {
+  [[nodiscard]] auto psiIoSome() const -> double {
     return m_psiIoSome;
   }
-  double psiIoFull() const {
+  [[nodiscard]] auto psiIoFull() const -> double {
     return m_psiIoFull;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
 
   void setDiskDevice(const QString& v);
 
-  Q_INVOKABLE bool refresh();
+  Q_INVOKABLE auto refresh() -> bool;
 
 signals:
   void cpuChanged();
@@ -149,8 +149,8 @@ private:
   double m_psiIoSome = 0;
   double m_psiIoFull = 0;
   QString m_error;
-  quint64 m_lastCpuTotal = 0;
-  quint64 m_lastCpuIdle = 0;
+  double m_lastCpuTotal = 0;
+  double m_lastCpuIdle = 0;
   qint64 m_lastDiskHealthMs = 0;
   QString m_diskHealthCache;
   QString m_diskWearCache;

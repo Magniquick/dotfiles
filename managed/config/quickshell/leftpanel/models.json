@@ -1,6 +1,19 @@
 {
   "models": [
     {
+      "provider": "test",
+      "provider_label": "Test",
+      "raw_id": "test",
+      "label": "test",
+      "description": "Always returns LaTeX and a code block",
+      "recommended": true,
+      "capabilities": {
+        "supports_images": false,
+        "supports_tools": false,
+        "supports_multimodal": false
+      }
+    },
+    {
       "provider": "local",
       "provider_label": "Local",
       "raw_id": "gpt-5.5",

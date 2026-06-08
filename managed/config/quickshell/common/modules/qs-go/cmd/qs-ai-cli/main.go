@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -289,7 +290,7 @@ func run(args []string) error {
 			}
 			fmt.Fprintf(os.Stderr, "\n[tool] %s %s %s\n", event.Phase, event.ToolName, event.Summary)
 		case -1:
-			done <- fmt.Errorf("%s", token)
+			done <- errors.New(token)
 		}
 	})
 	if sessionID == 0 {
@@ -397,6 +398,9 @@ func canonicalModelID(raw string) string {
 	}
 	if strings.HasPrefix(model, "gemini-") {
 		return "gemini/" + model
+	}
+	if model == "test" {
+		return "test/test"
 	}
 	if strings.HasPrefix(model, "gpt-5.") {
 		return "local/" + model

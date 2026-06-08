@@ -12,19 +12,18 @@ import ".."
 import "../components"
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property string iconText: "󰣇"
+  property string iconText: "󰣇"
 
-    content: [
-        IconLabel {
-            antialiasing: true
-            color: Config.color.tertiary
-            renderType: Text.NativeRendering
-            text: root.iconText
-        }
-    ]
+  content: [
+    IconLabel {
+      antialiasing: true
+      color: Config.color.tertiary
+      text: root.iconText
+    }
+  ]
 
-    onClicked: GlobalState.toggleLeftPanel()
-    onRightClicked: GlobalState.togglePowermenu()
+  onClicked: GlobalState.toggleLeftPanel()
+  onRightClicked: GlobalState.togglePowermenu()
 }

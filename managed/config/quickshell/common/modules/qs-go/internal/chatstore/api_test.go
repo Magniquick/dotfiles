@@ -1,7 +1,6 @@
 package chatstore
 
 import (
-	"context"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -148,7 +147,7 @@ func TestApplyJSONRestoreDoesNotCreateBlankConversation(t *testing.T) {
 		_ = store.Close()
 	}()
 	var count int
-	if err := store.db.QueryRowContext(context.Background(), `SELECT count(*) FROM conversations`).Scan(&count); err != nil {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM conversations`).Scan(&count); err != nil {
 		t.Fatalf("count conversations: %v", err)
 	}
 	if count != 0 {
@@ -185,10 +184,10 @@ func TestCreateConversationClosesPreviousActiveConversation(t *testing.T) {
 		_ = store.Close()
 	}()
 	var firstStatus, secondStatus string
-	if err := store.db.QueryRowContext(context.Background(), `SELECT status FROM conversations WHERE id = ?`, first.Conversation.ID).Scan(&firstStatus); err != nil {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT status FROM conversations WHERE id = ?`, first.Conversation.ID).Scan(&firstStatus); err != nil {
 		t.Fatalf("query first status: %v", err)
 	}
-	if err := store.db.QueryRowContext(context.Background(), `SELECT status FROM conversations WHERE id = ?`, second.Conversation.ID).Scan(&secondStatus); err != nil {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT status FROM conversations WHERE id = ?`, second.Conversation.ID).Scan(&secondStatus); err != nil {
 		t.Fatalf("query second status: %v", err)
 	}
 	if firstStatus != "closed" || secondStatus != "active" {
@@ -318,11 +317,11 @@ func TestApplyJSONListsResumeConversationsByClosedTimeAndSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	if _, err := store.db.ExecContext(context.Background(), `UPDATE conversations SET closed_at = ?, updated_at = ? WHERE id = ?`, "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z", first.Conversation.ID); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), `UPDATE conversations SET closed_at = ?, updated_at = ? WHERE id = ?`, "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z", first.Conversation.ID); err != nil {
 		_ = store.Close()
 		t.Fatalf("set first time: %v", err)
 	}
-	if _, err := store.db.ExecContext(context.Background(), `UPDATE conversations SET closed_at = ?, updated_at = ? WHERE id = ?`, "2026-05-02T00:00:00.000Z", "2026-05-02T00:00:00.000Z", second.Conversation.ID); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), `UPDATE conversations SET closed_at = ?, updated_at = ? WHERE id = ?`, "2026-05-02T00:00:00.000Z", "2026-05-02T00:00:00.000Z", second.Conversation.ID); err != nil {
 		_ = store.Close()
 		t.Fatalf("set second time: %v", err)
 	}

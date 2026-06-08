@@ -1,4 +1,5 @@
 #include "MathRenderer.h"
+#include <qsmath_stream/src/markdown_stream.cxxqt.h>
 
 #include <QDir>
 #include <QFile>
@@ -12,154 +13,184 @@ class MathRendererSmokeTest : public QObject {
   Q_OBJECT
 
 private slots:
-  void rendersInlineMathToCachedSvg();
-  void rendersInlineMathWithoutPaddedSvgBounds();
-  void rendersInlineMathAsTightInlineImage();
-  void rendersBracketDisplayMath();
-  void reportsRatexParseFailures();
-  void readsSingleQuotedSvgSizeInAnyAttributeOrder();
-  void readsSvgSizeFromViewBoxFallback();
+  static void rendersInlineMathToCachedSvg();
+  static void rendersInlineMathWithoutPaddedSvgBounds();
+  static void rendersInlineMathAsTightInlineImage();
+  static void rendersBracketDisplayMath();
+  static void rendersMultilineBracketDisplayMath();
+  static void reportsRatexParseFailures();
+  static void readsSingleQuotedSvgSizeInAnyAttributeOrder();
+  static void readsSvgSizeFromViewBoxFallback();
+  static void markdownStreamModelRoleNamesMatchQmlUsage();
+  static void markdownStreamModelAppendKeepsCommittedBlockIds();
+  static void markdownStreamModelNonAppendResetsRows();
+  static void markdownStreamModelStreamingFalseFinalizesPending();
 };
 
-bool waitForRender(QSignalSpy& finished, QSignalSpy& failed, QList<QVariant>* result,
-                   QString* error) {
-  while (finished.isEmpty() && failed.isEmpty())
+static auto waitForRender(QSignalSpy& finished, QSignalSpy& failed, QList<QVariant>* result,
+                          QString* error) -> bool {
+  while (finished.isEmpty() && failed.isEmpty()) {
     if (!finished.wait(5000) && failed.isEmpty()) {
-      if (error)
+      if (error != nullptr) {
         *error = QStringLiteral("Timed out waiting for MathRenderer");
+      }
       return false;
     }
+  }
 
   if (!failed.isEmpty()) {
-    if (error)
+    if (error != nullptr) {
       *error = failed.takeFirst().at(1).toString();
+    }
     return false;
   }
 
   if (finished.size() != 1) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Expected one finished signal, got %1").arg(finished.size());
+    }
     return false;
   }
 
-  if (result)
+  if (result != nullptr) {
     *result = finished.takeFirst();
+  }
   return true;
 }
 
-bool cacheContainsSvg(const QString& cachePath, const QString& expectedColor, QString* error) {
+static auto cacheContainsSvg(const QString& cachePath, const QString& expectedColor, QString* error)
+    -> bool {
   const QStringList svgs =
       QDir(cachePath).entryList(QStringList{QStringLiteral("*.svg")}, QDir::Files);
   if (svgs.isEmpty()) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("No SVG files were written to %1").arg(cachePath);
+    }
     return false;
   }
 
   QFile svg(QDir(cachePath).filePath(svgs.first()));
   if (!svg.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to read %1").arg(svg.fileName());
+    }
     return false;
   }
 
   const QString svgText = QString::fromUtf8(svg.readAll());
   if (!svgText.contains(QStringLiteral("<svg"))) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Cached file is not an SVG: %1").arg(svg.fileName());
+    }
     return false;
   }
 
   if (svgText.contains(QStringLiteral("rgba("))) {
-    if (error)
+    if (error != nullptr) {
       *error =
           QStringLiteral("Cached SVG still contains rgba() paint values: %1").arg(svg.fileName());
+    }
     return false;
   }
 
   if (!svgText.contains(expectedColor, Qt::CaseInsensitive)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Cached SVG does not contain expected color %1: %2")
                    .arg(expectedColor, svg.fileName());
+    }
     return false;
   }
 
   return true;
 }
 
-bool parseSvgLength(const QString& text, qreal* value) {
-  if (!value)
+static auto parseSvgLength(const QString& text, qreal* value) -> bool {
+  if (value == nullptr) {
     return false;
+  }
 
   const QString trimmed = text.trimmed();
-  if (trimmed.isEmpty() || trimmed.endsWith(QLatin1Char('%')))
+  if (trimmed.isEmpty() || trimmed.endsWith(QLatin1Char('%'))) {
     return false;
+  }
 
   qsizetype end = 0;
   while (end < trimmed.size()) {
     const QChar ch = trimmed.at(end);
     if (!(ch.isDigit() || ch == QLatin1Char('.') || ch == QLatin1Char('-') ||
-          ch == QLatin1Char('+') || ch == QLatin1Char('e') || ch == QLatin1Char('E')))
+          ch == QLatin1Char('+') || ch == QLatin1Char('e') || ch == QLatin1Char('E'))) {
       break;
+    }
     ++end;
   }
 
-  if (end <= 0)
+  if (end <= 0) {
     return false;
+  }
 
   bool ok = false;
   const qreal parsed = trimmed.left(end).toDouble(&ok);
-  if (!ok || parsed <= 0)
+  if (!ok || parsed <= 0) {
     return false;
+  }
 
   *value = parsed;
   return true;
 }
 
-bool parseSvgViewBox(const QString& viewBox, qreal* width, qreal* height) {
+static auto parseSvgViewBox(const QString& viewBox, qreal* width, qreal* height) -> bool {
   const QStringList parts = QString(viewBox)
                                 .replace(QLatin1Char(','), QLatin1Char(' '))
                                 .split(QLatin1Char(' '), Qt::SkipEmptyParts);
-  if (parts.size() != 4)
+  if (parts.size() != 4) {
     return false;
+  }
 
   bool widthOk = false;
   bool heightOk = false;
   const qreal parsedWidth = parts.at(2).toDouble(&widthOk);
   const qreal parsedHeight = parts.at(3).toDouble(&heightOk);
-  if (!widthOk || !heightOk || parsedWidth <= 0 || parsedHeight <= 0)
+  if (!widthOk || !heightOk || parsedWidth <= 0 || parsedHeight <= 0) {
     return false;
+  }
 
-  if (width)
+  if (width != nullptr) {
     *width = parsedWidth;
-  if (height)
+  }
+  if (height != nullptr) {
     *height = parsedHeight;
+  }
   return true;
 }
 
-bool readSingleSvgSize(const QString& cachePath, qreal* width, qreal* height, QString* error) {
+static auto readSingleSvgSize(const QString& cachePath, qreal* width, qreal* height, QString* error)
+    -> bool {
   const QStringList svgs =
       QDir(cachePath).entryList(QStringList{QStringLiteral("*.svg")}, QDir::Files);
   if (svgs.size() != 1) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Expected one SVG in %1, got %2").arg(cachePath).arg(svgs.size());
+    }
     return false;
   }
 
   QFile svg(QDir(cachePath).filePath(svgs.first()));
   if (!svg.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to read %1").arg(svg.fileName());
+    }
     return false;
   }
 
   QXmlStreamReader xml(&svg);
   while (!xml.atEnd()) {
     xml.readNext();
-    if (!xml.isStartElement())
+    if (!xml.isStartElement()) {
       continue;
-    if (xml.name() != QLatin1String("svg"))
+    }
+    if (xml.name() != QLatin1String("svg")) {
       break;
+    }
 
     const QXmlStreamAttributes attributes = xml.attributes();
     qreal parsedWidth = 0;
@@ -171,26 +202,32 @@ bool readSingleSvgSize(const QString& cachePath, qreal* width, qreal* height, QS
 
     if ((!hasWidth || !hasHeight) &&
         !parseSvgViewBox(attributes.value(QStringLiteral("viewBox")).toString(), &parsedWidth,
-                         &parsedHeight))
+                         &parsedHeight)) {
       break;
+    }
 
-    if (width)
+    if (width != nullptr) {
       *width = parsedWidth;
-    if (height)
+    }
+    if (height != nullptr) {
       *height = parsedHeight;
+    }
     return true;
   }
 
-  if (error)
+  if (error != nullptr) {
     *error = QStringLiteral("Cached SVG does not expose width and height: %1").arg(svg.fileName());
+  }
   return false;
 }
 
-bool writeSvgFixture(const QString& cachePath, const QString& svgText, QString* error) {
+static auto writeSvgFixture(const QString& cachePath, const QString& svgText, QString* error)
+    -> bool {
   QFile svg(QDir(cachePath).filePath(QStringLiteral("fixture.svg")));
   if (!svg.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to write fixture SVG: %1").arg(svg.fileName());
+    }
     return false;
   }
   svg.write(svgText.toUtf8());
@@ -198,7 +235,7 @@ bool writeSvgFixture(const QString& cachePath, const QString& svgText, QString* 
 }
 
 void MathRendererSmokeTest::rendersInlineMathToCachedSvg() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   MathRenderer renderer;
@@ -220,7 +257,7 @@ void MathRendererSmokeTest::rendersInlineMathToCachedSvg() {
 }
 
 void MathRendererSmokeTest::rendersInlineMathWithoutPaddedSvgBounds() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   MathRenderer renderer;
@@ -242,7 +279,7 @@ void MathRendererSmokeTest::rendersInlineMathWithoutPaddedSvgBounds() {
 }
 
 void MathRendererSmokeTest::rendersInlineMathAsTightInlineImage() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   MathRenderer renderer;
@@ -267,7 +304,7 @@ void MathRendererSmokeTest::rendersInlineMathAsTightInlineImage() {
 }
 
 void MathRendererSmokeTest::rendersBracketDisplayMath() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   MathRenderer renderer;
@@ -286,19 +323,42 @@ void MathRendererSmokeTest::rendersBracketDisplayMath() {
   QVERIFY2(cacheContainsSvg(cacheDir.path(), QStringLiteral("#ffffff"), &error), qPrintable(error));
 }
 
-void MathRendererSmokeTest::reportsRatexParseFailures() {
-  QTemporaryDir cacheDir;
+void MathRendererSmokeTest::rendersMultilineBracketDisplayMath() {
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   MathRenderer renderer;
   QSignalSpy finished(&renderer, &MathRenderer::requestFinished);
   QSignalSpy failed(&renderer, &MathRenderer::requestFailed);
 
+  renderer.renderMarkdown(QStringLiteral("aligned"),
+                          QStringLiteral("\\[\n\\begin{aligned}\nf(x) &= x^3 - 2x + 1 \\\\\n"
+                                         "f'(x) &= 3x^2 - 2\n\\end{aligned}\n\\]"),
+                          cacheDir.path(), 640, 18.0, 4.0, QStringLiteral("#ffffff"), 1.0);
+
+  QList<QVariant> result;
+  QString error;
+  QVERIFY2(waitForRender(finished, failed, &result, &error), qPrintable(error));
+  QCOMPARE(result.at(0).toString(), QStringLiteral("aligned"));
+  QVERIFY2(result.at(1).toString().contains(QStringLiteral("<img")),
+           qPrintable(result.at(1).toString()));
+  QVERIFY2(cacheContainsSvg(cacheDir.path(), QStringLiteral("#ffffff"), &error), qPrintable(error));
+}
+
+void MathRendererSmokeTest::reportsRatexParseFailures() {
+  QTemporaryDir const cacheDir;
+  QVERIFY(cacheDir.isValid());
+
+  MathRenderer renderer;
+  QSignalSpy const finished(&renderer, &MathRenderer::requestFinished);
+  QSignalSpy failed(&renderer, &MathRenderer::requestFailed);
+
   renderer.renderMarkdown(QStringLiteral("bad"), QStringLiteral("$\\notacommand{$"),
                           cacheDir.path(), 640, 18.0, 4.0, QStringLiteral("#ffffff"), 1.0);
 
-  while (finished.isEmpty() && failed.isEmpty())
+  while (finished.isEmpty() && failed.isEmpty()) {
     QVERIFY(failed.wait(5000) || !finished.isEmpty());
+  }
 
   QVERIFY(finished.isEmpty());
   QCOMPARE(failed.size(), 1);
@@ -306,7 +366,7 @@ void MathRendererSmokeTest::reportsRatexParseFailures() {
 }
 
 void MathRendererSmokeTest::readsSingleQuotedSvgSizeInAnyAttributeOrder() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   QString error;
@@ -324,7 +384,7 @@ void MathRendererSmokeTest::readsSingleQuotedSvgSizeInAnyAttributeOrder() {
 }
 
 void MathRendererSmokeTest::readsSvgSizeFromViewBoxFallback() {
-  QTemporaryDir cacheDir;
+  QTemporaryDir const cacheDir;
   QVERIFY(cacheDir.isValid());
 
   QString error;
@@ -339,6 +399,58 @@ void MathRendererSmokeTest::readsSvgSizeFromViewBoxFallback() {
   QVERIFY2(readSingleSvgSize(cacheDir.path(), &width, &height, &error), qPrintable(error));
   QCOMPARE(width, 120.5);
   QCOMPARE(height, 64.25);
+}
+
+void MathRendererSmokeTest::markdownStreamModelRoleNamesMatchQmlUsage() {
+  MarkdownStreamModel const model;
+  const QHash<int, QByteArray> roles = model.roleNames();
+
+  QCOMPARE(roles.value(Qt::UserRole), QByteArray("blockId"));
+  QVERIFY(roles.values().contains(QByteArray("kind")));
+  QVERIFY(roles.values().contains(QByteArray("type")));
+  QVERIFY(roles.values().contains(QByteArray("content")));
+  QVERIFY(roles.values().contains(QByteArray("raw")));
+  QVERIFY(roles.values().contains(QByteArray("display")));
+  QVERIFY(roles.values().contains(QByteArray("completed")));
+  QVERIFY(roles.values().contains(QByteArray("language")));
+}
+
+void MathRendererSmokeTest::markdownStreamModelAppendKeepsCommittedBlockIds() {
+  MarkdownStreamModel model;
+  model.setContent(QStringLiteral("Intro\n\n```rust\nfn main() {}"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+  const QModelIndex first = model.index(0, 0);
+  const int firstId = model.data(first, Qt::UserRole).toInt();
+
+  model.setContent(QStringLiteral("Intro\n\n```rust\nfn main() {}\nprintln!();"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole).toInt(), firstId);
+  QCOMPARE(model.data(model.index(1, 0), Qt::UserRole + 7).toString(), QStringLiteral("rust"));
+}
+
+void MathRendererSmokeTest::markdownStreamModelNonAppendResetsRows() {
+  MarkdownStreamModel model;
+  model.setContent(QStringLiteral("First\n\nSecond"));
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+
+  model.setContent(QStringLiteral("Replacement"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 1);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 4).toString(),
+           QStringLiteral("Replacement"));
+}
+
+void MathRendererSmokeTest::markdownStreamModelStreamingFalseFinalizesPending() {
+  MarkdownStreamModel model;
+  model.setContent(QStringLiteral("Hello **world"));
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 6).toBool(), false);
+
+  model.setStreaming(false);
+
+  QCOMPARE(model.rowCount(QModelIndex()), 1);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 6).toBool(), true);
 }
 
 QTEST_MAIN(MathRendererSmokeTest)

@@ -29,7 +29,27 @@ repos:
         types: [go]
 
       - id: qmllint
-        name: qmllint (qt6, fix all qml)
-        entry: bash -lc 'managed/config/quickshell/tools/qmllint.sh --fix $(find . -name "*.qml")'
+        name: qmllint (qt6)
+        entry: managed/config/quickshell/tools/qmllint.sh --all
         language: system
         pass_filenames: false
+
+      - id: qml-js-lint
+        name: QML JavaScript lint
+        entry: managed/config/quickshell/tools/qml-js-lint.sh
+        language: system
+        pass_filenames: false
+
+      - id: rustfmt-clippy
+        name: rust fmt + clippy
+        entry: managed/config/quickshell/tools/rust-lint.sh
+        language: system
+        pass_filenames: false
+        types: [rust]
+
+      - id: cpp-clang-tidy
+        name: C++ clang-tidy
+        entry: managed/config/quickshell/tools/cpp-lint.sh
+        language: system
+        pass_filenames: false
+        types_or: [c++, c]

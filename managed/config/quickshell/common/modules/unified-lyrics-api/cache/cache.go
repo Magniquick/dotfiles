@@ -38,15 +38,6 @@ func entryPath(cacheDir, logicalKey string) string {
 	return filepath.Join(cacheDir, "entries", name)
 }
 
-func cacheDisabled(cacheDir string) bool {
-	dir := strings.TrimSpace(cacheDir)
-	cleanDir := filepath.Clean(dir)
-	return dir == "/dev/null" ||
-		dir == os.DevNull ||
-		cleanDir == filepath.Clean("/dev/null") ||
-		cleanDir == filepath.Clean(os.DevNull)
-}
-
 // EntryPath returns the filesystem path for a logical cache key.
 func EntryPath(cacheDir, logicalKey string) string {
 	return entryPath(cacheDir, logicalKey)
@@ -55,9 +46,6 @@ func EntryPath(cacheDir, logicalKey string) string {
 // ReadPayload loads a cache entry payload and saved timestamp.
 func ReadPayload(cacheDir, logicalKey string) (json.RawMessage, int64, error) {
 	path := entryPath(cacheDir, logicalKey)
-	if cacheDisabled(cacheDir) {
-		return nil, 0, &os.PathError{Op: "open", Path: path, Err: os.ErrNotExist}
-	}
 	//nolint:gosec // Cache entry paths are cacheDir plus a sha256-derived filename.
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -82,9 +70,6 @@ func WritePayload(cacheDir, logicalKey string, payload []byte) error {
 	if strings.TrimSpace(cacheDir) == "" || strings.TrimSpace(logicalKey) == "" || len(payload) == 0 {
 		return nil
 	}
-	if cacheDisabled(cacheDir) {
-		return nil
-	}
 
 	env := Envelope{
 		Key:     logicalKey,
@@ -101,9 +86,6 @@ func WritePayload(cacheDir, logicalKey string, payload []byte) error {
 // DeletePayload removes a payload for a logical cache key.
 func DeletePayload(cacheDir, logicalKey string) {
 	if strings.TrimSpace(cacheDir) == "" || strings.TrimSpace(logicalKey) == "" {
-		return
-	}
-	if cacheDisabled(cacheDir) {
 		return
 	}
 	_ = os.Remove(entryPath(cacheDir, logicalKey))

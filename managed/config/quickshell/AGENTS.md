@@ -4,7 +4,7 @@ This file provides guidance for working with code in this repository.
 
 ## Project Overview
 
-Custom Quickshell configuration for Wayland/Hyprland featuring a modular status bar, overview, left/right panels, powermenu, resident lock controller, and screenshot/recording utilities through HyprQuickshot. Quickshell is a Qt/QML-based compositor shell toolkit.
+Custom Quickshell configuration for Wayland/Hyprland featuring a modular status bar, left/right panels, powermenu, resident lock controller, and screenshot/recording utilities through HyprQuickshot. Quickshell is a Qt/QML-based compositor shell toolkit.
 
 ## Compatibility Policy
 
@@ -21,7 +21,7 @@ The Quickshell binary locally tracks the master branch.
 
 **Running the shell:**
 
-- Main shell (bar + overview + panels + lock controller + HyprQuickshot/powermenu loaders): `./qs` from the root directory.
+- Main shell (bar + panels + lock controller + HyprQuickshot/powermenu loaders): `./qs` from the root directory.
 - Powermenu: `quickshell -c powermenu` or `qs -c powermenu`
 - HyprQuickshot (screenshot utility): run the main shell with `./qs`, then trigger it via your keybind or `qs ipc call hyprquickshot open`
 - Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for the normal manual check. It restarts `quickshell.service`, waits briefly, then prints recent warnings/errors.
@@ -30,14 +30,14 @@ The Quickshell binary locally tracks the master branch.
 **Native modules (Go/C++/QML):**
 
 - Build, import-path, and module notes live in `common/modules/AGENTS.md`.
-- Current native/module directories include `qs-go` (primary Go/CGO Qt plugin), `qs-capture` (native capture), `qsmath` (math rendering), `unified-lyrics-api`, and `rounded_polygon_qmljs`.
+- Current native/module directories include `qs-go` (primary Go/CGO Qt plugin), `qs-capture` (native capture), `qsmath` (math rendering), `material-popups` (Rust/CXX-Qt clipboard popup backend), `unified-lyrics-api`, and `rounded_polygon_qmljs`.
 - Prefer Go-based modules for new native integrations unless asked otherwise.
 
 ## Architecture
 
 ### Entry Points and Shell Structure
 
-- **Root shell** (`shell.qml`): Loads bar per screen via `Variants` over `Quickshell.screens`, left/right panels, overview, resident lock controller, powermenu, and HyprQuickshot
+- **Root shell** (`shell.qml`): Loads bar per screen via `Variants` over `Quickshell.screens`, left/right panels, resident lock controller, powermenu, and HyprQuickshot
 - **Powermenu** (`powermenu/shell.qml` → `powermenu/Powermenu.qml`): Overlay with system actions (poweroff/reboot/lock/hibernate/suspend/windows/etc)
 - **Lockscreen** (`lockscreen/shell.qml` + `lockscreen/LockController.qml`): resident lock controller in the main shell with a standalone fallback shell
 - **HyprQuickshot** (`hyprquickshot/HyprQuickshot.qml`): Screenshot tool with region/window/monitor selection
@@ -52,15 +52,15 @@ The bar uses a **modular architecture** with key directories:
    - `TooltipPopup.qml`: Tooltip system with scrolling support (Flickable + ScrollIndicator)
    - `IconLabel.qml`, `IconTextRow.qml`, `BarLabel.qml`, `ActionChip.qml`, `ActionIconButton.qml`: Common UI primitives
    - `ProcessMonitor.qml`, `TrafficGraph.qml`, `TooltipCard.qml`, `UpdatesTooltip.qml`, `CalendarTooltip.qml`: Shared behavior/tooltip helpers
-   - `JsonUtils.js`: Robust JSON parsing utilities (`safeParse`, `parseObject`, `parseArray`, `formatTooltip`)
+   - `common/JsonUtils.js`: Robust JSON parsing utilities (`safeParse`, `parseObject`, `parseArray`, `formatTooltip`)
    - `CommandRunner.qml`: Process execution helper with stderr capture, timeout, error signals
 
 1. **`bar/`** (singletons in qmldir):
 
    - `Config`: Design tokens (fonts, spacing, colors, slider constants) from `common/Config.qml`
-   - `ColorPalette`: Material palette + color roles from `common/ColorPalette.qml` / `common/colors.json`
+  - `Colors`: Material palette + color roles from `common/Colors.qml` / `common/colors.json`
    - `DependencyCheck`: Centralized dependency checking with notify-send alerts
-   - `GlobalState`: Shared runtime state (panels, overview, powermenu, HyprQuickshot, recording, idle-inhibit, lock state)
+   - `GlobalState`: Shared runtime state (panels, powermenu, HyprQuickshot, recording, idle-inhibit, lock state)
    - Service singletons: `BrightnessService`, `CalendarService`, `NetworkService`, `PrivacyService`, `SystemdFailedService`, `TodoistService`, `UpdatesService`
 
 1. **`bar/modules/`** : Feature modules, organized into groups
@@ -77,7 +77,7 @@ Native module notes live in `common/modules/AGENTS.md`. The primary QML plugin i
 Modules integrate with system services via:
 
 - **Quickshell services/APIs**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland`, `Quickshell.Networking`, `Quickshell.Bluetooth`, `Quickshell.Services.Pipewire`, `Quickshell.Services.UPower`
-- **Native helpers**: `qsgo.BacklightProvider`, `PacmanUpdatesProvider`, `IcalCache`, `TodoistClient`, `SysInfoProvider`, `HyprlandSnapshotProvider`, `AiChatSession`, plus `qs-capture`, `qsmath`, and `unifiedlyrics`
+- **Native helpers**: `qsgo.BacklightProvider`, `PacmanUpdatesProvider`, `IcalCache`, `TodoistClient`, `SysInfoProvider`, `AiChatSession`, plus `qs-capture`, `qsmath`, and `unifiedlyrics`
 - **External commands**:
   - `ip` for current address/gateway details that `Quickshell.Networking` does not expose
   - `ddcutil` for external monitor brightness
@@ -100,7 +100,7 @@ For AI MCP/tool-call rows, the UI must only show content that is sent back to th
   - Spacing/motion: `Config.space.*`, `Config.motion.duration.*`, `Config.shape.corner.*`
   - Colors: `Config.color` and `Config.palette` (from `common/Colors.qml`)
   - Typography: `Config.type.*` defines Material type scale (display/headline/title/body/label)
-- **Layering**: Bar uses `WlrLayershell.layer: WlrLayer.Top`; left/right panels use overlay windows with on-demand focus; powermenu/overview use overlay + exclusive keyboard focus
+- **Layering**: Bar uses `WlrLayershell.layer: WlrLayer.Top`; left/right panels use overlay windows with on-demand focus; powermenu uses overlay + exclusive keyboard focus
 
 ### Color Roles (Material 3)
 

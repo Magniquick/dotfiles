@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(unifiedlyrics LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -11,6 +12,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Qml Concurrent)
 find_program(GO_EXECUTABLE go REQUIRED)
@@ -65,9 +67,7 @@ target_include_directories(unifiedlyrics_plugin PRIVATE
     "${QML_MODULE_DIR}"
 )
 
-if(QS_NATIVE_CPU)
-    target_compile_options(unifiedlyrics_plugin PRIVATE -march=native -mtune=native)
-endif()
+qs_apply_common_compile_options(unifiedlyrics_plugin)
 
 add_dependencies(unifiedlyrics_plugin unifiedlyrics_go_lib)
 

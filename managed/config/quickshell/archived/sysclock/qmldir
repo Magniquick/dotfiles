@@ -1,2 +1,0 @@
-module sysclock
-singleton SysClock 1.0 SysClock.qml

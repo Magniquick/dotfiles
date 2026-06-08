@@ -23,8 +23,10 @@ func main() {
 	var album string
 	var lengthMicros string
 	var limit int
+	var noCache bool
 
 	flag.StringVar(&cacheDir, "cache-dir", "", "lyrics cache directory")
+	flag.BoolVar(&noCache, "no-cache", false, "disable lyric cache reads and writes")
 	flag.StringVar(&spotifyRef, "spotify-ref", "", "spotify track URL/URI/id")
 	flag.StringVar(&track, "track", "", "track name")
 	flag.StringVar(&artist, "artist", "", "artist name")
@@ -41,7 +43,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	res, err := unifiedlyrics.New(cacheDir).Fetch(ctx, unifiedlyrics.Request{
+	res, err := unifiedlyrics.New(cacheDir, unifiedlyrics.WithNoCache(noCache)).Fetch(ctx, unifiedlyrics.Request{
 		SPDC:            readSecret("SP_DC"),
 		SpotifyTrackRef: strings.TrimSpace(spotifyRef),
 		TrackName:       strings.TrimSpace(track),
@@ -54,7 +56,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("source=%s provider=%s syncType=%s lines=%d\n", res.Source, res.Metadata.Provider, res.SyncType, len(res.Lines))
+	fmt.Printf(
+		"source=%s provider=%s syncType=%s lines=%d\n",
+		res.Source,
+		res.Metadata.Provider,
+		res.SyncType,
+		len(res.Lines),
+	)
 	maxLines := limit
 	if maxLines < 0 || maxLines > len(res.Lines) {
 		maxLines = len(res.Lines)

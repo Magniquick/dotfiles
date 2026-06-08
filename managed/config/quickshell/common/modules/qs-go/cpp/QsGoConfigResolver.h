@@ -10,11 +10,11 @@ class QsGoConfigResolver : public QObject {
 public:
   explicit QsGoConfigResolver(QObject* parent = nullptr);
 
-  QVariantMap values() const {
+  [[nodiscard]] auto values() const -> QVariantMap {
     return m_values;
   }
 
-  Q_INVOKABLE bool refresh();
+  Q_INVOKABLE auto refresh() -> bool;
 
 signals:
   void valuesChanged();

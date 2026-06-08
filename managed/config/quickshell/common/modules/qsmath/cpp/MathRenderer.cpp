@@ -7,8 +7,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
-#include <QProcess>
 #include <QPointer>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -17,8 +17,8 @@
 #include <QTextDocument>
 #include <QUrl>
 #include <QXmlStreamReader>
-#include <QtMath>
 #include <QtConcurrent/QtConcurrent>
+#include <QtMath>
 
 #include <algorithm>
 #include <mutex>
@@ -52,9 +52,9 @@ struct RenderedSize {
 
 std::mutex ratexMutex;
 
-QString formulaHash(const QString& formula, Segment::Type type, const QString& rendererCacheKey,
-                    int maxWidth, qreal textSize, qreal padding, const QColor& color,
-                    qreal renderScale) {
+auto formulaHash(const QString& formula, Segment::Type type, const QString& rendererCacheKey,
+                 int maxWidth, qreal textSize, qreal padding, const QColor& color,
+                 qreal renderScale) -> QString {
   QCryptographicHash hash(QCryptographicHash::Sha256);
   hash.addData(rendererCacheKey.toUtf8());
   hash.addData(formula.toUtf8());
@@ -68,48 +68,53 @@ QString formulaHash(const QString& formula, Segment::Type type, const QString& r
   return QString::fromLatin1(hash.result().toHex());
 }
 
-bool startsWithAt(const QString& text, int offset, const QString& needle) {
+auto startsWithAt(const QString& text, int offset, const QString& needle) -> bool {
   return offset >= 0 && offset + needle.size() <= text.size() &&
          text.mid(offset, needle.size()) == needle;
 }
 
-int findClosingDollar(const QString& text, int offset, const QString& delimiter) {
+auto findClosingDollar(const QString& text, int offset, const QString& delimiter) -> int {
   int i = offset;
   while (i < text.size()) {
     const int found = text.indexOf(delimiter, i);
-    if (found < 0)
+    if (found < 0) {
       return -1;
-    if (found == 0 || text.at(found - 1) != QChar('\\'))
+    }
+    if (found == 0 || text.at(found - 1) != QChar('\\')) {
       return found;
+    }
     i = found + delimiter.size();
   }
   return -1;
 }
 
-QString captureEnvironment(const QString& text, int offset) {
+auto captureEnvironment(const QString& text, int offset) -> QString {
   static const QRegularExpression envStart(
       R"(\\begin\{(equation\*?|align\*?|gather\*?|multline\*?|matrix\*?|bmatrix|pmatrix|vmatrix|Vmatrix)\})");
   const QRegularExpressionMatch match = envStart.match(
       text, offset, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption);
-  if (!match.hasMatch())
+  if (!match.hasMatch()) {
     return {};
+  }
 
   const QString envName = match.captured(1);
   const QString endToken = QStringLiteral("\\end{%1}").arg(envName);
   const int endIndex = text.indexOf(endToken, match.capturedEnd());
-  if (endIndex < 0)
+  if (endIndex < 0) {
     return {};
+  }
   return text.mid(offset, endIndex + endToken.size() - offset);
 }
 
-std::vector<Segment> tokenizeMarkdown(const QString& source) {
+auto tokenizeMarkdown(const QString& source) -> std::vector<Segment> {
   std::vector<Segment> segments;
   QString textBuffer;
 
-  auto flushText = [&]() {
-    if (textBuffer.isEmpty())
+  auto flushText = [&]() -> void {
+    if (textBuffer.isEmpty()) {
       return;
-    segments.push_back({Segment::Type::Text, textBuffer, {}});
+    }
+    segments.push_back({.type = Segment::Type::Text, .text = textBuffer, .placeholder = {}});
     textBuffer.clear();
   };
 
@@ -119,8 +124,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
   while (i < source.size()) {
     if (source.at(i) == QChar('`')) {
       int run = 1;
-      while (i + run < source.size() && source.at(i + run) == QChar('`'))
+      while (i + run < source.size() && source.at(i + run) == QChar('`')) {
         ++run;
+      }
       const QString fence(run, QChar('`'));
       const int closeIndex = source.indexOf(fence, i + run);
       if (closeIndex < 0) {
@@ -135,8 +141,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
     const QString environment = captureEnvironment(source, i);
     if (!environment.isEmpty()) {
       flushText();
-      segments.push_back({Segment::Type::DisplayMath, environment,
-                          QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
+      segments.push_back({.type = Segment::Type::DisplayMath,
+                          .text = environment,
+                          .placeholder = QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
       i += environment.size();
       continue;
     }
@@ -145,8 +152,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
       const int closeIndex = source.indexOf(QStringLiteral("\\]"), i + 2);
       if (closeIndex >= 0) {
         flushText();
-        segments.push_back({Segment::Type::DisplayMath, source.mid(i, closeIndex + 2 - i),
-                            QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
+        segments.push_back({.type = Segment::Type::DisplayMath,
+                            .text = source.mid(i, closeIndex + 2 - i),
+                            .placeholder = QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
         i = closeIndex + 2;
         continue;
       }
@@ -156,8 +164,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
       const int closeIndex = findClosingDollar(source, i + 2, QStringLiteral("$$"));
       if (closeIndex >= 0) {
         flushText();
-        segments.push_back({Segment::Type::DisplayMath, source.mid(i, closeIndex + 2 - i),
-                            QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
+        segments.push_back({.type = Segment::Type::DisplayMath,
+                            .text = source.mid(i, closeIndex + 2 - i),
+                            .placeholder = QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
         i = closeIndex + 2;
         continue;
       }
@@ -167,8 +176,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
       const int closeIndex = source.indexOf(QStringLiteral("\\)"), i + 2);
       if (closeIndex >= 0) {
         flushText();
-        segments.push_back({Segment::Type::InlineMath, source.mid(i, closeIndex + 2 - i),
-                            QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
+        segments.push_back({.type = Segment::Type::InlineMath,
+                            .text = source.mid(i, closeIndex + 2 - i),
+                            .placeholder = QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
         i = closeIndex + 2;
         continue;
       }
@@ -178,8 +188,9 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
       const int closeIndex = findClosingDollar(source, i + 1, QStringLiteral("$"));
       if (closeIndex > i + 1) {
         flushText();
-        segments.push_back({Segment::Type::InlineMath, source.mid(i, closeIndex + 1 - i),
-                            QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
+        segments.push_back({.type = Segment::Type::InlineMath,
+                            .text = source.mid(i, closeIndex + 1 - i),
+                            .placeholder = QStringLiteral("@@MATH_%1@@").arg(placeholderIndex++)});
         i = closeIndex + 1;
         continue;
       }
@@ -193,13 +204,14 @@ std::vector<Segment> tokenizeMarkdown(const QString& source) {
   return segments;
 }
 
-QString stripMathDelimiters(QString formula) {
+auto stripMathDelimiters(QString formula) -> QString {
   formula = formula.trimmed();
 
-  auto stripPair = [&](const QString& left, const QString& right) {
+  auto stripPair = [&](const QString& left, const QString& right) -> bool {
     if (!formula.startsWith(left) || !formula.endsWith(right) ||
-        formula.size() < left.size() + right.size())
+        formula.size() < left.size() + right.size()) {
       return false;
+    }
     formula = formula.mid(left.size(), formula.size() - left.size() - right.size()).trimmed();
     return true;
   };
@@ -212,7 +224,16 @@ QString stripMathDelimiters(QString formula) {
   return formula;
 }
 
-QString markdownWithPlaceholders(const std::vector<Segment>& segments) {
+auto formulaForRatex(const Segment& segment) -> QString {
+  QString formula = stripMathDelimiters(segment.text);
+  if (segment.type == Segment::Type::DisplayMath) {
+    formula.replace(QRegularExpression(QStringLiteral(R"(\s+)")), QStringLiteral(" "));
+    formula = formula.trimmed();
+  }
+  return formula;
+}
+
+auto markdownWithPlaceholders(const std::vector<Segment>& segments) -> QString {
   QString result;
   for (const Segment& segment : segments) {
     if (segment.type == Segment::Type::Text) {
@@ -221,11 +242,13 @@ QString markdownWithPlaceholders(const std::vector<Segment>& segments) {
     }
 
     if (segment.type == Segment::Type::DisplayMath) {
-      if (!result.endsWith('\n'))
+      if (!result.endsWith('\n')) {
         result += '\n';
+      }
       result += segment.placeholder;
-      if (!result.endsWith('\n'))
+      if (!result.endsWith('\n')) {
         result += '\n';
+      }
     } else {
       result += segment.placeholder;
     }
@@ -233,40 +256,25 @@ QString markdownWithPlaceholders(const std::vector<Segment>& segments) {
   return result;
 }
 
-QString ratexExecutable() {
+auto ratexExecutable() -> QString {
 #ifdef QSMATH_RENDERER_PATH
   const QString bundled = QString::fromUtf8(QSMATH_RENDERER_PATH);
-  if (QFile::exists(bundled))
+  if (QFile::exists(bundled)) {
     return bundled;
+  }
 #endif
 
   const QString bundledFromPath =
       QStandardPaths::findExecutable(QStringLiteral("qsmath-render-svg"));
-  if (!bundledFromPath.isEmpty())
+  if (!bundledFromPath.isEmpty()) {
     return bundledFromPath;
-
-  const QString fromPath = QStandardPaths::findExecutable(QStringLiteral("render-svg"));
-  if (!fromPath.isEmpty())
-    return fromPath;
-
-  const QString cargoHome = qEnvironmentVariable("CARGO_HOME");
-  const QString home = QDir::homePath();
-  const QStringList candidates = {
-      cargoHome.isEmpty() ? QString() : cargoHome + QStringLiteral("/bin/render-svg"),
-      home + QStringLiteral("/.local/share/cargo/bin/render-svg"),
-      home + QStringLiteral("/.cargo/bin/render-svg"),
-  };
-
-  for (const QString& candidate : candidates) {
-    if (!candidate.isEmpty() && QFile::exists(candidate))
-      return candidate;
   }
 
   return {};
 }
 
-QString ratexCacheKey(const QString& executable) {
-  QFileInfo info(executable);
+auto ratexCacheKey(const QString& executable) -> QString {
+  QFileInfo const info(executable);
   const QString path =
       info.canonicalFilePath().isEmpty() ? info.absoluteFilePath() : info.canonicalFilePath();
 
@@ -276,71 +284,84 @@ QString ratexCacheKey(const QString& executable) {
       .arg(info.lastModified().toMSecsSinceEpoch());
 }
 
-bool parseSvgLength(const QString& text, qreal* value) {
-  if (!value)
+auto parseSvgLength(const QString& text, qreal* value) -> bool {
+  if (value == nullptr) {
     return false;
+  }
 
   const QString trimmed = text.trimmed();
-  if (trimmed.isEmpty() || trimmed.endsWith(QLatin1Char('%')))
+  if (trimmed.isEmpty() || trimmed.endsWith(QLatin1Char('%'))) {
     return false;
+  }
 
   qsizetype end = 0;
   while (end < trimmed.size()) {
     const QChar ch = trimmed.at(end);
     if (!(ch.isDigit() || ch == QLatin1Char('.') || ch == QLatin1Char('-') ||
-          ch == QLatin1Char('+') || ch == QLatin1Char('e') || ch == QLatin1Char('E')))
+          ch == QLatin1Char('+') || ch == QLatin1Char('e') || ch == QLatin1Char('E'))) {
       break;
+    }
     ++end;
   }
 
-  if (end <= 0)
+  if (end <= 0) {
     return false;
+  }
 
   bool ok = false;
   const qreal parsed = trimmed.left(end).toDouble(&ok);
-  if (!ok || parsed <= 0)
+  if (!ok || parsed <= 0) {
     return false;
+  }
 
   *value = parsed;
   return true;
 }
 
-bool parseSvgViewBox(const QString& viewBox, qreal* width, qreal* height) {
+auto parseSvgViewBox(const QString& viewBox, qreal* width, qreal* height) -> bool {
   const QStringList parts = QString(viewBox)
                                 .replace(QLatin1Char(','), QLatin1Char(' '))
                                 .split(QLatin1Char(' '), Qt::SkipEmptyParts);
-  if (parts.size() != 4)
+  if (parts.size() != 4) {
     return false;
+  }
 
   bool widthOk = false;
   bool heightOk = false;
   const qreal parsedWidth = parts.at(2).toDouble(&widthOk);
   const qreal parsedHeight = parts.at(3).toDouble(&heightOk);
-  if (!widthOk || !heightOk || parsedWidth <= 0 || parsedHeight <= 0)
+  if (!widthOk || !heightOk || parsedWidth <= 0 || parsedHeight <= 0) {
     return false;
+  }
 
-  if (width)
+  if (width != nullptr) {
     *width = parsedWidth;
-  if (height)
+  }
+  if (height != nullptr) {
     *height = parsedHeight;
+  }
   return true;
 }
 
-bool parseSvgSize(const QString& svgPath, qreal scale, RenderedSize* size) {
-  if (!size || scale <= 0)
+auto parseSvgSize(const QString& svgPath, qreal scale, RenderedSize* size) -> bool {
+  if ((size == nullptr) || scale <= 0) {
     return false;
+  }
 
   QFile svg(svgPath);
-  if (!svg.open(QIODevice::ReadOnly | QIODevice::Text))
+  if (!svg.open(QIODevice::ReadOnly | QIODevice::Text)) {
     return false;
+  }
 
   QXmlStreamReader xml(&svg);
   while (!xml.atEnd()) {
     xml.readNext();
-    if (!xml.isStartElement())
+    if (!xml.isStartElement()) {
       continue;
-    if (xml.name() != QLatin1String("svg"))
+    }
+    if (xml.name() != QLatin1String("svg")) {
       return false;
+    }
 
     const QXmlStreamAttributes attributes = xml.attributes();
     qreal physicalWidth = 0;
@@ -352,8 +373,9 @@ bool parseSvgSize(const QString& svgPath, qreal scale, RenderedSize* size) {
 
     if ((!hasWidth || !hasHeight) &&
         !parseSvgViewBox(attributes.value(QStringLiteral("viewBox")).toString(), &physicalWidth,
-                         &physicalHeight))
+                         &physicalHeight)) {
       return false;
+    }
 
     size->physicalWidth = physicalWidth;
     size->physicalHeight = physicalHeight;
@@ -365,7 +387,7 @@ bool parseSvgSize(const QString& svgPath, qreal scale, RenderedSize* size) {
   return false;
 }
 
-QString normalizeSvgPaintValues(QString svg) {
+auto normalizeSvgPaintValues(QString svg) -> QString {
   static const QRegularExpression rgbaPattern(
       R"regex((\b(?:fill|stroke)=")rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(?:1(?:\.0+)?|0?\.\d+)\s*\)("))regex");
 
@@ -385,20 +407,22 @@ QString normalizeSvgPaintValues(QString svg) {
     offset = match.capturedEnd();
   }
 
-  if (offset == 0)
+  if (offset == 0) {
     return svg;
+  }
 
   normalized += svg.mid(offset);
   return normalized;
 }
 
-bool copyRenderedSvg(const QString& sourcePath, const QString& targetPath, QString* error) {
+auto copyRenderedSvg(const QString& sourcePath, const QString& targetPath, QString* error) -> bool {
   QFile::remove(targetPath);
 
   QFile source(sourcePath);
   if (!source.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to read rendered SVG: %1").arg(sourcePath);
+    }
     return false;
   }
 
@@ -408,18 +432,20 @@ bool copyRenderedSvg(const QString& sourcePath, const QString& targetPath, QStri
     return true;
   }
 
-  if (error)
+  if (error != nullptr) {
     *error = QStringLiteral("Failed to write rendered SVG to cache: %1").arg(targetPath);
+  }
   return false;
 }
 
-bool renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qreal textSize,
+auto renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qreal textSize,
                             qreal padding, const QColor& foreground, qreal renderScale,
-                            const QString& executable, QString* error) {
-  QTemporaryDir outputDir(QDir::tempPath() + QStringLiteral("/qsmath-ratex-XXXXXX"));
+                            const QString& executable, QString* error) -> bool {
+  QTemporaryDir const outputDir(QDir::tempPath() + QStringLiteral("/qsmath-ratex-XXXXXX"));
   if (!outputDir.isValid()) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to create temporary RaTeX output directory");
+    }
     return false;
   }
 
@@ -443,20 +469,22 @@ bool renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qrea
   process.setArguments(arguments);
   process.start();
   if (!process.waitForStarted(3000)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to start %1: %2").arg(executable, process.errorString());
+    }
     return false;
   }
 
-  process.write(stripMathDelimiters(segment.text).toUtf8());
+  process.write(formulaForRatex(segment).toUtf8());
   process.write("\n");
   process.closeWriteChannel();
 
   if (!process.waitForFinished(10000)) {
     process.kill();
     process.waitForFinished(1000);
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("RaTeX render timed out");
+    }
     return false;
   }
 
@@ -466,7 +494,7 @@ bool renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qrea
 
   if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0 ||
       !QFile::exists(renderedPath)) {
-    if (error) {
+    if (error != nullptr) {
       const QString detail = !stderrText.isEmpty() ? stderrText : stdoutText;
       *error = detail.isEmpty() ? QStringLiteral("RaTeX render failed")
                                 : QStringLiteral("RaTeX render failed: %1").arg(detail);
@@ -477,21 +505,20 @@ bool renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qrea
   return copyRenderedSvg(renderedPath, svgPath, error);
 }
 
-RenderedMath renderSegment(const Segment& segment, const QString& cacheDir, int maxWidth,
-                           qreal textSize, qreal padding, const QColor& foreground,
-                           qreal renderScale, QString* error) {
+auto renderSegment(const Segment& segment, const QString& cacheDir, int maxWidth, qreal textSize,
+                   qreal padding, const QColor& foreground, qreal renderScale, QString* error)
+    -> RenderedMath {
   const QString executable = ratexExecutable();
   if (executable.isEmpty()) {
-    if (error) {
-      *error = QStringLiteral(
-          "render-svg not found; install RaTeX with: cargo install ratex-svg --bin render-svg "
-          "--features 'cli embed-fonts'");
+    if (error != nullptr) {
+      *error =
+          QStringLiteral("qsmath-render-svg not found; rebuild qsmath with tools/build-qsmath.sh");
     }
     return {};
   }
 
   const qreal scale = std::max<qreal>(1.0, renderScale);
-  const QString formula = stripMathDelimiters(segment.text);
+  const QString formula = formulaForRatex(segment);
   const QString svgPath = cacheDir + QLatin1Char('/') +
                           formulaHash(formula, segment.type, ratexCacheKey(executable), maxWidth,
                                       textSize, padding, foreground, scale) +
@@ -501,8 +528,9 @@ RenderedMath renderSegment(const Segment& segment, const QString& cacheDir, int 
 
   if (!QFile::exists(svgPath)) {
     if (!renderFormulaWithRatex(segment, svgPath, textSize, padding, foreground, scale, executable,
-                                error))
+                                error)) {
       return {};
+    }
   }
 
   parseSvgSize(svgPath, scale, &size);
@@ -514,15 +542,16 @@ RenderedMath renderSegment(const Segment& segment, const QString& cacheDir, int 
                  .arg(qCeil(size.logicalWidth))
                  .arg(qCeil(size.logicalHeight));
   }
-  if (segment.type == Segment::Type::InlineMath)
+  if (segment.type == Segment::Type::InlineMath) {
     attrs += QStringLiteral(" align=\"middle\"");
-  else
+  } else {
     attrs += QStringLiteral(" style=\"display:block; margin:0.5em auto; max-width:100%;\"");
+  }
 
-  return {segment.placeholder, QStringLiteral("<img %1 />").arg(attrs)};
+  return {.placeholder = segment.placeholder, .html = QStringLiteral("<img %1 />").arg(attrs)};
 }
 
-QString injectRenderedMath(QString html, const std::vector<RenderedMath>& rendered) {
+auto injectRenderedMath(QString html, const std::vector<RenderedMath>& rendered) -> QString {
   for (const RenderedMath& entry : rendered) {
     const QRegularExpression blockPattern(QStringLiteral(R"(<p[^>]*>\s*%1\s*</p>)")
                                               .arg(QRegularExpression::escape(entry.placeholder)));
@@ -535,12 +564,13 @@ QString injectRenderedMath(QString html, const std::vector<RenderedMath>& render
   return html;
 }
 
-QString renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, int maxWidth,
-                             qreal textSize, qreal padding, const QColor& foreground,
-                             qreal renderScale, QString* error) {
+auto renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, int maxWidth,
+                          qreal textSize, qreal padding, const QColor& foreground,
+                          qreal renderScale, QString* error) -> QString {
   if (!QDir().mkpath(cacheDir)) {
-    if (error)
+    if (error != nullptr) {
       *error = QStringLiteral("Failed to create cache directory: %1").arg(cacheDir);
+    }
     return {};
   }
 
@@ -554,19 +584,21 @@ QString renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, i
   QTextCharFormat textFormat;
   textFormat.setForeground(foreground);
   cursor.mergeCharFormat(textFormat);
-  QString html = document.toHtml();
+  QString const html = document.toHtml();
 
   std::vector<RenderedMath> rendered;
   rendered.reserve(segments.size());
 
-  std::lock_guard<std::mutex> lock(ratexMutex);
+  std::scoped_lock const lock(ratexMutex);
   for (const Segment& segment : segments) {
-    if (segment.type == Segment::Type::Text)
+    if (segment.type == Segment::Type::Text) {
       continue;
-    RenderedMath math = renderSegment(segment, cacheDir, maxWidth, textSize, padding, foreground,
-                                      renderScale, error);
-    if (error && !error->isEmpty())
+    }
+    RenderedMath const math = renderSegment(segment, cacheDir, maxWidth, textSize, padding,
+                                            foreground, renderScale, error);
+    if ((error != nullptr) && !error->isEmpty()) {
       return {};
+    }
     rendered.push_back(math);
   }
 
@@ -580,9 +612,9 @@ MathRenderer::MathRenderer(QObject* parent) : QObject(parent) {}
 void MathRenderer::renderMarkdown(const QString& requestId, const QString& markdown,
                                   const QString& cacheDir, int maxWidth, qreal textSize,
                                   qreal padding, const QString& foreground, qreal renderScale) {
-  QPointer<MathRenderer> self(this);
+  QPointer<MathRenderer> const self(this);
   (void)QtConcurrent::run([self, requestId, markdown, cacheDir, maxWidth, textSize, padding,
-                           foreground, renderScale]() {
+                           foreground, renderScale]() -> void {
     const QColor color(foreground);
     const QColor resolvedColor = color.isValid() ? color : QColor(QStringLiteral("#000000"));
     const qreal resolvedScale = std::clamp<qreal>(renderScale, 1.0, 4.0);
@@ -591,15 +623,17 @@ void MathRenderer::renderMarkdown(const QString& requestId, const QString& markd
         markdown, cacheDir, std::max(120, maxWidth), textSize > 0 ? textSize : 18.0,
         padding >= 0 ? padding : 4.0, resolvedColor, resolvedScale, &error);
 
-    if (!self)
+    if (!self) {
       return;
+    }
 
     if (!error.isEmpty()) {
       QMetaObject::invokeMethod(
           self,
-          [self, requestId, error]() {
-            if (self)
+          [self, requestId, error]() -> void {
+            if (self) {
               self->requestFailed(requestId, error);
+            }
           },
           Qt::QueuedConnection);
       return;
@@ -607,9 +641,10 @@ void MathRenderer::renderMarkdown(const QString& requestId, const QString& markd
 
     QMetaObject::invokeMethod(
         self,
-        [self, requestId, html]() {
-          if (self)
+        [self, requestId, html]() -> void {
+          if (self) {
             self->requestFinished(requestId, html);
+          }
         },
         Qt::QueuedConnection);
   });

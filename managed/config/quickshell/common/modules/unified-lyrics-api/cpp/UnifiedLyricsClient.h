@@ -1,10 +1,10 @@
 #pragma once
 
+#include <QFutureWatcher>
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
-#include <QFutureWatcher>
 
 struct UnifiedLyricsBackendResult {
   bool valid = false;
@@ -31,34 +31,34 @@ class UnifiedLyricsClient : public QObject {
 public:
   explicit UnifiedLyricsClient(QObject* parent = nullptr);
 
-  bool busy() const {
+  auto busy() const -> bool {
     return m_busy;
   }
-  bool loaded() const {
+  auto loaded() const -> bool {
     return m_loaded;
   }
-  QString status() const {
+  auto status() const -> QString {
     return m_status;
   }
-  QString error() const {
+  auto error() const -> QString {
     return m_error;
   }
-  QString source() const {
+  auto source() const -> QString {
     return m_source;
   }
-  QString syncType() const {
+  auto syncType() const -> QString {
     return m_syncType;
   }
-  QVariantMap metadata() const {
+  auto metadata() const -> QVariantMap {
     return m_metadata;
   }
-  QVariantList lines() const {
+  auto lines() const -> QVariantList {
     return m_lines;
   }
 
-  Q_INVOKABLE bool refresh(const QString& spotifyTrackRef, const QString& trackName,
+  Q_INVOKABLE auto refresh(const QString& spotifyTrackRef, const QString& trackName,
                            const QString& artistName, const QString& albumName,
-                           const QString& lengthMicros);
+                           const QString& lengthMicros) -> bool;
 
 signals:
   void busyChanged();

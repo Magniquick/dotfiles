@@ -19,95 +19,95 @@ import QtQuick.Layouts
 import Quickshell
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property string calendarRefreshTime: ""
-    readonly property bool refreshing: CalendarService.refreshing
-    property bool showDate: false
+  property string calendarRefreshTime: ""
+  readonly property bool refreshing: CalendarService.refreshing
+  property bool showDate: false
 
-    function dateText() {
-        return Qt.formatDateTime(clock.date, "dd/MM/yy");
+  function dateText() {
+    return Qt.formatDateTime(clock.date, "dd/MM/yy")
+  }
+  function timeText() {
+    return Qt.formatDateTime(clock.date, "hh:mm ap")
+  }
+  Component.onCompleted: {
+    root.updateCalendarRefreshTime()
+  }
+  function updateCalendarRefreshTime() {
+    const generatedAt = CalendarService.generatedAt
+    if (generatedAt && String(generatedAt).trim() !== "") {
+      const dt = new Date(generatedAt)
+      root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap")
+      return
     }
-    function timeText() {
-        return Qt.formatDateTime(clock.date, "hh:mm ap");
+    root.calendarRefreshTime = ""
+  }
+
+  tooltipHoverable: true
+  tooltipRefreshing: root.refreshing
+  tooltipSubtitle: calendarRefreshTime
+  tooltipTitle: ""
+
+  content: [
+    BarLabel {
+      color: Config.color.tertiary
+      text: root.showDate ? root.dateText() : root.timeText()
     }
-    Component.onCompleted: {
-        root.updateCalendarRefreshTime();
-    }
-    function updateCalendarRefreshTime() {
-        const generatedAt = CalendarService.generatedAt;
-        if (generatedAt && String(generatedAt).trim() !== "") {
-            const dt = new Date(generatedAt);
-            root.calendarRefreshTime = Qt.formatDateTime(dt, "hh:mm ap");
-            return;
-        }
-        root.calendarRefreshTime = "";
-    }
+  ]
+  tooltipContent: Component {
+    ColumnLayout {
+      spacing: Config.space.sm
 
-    tooltipHoverable: true
-    tooltipRefreshing: root.refreshing
-    tooltipSubtitle: calendarRefreshTime
-    tooltipTitle: ""
+      TooltipCard {
+        backgroundColor: "transparent"
+        outlined: false
 
-    content: [
-        BarLabel {
-            color: Config.color.tertiary
-            text: root.showDate ? root.dateText() : root.timeText()
-        }
-    ]
-    tooltipContent: Component {
-        ColumnLayout {
-            spacing: Config.space.sm
+        content: [
+          CalendarTooltip {
+            id: calendarRef
 
-            TooltipCard {
-                backgroundColor: "transparent"
-                outlined: false
+            active: root.tooltipActive
+            calendarClient: CalendarService.client
+            currentDate: clock.date
+            refreshDays: CalendarService.days
 
-                content: [
-                    CalendarTooltip {
-                        id: calendarRef
-
-                        active: root.tooltipActive
-                        calendarClient: CalendarService.client
-                        currentDate: clock.date
-                        refreshDays: CalendarService.days
-
-                        onDataLoaded: function () {
-                            // CalendarService controls refreshing state.
-                        }
-
-                        // Handle refresh signal from parent
-                        Connections {
-                            function onTooltipRefreshRequested() {
-                                calendarRef.refreshRequested();
-                            }
-
-                            target: root
-                        }
-                    }
-                ]
+            onDataLoaded: function () {
+            // CalendarService controls refreshing state.
             }
-        }
-    }
 
-    onTooltipActiveChanged: {
-        if (tooltipActive) {
-            CalendarService.refresh("tooltip");
-            root.updateCalendarRefreshTime();
-        }
-    }
-    Connections {
-        target: CalendarService
+            // Handle refresh signal from parent
+            Connections {
+              function onTooltipRefreshRequested() {
+                calendarRef.refreshRequested()
+              }
 
-        function onGeneratedAtChanged() {
-            root.updateCalendarRefreshTime();
-        }
+              target: root
+            }
+          }
+        ]
+      }
     }
-    SystemClock {
-        id: clock
+  }
 
-        precision: SystemClock.Minutes
+  onTooltipActiveChanged: {
+    if (tooltipActive) {
+      CalendarService.refresh("tooltip")
+      root.updateCalendarRefreshTime()
     }
+  }
+  Connections {
+    target: CalendarService
 
-    onClicked: root.showDate = !root.showDate
+    function onGeneratedAtChanged() {
+      root.updateCalendarRefreshTime()
+    }
+  }
+  SystemClock {
+    id: clock
+
+    precision: SystemClock.Minutes
+  }
+
+  onClicked: root.showDate = !root.showDate
 }

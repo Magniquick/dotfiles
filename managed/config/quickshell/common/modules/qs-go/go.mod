@@ -1,6 +1,6 @@
 module qs-go
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -9,6 +9,7 @@ require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/prometheus/procfs v0.20.1
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.278.0

@@ -1,2 +1,3 @@
 module qsmath
 plugin qsmath
+typeinfo plugins.qmltypes

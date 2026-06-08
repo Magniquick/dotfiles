@@ -1,2 +1,0 @@
-module qs
-singleton ColorPalette 1.0 common/ColorPalette.qml

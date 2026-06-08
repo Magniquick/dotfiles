@@ -19,58 +19,58 @@ import QtQuick
 import "../../common" as Common
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property bool dropdownPinned: false
-    readonly property int taskCount: {
-        const data = TodoistService.payload;
-        if (!data || !Array.isArray(data.today))
-            return 0;
-        return data.today.length;
+  property bool dropdownPinned: false
+  readonly property int taskCount: {
+    const data = TodoistService.payload
+    if (!data || !Array.isArray(data.today))
+      return 0
+    return data.today.length
+  }
+  // Intentionally no hover label; keep pill compact.
+
+  tooltipBrowserLink: ["runapp", "todoist.sh"]
+  tooltipHoverable: true
+  tooltipPinned: dropdownPinned
+  tooltipRefreshing: TodoistService.loading
+  tooltipShowBrowserIcon: true
+  tooltipShowRefreshIcon: true
+  tooltipSubtitle: TodoistService.lastUpdatedLabel ? ("Synced " + TodoistService.lastUpdatedLabel) : ""
+  tooltipTitle: "Tasks"
+
+  content: [
+    Row {
+      spacing: root.contentSpacing
+
+      IconLabel {
+        color: Config.color.tertiary
+        font.pixelSize: Config.iconSize
+        text: "󰄭"
+      }
+      BarLabel {
+        color: Config.color.tertiary
+        font.pixelSize: Config.fontSize
+        text: root.taskCount > 0 ? String(root.taskCount) : ""
+      }
     }
-    // Intentionally no hover label; keep pill compact.
+  ]
 
-    tooltipBrowserLink: ["runapp", "todoist.sh"]
-    tooltipHoverable: true
-    tooltipPinned: dropdownPinned
-    tooltipRefreshing: TodoistService.loading
-    tooltipShowBrowserIcon: true
-    tooltipShowRefreshIcon: true
-    tooltipSubtitle: TodoistService.lastUpdatedLabel ? ("Synced " + TodoistService.lastUpdatedLabel) : ""
-    tooltipTitle: "Tasks"
+  onClicked: Common.ProcessHelper.execDetached(root.tooltipBrowserLink)
+  onRightClicked: TodoistService.refresh("manual")
 
-    content: [
-        Row {
-            spacing: root.contentSpacing
+  onTooltipRefreshRequested: TodoistService.refresh("manual")
 
-            IconLabel {
-                color: Config.color.tertiary
-                font.pixelSize: Config.iconSize
-                text: "󰄭"
-            }
-            BarLabel {
-                color: Config.color.tertiary
-                font.pixelSize: Config.fontSize
-                text: root.taskCount > 0 ? String(root.taskCount) : ""
-            }
-        }
-    ]
+  tooltipContent: Component {
+    ToDoModule {
+      id: todoTooltip
+      width: 320
 
-    onClicked: Common.ProcessHelper.execDetached(root.tooltipBrowserLink)
-    onRightClicked: TodoistService.refresh("manual")
-
-    onTooltipRefreshRequested: TodoistService.refresh("manual")
-
-    tooltipContent: Component {
-        ToDoModule {
-            id: todoTooltip
-            width: 320
-
-            Binding {
-                target: root
-                property: "dropdownPinned"
-                value: todoTooltip.dropdownActive
-            }
-        }
+      Binding {
+        target: root
+        property: "dropdownPinned"
+        value: todoTooltip.dropdownActive
+      }
     }
+  }
 }

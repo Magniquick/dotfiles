@@ -147,7 +147,10 @@ type Snapshot struct {
 }
 
 // SamplingHandler handles MCP sampling requests from servers.
-type SamplingHandler func(context.Context, *sdk.CreateMessageWithToolsRequest) (*sdk.CreateMessageWithToolsResult, error)
+type SamplingHandler func(
+	context.Context,
+	*sdk.CreateMessageWithToolsRequest,
+) (*sdk.CreateMessageWithToolsResult, error)
 
 // ElicitationHandler handles MCP elicitation requests from servers.
 type ElicitationHandler func(context.Context, *sdk.ElicitRequest) (*sdk.ElicitResult, error)
@@ -200,7 +203,13 @@ func Refresh(configJSON string) string {
 // ToolDescriptors returns model-provider tool descriptors for configured MCP servers.
 func ToolDescriptors(configJSON string) ([]shared.ToolDescriptor, error) {
 	snapshot := defaultRuntime.snapshotForToolDescriptors(configuredServers(configJSON))
-	log.Printf("qs-go ai/mcp: refresh status=%s error=%q servers=[%s] tools=%d", snapshot.Status, snapshot.Error, serverSummary(snapshot.Servers), len(snapshot.Tools))
+	log.Printf(
+		"qs-go ai/mcp: refresh status=%s error=%q servers=[%s] tools=%d",
+		snapshot.Status,
+		snapshot.Error,
+		serverSummary(snapshot.Servers),
+		len(snapshot.Tools),
+	)
 	return descriptorsFromSnapshot(snapshot)
 }
 
@@ -369,7 +378,12 @@ func builtinToolFormat(tool ToolSnapshot) map[string]any {
 }
 
 // CallTool invokes a local or remote MCP tool.
-func CallTool(configJSON string, serverID string, toolName string, arguments map[string]any) (shared.ToolResult, error) {
+func CallTool(
+	configJSON string,
+	serverID string,
+	toolName string,
+	arguments map[string]any,
+) (shared.ToolResult, error) {
 	serverID, toolName = splitQualifiedToolName(serverID, toolName)
 	log.Printf("qs-go ai/mcp: call namespace_server=%q tool=%q arg_keys=%v", serverID, toolName, mapKeys(arguments))
 	if strings.TrimSpace(serverID) == emailServerID || (strings.TrimSpace(serverID) == "" && isEmailTool(toolName)) {
@@ -686,7 +700,10 @@ func (r *runtime) connectLocked(cfg ServerConfig, hash string) (*serverConn, err
 	}
 
 	client := sdk.NewClient(&sdk.Implementation{Name: "qs-go-mcp-client", Version: clientVersion}, &sdk.ClientOptions{
-		CreateMessageWithToolsHandler: func(ctx context.Context, req *sdk.CreateMessageWithToolsRequest) (*sdk.CreateMessageWithToolsResult, error) {
+		CreateMessageWithToolsHandler: func(
+			ctx context.Context,
+			req *sdk.CreateMessageWithToolsRequest,
+		) (*sdk.CreateMessageWithToolsResult, error) {
 			return r.handleSampling(ctx, req)
 		},
 		ElicitationHandler: func(ctx context.Context, req *sdk.ElicitRequest) (*sdk.ElicitResult, error) {
@@ -913,10 +930,18 @@ func (r *runtime) snapshotLocked() Snapshot {
 		out.Resources = append(out.Resources, conn.resources...)
 	}
 
-	slices.SortFunc(out.Servers, func(a, b ServerSnapshot) int { return strings.Compare(a.Label+a.ID, b.Label+b.ID) })
-	slices.SortFunc(out.Tools, func(a, b ToolSnapshot) int { return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name) })
-	slices.SortFunc(out.Prompts, func(a, b PromptSnapshot) int { return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name) })
-	slices.SortFunc(out.Resources, func(a, b ResourceSnapshot) int { return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name) })
+	slices.SortFunc(out.Servers, func(a, b ServerSnapshot) int {
+		return strings.Compare(a.Label+a.ID, b.Label+b.ID)
+	})
+	slices.SortFunc(out.Tools, func(a, b ToolSnapshot) int {
+		return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name)
+	})
+	slices.SortFunc(out.Prompts, func(a, b PromptSnapshot) int {
+		return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name)
+	})
+	slices.SortFunc(out.Resources, func(a, b ResourceSnapshot) int {
+		return strings.Compare(a.ServerLabel+a.Name, b.ServerLabel+b.Name)
+	})
 
 	if len(out.Servers) == 0 {
 		out.Status = "empty"
@@ -924,7 +949,10 @@ func (r *runtime) snapshotLocked() Snapshot {
 	return out
 }
 
-func (r *runtime) handleSampling(ctx context.Context, req *sdk.CreateMessageWithToolsRequest) (*sdk.CreateMessageWithToolsResult, error) {
+func (r *runtime) handleSampling(
+	ctx context.Context,
+	req *sdk.CreateMessageWithToolsRequest,
+) (*sdk.CreateMessageWithToolsResult, error) {
 	r.mu.Lock()
 	handler := r.sampling
 	r.mu.Unlock()
@@ -1170,10 +1198,7 @@ func loadCachedServerSnapshot(cfg ServerConfig, hash string, now time.Time) (*se
 	if cached.Version != remoteCatalogCacheVersion || cached.Hash != hash || cached.CachedAt.IsZero() {
 		return nil, 0, false
 	}
-	age := now.Sub(cached.CachedAt)
-	if age < 0 {
-		age = 0
-	}
+	age := max(now.Sub(cached.CachedAt), 0)
 	if age >= remoteCatalogCacheHardExpiry {
 		return nil, age, false
 	}
@@ -1286,10 +1311,13 @@ func builtinToolSnapshots() []ToolSnapshot {
 			Name:          "shell_command",
 			QualifiedName: "builtin__shell_command",
 			Title:         "Shell command",
-			Description:   "Run a bubblewrap sandbox command. Inside the sandbox, $HOME and /workspace are the same writable directory; ~/.cache and ~/.local are also writable, and other host paths are read-only or unavailable.",
-			Destructive:   true,
-			OpenWorld:     true,
-			Risk:          "destructive",
+			Description: "Run a bubblewrap sandbox command. Inside the sandbox, " +
+				"$HOME and /workspace are the same writable directory; " +
+				"~/.cache and ~/.local are also writable, and other host paths " +
+				"are read-only or unavailable.",
+			Destructive: true,
+			OpenWorld:   true,
+			Risk:        "destructive",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -1306,8 +1334,10 @@ func builtinToolSnapshots() []ToolSnapshot {
 						"description": "Optional timeout in milliseconds, capped at 15000.",
 					},
 					"login": map[string]any{
-						"type":        "boolean",
-						"description": "Whether to run the shell with login shell semantics. Accepted for Codex compatibility; leftpanel currently always runs bash -lc inside the sandbox.",
+						"type": "boolean",
+						"description": "Whether to run the shell with login shell semantics. " +
+							"Accepted for Codex compatibility; leftpanel currently always " +
+							"runs bash -lc inside the sandbox.",
 					},
 					"sandbox_permissions": map[string]any{
 						"type":        "string",
@@ -1332,9 +1362,10 @@ func builtinToolSnapshots() []ToolSnapshot {
 			Name:          "apply_patch",
 			QualifiedName: "builtin__apply_patch",
 			Title:         "Apply patch",
-			Description:   "Edit files in the sandbox using the Codex apply_patch format. File paths must be relative to $HOME / /workspace.",
-			Destructive:   true,
-			Risk:          "destructive",
+			Description: "Edit files in the sandbox using the Codex apply_patch format. " +
+				"File paths must be relative to $HOME / /workspace.",
+			Destructive: true,
+			Risk:        "destructive",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -1360,7 +1391,7 @@ func builtinToolSnapshots() []ToolSnapshot {
 
 func callBuiltinTool(toolName string, arguments map[string]any) shared.ToolResult {
 	switch strings.TrimSpace(toolName) {
-	case "shell_command", "shell_exec":
+	case "shell_command":
 		return callBuiltinShellExec(strings.TrimSpace(toolName), arguments)
 	case "apply_patch":
 		return callBuiltinApplyPatch(arguments)
@@ -1375,7 +1406,7 @@ func callBuiltinTool(toolName string, arguments map[string]any) shared.ToolResul
 
 func isBuiltinTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "shell_command", "shell_exec", "apply_patch":
+	case "shell_command", "apply_patch":
 		return true
 	default:
 		return false
@@ -1781,14 +1812,16 @@ func normalizeShellCwd(cwd string, home string) (string, error) {
 	if cwd == "" || cwd == "<nil>" {
 		return home, nil
 	}
-	if strings.HasPrefix(cwd, "/workspace") {
-		cwd = filepath.Join(home, strings.TrimPrefix(cwd, "/workspace"))
+	if suffix, ok := strings.CutPrefix(cwd, "/workspace"); ok {
+		cwd = filepath.Join(home, suffix)
 	}
 	if !filepath.IsAbs(cwd) {
 		cwd = filepath.Join(home, cwd)
 	}
 	clean := filepath.Clean(cwd)
-	if clean == home || strings.HasPrefix(clean, home+string(os.PathSeparator)) || clean == "/tmp" || strings.HasPrefix(clean, "/tmp/") {
+	inHome := clean == home || strings.HasPrefix(clean, home+string(os.PathSeparator))
+	inTmp := clean == "/tmp" || strings.HasPrefix(clean, "/tmp/")
+	if inHome || inTmp {
 		return clean, nil
 	}
 	return "", fmt.Errorf("cwd must be inside %s, /workspace, or /tmp", home)

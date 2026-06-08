@@ -11,8 +11,7 @@ where they are obvious from command/module names.
   `syntax-highlighting` for `org.kde.syntaxhighlighting`, plus the Qt modules
   pulled by Quickshell services (`Hyprland`, `Wayland`, `Pipewire`, `UPower`,
   `Mpris`, `SystemTray`, `Notifications`, `Pam`, `Bluetooth`, `Networking`).
-- Hyprland session tools: `hyprctl` (`hyprland`) for overview/workspace/DPMS
-  paths.
+- Hyprland session tools: `hyprctl` (`hyprland`) for workspace/DPMS paths.
 - Notifications: `notify-send` (`libnotify`) for dependency warnings and
   HyprQuickshot status notifications.
 - System/D-Bus helpers: `systemctl`, `systemd-inhibit`, `busctl`
@@ -61,8 +60,12 @@ Per module:
   `bash tools/build-qs-capture.sh`.
 - `common/modules/qsmath`: Qt6 Core/Gui/Qml/Concurrent plus Cargo for the
   small bundled RaTeX SVG helper. Build with `bash tools/build-qsmath.sh`.
+- `common/modules/material-popups`: Qt6 Core/Qml plus Cargo for the Rust
+  clipboard/input backend. Runtime global input dismissal requires readable
+  `/dev/input/event*` devices, normally via `input` group membership. Build
+  with `bash tools/build-material-popups.sh`.
 - `common/modules/unified-lyrics-api`: Go + CGO + Qt6 Core/Qml/Concurrent.
-  Build with CMake from that module directory.
+  Build with `bash tools/build-cmake-module.sh unified-lyrics-api`.
 
 ## Math / LaTeX Renderer
 
@@ -72,11 +75,9 @@ Per module:
 - The helper uses RaTeX crates directly, so inline math can render with zero
   SVG padding while display math keeps explicit margins from the QML call.
 - Runtime lookup prefers the bundled build output, then `qsmath-render-svg` in
-  `PATH`, then the older external RaTeX `render-svg` fallback.
+  `PATH`.
 - The SVG cache key includes the renderer binary path, size, and mtime, so
   helper updates naturally miss old cached SVGs.
-- `tools/render-latex.sh` remains a small wrapper around the external RaTeX
-  `render-svg` CLI for manual one-off rendering.
 
 ## Optional / Materialized Local Tools
 
@@ -84,8 +85,6 @@ Per module:
 - `wl-present`: privacy freeze toggle helper used by `PrivacyService`.
 - `awww`: lockscreen wallpaper query helper; source/package not established
   by this tree.
-- RaTeX `render-svg`: installed by Cargo into the user Cargo bin, not vendored
-  into this repo.
 - Vendored/local assets: `common/materialkit` and
   `common/modules/rounded_polygon_qmljs` are in-tree, not package-manager deps.
 

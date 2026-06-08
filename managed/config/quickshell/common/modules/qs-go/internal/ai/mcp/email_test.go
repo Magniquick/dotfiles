@@ -3,12 +3,18 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	imap "github.com/emersion/go-imap/v2"
+	"golang.org/x/oauth2"
 
 	"qs-go/internal/appconfig"
+	"qs-go/internal/googleauth"
 	"qs-go/internal/secrets"
 )
 
@@ -333,6 +339,143 @@ func TestCallEmailReadUsesGmailMessageIDForGmailAccounts(t *testing.T) {
 	}
 }
 
+func TestGmailOAuthHTTPClientRefreshesExpiredTokenAndPersists(t *testing.T) {
+	var tokenRequestBody string
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("refresh request method = %s, want POST", r.Method)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse refresh form: %v", err)
+		}
+		tokenRequestBody = r.Form.Encode()
+		if r.Form.Get("grant_type") != "refresh_token" {
+			t.Fatalf("grant_type = %q, want refresh_token", r.Form.Get("grant_type"))
+		}
+		if r.Form.Get("refresh_token") != "old-refresh" {
+			t.Fatalf("refresh_token = %q, want old-refresh", r.Form.Get("refresh_token"))
+		}
+		clientID, clientSecret, ok := r.BasicAuth()
+		if !ok || clientID != "gmail-client-id" || clientSecret != "gmail-client-secret" {
+			t.Fatalf("refresh used wrong client credentials: basic=%v body=%s", ok, tokenRequestBody)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"fresh-access","expires_in":3600,"token_type":"Bearer"}`))
+	}))
+	defer tokenServer.Close()
+	restoreEndpoint := useGmailOAuthEndpointForTest(t, tokenServer.URL)
+	defer restoreEndpoint()
+	resourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer fresh-access" {
+			t.Fatalf("resource request Authorization = %q, want Bearer fresh-access", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer resourceServer.Close()
+
+	store := secrets.NewMapStore(map[string]string{
+		"GOOGLE_PERSONAL_TOKEN_JSON": mustOAuthTokenJSON(t, oauth2.Token{
+			AccessToken:  "expired-access",
+			RefreshToken: "old-refresh",
+			TokenType:    "Bearer",
+			Expiry:       time.Now().Add(-time.Hour),
+		}),
+		"GOOGLE_PERSONAL_CLIENT_ID":     "gmail-client-id",
+		"GOOGLE_PERSONAL_CLIENT_SECRET": "gmail-client-secret",
+	})
+	cleanup := secrets.UseResolverForTest(store)
+	defer cleanup()
+
+	client, err := gmailOAuthHTTPClient(context.Background(), emailAccount{
+		ID:       "personal",
+		Provider: "gmail",
+		Address:  "me@gmail.com",
+		Google: googleauth.Account{
+			ID:              "personal",
+			Address:         "me@gmail.com",
+			TokenJSON:       storeValue(t, store, "GOOGLE_PERSONAL_TOKEN_JSON"),
+			ClientID:        storeValue(t, store, "GOOGLE_PERSONAL_CLIENT_ID"),
+			ClientSecret:    storeValue(t, store, "GOOGLE_PERSONAL_CLIENT_SECRET"),
+			TokenKey:        "GOOGLE_PERSONAL_TOKEN_JSON",
+			ClientIDKey:     "GOOGLE_PERSONAL_CLIENT_ID",
+			ClientSecretKey: "GOOGLE_PERSONAL_CLIENT_SECRET",
+		},
+	})
+	if err != nil {
+		t.Fatalf("gmailOAuthHTTPClient returned error: %v", err)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, resourceServer.URL, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := client.Transport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("authenticated resource request failed: %v", err)
+	}
+	if resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("resource status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+	if tokenRequestBody == "" {
+		t.Fatalf("refresh endpoint was not called")
+	}
+	stored := storeValue(t, store, "GOOGLE_PERSONAL_TOKEN_JSON")
+	if !strings.Contains(stored, "fresh-access") || !strings.Contains(stored, "old-refresh") {
+		t.Fatalf("refreshed token JSON was not persisted with preserved refresh token: %s", stored)
+	}
+}
+
+func TestGmailOAuthHTTPClientRejectsNonRefreshableToken(t *testing.T) {
+	_, err := gmailOAuthHTTPClient(context.Background(), emailAccount{
+		ID:       "personal",
+		Provider: "gmail",
+		Address:  "me@gmail.com",
+		Google: googleauth.Account{
+			ID:      "personal",
+			Address: "me@gmail.com",
+			TokenJSON: mustOAuthTokenJSON(t, oauth2.Token{
+				AccessToken: "access-only",
+				TokenType:   "Bearer",
+				Expiry:      time.Now().Add(time.Hour),
+			}),
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected access-token-only gmail config to be rejected")
+	}
+	if !strings.Contains(err.Error(), "refresh_token") {
+		t.Fatalf("expected refresh_token error, got %v", err)
+	}
+}
+
+func TestGmailOAuthHTTPClientRequiresClientCredentials(t *testing.T) {
+	tokenJSON := mustOAuthTokenJSON(t, oauth2.Token{
+		AccessToken:  "expired-access",
+		RefreshToken: "old-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(-time.Hour),
+	})
+	_, err := gmailOAuthHTTPClient(context.Background(), emailAccount{
+		ID:       "personal",
+		Provider: "gmail",
+		Address:  "me@gmail.com",
+		Google: googleauth.Account{
+			ID:        "personal",
+			Address:   "me@gmail.com",
+			TokenJSON: tokenJSON,
+			TokenKey:  "GOOGLE_PERSONAL_TOKEN_JSON",
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected missing client credential error")
+	}
+	if !strings.Contains(err.Error(), "GOOGLE_PERSONAL_CLIENT_ID") || !strings.Contains(err.Error(), "GOOGLE_PERSONAL_CLIENT_SECRET") {
+		t.Fatalf("expected client credential keys in error, got %v", err)
+	}
+}
+
 func TestSearchCriteriaFromArgsParsesGmailStyleQueryOperators(t *testing.T) {
 	criteria, err := searchCriteriaFromArgs(map[string]any{
 		"query": "from:alice@example.com to:bob@example.net subject:\"meeting notes\" after:2024/01/02 before:2024/02/03 is:unread has:attachment quarterly report",
@@ -501,10 +644,35 @@ func withGmailClientForTest(t *testing.T, client gmailClient) {
 }
 
 func containsAny(values []any, needle any) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
+	return slices.Contains(values, needle)
+}
+
+func mustOAuthTokenJSON(t *testing.T, token oauth2.Token) string {
+	t.Helper()
+	raw, err := json.Marshal(token)
+	if err != nil {
+		t.Fatalf("marshal token: %v", err)
 	}
-	return false
+	return string(raw)
+}
+
+func storeValue(t *testing.T, resolver secrets.Resolver, key string) string {
+	t.Helper()
+	value, ok := resolver.Lookup(key)
+	if !ok {
+		t.Fatalf("missing secret %s", key)
+	}
+	return value
+}
+
+func useGmailOAuthEndpointForTest(t *testing.T, tokenURL string) func() {
+	t.Helper()
+	previous := googleauth.Endpoint
+	googleauth.Endpoint = oauth2.Endpoint{
+		AuthURL:  previous.AuthURL,
+		TokenURL: tokenURL,
+	}
+	return func() {
+		googleauth.Endpoint = previous
+	}
 }

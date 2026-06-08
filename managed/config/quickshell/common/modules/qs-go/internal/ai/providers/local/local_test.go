@@ -1,7 +1,6 @@
 package local
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,7 +39,7 @@ func TestStreamResponsesTextDeltaAndUsage(t *testing.T) {
 	defer server.Close()
 
 	var got strings.Builder
-	result, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	result, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID: "gpt-5.4-mini",
 		Config: shared.ProviderConfig{
 			APIKey:  "test-key",
@@ -65,18 +64,18 @@ func TestStreamResponsesFunctionCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		mustFprint(t, w, "event: response.output_item.done\n")
-		mustFprint(t, w, "data: {\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"builtin__shell_exec\",\"arguments\":\"{\\\"command\\\":\\\"date\\\"}\"}}\n\n")
+		mustFprint(t, w, "data: {\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"builtin__shell_command\",\"arguments\":\"{\\\"command\\\":\\\"date\\\"}\"}}\n\n")
 		mustFprint(t, w, "event: response.completed\n")
 		mustFprint(t, w, "data: {\"response\":{\"output\":[]}}\n\n")
 	}))
 	defer server.Close()
 
-	result, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	result, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID: "gpt-5.4-mini",
 		Config:     shared.ProviderConfig{APIKey: "test-key", BaseURL: server.URL},
 		Message:    "run date",
 		Tools: []shared.ToolDescriptor{{
-			Name:        "builtin__shell_exec",
+			Name:        "builtin__shell_command",
 			Description: "Run a shell command",
 			InputSchema: map[string]any{
 				"type":       "object",
@@ -91,7 +90,7 @@ func TestStreamResponsesFunctionCall(t *testing.T) {
 		t.Fatalf("expected one tool call, got %#v", result.ToolCalls)
 	}
 	call := result.ToolCalls[0]
-	if call.ID != "call_1" || call.Name != "builtin__shell_exec" || call.Arguments["command"] != "date" {
+	if call.ID != "call_1" || call.Name != "builtin__shell_command" || call.Arguments["command"] != "date" {
 		t.Fatalf("unexpected tool call: %#v", call)
 	}
 }
@@ -130,7 +129,7 @@ func TestStreamResponsesCustomApplyPatchTool(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	result, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID: "gpt-5.4-mini",
 		Config:     shared.ProviderConfig{APIKey: "test-key", BaseURL: server.URL},
 		Message:    "patch",
@@ -277,10 +276,10 @@ func TestStreamCompactsLargeInputBeforeResponsesRequest(t *testing.T) {
 	defer server.Close()
 
 	history := make([]shared.HistoryMessage, 0, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		history = append(history, shared.HistoryMessage{Sender: "user", Body: fmt.Sprintf("message %d", i)})
 	}
-	_, err := Provider{}.Stream(context.Background(), shared.StreamRequest{
+	_, err := Provider{}.Stream(t.Context(), shared.StreamRequest{
 		RawModelID: "gpt-5.4-mini",
 		Config:     shared.ProviderConfig{APIKey: "test-key", BaseURL: server.URL},
 		History:    history,

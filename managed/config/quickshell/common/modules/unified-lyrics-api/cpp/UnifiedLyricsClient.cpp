@@ -1,13 +1,13 @@
 #include "UnifiedLyricsClient.h"
 
-#include <QtGlobal>
 #include <QtConcurrent/QtConcurrent>
+#include <QtGlobal>
 
 #include "libunifiedlyrics_go.h"
 
 UnifiedLyricsClient::UnifiedLyricsClient(QObject* parent) : QObject(parent) {
   m_timeout.setSingleShot(true);
-  connect(&m_timeout, &QTimer::timeout, this, [this]() {
+  connect(&m_timeout, &QTimer::timeout, this, [this]() -> void {
     setError(QStringLiteral("Timeout while fetching lyrics"));
     setStatus(QStringLiteral("Timed out"));
     ++m_requestId;
@@ -15,86 +15,94 @@ UnifiedLyricsClient::UnifiedLyricsClient(QObject* parent) : QObject(parent) {
     setLoaded(false);
   });
 
-  connect(&m_watcher, &QFutureWatcher<UnifiedLyricsBackendResult>::finished, this, [this]() {
-    stopTimeout();
+  connect(&m_watcher, &QFutureWatcher<UnifiedLyricsBackendResult>::finished, this,
+          [this]() -> void {
+            stopTimeout();
 
-    const UnifiedLyricsBackendResult out = m_watcher.result();
-    const quint64 finishedId = m_watcher.property("requestId").toULongLong();
-    if (finishedId != m_requestId)
-      return;
+            const UnifiedLyricsBackendResult out = m_watcher.result();
+            const quint64 finishedId = m_watcher.property("requestId").toULongLong();
+            if (finishedId != m_requestId) {
+              return;
+            }
 
-    if (!out.valid) {
-      setError(QStringLiteral("Empty response from lyrics backend"));
-      setStatus(QStringLiteral("Error"));
-      setBusy(false);
-      setLoaded(false);
-      return;
-    }
+            if (!out.valid) {
+              setError(QStringLiteral("Empty response from lyrics backend"));
+              setStatus(QStringLiteral("Error"));
+              setBusy(false);
+              setLoaded(false);
+              return;
+            }
 
-    if (out.error) {
-      qWarning().noquote() << "UnifiedLyricsClient backend error"
-                           << "message="
-                           << (out.message.isEmpty() ? QStringLiteral("Unknown error")
-                                                     : out.message);
-      setError(out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
-      setStatus(QStringLiteral("Error"));
-      setBusy(false);
-      setLoaded(false);
-      return;
-    }
+            if (out.error) {
+              qWarning().noquote()
+                  << "UnifiedLyricsClient backend error"
+                  << "message="
+                  << (out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
+              setError(out.message.isEmpty() ? QStringLiteral("Unknown error") : out.message);
+              setStatus(QStringLiteral("Error"));
+              setBusy(false);
+              setLoaded(false);
+              return;
+            }
 
-    setSource(out.source);
-    setSyncType(out.syncType);
-    setMetadata(QVariantMap{{QStringLiteral("provider"), out.provider}});
-    setLines(out.lines);
-    qInfo().noquote() << "UnifiedLyricsClient loaded"
-                      << "source=" << out.source << "provider=" << out.provider
-                      << "syncType=" << out.syncType << "lines=" << out.lines.size();
+            setSource(out.source);
+            setSyncType(out.syncType);
+            setMetadata(QVariantMap{{QStringLiteral("provider"), out.provider}});
+            setLines(out.lines);
+            qInfo().noquote() << "UnifiedLyricsClient loaded"
+                              << "source=" << out.source << "provider=" << out.provider
+                              << "syncType=" << out.syncType << "lines=" << out.lines.size();
 
-    setStatus(QStringLiteral("OK"));
-    setBusy(false);
-    setLoaded(true);
-  });
+            setStatus(QStringLiteral("OK"));
+            setBusy(false);
+            setLoaded(true);
+          });
 }
 
 void UnifiedLyricsClient::setBusy(bool busy) {
-  if (m_busy == busy)
+  if (m_busy == busy) {
     return;
+  }
   m_busy = busy;
   emit busyChanged();
 }
 
 void UnifiedLyricsClient::setLoaded(bool loaded) {
-  if (m_loaded == loaded)
+  if (m_loaded == loaded) {
     return;
+  }
   m_loaded = loaded;
   emit loadedChanged();
 }
 
 void UnifiedLyricsClient::setStatus(const QString& status) {
-  if (m_status == status)
+  if (m_status == status) {
     return;
+  }
   m_status = status;
   emit statusChanged();
 }
 
 void UnifiedLyricsClient::setError(const QString& error) {
-  if (m_error == error)
+  if (m_error == error) {
     return;
+  }
   m_error = error;
   emit errorChanged();
 }
 
 void UnifiedLyricsClient::setSource(const QString& source) {
-  if (m_source == source)
+  if (m_source == source) {
     return;
+  }
   m_source = source;
   emit sourceChanged();
 }
 
 void UnifiedLyricsClient::setSyncType(const QString& syncType) {
-  if (m_syncType == syncType)
+  if (m_syncType == syncType) {
     return;
+  }
   m_syncType = syncType;
   emit syncTypeChanged();
 }
@@ -105,25 +113,28 @@ void UnifiedLyricsClient::setLines(const QVariantList& lines) {
 }
 
 void UnifiedLyricsClient::setMetadata(const QVariantMap& metadata) {
-  if (m_metadata == metadata)
+  if (m_metadata == metadata) {
     return;
+  }
   m_metadata = metadata;
   emit metadataChanged();
 }
 
 void UnifiedLyricsClient::startTimeout(int ms) {
-  if (ms > 0)
+  if (ms > 0) {
     m_timeout.start(ms);
+  }
 }
 
 void UnifiedLyricsClient::stopTimeout() {
-  if (m_timeout.isActive())
+  if (m_timeout.isActive()) {
     m_timeout.stop();
+  }
 }
 
-bool UnifiedLyricsClient::refresh(const QString& spotifyTrackRef, const QString& trackName,
+auto UnifiedLyricsClient::refresh(const QString& spotifyTrackRef, const QString& trackName,
                                   const QString& artistName, const QString& albumName,
-                                  const QString& lengthMicros) {
+                                  const QString& lengthMicros) -> bool {
   if (spotifyTrackRef.trimmed().isEmpty() &&
       (trackName.trimmed().isEmpty() || artistName.trimmed().isEmpty())) {
     setError(QStringLiteral("spotifyTrackRef or (trackName+artistName) required"));
@@ -164,19 +175,24 @@ bool UnifiedLyricsClient::refresh(const QString& spotifyTrackRef, const QString&
         const_cast<char*>(spdcUtf8.constData()), const_cast<char*>(spotifyRefUtf8.constData()),
         const_cast<char*>(trackUtf8.constData()), const_cast<char*>(artistUtf8.constData()),
         const_cast<char*>(albumUtf8.constData()), const_cast<char*>(lengthMicrosUtf8.constData()));
-    if (!out)
+    if (!out) {
       return result;
+    }
 
     result.valid = true;
     result.error = out->error;
-    if (out->message)
+    if (out->message) {
       result.message = QString::fromUtf8(out->message);
-    if (out->source)
+    }
+    if (out->source) {
       result.source = QString::fromUtf8(out->source);
-    if (out->syncType)
+    }
+    if (out->syncType) {
       result.syncType = QString::fromUtf8(out->syncType);
-    if (out->provider)
+    }
+    if (out->provider) {
       result.provider = QString::fromUtf8(out->provider);
+    }
 
     result.lines.reserve(static_cast<int>(out->lineCount));
     for (size_t i = 0; i < out->lineCount; ++i) {

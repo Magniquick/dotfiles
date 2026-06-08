@@ -36,47 +36,46 @@ ShaderEffect {
 
   function syncStaticProgress() {
     if (animatedProgressEnabled)
-      return;
-    progressAnimator.stop();
-    renderProgress = clampedProgress;
+      return
+    progressAnimator.stop()
+    renderProgress = clampedProgress
   }
 
   function restartAnimatedProgress() {
     if (!animatedProgressEnabled)
-      return;
-
-    progressAnimator.stop();
-    renderProgress = clampedAnimatedProgressFrom;
+      return
+    progressAnimator.stop()
+    renderProgress = clampedAnimatedProgressFrom
 
     if (animatedProgressDuration <= 0 || clampedAnimatedProgressFrom >= 1) {
-      renderProgress = clampedAnimatedProgressFrom;
-      return;
+      renderProgress = clampedAnimatedProgressFrom
+      return
     }
 
-    progressAnimator.restart();
+    progressAnimator.restart()
   }
 
   onProgressChanged: syncStaticProgress()
   onAnimatedProgressEnabledChanged: {
     if (animatedProgressEnabled)
-      restartAnimatedProgress();
+      restartAnimatedProgress()
     else
-      syncStaticProgress();
+      syncStaticProgress()
   }
   onAnimatedProgressFromChanged: {
     if (animatedProgressEnabled)
-      restartAnimatedProgress();
+      restartAnimatedProgress()
   }
   onAnimatedProgressDurationChanged: {
     if (animatedProgressEnabled)
-      restartAnimatedProgress();
+      restartAnimatedProgress()
   }
   onAnimatedProgressKeyChanged: restartAnimatedProgress()
 
   Component.onCompleted: {
     if (animatedProgressEnabled)
-      restartAnimatedProgress();
+      restartAnimatedProgress()
     else
-      syncStaticProgress();
+      syncStaticProgress()
   }
 }

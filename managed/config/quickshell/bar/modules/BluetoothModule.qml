@@ -12,1218 +12,1174 @@ import "../components"
 import "../../common" as Common
 
 ModuleContainer {
-    id: root
+  id: root
 
-    readonly property var bluetooth: Bluetooth
-    property var adapter: bluetooth.defaultAdapter
-    property var devices: adapter && adapter.devices ? adapter.devices.values : []
-    property var deviceSnapshot: []
+  readonly property var bluetooth: Bluetooth
+  property var adapter: bluetooth.defaultAdapter
+  property var devices: adapter && adapter.devices ? adapter.devices.values : []
+  property var deviceSnapshot: []
 
-    property string iconConnected: ""
-    property string iconDisabled: "󰂲"
-    property string iconOn: "󰂯"
-    property string iconOff: "󰂲"
-    property string iconScanning: "󰂰"
-    property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class bluetui -e 'bluetui'"
+  property string iconConnected: ""
+  property string iconDisabled: "󰂲"
+  property string iconOn: "󰂯"
+  property string iconOff: "󰂲"
+  property string iconScanning: "󰂰"
+  property string onClickCommand: "runapp kitty -o tab_bar_style=hidden --class bluetui -e 'bluetui'"
 
-    property int connectedCount: 0
-    property int connectedBattery: -1
-    property int librepodsBattery: -1
-    property int librepodsBatteryLeft: -1
-    property int librepodsBatteryRight: -1
-    property int librepodsBatteryCase: -1
-    property string connectedNames: ""
-    property bool detailsExpanded: false
-    property string pendingDeviceKey: ""
-    property bool pendingConnect: false
-    property var pendingDeviceActions: ({})
-    property int deviceActionTimeoutMs: 12000
-    property bool scanActive: false
-    property bool moduleScanSession: false
-    property bool desiredScanState: false
-    property int scanEnsureAttempts: 0
-    property string lastScanSource: ""
-    property string lastScanAction: "none"
-    property string lastStartDiscoverySender: ""
-    property int lastStartDiscoveryPid: -1
-    property string lastStartDiscoveryProcess: ""
-    property string lastScanHolders: ""
-    property int lastScanStopNotifyMs: 0
-    property bool showUnpairedDevices: false
-    property bool debugBluetooth: false
-    property bool debugLogging: true
+  property int connectedCount: 0
+  property int connectedBattery: -1
+  property int librepodsBattery: -1
+  property int librepodsBatteryLeft: -1
+  property int librepodsBatteryRight: -1
+  property int librepodsBatteryCase: -1
+  property string connectedNames: ""
+  property bool detailsExpanded: false
+  property string pendingDeviceKey: ""
+  property bool pendingConnect: false
+  property var pendingDeviceActions: ({})
+  property int deviceActionTimeoutMs: 12000
+  property bool scanActive: false
+  property bool moduleScanSession: false
+  property bool desiredScanState: false
+  property int scanEnsureAttempts: 0
+  property string lastScanSource: ""
+  property string lastScanAction: "none"
+  property string lastStartDiscoverySender: ""
+  property int lastStartDiscoveryPid: -1
+  property string lastStartDiscoveryProcess: ""
+  property string lastScanHolders: ""
+  property int lastScanStopNotifyMs: 0
+  property bool showUnpairedDevices: false
+  property bool debugBluetooth: false
+  property bool debugLogging: true
 
-    readonly property bool adapterEnabled: !!(root.adapter && root.adapter.enabled)
-    readonly property bool adapterDiscovering: !!(root.adapter && root.adapter.discovering)
-    readonly property string adapterName: root.adapter && root.adapter.name ? String(root.adapter.name) : "Bluetooth"
+  readonly property bool adapterEnabled: !!(root.adapter && root.adapter.enabled)
+  readonly property bool adapterDiscovering: !!(root.adapter && root.adapter.discovering)
+  readonly property string adapterName: root.adapter && root.adapter.name ? String(root.adapter.name) : "Bluetooth"
 
-    function logDebug(message) {
-        if (!root.debugLogging)
-            return;
-        console.log("[BluetoothModule]", new Date().toISOString(), message);
+  function logDebug(message) {
+    if (!root.debugLogging)
+      return
+    console.log("[BluetoothModule]", new Date().toISOString(), message)
+  }
+
+  function deviceLabel(device) {
+    if (!device)
+      return ""
+    const alias = String(device.alias || "").trim()
+    const name = String(device.name || "").trim()
+    if (root.isReadableDeviceName(alias, device))
+      return alias
+    if (root.isReadableDeviceName(name, device))
+      return name
+    return ""
+  }
+
+  function normalizeId(text) {
+    return String(text || "").trim().toUpperCase().replace(/[^0-9A-F]/g, "")
+  }
+
+  function isRawBluetoothId(text, device) {
+    const value = String(text || "").trim()
+    if (value.length === 0)
+      return true
+
+    const normalized = root.normalizeId(value)
+    const addressNormalized = root.normalizeId(device && device.address ? device.address : "")
+    if (addressNormalized.length === 12 && normalized === addressNormalized)
+      return true
+
+    return false
+  }
+
+  function isReadableDeviceName(text, device) {
+    const value = String(text || "").trim()
+    if (value.length === 0)
+      return false
+    if (root.isRawBluetoothId(value, device))
+      return false
+    if (value.toLowerCase() === "unknown device")
+      return false
+    return true
+  }
+
+  function deviceTypeIcon(device) {
+    if (!device)
+      return "󰂯"
+
+    const iconName = String(device.icon || "").toLowerCase()
+    if (iconName.indexOf("headset") >= 0)
+      return "󰋎"
+    if (iconName.indexOf("headphone") >= 0)
+      return "󰋋"
+    if (iconName.indexOf("audio") >= 0 || iconName.indexOf("speaker") >= 0)
+      return "󰓃"
+    if (iconName.indexOf("phone") >= 0)
+      return "󰄜"
+    if (iconName.indexOf("keyboard") >= 0)
+      return "󰌌"
+    if (iconName.indexOf("mouse") >= 0)
+      return "󰍽"
+    if (iconName.indexOf("gamepad") >= 0 || iconName.indexOf("joystick") >= 0)
+      return "󰊗"
+    if (iconName.indexOf("tablet") >= 0)
+      return "󰓷"
+    if (iconName.indexOf("camera") >= 0)
+      return "󰄀"
+    if (iconName.indexOf("watch") >= 0)
+      return "󰋋"
+    if (iconName.indexOf("computer") >= 0 || iconName.indexOf("laptop") >= 0)
+      return "󰌢"
+
+    return "󰂯"
+  }
+
+  function deviceKey(device) {
+    if (!device)
+      return ""
+    return device.dbusPath || device.address || root.deviceLabel(device)
+  }
+
+  function deviceBatteryValue(device) {
+    if (!device)
+      return -1
+    if (Number.isFinite(device.batteryPercentage))
+      return Math.max(0, Math.min(100, Math.round(device.batteryPercentage)))
+    if (Number.isFinite(device.battery))
+      return Math.max(0, Math.min(100, Math.round(device.battery)))
+    return -1
+  }
+
+  function parseLibrepodsTooltip(text) {
+    const parsed = root.parseLibrepodsTooltipParts(text)
+    return parsed.average
+  }
+
+  function parseLibrepodsTooltipParts(text) {
+    const raw = String(text || "")
+    const m = raw.match(/L:\s*([0-9-]+)%?\s+R:\s*([0-9-]+)%?\s+C:\s*([0-9-]+)/i)
+    if (!m)
+      return {
+        left: -1,
+        right: -1,
+        caseBattery: -1,
+        average: -1
+      }
+
+    const values = []
+    const parsedValues = []
+    for (let i = 1; i <= 3; i++) {
+      const n = parseInt(m[i], 10)
+      if (Number.isFinite(n) && n > 0 && n <= 100) {
+        values.push(n)
+        parsedValues.push(n)
+      } else {
+        parsedValues.push(-1)
+      }
+    }
+    if (values.length === 0)
+      return {
+        left: parsedValues[0],
+        right: parsedValues[1],
+        caseBattery: parsedValues[2],
+        average: -1
+      }
+
+    const sum = values.reduce((acc, v) => acc + v, 0)
+    return {
+      left: parsedValues[0],
+      right: parsedValues[1],
+      caseBattery: parsedValues[2],
+      average: Math.round(sum / values.length)
+    }
+  }
+
+  function isAirpodsDevice(device) {
+    const label = root.deviceLabel(device).toLowerCase()
+    return label.indexOf("airpods") >= 0
+  }
+
+  function displayBatteryValue(device, directBattery) {
+    if (Number.isFinite(directBattery) && directBattery > 0)
+      return directBattery
+    if (!!(device && device.connected) && root.isAirpodsDevice(device) && root.librepodsBattery > 0)
+      return root.librepodsBattery
+    return -1
+  }
+
+  function librepodsBatterySummary() {
+    if (root.librepodsBatteryLeft <= 0 && root.librepodsBatteryRight <= 0 && root.librepodsBatteryCase <= 0)
+      return ""
+
+    const parts = []
+    if (root.librepodsBatteryLeft > 0)
+      parts.push("L " + root.librepodsBatteryLeft.toString() + "%")
+    if (root.librepodsBatteryRight > 0)
+      parts.push("R " + root.librepodsBatteryRight.toString() + "%")
+    if (root.librepodsBatteryCase > 0)
+      parts.push("C " + root.librepodsBatteryCase.toString() + "%")
+    return parts.join(" ")
+  }
+
+  function deviceBatterySuffix(device, directBattery) {
+    if (Number.isFinite(directBattery) && directBattery > 0)
+      return directBattery.toString() + "%"
+    if (!!(device && device.connected) && root.isAirpodsDevice(device)) {
+      const summary = root.librepodsBatterySummary()
+      if (summary.length > 0)
+        return summary
+    }
+    return ""
+  }
+
+  function pendingDeviceAction(device) {
+    const key = root.deviceKey(device)
+    if (key.length === 0)
+      return null
+    return root.pendingDeviceActions[key] || null
+  }
+
+  function deviceInteractive(device) {
+    if (!device || !root.adapterEnabled)
+      return false
+    if (root.pendingDeviceAction(device) !== null)
+      return false
+    const state = device.state
+    if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+      return false
+    return true
+  }
+
+  function deviceStatusBadge(device) {
+    if (!device || !root.adapterEnabled)
+      return ""
+    const pending = root.pendingDeviceAction(device)
+    if (pending)
+      return pending.targetConnected ? "CONNECTING" : "DISCONNECTING"
+    const state = device.state
+    if (state === BluetoothDeviceState.Connecting)
+      return "CONNECTING"
+    if (state === BluetoothDeviceState.Disconnecting)
+      return "DISCONNECTING"
+    if (device.connected)
+      return "CONNECTED"
+    if (device.paired)
+      return "PAIRED"
+    return root.adapterDiscovering ? "NEW" : ""
+  }
+
+  function deviceStatusColor(device) {
+    const pending = root.pendingDeviceAction(device)
+    if (pending)
+      return Qt.alpha(Config.color.secondary, 0.95)
+    const state = device ? device.state : undefined
+    if (!root.adapterEnabled || state === BluetoothDeviceState.Disconnected)
+      return Qt.alpha(Config.color.surface_variant, 0.95)
+    if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+      return Qt.alpha(Config.color.secondary, 0.95)
+    if (device && device.connected)
+      return Qt.alpha(Config.color.tertiary, 0.9)
+    return Qt.alpha(Config.color.surface_variant, 0.95)
+  }
+
+  function deviceStatusTextColor(device) {
+    if (root.pendingDeviceAction(device))
+      return Config.color.on_secondary
+    const state = device ? device.state : undefined
+    if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
+      return Config.color.on_secondary
+    if (device && device.connected)
+      return Config.color.on_tertiary
+    return Config.color.on_surface_variant
+  }
+
+  function deviceTrailingIcon(device) {
+    if (!root.adapterEnabled)
+      return ""
+    const pending = root.pendingDeviceAction(device)
+    if (pending)
+      return pending.targetConnected ? "󱍸" : "󱍹"
+    const state = device ? device.state : undefined
+    if (state === BluetoothDeviceState.Connecting)
+      return "󱍸"
+    if (state === BluetoothDeviceState.Disconnecting)
+      return "󱍹"
+    return device && device.connected ? "󰅖" : "󰐕"
+  }
+
+  function deviceSubtitle(device) {
+    if (!device)
+      return ""
+
+    const parts = []
+    const state = device.state
+    if (!root.adapterEnabled) {
+      parts.push("Adapter disabled")
+    } else if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting) {
+      // The badge already carries the primary transition state.
+    } else if (device.paired) {
+      parts.push("Paired")
+    } else if (root.adapterDiscovering) {
+      parts.push("Available now")
     }
 
-    function deviceLabel(device) {
-        if (!device)
-            return "";
-        const alias = String(device.alias || "").trim();
-        const name = String(device.name || "").trim();
-        if (root.isReadableDeviceName(alias, device))
-            return alias;
-        if (root.isReadableDeviceName(name, device))
-            return name;
-        return "";
+    const battery = root.deviceBatterySuffix(device, root.deviceBatteryValue(device))
+    if (battery.length > 0)
+      parts.push(battery)
+
+    return parts.join(" • ")
+  }
+
+  function statusLabel() {
+    if (!root.adapter)
+      return "Unavailable"
+    if (!root.adapterEnabled)
+      return "Disabled"
+    if (root.moduleScanSession || root.desiredScanState)
+      return "Scanning"
+    if (root.connectedCount > 0)
+      return "Connected"
+    return "Ready"
+  }
+
+  function stateColor() {
+    if (!root.adapter || !root.adapterEnabled)
+      return Config.color.on_surface_variant
+    if (root.connectedCount > 0)
+      return Config.color.tertiary
+    if (root.adapterDiscovering)
+      return Config.color.primary
+    return Config.color.on_surface
+  }
+
+  function displayIcon() {
+    if (!root.adapter)
+      return root.iconDisabled
+    if (!root.adapterEnabled)
+      return root.iconOff
+    if (root.connectedCount > 0)
+      return root.iconConnected
+    if (root.moduleScanSession || root.desiredScanState)
+      return root.iconScanning
+    return root.iconOn
+  }
+
+  function sortedDevices(list) {
+    const copy = (list || []).slice(0)
+    copy.sort((a, b) => {
+      const aConnected = a && a.connected ? 1 : 0
+      const bConnected = b && b.connected ? 1 : 0
+      if (aConnected !== bConnected)
+        return bConnected - aConnected
+
+      const aPaired = a && a.paired ? 1 : 0
+      const bPaired = b && b.paired ? 1 : 0
+      if (aPaired !== bPaired)
+        return bPaired - aPaired
+
+      const aLabel = root.deviceLabel(a).toLowerCase()
+      const bLabel = root.deviceLabel(b).toLowerCase()
+      if (aLabel < bLabel)
+        return -1
+      if (aLabel > bLabel)
+        return 1
+      return 0
+    })
+    return copy
+  }
+
+  function refreshBluetooth() {
+    const availableDevices = root.adapterEnabled ? (root.devices || []) : []
+    const list = root.sortedDevices(availableDevices.filter(device => root.deviceLabel(device).length > 0))
+    root.deviceSnapshot = list
+
+    root.connectedCount = 0
+    root.connectedBattery = -1
+    let hasAirpodsConnected = false
+
+    const names = []
+    for (let i = 0; i < list.length; i++) {
+      const device = list[i]
+      if (!device)
+        continue
+      if (device.connected) {
+        root.connectedCount += 1
+        const label = root.deviceLabel(device)
+        if (label.length > 0)
+          names.push(label)
+        if (root.isAirpodsDevice(device))
+          hasAirpodsConnected = true
+
+        if (root.connectedBattery < 0)
+          root.connectedBattery = root.deviceBatteryValue(device)
+      }
     }
 
-    function normalizeId(text) {
-        return String(text || "").trim().toUpperCase().replace(/[^0-9A-F]/g, "");
+    if (hasAirpodsConnected && root.connectedBattery <= 0 && root.librepodsBattery > 0) {
+      root.connectedBattery = root.librepodsBattery
+      root.logDebug("using librepods battery fallback=" + root.librepodsBattery)
     }
 
-    function isRawBluetoothId(text, device) {
-        const value = String(text || "").trim();
-        if (value.length === 0)
-            return true;
+    root.connectedNames = names.join(", ")
 
-        const normalized = root.normalizeId(value);
-        const addressNormalized = root.normalizeId(device && device.address ? device.address : "");
-        if (addressNormalized.length === 12 && normalized === addressNormalized)
-            return true;
-
-        return false;
+    if (root.pendingDeviceKey.length > 0) {
+      const pendingStillExists = list.some(device => root.deviceKey(device) === root.pendingDeviceKey)
+      if (!pendingStillExists)
+        root.pendingDeviceKey = ""
     }
 
-    function isReadableDeviceName(text, device) {
-        const value = String(text || "").trim();
-        if (value.length === 0)
-            return false;
-        if (root.isRawBluetoothId(value, device))
-            return false;
-        if (value.toLowerCase() === "unknown device")
-            return false;
-        return true;
+    root.updatePendingDeviceActions()
+    root.requestScanState()
+  }
+
+  function toggleAdapterEnabled() {
+    if (!root.adapter)
+      return
+    root.adapter.enabled = !root.adapter.enabled
+    if (!root.adapter.enabled) {
+      root.moduleScanSession = false
+      root.desiredScanState = false
+      root.scanActive = false
+      root.pendingDeviceActions = ({})
+      root.pendingDeviceKey = ""
+      root.showUnpairedDevices = false
+      root.refreshBluetooth()
+    }
+  }
+
+  function setDiscovery(active) {
+    if (!root.adapter || !root.adapterEnabled)
+      return
+    root.logDebug("setDiscovery(" + active + ") requested; adapterDiscovering=" + root.adapterDiscovering + " scanActive=" + root.scanActive + " desiredScanState=" + root.desiredScanState)
+    root.lastScanAction = active ? "start" : "stop"
+    root.desiredScanState = active
+    root.moduleScanSession = active
+    root.scanEnsureAttempts = 0;
+
+    // Short-circuit only if both observed states already match the request.
+    if (root.adapterDiscovering === active && root.scanActive === active) {
+      root.scanActive = active
+      root.logDebug("setDiscovery early-return (already in requested state)")
+      scanEnsureTimer.stop()
+      return
     }
 
-    function deviceTypeIcon(device) {
-        if (!device)
-            return "󰂯";
+    root.scanActive = active
+    root.lastScanSource = "module"
+    root.adapter.discovering = active
+    root.logDebug("adapter.discovering set to " + active + "; now adapterDiscovering=" + root.adapterDiscovering)
 
-        const iconName = String(device.icon || "").toLowerCase();
-        if (iconName.indexOf("headset") >= 0)
-            return "󰋎";
-        if (iconName.indexOf("headphone") >= 0)
-            return "󰋋";
-        if (iconName.indexOf("audio") >= 0 || iconName.indexOf("speaker") >= 0)
-            return "󰓃";
-        if (iconName.indexOf("phone") >= 0)
-            return "󰄜";
-        if (iconName.indexOf("keyboard") >= 0)
-            return "󰌌";
-        if (iconName.indexOf("mouse") >= 0)
-            return "󰍽";
-        if (iconName.indexOf("gamepad") >= 0 || iconName.indexOf("joystick") >= 0)
-            return "󰊗";
-        if (iconName.indexOf("tablet") >= 0)
-            return "󰓷";
-        if (iconName.indexOf("camera") >= 0)
-            return "󰄀";
-        if (iconName.indexOf("watch") >= 0)
-            return "󰋋";
-        if (iconName.indexOf("computer") >= 0 || iconName.indexOf("laptop") >= 0)
-            return "󰌢";
+    refreshTimer.restart()
+    scanRefreshTimer.restart()
+    scanEnsureTimer.start()
+  }
 
-        return "󰂯";
+  function toggleDiscovery() {
+    const currentlyScanning = root.moduleScanSession || root.desiredScanState
+    root.logDebug("toggleDiscovery currentlyScanning=" + currentlyScanning + " (moduleScanSession=" + root.moduleScanSession + ", desired=" + root.desiredScanState + ", scanActive=" + root.scanActive + ", adapterDiscovering=" + root.adapterDiscovering + ")")
+    root.setDiscovery(!currentlyScanning)
+  }
+
+  function parseDiscoveryOwnerLine(line) {
+    const text = String(line || "").trim()
+    if (text.length === 0)
+      return
+    if (text.indexOf("member=StartDiscovery") < 0)
+      return
+    const senderMatch = text.match(/sender=([^ ]+)/)
+    if (!senderMatch || senderMatch.length < 2)
+      return
+    const sender = String(senderMatch[1]).trim()
+    if (sender.length === 0 || sender === root.lastStartDiscoverySender)
+      return
+    root.lastStartDiscoverySender = sender
+    root.lastStartDiscoveryPid = -1
+    root.lastStartDiscoveryProcess = ""
+    root.logDebug("StartDiscovery caller seen sender=" + sender + "; resolving pid")
+    resolveDiscoveryPidRunner.trigger()
+  }
+
+  function logDiscoveryOwner(context) {
+    if (root.lastStartDiscoverySender.length === 0) {
+      root.logDebug(context + " discovery owner unknown (no StartDiscovery sender seen)")
+      probeScanHoldersRunner.trigger()
+      return
+    }
+    root.logDebug(context + " possible holder sender=" + root.lastStartDiscoverySender + " pid=" + root.lastStartDiscoveryPid + " process=" + root.lastStartDiscoveryProcess)
+    probeScanHoldersRunner.trigger()
+  }
+
+  function notifyScanStopFailure() {
+    const nowMs = Date.now()
+    if (nowMs - root.lastScanStopNotifyMs < 15000)
+      return
+    root.lastScanStopNotifyMs = nowMs
+
+    let detail = "Discovery appears to be owned by another process."
+    if (root.lastScanHolders.length > 0) {
+      const firstLine = root.lastScanHolders.split("\n")[0].trim()
+      if (firstLine.length > 0)
+        detail = "Possible holder: " + firstLine
     }
 
-    function deviceKey(device) {
-        if (!device)
-            return "";
-        return device.dbusPath || device.address || root.deviceLabel(device);
+    Common.ProcessHelper.execDetached(["notify-send", "Bluetooth scan stop failed", detail])
+  }
+
+  function toggleDeviceConnection(device) {
+    if (!device || !root.adapterEnabled)
+      return
+    const connectTarget = !device.connected
+    root.beginPendingDeviceAction(device, connectTarget)
+
+    try {
+      if (connectTarget)
+        device.connect()
+      else
+        device.disconnect()
+    } catch (error) {
+      root.clearPendingDeviceAction(root.deviceKey(device))
+      root.notifyDeviceActionFailure(device, connectTarget, error)
     }
 
-    function deviceBatteryValue(device) {
-        if (!device)
-            return -1;
-        if (Number.isFinite(device.batteryPercentage))
-            return Math.max(0, Math.min(100, Math.round(device.batteryPercentage)));
-        if (Number.isFinite(device.battery))
-            return Math.max(0, Math.min(100, Math.round(device.battery)));
-        return -1;
+    refreshTimer.restart()
+  }
+
+  function deviceStateName(device) {
+    if (!device || device.state === undefined)
+      return ""
+
+    return BluetoothDeviceState.toString(device.state)
+  }
+
+  function beginPendingDeviceAction(device, connectTarget) {
+    const key = root.deviceKey(device)
+    if (key.length === 0)
+      return
+    root.pendingDeviceKey = key
+    root.pendingConnect = connectTarget
+
+    const actions = Object.assign({}, root.pendingDeviceActions)
+    actions[key] = {
+      targetConnected: connectTarget,
+      startedAt: Date.now(),
+      label: root.deviceLabel(device) || root.adapterName,
+      address: String(device.address || ""),
+      startState: root.deviceStateName(device)
+    }
+    root.pendingDeviceActions = actions
+    deviceActionTimer.restart()
+  }
+
+  function clearPendingDeviceAction(key) {
+    const actions = Object.assign({}, root.pendingDeviceActions)
+    if (!(key in actions))
+      return
+    delete actions[key]
+    root.pendingDeviceActions = actions
+
+    if (root.pendingDeviceKey === key)
+      root.pendingDeviceKey = ""
+
+    if (Object.keys(actions).length === 0)
+      deviceActionTimer.stop()
+  }
+
+  function notifyDeviceActionFailure(device, connectTarget, error) {
+    const label = root.deviceLabel(device) || root.adapterName
+    const actionText = connectTarget ? "connect to" : "disconnect"
+    let detail = "Bluetooth device did not " + actionText + " " + label + "."
+
+    const errorText = String(error || "").trim()
+    if (errorText.length > 0)
+      detail += " " + errorText
+
+    Common.ProcessHelper.execDetached(["notify-send", "Bluetooth action failed", detail])
+  }
+
+  function updatePendingDeviceActions() {
+    const actions = root.pendingDeviceActions || {}
+    const keys = Object.keys(actions)
+    if (keys.length === 0) {
+      deviceActionTimer.stop()
+      return
     }
 
-    function parseLibrepodsTooltip(text) {
-        const parsed = root.parseLibrepodsTooltipParts(text);
-        return parsed.average;
-    }
+    const list = root.deviceSnapshot || []
+    const now = Date.now()
+    let hasPending = false
 
-    function parseLibrepodsTooltipParts(text) {
-        const raw = String(text || "");
-        const m = raw.match(/L:\s*([0-9-]+)%?\s+R:\s*([0-9-]+)%?\s+C:\s*([0-9-]+)/i);
-        if (!m)
-            return {
-                left: -1,
-                right: -1,
-                caseBattery: -1,
-                average: -1
-            };
-
-        const values = [];
-        const parsedValues = [];
-        for (let i = 1; i <= 3; i++) {
-            const n = parseInt(m[i], 10);
-            if (Number.isFinite(n) && n > 0 && n <= 100) {
-                values.push(n);
-                parsedValues.push(n);
-            } else {
-                parsedValues.push(-1);
-            }
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      const pending = actions[key]
+      if (!pending)
+        continue
+      const device = list.find(candidate => root.deviceKey(candidate) === key)
+      if (device) {
+        const reachedTarget = pending.targetConnected ? !!device.connected : !device.connected
+        if (reachedTarget) {
+          root.clearPendingDeviceAction(key)
+          continue
         }
-        if (values.length === 0)
-            return {
-                left: parsedValues[0],
-                right: parsedValues[1],
-                caseBattery: parsedValues[2],
-                average: -1
-            };
+      }
 
-        const sum = values.reduce((acc, v) => acc + v, 0);
-        return {
-            left: parsedValues[0],
-            right: parsedValues[1],
-            caseBattery: parsedValues[2],
-            average: Math.round(sum / values.length)
-        };
+      if (now - pending.startedAt >= root.deviceActionTimeoutMs) {
+        root.clearPendingDeviceAction(key)
+        root.notifyDeviceActionFailure(device || {
+          alias: pending.label,
+          name: pending.label,
+          address: pending.address
+        }, pending.targetConnected, "")
+        continue
+      }
+
+      hasPending = true
     }
 
-    function isAirpodsDevice(device) {
-        const label = root.deviceLabel(device).toLowerCase();
-        return label.indexOf("airpods") >= 0;
+    if (hasPending)
+      deviceActionTimer.restart()
+  }
+
+  function openSettings() {
+    Common.ProcessHelper.execDetached(root.onClickCommand)
+  }
+
+  Timer {
+    id: refreshTimer
+    interval: 1000
+    repeat: false
+    onTriggered: {
+      root.pendingDeviceKey = ""
+      root.refreshBluetooth()
     }
+  }
 
-    function displayBatteryValue(device, directBattery) {
-        if (Number.isFinite(directBattery) && directBattery > 0)
-            return directBattery;
-        if (!!(device && device.connected) && root.isAirpodsDevice(device) && root.librepodsBattery > 0)
-            return root.librepodsBattery;
-        return -1;
+  Timer {
+    id: deviceActionTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.updatePendingDeviceActions()
+  }
+
+  function requestScanState() {
+    if (!root.adapterEnabled) {
+      root.scanActive = false
+      root.moduleScanSession = false
+      root.desiredScanState = false
+      root.logDebug("requestScanState skipped (adapter disabled)")
+      return
     }
+    root.scanActive = root.adapterDiscovering
+    root.logDebug("requestScanState synced from adapter.discovering=" + root.scanActive)
+    if (root.scanActive && !root.moduleScanSession && !root.desiredScanState)
+      root.logDebug("scan appears to be held by another client/session")
+  }
 
-    function librepodsBatterySummary() {
-        if (root.librepodsBatteryLeft <= 0 && root.librepodsBatteryRight <= 0 && root.librepodsBatteryCase <= 0)
-            return "";
+  ProcessMonitor {
+    id: discoveryOwnerMonitor
+    enabled: root.adapterEnabled && root.debugBluetooth
+    processName: "BlueZStartDiscoveryMonitor"
+    command: ["dbus-monitor", "--system", "type='method_call',destination='org.bluez',interface='org.bluez.Adapter1',member='StartDiscovery'"]
+    onOutput: data => root.parseDiscoveryOwnerLine(data)
+  }
 
-        const parts = [];
-        if (root.librepodsBatteryLeft > 0)
-            parts.push("L " + root.librepodsBatteryLeft.toString() + "%");
-        if (root.librepodsBatteryRight > 0)
-            parts.push("R " + root.librepodsBatteryRight.toString() + "%");
-        if (root.librepodsBatteryCase > 0)
-            parts.push("C " + root.librepodsBatteryCase.toString() + "%");
-        return parts.join(" ");
+  CommandRunner {
+    id: resolveDiscoveryPidRunner
+    intervalMs: 0
+    timeoutMs: 3000
+    command: root.lastStartDiscoverySender.length > 0 ? ["busctl", "--system", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixProcessID", "s", root.lastStartDiscoverySender] : []
+    onRan: function (output) {
+      const m = String(output || "").match(/\bu\s+([0-9]+)/)
+      if (!m) {
+        root.logDebug("discovery pid parse failed sender=" + root.lastStartDiscoverySender + " output=" + output)
+        return
+      }
+      const pid = parseInt(m[1], 10)
+      if (!Number.isFinite(pid))
+        return
+      root.lastStartDiscoveryPid = pid
+      resolveDiscoveryProcessRunner.trigger()
     }
+  }
 
-    function deviceBatterySuffix(device, directBattery) {
-        if (Number.isFinite(directBattery) && directBattery > 0)
-            return directBattery.toString() + "%";
-        if (!!(device && device.connected) && root.isAirpodsDevice(device)) {
-            const summary = root.librepodsBatterySummary();
-            if (summary.length > 0)
-                return summary;
+  CommandRunner {
+    id: resolveDiscoveryProcessRunner
+    intervalMs: 0
+    timeoutMs: 3000
+    command: root.lastStartDiscoveryPid > 0 ? ["sh", "-lc", "ps -p " + root.lastStartDiscoveryPid + " -o comm= 2>/dev/null | head -n1"] : []
+    onRan: function (output) {
+      root.lastStartDiscoveryProcess = String(output || "").trim()
+      root.logDebug("resolved StartDiscovery caller sender=" + root.lastStartDiscoverySender + " pid=" + root.lastStartDiscoveryPid + " process=" + root.lastStartDiscoveryProcess)
+    }
+  }
+
+  CommandRunner {
+    id: probeScanHoldersRunner
+    intervalMs: 0
+    timeoutMs: 3000
+    command: ["sh", "-lc", "ps -eo pid,user,cmd | grep -E '(btmgmt|bluetoothctl|blueman|blueberry|kdeconnectd|librepods)' | grep -v grep | head -n 20"]
+    onRan: function (output) {
+      root.lastScanHolders = String(output || "").trim()
+      if (root.lastScanHolders.length > 0)
+        root.logDebug("possible scan holders:\n" + root.lastScanHolders)
+      else
+        root.logDebug("possible scan holders: none matched")
+    }
+  }
+
+  Process {
+    id: librepodsTooltipProcess
+    running: root.debugBluetooth
+    command: ["sh", "-lc", "svc=$(busctl --user list 2>/dev/null | awk '$1 ~ /^org\\.kde\\.StatusNotifierItem-/ {print $1}' | while read -r s; do id=$(busctl --user get-property \"$s\" /StatusNotifierItem org.kde.StatusNotifierItem Id 2>/dev/null); echo \"$id\" | grep -qi '\"librepods\"' && { echo \"$s\"; break; }; done); [ -n \"$svc\" ] && busctl --user get-property \"$svc\" /StatusNotifierItem org.kde.StatusNotifierItem ToolTip 2>/dev/null || true"]
+
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const parsed = root.parseLibrepodsTooltipParts(this.text)
+        if (parsed.average > 0) {
+          const changed = parsed.average !== root.librepodsBattery || parsed.left !== root.librepodsBatteryLeft || parsed.right !== root.librepodsBatteryRight || parsed.caseBattery !== root.librepodsBatteryCase
+
+          root.librepodsBattery = parsed.average
+          root.librepodsBatteryLeft = parsed.left
+          root.librepodsBatteryRight = parsed.right
+          root.librepodsBatteryCase = parsed.caseBattery
+
+          root.logDebug("librepods tooltip battery parsed avg=" + parsed.average + " L=" + parsed.left + " R=" + parsed.right + " C=" + parsed.caseBattery)
+          if (changed && root.connectedBattery <= 0 && root.connectedCount > 0)
+            root.refreshBluetooth()
+        } else {
+          root.librepodsBattery = -1
+          root.librepodsBatteryLeft = -1
+          root.librepodsBatteryRight = -1
+          root.librepodsBatteryCase = -1
         }
-        return "";
+      }
     }
 
-    function pendingDeviceAction(device) {
-        const key = root.deviceKey(device);
-        if (key.length === 0)
-            return null;
-        return root.pendingDeviceActions[key] || null;
+    stderr: StdioCollector {
+      onStreamFinished: {
+        const err = String(this.text || "").trim()
+        if (err.length > 0)
+          root.logDebug("librepods probe stderr: " + err)
+      }
     }
+  }
 
-    function deviceInteractive(device) {
-        if (!device || !root.adapterEnabled)
-            return false;
-        if (root.pendingDeviceAction(device) !== null)
-            return false;
-        const state = device.state;
-        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
-            return false;
-        return true;
+  Timer {
+    id: scanPollTimer
+    interval: 2000
+    repeat: true
+    running: root.tooltipActive && root.adapterEnabled
+    onTriggered: {
+      root.requestScanState()
     }
+  }
 
-    function deviceStatusBadge(device) {
-        if (!device || !root.adapterEnabled)
-            return "";
-        const pending = root.pendingDeviceAction(device);
-        if (pending)
-            return pending.targetConnected ? "CONNECTING" : "DISCONNECTING";
-        const state = device.state;
-        if (state === BluetoothDeviceState.Connecting)
-            return "CONNECTING";
-        if (state === BluetoothDeviceState.Disconnecting)
-            return "DISCONNECTING";
-        if (device.connected)
-            return "CONNECTED";
-        if (device.paired)
-            return "PAIRED";
-        return root.adapterDiscovering ? "NEW" : "";
-    }
+  Timer {
+    id: scanRefreshTimer
+    interval: 500
+    repeat: false
+    onTriggered: root.requestScanState()
+  }
 
-    function deviceStatusColor(device) {
-        const pending = root.pendingDeviceAction(device);
-        if (pending)
-            return Qt.alpha(Config.color.secondary, 0.95);
-        const state = device ? device.state : undefined;
-        if (!root.adapterEnabled || state === BluetoothDeviceState.Disconnected)
-            return Qt.alpha(Config.color.surface_variant, 0.95);
-        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
-            return Qt.alpha(Config.color.secondary, 0.95);
-        if (device && device.connected)
-            return Qt.alpha(Config.color.tertiary, 0.9);
-        return Qt.alpha(Config.color.surface_variant, 0.95);
-    }
+  Timer {
+    id: scanEnsureTimer
+    interval: 1200
+    repeat: true
+    running: false
+    onTriggered: {
+      const adapterState = root.adapterDiscovering
+      const uiState = root.scanActive
+      const desired = root.desiredScanState
+      const matches = (adapterState === desired && uiState === desired)
 
-    function deviceStatusTextColor(device) {
-        if (root.pendingDeviceAction(device))
-            return Config.color.on_secondary;
-        const state = device ? device.state : undefined;
-        if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting)
-            return Config.color.on_secondary;
-        if (device && device.connected)
-            return Config.color.on_tertiary;
-        return Config.color.on_surface_variant;
-    }
+      root.logDebug("scanEnsure attempt=" + root.scanEnsureAttempts + " desired=" + desired + " adapterDiscovering=" + adapterState + " scanActive=" + uiState)
 
-    function deviceTrailingIcon(device) {
-        if (!root.adapterEnabled)
-            return "";
-        const pending = root.pendingDeviceAction(device);
-        if (pending)
-            return pending.targetConnected ? "󱍸" : "󱍹";
-        const state = device ? device.state : undefined;
-        if (state === BluetoothDeviceState.Connecting)
-            return "󱍸";
-        if (state === BluetoothDeviceState.Disconnecting)
-            return "󱍹";
-        return device && device.connected ? "󰅖" : "󰐕";
-    }
-
-    function deviceSubtitle(device) {
-        if (!device)
-            return "";
-
-        const parts = [];
-        const state = device.state;
-        if (!root.adapterEnabled) {
-            parts.push("Adapter disabled");
-        } else if (state === BluetoothDeviceState.Connecting || state === BluetoothDeviceState.Disconnecting) {
-            // The badge already carries the primary transition state.
-        } else if (device.paired) {
-            parts.push("Paired");
-        } else if (root.adapterDiscovering) {
-            parts.push("Available now");
+      if (matches || root.scanEnsureAttempts >= 3) {
+        running = false
+        root.requestScanState()
+        if (!matches && !desired) {
+          root.logDiscoveryOwner("scanEnsure exhausted;")
+          root.notifyScanStopFailure()
         }
+        return
+      }
 
-        const battery = root.deviceBatterySuffix(device, root.deviceBatteryValue(device));
-        if (battery.length > 0)
-            parts.push(battery);
+      root.scanEnsureAttempts += 1
+      if (root.adapter && root.adapterEnabled)
+        root.adapter.discovering = desired
+      if (!desired)
+        root.logDiscoveryOwner("scanEnsure retry;")
+      root.requestScanState()
+    }
+  }
 
-        return parts.join(" • ");
+  IpcHandler {
+    id: scanIpc
+    target: "bluetooth-scan"
+
+    function start() {
+      root.lastScanSource = "ipc.start"
+      root.setDiscovery(true)
     }
 
-    function statusLabel() {
-        if (!root.adapter)
-            return "Unavailable";
-        if (!root.adapterEnabled)
-            return "Disabled";
-        if (root.moduleScanSession || root.desiredScanState)
-            return "Scanning";
-        if (root.connectedCount > 0)
-            return "Connected";
-        return "Ready";
+    function stop() {
+      root.lastScanSource = "ipc.stop"
+      root.setDiscovery(false)
     }
 
-    function stateColor() {
-        if (!root.adapter || !root.adapterEnabled)
-            return Config.color.on_surface_variant;
-        if (root.connectedCount > 0)
-            return Config.color.tertiary;
-        if (root.adapterDiscovering)
-            return Config.color.primary;
-        return Config.color.on_surface;
+    function toggle() {
+      root.lastScanSource = "ipc.toggle"
+      root.toggleDiscovery()
     }
 
-    function displayIcon() {
-        if (!root.adapter)
-            return root.iconDisabled;
-        if (!root.adapterEnabled)
-            return root.iconOff;
-        if (root.connectedCount > 0)
-            return root.iconConnected;
-        if (root.moduleScanSession || root.desiredScanState)
-            return root.iconScanning;
-        return root.iconOn;
+    function status() {
+      return JSON.stringify({
+        adapterEnabled: root.adapterEnabled,
+        adapterId: root.adapter && root.adapter.adapterId ? String(root.adapter.adapterId) : "",
+        adapterDiscovering: root.adapterDiscovering,
+        scanActive: root.scanActive,
+        moduleScanSession: root.moduleScanSession,
+        desiredScanState: root.desiredScanState,
+        scanEnsureAttempts: root.scanEnsureAttempts,
+        lastScanSource: root.lastScanSource,
+        lastScanAction: root.lastScanAction,
+        lastStartDiscoverySender: root.lastStartDiscoverySender,
+        lastStartDiscoveryPid: root.lastStartDiscoveryPid,
+        lastStartDiscoveryProcess: root.lastStartDiscoveryProcess,
+        lastScanHolders: root.lastScanHolders
+      })
     }
+  }
 
-    function sortedDevices(list) {
-        const copy = (list || []).slice(0);
-        copy.sort((a, b) => {
-            const aConnected = a && a.connected ? 1 : 0;
-            const bConnected = b && b.connected ? 1 : 0;
-            if (aConnected !== bConnected)
-                return bConnected - aConnected;
+  tooltipHoverable: true
+  tooltipText: ""
+  tooltipTitle: root.connectedNames !== "" ? root.connectedNames : root.adapterName
 
-            const aPaired = a && a.paired ? 1 : 0;
-            const bPaired = b && b.paired ? 1 : 0;
-            if (aPaired !== bPaired)
-                return bPaired - aPaired;
-
-            const aLabel = root.deviceLabel(a).toLowerCase();
-            const bLabel = root.deviceLabel(b).toLowerCase();
-            if (aLabel < bLabel)
-                return -1;
-            if (aLabel > bLabel)
-                return 1;
-            return 0;
-        });
-        return copy;
+  content: [
+    IconLabel {
+      color: root.stateColor()
+      text: root.displayIcon()
     }
-
-    function refreshBluetooth() {
-        const availableDevices = root.adapterEnabled ? (root.devices || []) : [];
-        const list = root.sortedDevices(availableDevices.filter(device => root.deviceLabel(device).length > 0));
-        root.deviceSnapshot = list;
-
-        root.connectedCount = 0;
-        root.connectedBattery = -1;
-        let hasAirpodsConnected = false;
-
-        const names = [];
-        for (let i = 0; i < list.length; i++) {
-            const device = list[i];
-            if (!device)
-                continue;
-
-            if (device.connected) {
-                root.connectedCount += 1;
-                const label = root.deviceLabel(device);
-                if (label.length > 0)
-                    names.push(label);
-                if (root.isAirpodsDevice(device))
-                    hasAirpodsConnected = true;
-
-                if (root.connectedBattery < 0)
-                    root.connectedBattery = root.deviceBatteryValue(device);
-            }
-        }
-
-        if (hasAirpodsConnected && root.connectedBattery <= 0 && root.librepodsBattery > 0) {
-            root.connectedBattery = root.librepodsBattery;
-            root.logDebug("using librepods battery fallback=" + root.librepodsBattery);
-        }
-
-        root.connectedNames = names.join(", ");
-
-        if (root.pendingDeviceKey.length > 0) {
-            const pendingStillExists = list.some(device => root.deviceKey(device) === root.pendingDeviceKey);
-            if (!pendingStillExists)
-                root.pendingDeviceKey = "";
-        }
-
-        root.updatePendingDeviceActions();
-        root.requestScanState();
-    }
-
-    function toggleAdapterEnabled() {
-        if (!root.adapter)
-            return;
-        root.adapter.enabled = !root.adapter.enabled;
-        if (!root.adapter.enabled) {
-            root.moduleScanSession = false;
-            root.desiredScanState = false;
-            root.scanActive = false;
-            root.pendingDeviceActions = ({});
-            root.pendingDeviceKey = "";
-            root.showUnpairedDevices = false;
-            root.refreshBluetooth();
-        }
-    }
-
-    function setDiscovery(active) {
-        if (!root.adapter || !root.adapterEnabled)
-            return;
-
-        root.logDebug("setDiscovery(" + active + ") requested; adapterDiscovering=" + root.adapterDiscovering + " scanActive=" + root.scanActive + " desiredScanState=" + root.desiredScanState);
-        root.lastScanAction = active ? "start" : "stop";
-        root.desiredScanState = active;
-        root.moduleScanSession = active;
-        root.scanEnsureAttempts = 0;
-
-        // Short-circuit only if both observed states already match the request.
-        if (root.adapterDiscovering === active && root.scanActive === active) {
-            root.scanActive = active;
-            root.logDebug("setDiscovery early-return (already in requested state)");
-            scanEnsureTimer.stop();
-            return;
-        }
-
-        root.scanActive = active;
-        root.lastScanSource = "module";
-        root.adapter.discovering = active;
-        root.logDebug("adapter.discovering set to " + active + "; now adapterDiscovering=" + root.adapterDiscovering);
-
-        refreshTimer.restart();
-        scanRefreshTimer.restart();
-        scanEnsureTimer.start();
-    }
-
-    function toggleDiscovery() {
-        const currentlyScanning = root.moduleScanSession || root.desiredScanState;
-        root.logDebug("toggleDiscovery currentlyScanning=" + currentlyScanning
-            + " (moduleScanSession=" + root.moduleScanSession
-            + ", desired=" + root.desiredScanState
-            + ", scanActive=" + root.scanActive
-            + ", adapterDiscovering=" + root.adapterDiscovering + ")");
-        root.setDiscovery(!currentlyScanning);
-    }
-
-    function parseDiscoveryOwnerLine(line) {
-        const text = String(line || "").trim();
-        if (text.length === 0)
-            return;
-        if (text.indexOf("member=StartDiscovery") < 0)
-            return;
-
-        const senderMatch = text.match(/sender=([^ ]+)/);
-        if (!senderMatch || senderMatch.length < 2)
-            return;
-
-        const sender = String(senderMatch[1]).trim();
-        if (sender.length === 0 || sender === root.lastStartDiscoverySender)
-            return;
-
-        root.lastStartDiscoverySender = sender;
-        root.lastStartDiscoveryPid = -1;
-        root.lastStartDiscoveryProcess = "";
-        root.logDebug("StartDiscovery caller seen sender=" + sender + "; resolving pid");
-        resolveDiscoveryPidRunner.trigger();
-    }
-
-    function logDiscoveryOwner(context) {
-        if (root.lastStartDiscoverySender.length === 0) {
-            root.logDebug(context + " discovery owner unknown (no StartDiscovery sender seen)");
-            probeScanHoldersRunner.trigger();
-            return;
-        }
-        root.logDebug(context + " possible holder sender=" + root.lastStartDiscoverySender
-            + " pid=" + root.lastStartDiscoveryPid
-            + " process=" + root.lastStartDiscoveryProcess);
-        probeScanHoldersRunner.trigger();
-    }
-
-    function notifyScanStopFailure() {
-        const nowMs = Date.now();
-        if (nowMs - root.lastScanStopNotifyMs < 15000)
-            return;
-        root.lastScanStopNotifyMs = nowMs;
-
-        let detail = "Discovery appears to be owned by another process.";
-        if (root.lastScanHolders.length > 0) {
-            const firstLine = root.lastScanHolders.split("\n")[0].trim();
-            if (firstLine.length > 0)
-                detail = "Possible holder: " + firstLine;
-        }
-
-        Common.ProcessHelper.execDetached(["notify-send",
-            "Bluetooth scan stop failed",
-            detail
-        ]);
-    }
-
-    function toggleDeviceConnection(device) {
-        if (!device || !root.adapterEnabled)
-            return;
-
-        const connectTarget = !device.connected;
-        root.beginPendingDeviceAction(device, connectTarget);
-
-        try {
-            if (connectTarget)
-                device.connect();
-            else
-                device.disconnect();
-        } catch (error) {
-            root.clearPendingDeviceAction(root.deviceKey(device));
-            root.notifyDeviceActionFailure(device, connectTarget, error);
-        }
-
-        refreshTimer.restart();
-    }
-
-    function deviceStateName(device) {
-        if (!device || device.state === undefined)
-            return "";
-
-        return BluetoothDeviceState.toString(device.state);
-    }
-
-    function beginPendingDeviceAction(device, connectTarget) {
-        const key = root.deviceKey(device);
-        if (key.length === 0)
-            return;
-
-        root.pendingDeviceKey = key;
-        root.pendingConnect = connectTarget;
-
-        const actions = Object.assign({}, root.pendingDeviceActions);
-        actions[key] = {
-            targetConnected: connectTarget,
-            startedAt: Date.now(),
-            label: root.deviceLabel(device) || root.adapterName,
-            address: String(device.address || ""),
-            startState: root.deviceStateName(device)
-        };
-        root.pendingDeviceActions = actions;
-        deviceActionTimer.restart();
-    }
-
-    function clearPendingDeviceAction(key) {
-        const actions = Object.assign({}, root.pendingDeviceActions);
-        if (!(key in actions))
-            return;
-
-        delete actions[key];
-        root.pendingDeviceActions = actions;
-
-        if (root.pendingDeviceKey === key)
-            root.pendingDeviceKey = "";
-
-        if (Object.keys(actions).length === 0)
-            deviceActionTimer.stop();
-    }
-
-    function notifyDeviceActionFailure(device, connectTarget, error) {
-        const label = root.deviceLabel(device) || root.adapterName;
-        const actionText = connectTarget ? "connect to" : "disconnect";
-        let detail = "Bluetooth device did not " + actionText + " " + label + ".";
-
-        const errorText = String(error || "").trim();
-        if (errorText.length > 0)
-            detail += " " + errorText;
-
-        Common.ProcessHelper.execDetached(["notify-send",
-            "Bluetooth action failed",
-            detail
-        ]);
-    }
-
-    function updatePendingDeviceActions() {
-        const actions = root.pendingDeviceActions || {};
-        const keys = Object.keys(actions);
-        if (keys.length === 0) {
-            deviceActionTimer.stop();
-            return;
-        }
-
-        const list = root.deviceSnapshot || [];
-        const now = Date.now();
-        let hasPending = false;
-
-        for (let i = 0; i < keys.length; i++) {
-            const key = keys[i];
-            const pending = actions[key];
-            if (!pending)
-                continue;
-
-            const device = list.find(candidate => root.deviceKey(candidate) === key);
-            if (device) {
-                const reachedTarget = pending.targetConnected ? !!device.connected : !device.connected;
-                if (reachedTarget) {
-                    root.clearPendingDeviceAction(key);
-                    continue;
-                }
-            }
-
-            if (now - pending.startedAt >= root.deviceActionTimeoutMs) {
-                root.clearPendingDeviceAction(key);
-                root.notifyDeviceActionFailure(device || {
-                    alias: pending.label,
-                    name: pending.label,
-                    address: pending.address
-                }, pending.targetConnected, "");
-                continue;
-            }
-
-            hasPending = true;
-        }
-
-        if (hasPending)
-            deviceActionTimer.restart();
-    }
-
-    function openSettings() {
-        Common.ProcessHelper.execDetached(root.onClickCommand);
-    }
-
-    Timer {
-        id: refreshTimer
-        interval: 1000
-        repeat: false
-        onTriggered: {
-            root.pendingDeviceKey = "";
-            root.refreshBluetooth();
-        }
-    }
-
-    Timer {
-        id: deviceActionTimer
-        interval: 1000
-        repeat: false
-        onTriggered: root.updatePendingDeviceActions()
-    }
-
-    function requestScanState() {
-        if (!root.adapterEnabled) {
-            root.scanActive = false;
-            root.moduleScanSession = false;
-            root.desiredScanState = false;
-            root.logDebug("requestScanState skipped (adapter disabled)");
-            return;
-        }
-        root.scanActive = root.adapterDiscovering;
-        root.logDebug("requestScanState synced from adapter.discovering=" + root.scanActive);
-        if (root.scanActive && !root.moduleScanSession && !root.desiredScanState)
-            root.logDebug("scan appears to be held by another client/session");
-    }
-
-    ProcessMonitor {
-        id: discoveryOwnerMonitor
-        enabled: root.adapterEnabled && root.debugBluetooth
-        processName: "BlueZStartDiscoveryMonitor"
-        command: ["dbus-monitor", "--system", "type='method_call',destination='org.bluez',interface='org.bluez.Adapter1',member='StartDiscovery'"]
-        onOutput: data => root.parseDiscoveryOwnerLine(data)
-    }
-
-    CommandRunner {
-        id: resolveDiscoveryPidRunner
-        intervalMs: 0
-        timeoutMs: 3000
-        command: root.lastStartDiscoverySender.length > 0
-            ? ["busctl", "--system", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixProcessID", "s", root.lastStartDiscoverySender]
-            : []
-        onRan: function(output) {
-            const m = String(output || "").match(/\bu\s+([0-9]+)/);
-            if (!m) {
-                root.logDebug("discovery pid parse failed sender=" + root.lastStartDiscoverySender + " output=" + output);
-                return;
-            }
-            const pid = parseInt(m[1], 10);
-            if (!Number.isFinite(pid))
-                return;
-
-            root.lastStartDiscoveryPid = pid;
-            resolveDiscoveryProcessRunner.trigger();
-        }
-    }
-
-    CommandRunner {
-        id: resolveDiscoveryProcessRunner
-        intervalMs: 0
-        timeoutMs: 3000
-        command: root.lastStartDiscoveryPid > 0
-            ? ["sh", "-lc", "ps -p " + root.lastStartDiscoveryPid + " -o comm= 2>/dev/null | head -n1"]
-            : []
-        onRan: function(output) {
-            root.lastStartDiscoveryProcess = String(output || "").trim();
-            root.logDebug("resolved StartDiscovery caller sender=" + root.lastStartDiscoverySender
-                + " pid=" + root.lastStartDiscoveryPid
-                + " process=" + root.lastStartDiscoveryProcess);
-        }
-    }
-
-    CommandRunner {
-        id: probeScanHoldersRunner
-        intervalMs: 0
-        timeoutMs: 3000
-        command: ["sh", "-lc", "ps -eo pid,user,cmd | grep -E '(btmgmt|bluetoothctl|blueman|blueberry|kdeconnectd|librepods)' | grep -v grep | head -n 20"]
-        onRan: function(output) {
-            root.lastScanHolders = String(output || "").trim();
-            if (root.lastScanHolders.length > 0)
-                root.logDebug("possible scan holders:\n" + root.lastScanHolders);
-            else
-                root.logDebug("possible scan holders: none matched");
-        }
-    }
-
-    Process {
-        id: librepodsTooltipProcess
-        running: root.debugBluetooth
-        command: ["sh", "-lc", "svc=$(busctl --user list 2>/dev/null | awk '$1 ~ /^org\\.kde\\.StatusNotifierItem-/ {print $1}' | while read -r s; do id=$(busctl --user get-property \"$s\" /StatusNotifierItem org.kde.StatusNotifierItem Id 2>/dev/null); echo \"$id\" | grep -qi '\"librepods\"' && { echo \"$s\"; break; }; done); [ -n \"$svc\" ] && busctl --user get-property \"$svc\" /StatusNotifierItem org.kde.StatusNotifierItem ToolTip 2>/dev/null || true"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const parsed = root.parseLibrepodsTooltipParts(this.text);
-                if (parsed.average > 0) {
-                    const changed = parsed.average !== root.librepodsBattery
-                        || parsed.left !== root.librepodsBatteryLeft
-                        || parsed.right !== root.librepodsBatteryRight
-                        || parsed.caseBattery !== root.librepodsBatteryCase;
-
-                    root.librepodsBattery = parsed.average;
-                    root.librepodsBatteryLeft = parsed.left;
-                    root.librepodsBatteryRight = parsed.right;
-                    root.librepodsBatteryCase = parsed.caseBattery;
-
-                    root.logDebug("librepods tooltip battery parsed avg=" + parsed.average
-                        + " L=" + parsed.left + " R=" + parsed.right + " C=" + parsed.caseBattery);
-                    if (changed && root.connectedBattery <= 0 && root.connectedCount > 0)
-                        root.refreshBluetooth();
-                } else {
-                    root.librepodsBattery = -1;
-                    root.librepodsBatteryLeft = -1;
-                    root.librepodsBatteryRight = -1;
-                    root.librepodsBatteryCase = -1;
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                const err = String(this.text || "").trim();
-                if (err.length > 0)
-                    root.logDebug("librepods probe stderr: " + err);
-            }
-        }
-    }
-
-    Timer {
-        id: scanPollTimer
-        interval: 2000
-        repeat: true
-        running: root.tooltipActive && root.adapterEnabled
-        onTriggered: {
-            root.requestScanState();
-        }
-    }
-
-    Timer {
-        id: scanRefreshTimer
-        interval: 500
-        repeat: false
-        onTriggered: root.requestScanState()
-    }
-
-    Timer {
-        id: scanEnsureTimer
-        interval: 1200
-        repeat: true
-        running: false
-        onTriggered: {
-            const adapterState = root.adapterDiscovering;
-            const uiState = root.scanActive;
-            const desired = root.desiredScanState;
-            const matches = (adapterState === desired && uiState === desired);
-
-            root.logDebug("scanEnsure attempt=" + root.scanEnsureAttempts
-                + " desired=" + desired
-                + " adapterDiscovering=" + adapterState
-                + " scanActive=" + uiState);
-
-            if (matches || root.scanEnsureAttempts >= 3) {
-                running = false;
-                root.requestScanState();
-                if (!matches && !desired) {
-                    root.logDiscoveryOwner("scanEnsure exhausted;");
-                    root.notifyScanStopFailure();
-                }
-                return;
-            }
-
-            root.scanEnsureAttempts += 1;
-            if (root.adapter && root.adapterEnabled)
-                root.adapter.discovering = desired;
-            if (!desired)
-                root.logDiscoveryOwner("scanEnsure retry;");
-            root.requestScanState();
-        }
-    }
-
-    IpcHandler {
-        id: scanIpc
-        target: "bluetooth-scan"
-
-        function start() {
-            root.lastScanSource = "ipc.start";
-            root.setDiscovery(true);
-        }
-
-        function stop() {
-            root.lastScanSource = "ipc.stop";
-            root.setDiscovery(false);
-        }
-
-        function toggle() {
-            root.lastScanSource = "ipc.toggle";
-            root.toggleDiscovery();
-        }
-
-        function status() {
-            return JSON.stringify({
-                adapterEnabled: root.adapterEnabled,
-                adapterId: root.adapter && root.adapter.adapterId ? String(root.adapter.adapterId) : "",
-                adapterDiscovering: root.adapterDiscovering,
-                scanActive: root.scanActive,
-                moduleScanSession: root.moduleScanSession,
-                desiredScanState: root.desiredScanState,
-                scanEnsureAttempts: root.scanEnsureAttempts,
-                lastScanSource: root.lastScanSource,
-                lastScanAction: root.lastScanAction,
-                lastStartDiscoverySender: root.lastStartDiscoverySender,
-                lastStartDiscoveryPid: root.lastStartDiscoveryPid,
-                lastStartDiscoveryProcess: root.lastStartDiscoveryProcess,
-                lastScanHolders: root.lastScanHolders
-            });
-        }
-    }
-
-    tooltipHoverable: true
-    tooltipText: ""
-    tooltipTitle: root.connectedNames !== "" ? root.connectedNames : root.adapterName
-
-    content: [
-        IconLabel {
+  ]
+
+  tooltipContent: Component {
+    ColumnLayout {
+      id: menu
+
+      readonly property int maxVisibleRows: 5
+      readonly property int rowHeight: 46
+      readonly property var pairedDevices: root.deviceSnapshot.filter(device => !!(device && device.paired))
+      readonly property var unpairedDevices: root.deviceSnapshot.filter(device => !!(device && !device.paired))
+      readonly property int pairedRowsShown: Math.min(maxVisibleRows, pairedDevices.length)
+      readonly property int pairedRowsHeight: pairedRowsShown > 0 ? (pairedRowsShown * rowHeight) + ((pairedRowsShown - 1) * Config.space.xs) : 0
+      readonly property int unpairedRowsShown: Math.min(maxVisibleRows, unpairedDevices.length)
+      readonly property int unpairedRowsHeight: unpairedRowsShown > 0 ? (unpairedRowsShown * rowHeight) + ((unpairedRowsShown - 1) * Config.space.xs) : 0
+      readonly property bool showDeviceLists: root.adapterEnabled && root.deviceSnapshot.length > 0
+
+      spacing: Config.space.md
+      width: 276
+
+      RowLayout {
+        id: headerRow
+
+        Layout.fillWidth: true
+        spacing: Config.space.md
+
+        Item {
+          Layout.preferredHeight: Config.space.xxl * 2
+          Layout.preferredWidth: Config.space.xxl * 2
+
+          Rectangle {
+            anchors.centerIn: parent
+            color: Qt.alpha(root.stateColor(), 0.12)
+            height: parent.height
+            radius: height / 2
+            width: parent.width
+          }
+
+          Text {
+            anchors.centerIn: parent
             color: root.stateColor()
+            font.pixelSize: Config.type.headlineLarge.size
             text: root.displayIcon()
+          }
         }
-    ]
 
-    tooltipContent: Component {
-        ColumnLayout {
-            id: menu
+        Item {
+          Layout.fillWidth: true
+          Layout.minimumWidth: 0
+          implicitHeight: headerContent.implicitHeight
 
-            readonly property int maxVisibleRows: 5
-            readonly property int rowHeight: 46
-            readonly property var pairedDevices: root.deviceSnapshot.filter(device => !!(device && device.paired))
-            readonly property var unpairedDevices: root.deviceSnapshot.filter(device => !!(device && !device.paired))
-            readonly property int pairedRowsShown: Math.min(maxVisibleRows, pairedDevices.length)
-            readonly property int pairedRowsHeight: pairedRowsShown > 0
-                ? (pairedRowsShown * rowHeight) + ((pairedRowsShown - 1) * Config.space.xs)
-                : 0
-            readonly property int unpairedRowsShown: Math.min(maxVisibleRows, unpairedDevices.length)
-            readonly property int unpairedRowsHeight: unpairedRowsShown > 0
-                ? (unpairedRowsShown * rowHeight) + ((unpairedRowsShown - 1) * Config.space.xs)
-                : 0
-            readonly property bool showDeviceLists: root.adapterEnabled && root.deviceSnapshot.length > 0
-
-            spacing: Config.space.md
-            width: 276
+          ColumnLayout {
+            id: headerContent
+            anchors.fill: parent
+            spacing: Config.space.none
 
             RowLayout {
-                id: headerRow
+              Layout.fillWidth: true
+              spacing: Config.space.xs
 
+              Text {
+                Layout.minimumWidth: 0
+                color: Config.color.on_surface
+                elide: Text.ElideRight
+                font.family: Config.fontFamily
+                font.pixelSize: Config.type.headlineSmall.size
+                font.weight: Font.Bold
+                text: root.connectedNames !== "" ? root.connectedNames : root.adapterName
+              }
+
+              Text {
+                color: Config.color.on_surface_variant
+                font.family: Config.iconFontFamily
+                font.pixelSize: Config.type.labelLarge.size
+                text: root.detailsExpanded ? "󰅀" : "󰅂"
+              }
+
+              Item {
                 Layout.fillWidth: true
-                spacing: Config.space.md
-
-                Item {
-                    Layout.preferredHeight: Config.space.xxl * 2
-                    Layout.preferredWidth: Config.space.xxl * 2
-
-                    Rectangle {
-                        anchors.centerIn: parent
-                        color: Qt.alpha(root.stateColor(), 0.12)
-                        height: parent.height
-                        radius: height / 2
-                        width: parent.width
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: root.stateColor()
-                        font.pixelSize: Config.type.headlineLarge.size
-                        text: root.displayIcon()
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    implicitHeight: headerContent.implicitHeight
-
-                    ColumnLayout {
-                        id: headerContent
-                        anchors.fill: parent
-                        spacing: Config.space.none
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.space.xs
-
-                            Text {
-                                Layout.minimumWidth: 0
-                                color: Config.color.on_surface
-                                elide: Text.ElideRight
-                                font.family: Config.fontFamily
-                                font.pixelSize: Config.type.headlineSmall.size
-                                font.weight: Font.Bold
-                                text: root.connectedNames !== "" ? root.connectedNames : root.adapterName
-                            }
-
-                            Text {
-                                color: Config.color.on_surface_variant
-                                font.family: Config.iconFontFamily
-                                font.pixelSize: Config.type.labelLarge.size
-                                text: root.detailsExpanded ? "󰅀" : "󰅂"
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                            color: Config.color.on_surface_variant
-                            elide: Text.ElideRight
-                            font.family: Config.fontFamily
-                            font.pixelSize: Config.type.labelMedium.size
-                            text: root.connectedBattery > 0
-                                ? (root.statusLabel() + " • "
-                                    + (root.librepodsBatterySummary().length > 0
-                                        ? root.librepodsBatterySummary()
-                                        : (root.connectedBattery.toString() + "%")))
-                                : root.statusLabel()
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.detailsExpanded = !root.detailsExpanded
-                    }
-                }
+              }
             }
 
-            ProgressBar {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Config.space.xs
-                fillColor: Config.color.tertiary
-                trackColor: Config.color.surface_variant
-                value: root.connectedBattery / 100
-                visible: root.connectedBattery > 0
+            Text {
+              Layout.fillWidth: true
+              Layout.minimumWidth: 0
+              color: Config.color.on_surface_variant
+              elide: Text.ElideRight
+              font.family: Config.fontFamily
+              font.pixelSize: Config.type.labelMedium.size
+              text: root.connectedBattery > 0 ? (root.statusLabel() + " • " + (root.librepodsBatterySummary().length > 0 ? root.librepodsBatterySummary() : (root.connectedBattery.toString() + "%"))) : root.statusLabel()
             }
+          }
 
-            StackLayout {
-                Layout.fillWidth: true
-                currentIndex: root.detailsExpanded ? 1 : 0
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.space.xs
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.bottomMargin: Config.space.xs
-                        spacing: Config.space.sm
-
-                        Text {
-                            color: Config.color.primary
-                            font.family: Config.fontFamily
-                            font.letterSpacing: 1.5
-                            font.pixelSize: Config.type.labelSmall.size
-                            font.weight: Font.Black
-                            text: "DEVICES"
-                        }
-
-                        Rectangle {
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.fillWidth: true
-                            color: Qt.alpha(Config.color.outline_variant, 0.55)
-                            implicitHeight: 1
-                            radius: 1
-                        }
-
-                        Item {
-                            Layout.fillHeight: true
-                            Layout.preferredWidth: toggleRow.implicitWidth + (Config.space.xs * 2)
-                            visible: root.adapterEnabled && menu.unpairedDevices.length > 0
-
-                            RowLayout {
-                                id: toggleRow
-                                anchors.centerIn: parent
-                                spacing: Config.space.xs
-
-                                Text {
-                                    color: Config.color.on_surface_variant
-                                    font.family: Config.fontFamily
-                                    font.pixelSize: Config.type.labelSmall.size
-                                    text: menu.unpairedDevices.length.toString()
-                                }
-
-                                Text {
-                                    color: Config.color.on_surface_variant
-                                    font.family: Config.iconFontFamily
-                                    font.pixelSize: Config.type.labelLarge.size
-                                    text: root.showUnpairedDevices ? "󰅀" : "󰅂"
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.showUnpairedDevices = !root.showUnpairedDevices
-                            }
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        color: Config.color.on_surface_variant
-                        font.family: Config.fontFamily
-                        font.pixelSize: Config.type.labelMedium.size
-                        text: !root.adapterEnabled
-                            ? "Turn Bluetooth on to discover and connect devices."
-                            : (root.moduleScanSession || root.desiredScanState
-                                ? "Scanning for devices. New devices will appear here."
-                                : "No Bluetooth devices available.")
-                        visible: !menu.showDeviceLists
-                        wrapMode: Text.Wrap
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: menu.pairedRowsHeight
-                        clip: true
-                        visible: menu.showDeviceLists && menu.pairedRowsShown > 0
-
-                        ListView {
-                            anchors.fill: parent
-                            boundsBehavior: Flickable.StopAtBounds
-                            boundsMovement: Flickable.StopAtBounds
-                            clip: true
-                            flickableDirection: Flickable.VerticalFlick
-                            interactive: menu.pairedDevices.length > menu.maxVisibleRows
-                            model: menu.pairedDevices
-                            spacing: Config.space.xs
-                            delegate: BluetoothDeviceRow {
-                                moduleRoot: root
-                                rowHeight: menu.rowHeight
-                            }
-                        }
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: menu.unpairedRowsHeight
-                        clip: true
-                        visible: menu.showDeviceLists && root.showUnpairedDevices && menu.unpairedRowsShown > 0
-
-                        ListView {
-                            anchors.fill: parent
-                            boundsBehavior: Flickable.StopAtBounds
-                            boundsMovement: Flickable.StopAtBounds
-                            clip: true
-                            flickableDirection: Flickable.VerticalFlick
-                            interactive: menu.unpairedDevices.length > menu.maxVisibleRows
-                            model: menu.unpairedDevices
-                            spacing: Config.space.xs
-                            delegate: BluetoothDeviceRow {
-                                moduleRoot: root
-                                rowHeight: menu.rowHeight
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.space.xs
-
-                    SectionHeader { text: "BLUETOOTH DETAILS" }
-
-                    InfoRow {
-                        Layout.fillWidth: true
-                        label: "Adapter"
-                        value: root.adapterName
-                    }
-
-                    InfoRow {
-                        Layout.fillWidth: true
-                        label: "Status"
-                        value: root.statusLabel()
-                    }
-
-                    InfoRow {
-                        Layout.fillWidth: true
-                        label: "Battery (L/R/C)"
-                        value: root.librepodsBatterySummary()
-                        visible: root.librepodsBatterySummary().length > 0
-                    }
-
-                    InfoRow {
-                        Layout.fillWidth: true
-                        label: "Scanning"
-                        value: root.scanActive ? "Yes" : "No"
-                        visible: !!root.adapter
-                    }
-
-                    InfoRow {
-                        Layout.fillWidth: true
-                        label: "Known Devices"
-                        value: root.adapterEnabled ? root.deviceSnapshot.length.toString() : "0"
-                        visible: !!root.adapter
-                    }
-                }
-            }
-
-            TooltipActionsRow {
-                spacing: Config.space.sm
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: root.adapterEnabled ? "Turn Off" : "Turn On"
-                    onClicked: root.toggleAdapterEnabled()
-                }
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    enabled: root.adapterEnabled
-                    text: (root.moduleScanSession || root.desiredScanState) ? "Stop Scan" : "Scan"
-                    onClicked: scanIpc.toggle()
-                }
-            }
-
-            TooltipActionsRow {
-                spacing: Config.space.sm
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "Open Settings"
-                    onClicked: root.openSettings()
-                }
-
-                ActionChip {
-                    Layout.fillWidth: true
-                    text: "Refresh"
-                    onClicked: root.refreshBluetooth()
-                }
-            }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.detailsExpanded = !root.detailsExpanded
+          }
         }
-    }
+      }
 
-    onAdapterChanged: root.refreshBluetooth()
-    onDevicesChanged: root.refreshBluetooth()
-    onAdapterDiscoveringChanged: {
-        root.logDebug("onAdapterDiscoveringChanged -> " + root.adapterDiscovering);
-        root.scanActive = root.adapterDiscovering;
-        root.requestScanState();
-    }
-    onTooltipActiveChanged: {
-        if (root.tooltipActive) {
-            root.refreshBluetooth();
-            root.requestScanState();
+      ProgressBar {
+        Layout.fillWidth: true
+        Layout.preferredHeight: Config.space.xs
+        fillColor: Config.color.tertiary
+        trackColor: Config.color.surface_variant
+        value: root.connectedBattery / 100
+        visible: root.connectedBattery > 0
+      }
+
+      StackLayout {
+        Layout.fillWidth: true
+        currentIndex: root.detailsExpanded ? 1 : 0
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: Config.space.xs
+
+          RowLayout {
+            Layout.fillWidth: true
+            Layout.bottomMargin: Config.space.xs
+            spacing: Config.space.sm
+
+            Text {
+              color: Config.color.primary
+              font.family: Config.fontFamily
+              font.letterSpacing: 1.5
+              font.pixelSize: Config.type.labelSmall.size
+              font.weight: Font.Black
+              text: "DEVICES"
+            }
+
+            Rectangle {
+              Layout.alignment: Qt.AlignVCenter
+              Layout.fillWidth: true
+              color: Qt.alpha(Config.color.outline_variant, 0.55)
+              implicitHeight: 1
+              radius: 1
+            }
+
+            Item {
+              Layout.fillHeight: true
+              Layout.preferredWidth: toggleRow.implicitWidth + (Config.space.xs * 2)
+              visible: root.adapterEnabled && menu.unpairedDevices.length > 0
+
+              RowLayout {
+                id: toggleRow
+                anchors.centerIn: parent
+                spacing: Config.space.xs
+
+                Text {
+                  color: Config.color.on_surface_variant
+                  font.family: Config.fontFamily
+                  font.pixelSize: Config.type.labelSmall.size
+                  text: menu.unpairedDevices.length.toString()
+                }
+
+                Text {
+                  color: Config.color.on_surface_variant
+                  font.family: Config.iconFontFamily
+                  font.pixelSize: Config.type.labelLarge.size
+                  text: root.showUnpairedDevices ? "󰅀" : "󰅂"
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.showUnpairedDevices = !root.showUnpairedDevices
+              }
+            }
+          }
+
+          Text {
+            Layout.fillWidth: true
+            color: Config.color.on_surface_variant
+            font.family: Config.fontFamily
+            font.pixelSize: Config.type.labelMedium.size
+            text: !root.adapterEnabled ? "Turn Bluetooth on to discover and connect devices." : (root.moduleScanSession || root.desiredScanState ? "Scanning for devices. New devices will appear here." : "No Bluetooth devices available.")
+            visible: !menu.showDeviceLists
+            wrapMode: Text.Wrap
+          }
+
+          Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: menu.pairedRowsHeight
+            clip: true
+            visible: menu.showDeviceLists && menu.pairedRowsShown > 0
+
+            ListView {
+              anchors.fill: parent
+              boundsBehavior: Flickable.StopAtBounds
+              boundsMovement: Flickable.StopAtBounds
+              clip: true
+              flickableDirection: Flickable.VerticalFlick
+              interactive: menu.pairedDevices.length > menu.maxVisibleRows
+              model: menu.pairedDevices
+              spacing: Config.space.xs
+              delegate: BluetoothDeviceRow {
+                moduleRoot: root
+                rowHeight: menu.rowHeight
+              }
+            }
+          }
+
+          Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: menu.unpairedRowsHeight
+            clip: true
+            visible: menu.showDeviceLists && root.showUnpairedDevices && menu.unpairedRowsShown > 0
+
+            ListView {
+              anchors.fill: parent
+              boundsBehavior: Flickable.StopAtBounds
+              boundsMovement: Flickable.StopAtBounds
+              clip: true
+              flickableDirection: Flickable.VerticalFlick
+              interactive: menu.unpairedDevices.length > menu.maxVisibleRows
+              model: menu.unpairedDevices
+              spacing: Config.space.xs
+              delegate: BluetoothDeviceRow {
+                moduleRoot: root
+                rowHeight: menu.rowHeight
+              }
+            }
+          }
         }
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: Config.space.xs
+
+          SectionHeader {
+            text: "BLUETOOTH DETAILS"
+          }
+
+          InfoRow {
+            Layout.fillWidth: true
+            label: "Adapter"
+            value: root.adapterName
+          }
+
+          InfoRow {
+            Layout.fillWidth: true
+            label: "Status"
+            value: root.statusLabel()
+          }
+
+          InfoRow {
+            Layout.fillWidth: true
+            label: "Battery (L/R/C)"
+            value: root.librepodsBatterySummary()
+            visible: root.librepodsBatterySummary().length > 0
+          }
+
+          InfoRow {
+            Layout.fillWidth: true
+            label: "Scanning"
+            value: root.scanActive ? "Yes" : "No"
+            visible: !!root.adapter
+          }
+
+          InfoRow {
+            Layout.fillWidth: true
+            label: "Known Devices"
+            value: root.adapterEnabled ? root.deviceSnapshot.length.toString() : "0"
+            visible: !!root.adapter
+          }
+        }
+      }
+
+      TooltipActionsRow {
+        spacing: Config.space.sm
+
+        ActionChip {
+          Layout.fillWidth: true
+          text: root.adapterEnabled ? "Turn Off" : "Turn On"
+          onClicked: root.toggleAdapterEnabled()
+        }
+
+        ActionChip {
+          Layout.fillWidth: true
+          enabled: root.adapterEnabled
+          text: (root.moduleScanSession || root.desiredScanState) ? "Stop Scan" : "Scan"
+          onClicked: scanIpc.toggle()
+        }
+      }
+
+      TooltipActionsRow {
+        spacing: Config.space.sm
+
+        ActionChip {
+          Layout.fillWidth: true
+          text: "Open Settings"
+          onClicked: root.openSettings()
+        }
+
+        ActionChip {
+          Layout.fillWidth: true
+          text: "Refresh"
+          onClicked: root.refreshBluetooth()
+        }
+      }
     }
+  }
 
-    onClicked: root.openSettings()
+  onAdapterChanged: root.refreshBluetooth()
+  onDevicesChanged: root.refreshBluetooth()
+  onAdapterDiscoveringChanged: {
+    root.logDebug("onAdapterDiscoveringChanged -> " + root.adapterDiscovering)
+    root.scanActive = root.adapterDiscovering
+    root.requestScanState()
+  }
+  onTooltipActiveChanged: {
+    if (root.tooltipActive) {
+      root.refreshBluetooth()
+      root.requestScanState()
+    }
+  }
 
-    Component.onCompleted: root.refreshBluetooth()
+  onClicked: root.openSettings()
+
+  Component.onCompleted: root.refreshBluetooth()
 }

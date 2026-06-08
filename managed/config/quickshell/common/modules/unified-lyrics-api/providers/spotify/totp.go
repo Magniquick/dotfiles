@@ -31,7 +31,7 @@ func generateTOTP(serverTimeSeconds int64, secret string) (string, error) {
 		(int(sum[offset+3]) & 0xff)
 
 	mod := 1
-	for i := 0; i < digits; i++ {
+	for range digits {
 		mod *= 10
 	}
 	code := bin % mod

@@ -1,27 +1,23 @@
-// Package ical fetches and parses iCalendar feeds with ETag-based caching.
+// Package ical returns calendar events for the QML calendar surface.
 package ical
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"sort"
+	"slices"
 	"strings"
-	"sync"
 	"time"
 
-	ics "github.com/arran4/golang-ical"
+	calendarapi "google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 
+	"qs-go/internal/appconfig"
+	"qs-go/internal/googleauth"
 	"qs-go/internal/secrets"
 )
 
-// CacheMeta stores HTTP caching headers per URL.
-type CacheMeta struct {
-	ETag         string `json:"etag"`
-	LastModified string `json:"last_modified"`
-}
+var calendarServiceOptions []option.ClientOption
 
 // EventOut is a single calendar event in the output.
 type EventOut struct {
@@ -40,298 +36,216 @@ type Output struct {
 	EventsByDay map[string][]EventOut `json:"eventsByDay"`
 }
 
-// State persists between calls to avoid re-fetching unchanged calendars.
-type State struct {
-	mu        sync.Mutex
-	metaByURL map[string]CacheMeta
-	icsByURL  map[string]string
-}
-
-var globalState = &State{
-	metaByURL: make(map[string]CacheMeta),
-	icsByURL:  make(map[string]string),
-}
-
-// Refresh fetches/re-fetches calendars from CALENDAR_ICAL_URL in Secret Service and returns JSON.
-func Refresh(days int) string {
-	globalState.mu.Lock()
-	defer globalState.mu.Unlock()
-
-	urls := resolveURLs(secrets.NewResolver())
-	if len(urls) == 0 {
-		b, _ := json.Marshal(Output{
-			GeneratedAt: time.Now().Format(time.RFC3339),
-			Status:      "error",
-			Error:       "Missing CALENDAR_ICAL_URL in Secret Service",
-			EventsByDay: map[string][]EventOut{},
-		})
-		return string(b)
-	}
-
-	client := &http.Client{Timeout: 20 * time.Second}
-	var allEvents []parsedEvent
-	var errs []string
-	successCount := 0
-
-	for _, url := range urls {
-		status, fetchErr := fetchCalendar(client, url)
-		if fetchErr != nil {
-			errs = append(errs, fmt.Sprintf("fatal error fetching %s: %v", url, fetchErr))
-			continue
-		}
-		if strings.HasPrefix(status, "error") {
-			errs = append(errs, fmt.Sprintf("error fetching %s: %s", url, status))
-		} else {
-			successCount++
-		}
-		if body, ok := globalState.icsByURL[url]; ok {
-			events, parseErr := parseCalendar(body)
-			if parseErr != nil {
-				errs = append(errs, fmt.Sprintf("error parsing %s: %v", url, parseErr))
-			} else {
-				allEvents = append(allEvents, events...)
-			}
-		}
-	}
-
-	aggStatus := "fetched"
-	if successCount == 0 && len(errs) > 0 {
-		aggStatus = "error"
-	} else if successCount > 0 && len(errs) > 0 {
-		aggStatus = "partial_success"
-	}
-
-	eventsByDay := organizeEvents(allEvents, days)
-
-	out := Output{
-		GeneratedAt: time.Now().Format(time.RFC3339),
-		Status:      aggStatus,
-		EventsByDay: eventsByDay,
-	}
-	if len(errs) > 0 {
-		out.Error = strings.Join(errs, "; ")
-	}
-
-	b, _ := json.Marshal(out)
-	return string(b)
-}
-
-func resolveURLs(resolver secrets.Resolver) []string {
-	if resolver == nil {
-		return nil
-	}
-	env, _ := resolver.Lookup("CALENDAR_ICAL_URL")
-	var urls []string
-	for _, u := range strings.Split(env, ",") {
-		if t := strings.TrimSpace(u); t != "" {
-			urls = append(urls, t)
-		}
-	}
-	return urls
-}
-
-// fetchCalendar downloads a calendar URL respecting ETag/Last-Modified.
-// Returns status string and optional fatal error.
-func fetchCalendar(client *http.Client, url string) (string, error) {
-	meta := globalState.metaByURL[url]
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	if meta.ETag != "" {
-		req.Header.Set("If-None-Match", meta.ETag)
-	}
-	if meta.LastModified != "" {
-		req.Header.Set("If-Modified-Since", meta.LastModified)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode == http.StatusNotModified {
-		return "not_modified", nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		errMsg := fmt.Sprintf("HTTP %d", resp.StatusCode)
-		if _, cached := globalState.icsByURL[url]; cached {
-			return "error_cached: " + errMsg, nil
-		}
-		return "", fmt.Errorf("%s", errMsg)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	text := string(body)
-
-	if !strings.Contains(text, "BEGIN:VCALENDAR") {
-		msg := "invalid ICS response"
-		if _, cached := globalState.icsByURL[url]; cached {
-			return "error_cached: " + msg, nil
-		}
-		return "", fmt.Errorf("%s", msg)
-	}
-
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-
-	newMeta := CacheMeta{
-		ETag:         resp.Header.Get("ETag"),
-		LastModified: resp.Header.Get("Last-Modified"),
-	}
-	globalState.metaByURL[url] = newMeta
-	globalState.icsByURL[url] = text
-	return "fetched", nil
-}
-
 type parsedEvent struct {
 	event            EventOut
 	startDate        time.Time
 	endDateExclusive time.Time
 }
 
-func parseCalendar(body string) ([]parsedEvent, error) {
-	cal, err := ics.ParseCalendar(strings.NewReader(body))
-	if err != nil {
-		return nil, err
+// Refresh fetches configured Google Calendar API sources and returns the QML payload JSON.
+func Refresh(days int) string {
+	if days <= 0 {
+		days = 180
 	}
-	var events []parsedEvent
-	for _, comp := range cal.Components {
-		event, ok := comp.(*ics.VEvent)
+	cfg, err := appconfig.Current()
+	if err != nil {
+		return outputError(fmt.Sprintf("load config: %v", err))
+	}
+	sources := calendarSources(cfg)
+	if len(sources) == 0 {
+		return outputError("Missing calendar.accounts entries with calendar_ids in leftpanel/config.toml")
+	}
+
+	resolver := secrets.NewResolver()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	rangeStart, rangeEnd := eventRange(days)
+	var allEvents []parsedEvent
+	var errs []string
+	successCount := 0
+	for _, source := range sources {
+		account, ok := emailAccountByID(cfg, source.Account)
 		if !ok {
+			errs = append(errs, fmt.Sprintf("calendar account %s is not configured as an email account", source.Account))
 			continue
 		}
-		pe, err := parseEvent(event)
-		if err != nil || pe == nil {
+		httpClient, err := googleauth.NewHTTPClient(ctx, googleauth.AccountFromResolver(source.Account, account.Address, resolver), []string{
+			calendarapi.CalendarCalendarlistReadonlyScope,
+			calendarapi.CalendarEventsReadonlyScope,
+		})
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", source.Account, err))
 			continue
 		}
-		events = append(events, *pe)
+		options := append([]option.ClientOption{option.WithHTTPClient(httpClient)}, calendarServiceOptions...)
+		service, err := calendarapi.NewService(ctx, options...)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", source.Account, err))
+			continue
+		}
+		accountSuccess := false
+		for _, calendarID := range source.CalendarIDs {
+			events, err := fetchCalendarEvents(ctx, service, calendarID, rangeStart, rangeEnd)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s/%s: %v", source.Account, calendarID, err))
+				continue
+			}
+			accountSuccess = true
+			allEvents = append(allEvents, events...)
+		}
+		if accountSuccess {
+			successCount++
+		}
+	}
+
+	status := "fetched"
+	if successCount == 0 && len(errs) > 0 {
+		status = "error"
+	} else if successCount > 0 && len(errs) > 0 {
+		status = "partial_success"
+	}
+	out := Output{
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Status:      status,
+		EventsByDay: organizeEvents(allEvents, days),
+	}
+	if len(errs) > 0 {
+		out.Error = strings.Join(errs, "; ")
+	}
+	return marshalOutput(out)
+}
+
+func calendarSources(cfg appconfig.Config) []appconfig.CalendarAccountConfig {
+	var out []appconfig.CalendarAccountConfig
+	for _, source := range cfg.Calendar.Accounts {
+		if strings.TrimSpace(source.Account) == "" || len(source.CalendarIDs) == 0 {
+			continue
+		}
+		out = append(out, source)
+	}
+	return out
+}
+
+func emailAccountByID(cfg appconfig.Config, id string) (appconfig.EmailAccountConfig, bool) {
+	for _, account := range cfg.Email.Accounts {
+		if strings.EqualFold(strings.TrimSpace(account.ID), strings.TrimSpace(id)) {
+			return account, true
+		}
+	}
+	return appconfig.EmailAccountConfig{}, false
+}
+
+func fetchCalendarEvents(ctx context.Context, service *calendarapi.Service, calendarID string, rangeStart, rangeEnd time.Time) ([]parsedEvent, error) {
+	var events []parsedEvent
+	pageToken := ""
+	for {
+		call := service.Events.List(calendarID).
+			Context(ctx).
+			SingleEvents(true).
+			OrderBy("startTime").
+			TimeMin(rangeStart.Format(time.RFC3339)).
+			TimeMax(rangeEnd.Format(time.RFC3339)).
+			MaxResults(2500)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		response, err := call.Do()
+		if err != nil {
+			return events, err
+		}
+		for _, item := range response.Items {
+			event, ok := eventFromAPI(item)
+			if ok {
+				events = append(events, event)
+			}
+		}
+		pageToken = response.NextPageToken
+		if pageToken == "" {
+			break
+		}
 	}
 	return events, nil
 }
 
-func parseEvent(event *ics.VEvent) (*parsedEvent, error) {
-	uid := ""
-	if p := event.GetProperty(ics.ComponentPropertyUniqueId); p != nil {
-		uid = p.Value
+func eventFromAPI(item *calendarapi.Event) (parsedEvent, bool) {
+	if item == nil || strings.EqualFold(item.Status, "cancelled") {
+		return parsedEvent{}, false
 	}
-	title := "Untitled"
-	if p := event.GetProperty(ics.ComponentPropertySummary); p != nil && p.Value != "" {
-		title = unescapeIcal(p.Value)
+	if strings.EqualFold(item.EventType, "workingLocation") {
+		return parsedEvent{}, false
 	}
-
-	startDt, startAllDay, err := getEventTime(event, ics.ComponentPropertyDtStart)
-	if err != nil {
-		return nil, err
+	start, startAllDay, ok := eventDateTime(item.Start)
+	if !ok {
+		return parsedEvent{}, false
 	}
-	endDt, endAllDay, err := getEventTime(event, ics.ComponentPropertyDtEnd)
-	if err != nil || endDt.IsZero() {
+	end, endAllDay, ok := eventDateTime(item.End)
+	if !ok || !end.After(start) {
 		if startAllDay {
-			endDt = startDt.AddDate(0, 0, 1)
+			end = start.AddDate(0, 0, 1)
 		} else {
-			endDt = startDt.AddDate(0, 0, 1)
+			end = start.Add(time.Hour)
 		}
-		endAllDay = startAllDay
 	}
-
 	allDay := startAllDay || endAllDay
-
+	endExclusive := end
+	if !allDay {
+		endExclusive = time.Date(end.Year(), end.Month(), end.Day()+1, 0, 0, 0, 0, end.Location())
+	}
+	title := strings.TrimSpace(item.Summary)
+	if title == "" {
+		title = "Untitled"
+	}
+	uid := strings.TrimSpace(item.ICalUID)
 	if uid == "" {
-		uid = fmt.Sprintf("%s-%d", title, startDt.Unix())
+		uid = strings.TrimSpace(item.Id)
 	}
-
-	var endExclusive time.Time
-	if allDay {
-		endExclusive = endDt
-	} else {
-		if endDt.Hour() == 0 && endDt.Minute() == 0 && endDt.Second() == 0 && endDt.After(startDt) {
-			endExclusive = endDt
-		} else {
-			endExclusive = time.Date(endDt.Year(), endDt.Month(), endDt.Day()+1, 0, 0, 0, 0, endDt.Location())
-		}
+	if uid == "" {
+		uid = fmt.Sprintf("%s-%d", title, start.Unix())
 	}
-
-	out := EventOut{
-		UID:    uid,
-		Title:  title,
-		Start:  startDt.Format(time.RFC3339),
-		End:    endDt.Format(time.RFC3339),
-		AllDay: allDay,
-	}
-	return &parsedEvent{
-		event:            out,
-		startDate:        startDt,
+	return parsedEvent{
+		event: EventOut{
+			UID:    uid,
+			Title:  title,
+			Start:  start.Format(time.RFC3339),
+			End:    end.Format(time.RFC3339),
+			AllDay: allDay,
+		},
+		startDate:        start,
 		endDateExclusive: endExclusive,
-	}, nil
+	}, true
 }
 
-func getEventTime(event *ics.VEvent, prop ics.ComponentProperty) (t time.Time, allDay bool, err error) {
-	p := event.GetProperty(prop)
-	if p == nil {
-		return time.Time{}, false, nil
+func eventDateTime(value *calendarapi.EventDateTime) (time.Time, bool, bool) {
+	if value == nil {
+		return time.Time{}, false, false
 	}
-	val := strings.TrimSpace(p.Value)
-	if val == "" {
-		return time.Time{}, false, nil
-	}
-
-	// Check VALUE=DATE parameter
-	valueType := ""
-	if params := p.ICalParameters; params != nil {
-		if vt, ok := params["VALUE"]; ok && len(vt) > 0 {
-			valueType = strings.ToUpper(vt[0])
+	if strings.TrimSpace(value.Date) != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", value.Date, time.Local)
+		if err != nil {
+			return time.Time{}, false, false
 		}
+		return parsed, true, true
 	}
+	raw := strings.TrimSpace(value.DateTime)
+	if raw == "" {
+		return time.Time{}, false, false
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, false, false
+	}
+	return parsed.In(time.Local), false, true
+}
 
-	if valueType == "DATE" || (len(val) == 8 && !strings.Contains(val, "T")) {
-		parsed, e := time.ParseInLocation("20060102", val, time.Local)
-		if e != nil {
-			return time.Time{}, false, e
-		}
-		return parsed, true, nil
-	}
-
-	// UTC suffix
-	if strings.HasSuffix(val, "Z") {
-		parsed, e := time.Parse("20060102T150405Z", val)
-		if e != nil {
-			return time.Time{}, false, e
-		}
-		return parsed.In(time.Local), false, nil
-	}
-
-	// TZID parameter
-	tzid := ""
-	if params := p.ICalParameters; params != nil {
-		if tz, ok := params["TZID"]; ok && len(tz) > 0 {
-			tzid = tz[0]
-		}
-	}
-
-	loc := time.Local
-	if tzid != "" {
-		if l, e := time.LoadLocation(tzid); e == nil {
-			loc = l
-		}
-	}
-
-	parsed, e := time.ParseInLocation("20060102T150405", val, loc)
-	if e != nil {
-		return time.Time{}, false, e
-	}
-	return parsed, false, nil
+func eventRange(days int) (time.Time, time.Time) {
+	now := time.Now()
+	rangeStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	return rangeStart, rangeStart.AddDate(0, 0, days)
 }
 
 func organizeEvents(events []parsedEvent, days int) map[string][]EventOut {
-	now := time.Now()
-	rangeStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
-	rangeEnd := rangeStart.AddDate(0, 0, days)
-
+	rangeStart, rangeEnd := eventRange(days)
 	result := make(map[string][]EventOut)
 	for _, pe := range events {
 		d := time.Date(pe.startDate.Year(), pe.startDate.Month(), pe.startDate.Day(), 0, 0, 0, 0, time.Local)
@@ -352,24 +266,31 @@ func organizeEvents(events []parsedEvent, days int) map[string][]EventOut {
 			}
 		}
 	}
-
-	// Sort events within each day
-	for k := range result {
-		day := result[k]
-		sort.Slice(day, func(i, j int) bool {
-			ti, _ := time.Parse(time.RFC3339, day[i].Start)
-			tj, _ := time.Parse(time.RFC3339, day[j].Start)
-			return ti.Before(tj)
+	for key := range result {
+		day := result[key]
+		slices.SortFunc(day, func(a, b EventOut) int {
+			at, _ := time.Parse(time.RFC3339, a.Start)
+			bt, _ := time.Parse(time.RFC3339, b.Start)
+			return at.Compare(bt)
 		})
-		result[k] = day
+		result[key] = day
 	}
 	return result
 }
 
-func unescapeIcal(s string) string {
-	s = strings.ReplaceAll(s, "\\\\", "\\")
-	s = strings.ReplaceAll(s, "\\n", "\n")
-	s = strings.ReplaceAll(s, "\\,", ",")
-	s = strings.ReplaceAll(s, "\\;", ";")
-	return s
+func outputError(message string) string {
+	return marshalOutput(Output{
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Status:      "error",
+		Error:       message,
+		EventsByDay: map[string][]EventOut{},
+	})
+}
+
+func marshalOutput(out Output) string {
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
 }

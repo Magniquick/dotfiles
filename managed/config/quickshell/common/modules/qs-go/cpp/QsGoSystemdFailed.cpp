@@ -37,16 +37,16 @@ void QsGoSystemdFailed::start() {
   refresh();
 }
 
-bool QsGoSystemdFailed::refresh() {
+auto QsGoSystemdFailed::refresh() -> bool {
   setRefreshing(true);
-  QThreadPool::globalInstance()->start([this]() {
+  QThreadPool::globalInstance()->start([this]() -> void {
     char* raw = QsGo_SystemdFailed_Refresh();
-    QByteArray json(raw);
+    QByteArray const json(raw);
     QsGo_Free(raw);
 
     QMetaObject::invokeMethod(
         this,
-        [this, json]() {
+        [this, json]() -> void {
           applyJson(json);
           setRefreshing(false);
         },
@@ -76,12 +76,13 @@ void QsGoSystemdFailed::onSystemdChanged() {
   scheduleRefresh();
 }
 
-void QsGoSystemdFailed::onSystemdJobRemoved(uint, const QDBusObjectPath&, const QString&,
-                                            const QString&) {
+void QsGoSystemdFailed::onSystemdJobRemoved(uint /*unused*/, const QDBusObjectPath& /*unused*/,
+                                            const QString& /*unused*/, const QString& /*unused*/) {
   scheduleRefresh();
 }
 
-void QsGoSystemdFailed::onSystemdUnitChanged(const QString&, const QDBusObjectPath&) {
+void QsGoSystemdFailed::onSystemdUnitChanged(const QString& /*unused*/,
+                                             const QDBusObjectPath& /*unused*/) {
   scheduleRefresh();
 }
 
@@ -101,8 +102,8 @@ void QsGoSystemdFailed::applyJson(const QByteArray& json) {
 #define SET_INT(member, signal, key)                                                               \
   {                                                                                                \
     const int v = obj.value(QLatin1String(key)).toInt();                                           \
-    if (v != member) {                                                                             \
-      member = v;                                                                                  \
+    if (v != (member)) {                                                                           \
+      (member) = v;                                                                                \
       emit signal();                                                                               \
     }                                                                                              \
   }
@@ -138,13 +139,14 @@ void QsGoSystemdFailed::applyJson(const QByteArray& json) {
   }
 }
 
-QVariantList QsGoSystemdFailed::parseUnits(const QJsonValue& value) const {
+auto QsGoSystemdFailed::parseUnits(const QJsonValue& value) -> QVariantList {
   QVariantList units;
   const QJsonArray arr = value.toArray();
   units.reserve(arr.size());
   for (const QJsonValue& v : arr) {
-    if (!v.isObject())
+    if (!v.isObject()) {
       continue;
+    }
     const QJsonObject obj = v.toObject();
     QVariantMap unit;
     unit.insert(QStringLiteral("unit"), obj.value(QLatin1String("unit")).toString());
@@ -158,8 +160,9 @@ QVariantList QsGoSystemdFailed::parseUnits(const QJsonValue& value) const {
 }
 
 void QsGoSystemdFailed::setRefreshing(bool refreshing) {
-  if (refreshing == m_refreshing)
+  if (refreshing == m_refreshing) {
     return;
+  }
   m_refreshing = refreshing;
   emit refreshingChanged();
 }

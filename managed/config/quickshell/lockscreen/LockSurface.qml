@@ -19,8 +19,8 @@ WlSessionLockSurface {
   required property LockContext context
   property var now: new Date()
   property bool startAnim: false
-  readonly property string powermenuLauncher: Quickshell.shellPath("../tools/run-quickshell.sh")
-  readonly property string currentUser: Quickshell.env("USER") || "user"
+  readonly property string powermenuLauncher: Quickshell.shellPath("../qs")
+  readonly property string currentUser: Quickshell.env("USER") || qsTr("user")
   readonly property url profileImageSource: Qt.resolvedUrl("assets/pfp.png")
   readonly property string clockDisplayFontFamily: "Google Sans Flex"
   readonly property string mondDisplayFontFamily: Common.Config.fontFamily
@@ -35,57 +35,57 @@ WlSessionLockSurface {
   readonly property var palette: Common.Config.palette
 
   function clearPasswordField() {
-    passField.clear();
-    root.context.currentText = "";
-    root.context.clearError();
-    passField.forceActiveFocus();
+    passField.clear()
+    root.context.currentText = ""
+    root.context.clearError()
+    passField.forceActiveFocus()
   }
 
   function openPowermenu() {
-    root.powerMenuVisible = true;
+    root.powerMenuVisible = true
   }
 
   function togglePowerMenu(advancedRequested) {
     if (!root.powerMenuVisible) {
-      root.advancedPowerOptions = !!advancedRequested;
-      root.powerMenuVisible = true;
+      root.advancedPowerOptions = !!advancedRequested
+      root.powerMenuVisible = true
     } else if (advancedRequested) {
-      root.advancedPowerOptions = true;
+      root.advancedPowerOptions = true
     } else {
-      root.powerMenuVisible = false;
-      root.advancedPowerOptions = false;
+      root.powerMenuVisible = false
+      root.advancedPowerOptions = false
     }
     if (root.powerMenuVisible)
-      passField.forceActiveFocus();
+      passField.forceActiveFocus()
   }
 
   function runPowerAction(action) {
-    let cmd = [];
+    let cmd = []
     if (action === "suspend")
-      cmd = ["systemctl", "suspend"];
+      cmd = ["systemctl", "suspend"]
     else if (action === "reboot")
-      cmd = ["systemctl", "reboot"];
+      cmd = ["systemctl", "reboot"]
     else if (action === "poweroff")
-      cmd = ["systemctl", "poweroff"];
+      cmd = ["systemctl", "poweroff"]
     else if (action === "hibernate")
-      cmd = ["systemctl", "hibernate"];
+      cmd = ["systemctl", "hibernate"]
     else if (action === "windows")
-      cmd = ["systemctl", "reboot", "--boot-loader-entry=auto-windows"];
+      cmd = ["systemctl", "reboot", "--boot-loader-entry=auto-windows"]
     else if (action === "powermenu")
-      cmd = [root.powermenuLauncher, "--standalone", "powermenu", "-n"];
+      cmd = [root.powermenuLauncher, "--standalone", "powermenu", "-n"]
 
     if (action === "logout") {
-      root.powerMenuVisible = false;
-      root.advancedPowerOptions = false;
-      Hyprland.dispatch("exit");
-      return;
+      root.powerMenuVisible = false
+      root.advancedPowerOptions = false
+      Hyprland.dispatch("exit")
+      return
     }
 
     if (cmd.length === 0)
-      return;
-    root.powerMenuVisible = false;
-    root.advancedPowerOptions = false;
-    Quickshell.execDetached(cmd);
+      return
+    root.powerMenuVisible = false
+    root.advancedPowerOptions = false
+    Quickshell.execDetached(cmd)
   }
 
   QtObject {
@@ -94,65 +94,67 @@ WlSessionLockSurface {
 
     function modelAt(model, index) {
       if (!model || index < 0)
-        return null;
+        return null
       if (model.values && typeof model.values.length === "number")
-        return model.values[index];
+        return model.values[index]
       if (typeof model.get === "function")
-        return model.get(index);
-      return model[index];
+        return model.get(index)
+      return model[index]
     }
 
     function modelCount(model) {
       if (!model)
-        return 0;
+        return 0
       if (model.values && typeof model.values.length === "number")
-        return model.values.length;
+        return model.values.length
       if (typeof model.count === "number")
-        return model.count;
+        return model.count
       if (typeof model.length === "number")
-        return model.length;
-      return 0;
+        return model.length
+      return 0
     }
 
     readonly property var connectedDevice: {
       if (!nativeNetworkBackend || !Networking.devices)
-        return null;
-      let fallbackEthernet = null;
-      const deviceCount = modelCount(Networking.devices);
+        return null
+      let fallbackEthernet = null
+      const deviceCount = modelCount(Networking.devices)
       for (let i = 0; i < deviceCount; i++) {
-        const dev = modelAt(Networking.devices, i);
+        const dev = modelAt(Networking.devices, i)
         if (!dev || !dev.connected)
-          continue;
+          continue
         if (dev.type === DeviceType.Wifi)
-          return dev;
+          return dev
         if (!fallbackEthernet)
-          fallbackEthernet = dev;
+          fallbackEthernet = dev
       }
-      return fallbackEthernet;
+      return fallbackEthernet
     }
 
     readonly property var connectedWifiNetwork: {
-      const dev = connectedDevice;
+      const dev = connectedDevice
       if (!dev || dev.type !== DeviceType.Wifi || !dev.networks)
-        return null;
-      const networkCount = modelCount(dev.networks);
+        return null
+      const networkCount = modelCount(dev.networks)
       for (let i = 0; i < networkCount; i++) {
-        const network = modelAt(dev.networks, i);
+        const network = modelAt(dev.networks, i)
         if (network && network.connected)
-          return network;
+          return network
       }
-      return null;
+      return null
     }
 
     property var adapter: Bluetooth.defaultAdapter
     property int bluetoothConnectedCount: {
-      if (!adapter || !adapter.devices) return 0;
-      let count = 0;
+      if (!adapter || !adapter.devices)
+        return 0
+      let count = 0
       for (let i = 0; i < adapter.devices.count; i++) {
-        const dev = adapter.devices.get(i);
-        if (dev && dev.connected) count++;
+        const dev = adapter.devices.get(i)
+        if (dev && dev.connected)
+          count++
       }
-      return count;
+      return count
     }
   }
 
@@ -201,8 +203,8 @@ WlSessionLockSurface {
     property bool filled: false
     property bool danger: false
     property bool iconOnly: false
-    property bool hovered: buttonMouse.containsMouse
-    property bool pressed: buttonMouse.pressed
+    property bool hovered: buttonSurface.hovered
+    property bool pressed: buttonSurface.pressed
     property bool buttonEnabled: true
     property int leftPadding: iconOnly ? 0 : 13
     property int rightPadding: iconOnly ? 0 : 13
@@ -216,14 +218,14 @@ WlSessionLockSurface {
 
     color: {
       if (!button.buttonEnabled)
-        return Qt.alpha(root.colors.surface_container_low, 0.45);
+        return Qt.alpha(root.colors.surface_container_low, 0.45)
       if (button.pressed)
-        return button.filled ? Qt.alpha(root.colors.primary, 0.84) : Qt.alpha(root.colors.surface_container_highest, 0.95);
+        return button.filled ? Qt.alpha(root.colors.primary, 0.84) : Qt.alpha(root.colors.surface_container_highest, 0.95)
       if (button.filled)
-        return root.colors.primary;
+        return root.colors.primary
       if (button.hovered)
-        return Qt.alpha(root.colors.surface_container_highest, 0.95);
-      return Qt.alpha(root.colors.surface_container_low, 0.85);
+        return Qt.alpha(root.colors.surface_container_highest, 0.95)
+      return Qt.alpha(root.colors.surface_container_low, 0.85)
     }
     radius: Common.Config.shape.corner.md
     elevation: button.pressed ? 0 : (button.hovered ? 2 : 1)
@@ -235,16 +237,18 @@ WlSessionLockSurface {
       border.width: 1
       border.color: {
         if (!button.buttonEnabled)
-          return Qt.alpha(root.colors.outline_variant, 0.4);
+          return Qt.alpha(root.colors.outline_variant, 0.4)
         if (button.filled)
-          return Qt.alpha(root.colors.primary, 0.8);
+          return Qt.alpha(root.colors.primary, 0.8)
         if (button.danger)
-          return Qt.alpha(root.colors.error, 0.7);
-        return Qt.alpha(root.colors.outline_variant, 0.85);
+          return Qt.alpha(root.colors.error, 0.7)
+        return Qt.alpha(root.colors.outline_variant, 0.85)
       }
 
       Behavior on border.color {
-        ColorAnimation { duration: Common.Config.motion.duration.shortMs }
+        ColorAnimation {
+          duration: Common.Config.motion.duration.shortMs
+        }
       }
     }
 
@@ -255,12 +259,12 @@ WlSessionLockSurface {
       text: button.dotState ? "•••" : button.text
       color: {
         if (!button.buttonEnabled)
-          return Qt.alpha(root.colors.on_surface, 0.5);
+          return Qt.alpha(root.colors.on_surface, 0.5)
         if (button.filled)
-          return root.colors.on_primary;
+          return root.colors.on_primary
         if (button.danger)
-          return root.colors.error;
-        return root.colors.on_surface;
+          return root.colors.error
+        return root.colors.on_surface
       }
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
@@ -270,46 +274,29 @@ WlSessionLockSurface {
       font.letterSpacing: button.dotState ? 2 : 0
     }
 
-    Rectangle {
-      anchors.fill: parent
-      color: "transparent"
-      radius: button.radius
-      clip: true
+    MK.ClickableSurface {
+      id: buttonSurface
 
-      MK.HybridRipple {
-        anchors.fill: parent
-        color: button.filled ? root.colors.on_primary : root.colors.on_surface
-        pressX: buttonMouse.pressX
-        pressY: buttonMouse.pressY
-        pressed: buttonMouse.pressed
-        radius: button.radius
-        stateOpacity: 0
-      }
+      anchors.fill: parent
+      radius: button.radius
+      enabled: button.buttonEnabled
+      backgroundColor: "transparent"
+      hoverBackgroundColor: "transparent"
+      pressedBackgroundColor: "transparent"
+      rippleColor: button.filled ? root.colors.on_primary : root.colors.on_surface
+      rippleStateOpacity: 0
+      onClicked: button.clicked()
     }
 
     Behavior on color {
-      ColorAnimation { duration: Common.Config.motion.duration.shortMs }
+      ColorAnimation {
+        duration: Common.Config.motion.duration.shortMs
+      }
     }
     Behavior on elevation {
-      NumberAnimation { duration: Common.Config.motion.duration.shortMs }
-    }
-
-    MouseArea {
-      id: buttonMouse
-
-      property real pressX: width / 2
-      property real pressY: height / 2
-
-      anchors.fill: parent
-      enabled: button.buttonEnabled
-      hoverEnabled: true
-      cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-
-      onPressed: function(mouse) {
-        pressX = mouse.x;
-        pressY = mouse.y;
+      NumberAnimation {
+        duration: Common.Config.motion.duration.shortMs
       }
-      onClicked: button.clicked()
     }
   }
 
@@ -462,9 +449,9 @@ WlSessionLockSurface {
 
           Text {
             text: {
-              const hours = root.now.getHours() % 12 || 12;
-              const minutes = String(root.now.getMinutes()).padStart(2, "0");
-              return hours + ":" + minutes;
+              const hours = root.now.getHours() % 12 || 12
+              const minutes = String(root.now.getMinutes()).padStart(2, "0")
+              return hours + ":" + minutes
             }
             color: root.colors.on_surface
             font.pixelSize: 96
@@ -517,17 +504,27 @@ WlSessionLockSurface {
 
             active: true
             icon: {
-              if (charging) return "󰂄";
-              if (percentage <= 10) return "󰁺";
-              if (percentage <= 20) return "󰁻";
-              if (percentage <= 30) return "󰁼";
-              if (percentage <= 40) return "󰁽";
-              if (percentage <= 50) return "󰁾";
-              if (percentage <= 60) return "󰁿";
-              if (percentage <= 70) return "󰂀";
-              if (percentage <= 80) return "󰂁";
-              if (percentage <= 90) return "󰂂";
-              return "󰁹";
+              if (charging)
+                return "󰂄"
+              if (percentage <= 10)
+                return "󰁺"
+              if (percentage <= 20)
+                return "󰁻"
+              if (percentage <= 30)
+                return "󰁼"
+              if (percentage <= 40)
+                return "󰁽"
+              if (percentage <= 50)
+                return "󰁾"
+              if (percentage <= 60)
+                return "󰁿"
+              if (percentage <= 70)
+                return "󰂀"
+              if (percentage <= 80)
+                return "󰂁"
+              if (percentage <= 90)
+                return "󰂂"
+              return "󰁹"
             }
             text: percentage + "%"
             accentColor: charging ? root.colors.tertiary : (percentage < 20 ? root.colors.error : root.colors.primary)
@@ -544,18 +541,26 @@ WlSessionLockSurface {
 
             active: connected
             icon: {
-              if (!connected) return "󰖪";
-              if (!isWifi) return "󰈀";
-              if (signal < 20) return "󰤯";
-              if (signal < 40) return "󰤟";
-              if (signal < 60) return "󰤢";
-              if (signal < 80) return "󰤥";
-              return "󰤨";
+              if (!connected)
+                return "󰖪"
+              if (!isWifi)
+                return "󰈀"
+              if (signal < 20)
+                return "󰤯"
+              if (signal < 40)
+                return "󰤟"
+              if (signal < 60)
+                return "󰤢"
+              if (signal < 80)
+                return "󰤥"
+              return "󰤨"
             }
             text: {
-              if (!connected) return "Offline";
-              if (isWifi) return (wifiNetwork ? wifiNetwork.name : "") || "Connected";
-              return "Ethernet";
+              if (!connected)
+                return qsTr("Offline")
+              if (isWifi)
+                return (wifiNetwork ? wifiNetwork.name : "") || qsTr("Connected")
+              return qsTr("Ethernet")
             }
             accentColor: connected ? root.colors.primary : root.colors.on_surface_variant
           }
@@ -568,9 +573,11 @@ WlSessionLockSurface {
             active: bluetoothEnabled
             icon: !bluetoothEnabled ? "󰂲" : (connectedCount > 0 ? "󰂱" : "󰂯")
             text: {
-              if (!bluetoothEnabled) return "";
-              if (connectedCount > 0) return connectedCount;
-              return "On";
+              if (!bluetoothEnabled)
+                return ""
+              if (connectedCount > 0)
+                return connectedCount
+              return qsTr("On")
             }
             accentColor: bluetoothEnabled ? root.colors.primary : root.colors.on_surface_variant
             visible: !!statusService.adapter
@@ -598,11 +605,36 @@ WlSessionLockSurface {
     SequentialAnimation {
       id: shakeAnim
 
-      NumberAnimation { target: root; property: "authShakeOffset"; to: -10; duration: 45 }
-      NumberAnimation { target: root; property: "authShakeOffset"; to: 10; duration: 45 }
-      NumberAnimation { target: root; property: "authShakeOffset"; to: -6; duration: 45 }
-      NumberAnimation { target: root; property: "authShakeOffset"; to: 6; duration: 45 }
-      NumberAnimation { target: root; property: "authShakeOffset"; to: 0; duration: 45 }
+      NumberAnimation {
+        target: root
+        property: "authShakeOffset"
+        to: -10
+        duration: 45
+      }
+      NumberAnimation {
+        target: root
+        property: "authShakeOffset"
+        to: 10
+        duration: 45
+      }
+      NumberAnimation {
+        target: root
+        property: "authShakeOffset"
+        to: -6
+        duration: 45
+      }
+      NumberAnimation {
+        target: root
+        property: "authShakeOffset"
+        to: 6
+        duration: 45
+      }
+      NumberAnimation {
+        target: root
+        property: "authShakeOffset"
+        to: 0
+        duration: 45
+      }
     }
 
     MK.Card {
@@ -681,7 +713,7 @@ WlSessionLockSurface {
               id: passField
 
               Layout.fillWidth: true
-              placeholderText: root.context.unlockInProgress ? "Checking " + root.currentUser.toLowerCase() : (root.context.showFailure ? "Incorrect password" : root.currentUser.toLowerCase())
+              placeholderText: root.context.unlockInProgress ? qsTr("Checking %1").arg(root.currentUser.toLowerCase()) : (root.context.showFailure ? qsTr("Incorrect password") : root.currentUser.toLowerCase())
               echoMode: root.context.showPassword ? TextInput.Normal : TextInput.Password
               enabled: !root.context.unlockInProgress
               selectByMouse: false
@@ -693,10 +725,15 @@ WlSessionLockSurface {
 
               background: Item {}
 
-              onTextChanged: {
-                root.context.currentText = text;
+              Binding {
+                target: root.context
+                property: "currentText"
+                value: passField.text
+              }
+
+              onTextEdited: {
                 if (text.length > 0)
-                  root.context.clearError();
+                  root.context.clearError()
               }
               onAccepted: root.context.tryUnlock()
 
@@ -734,7 +771,7 @@ WlSessionLockSurface {
       color: root.colors.error
       font.family: Common.Config.fontFamily
       font.pixelSize: Common.Config.type.bodySmall.size
-      text: root.context.lastMessage.length > 0 ? root.context.lastMessage : "Authentication failed"
+      text: root.context.lastMessage.length > 0 ? root.context.lastMessage : qsTr("Authentication failed")
       visible: root.context.showFailure
       wrapMode: Text.WordWrap
       horizontalAlignment: Text.AlignHCenter
@@ -792,17 +829,19 @@ WlSessionLockSurface {
           spacing: 8
 
           Text {
-            text: "Power"
+            text: qsTr("Power")
             color: root.colors.on_surface
             font.family: Common.Config.fontFamily
             font.pixelSize: Common.Config.type.titleMedium.size
             font.weight: Font.DemiBold
           }
 
-          Item { Layout.fillWidth: true }
+          Item {
+            Layout.fillWidth: true
+          }
 
           Text {
-            text: root.advancedPowerOptions ? "Advanced" : "Quick"
+            text: root.advancedPowerOptions ? qsTr("Advanced") : qsTr("Quick")
             color: root.colors.on_surface_variant
             font.family: Common.Config.fontFamily
             font.pixelSize: Common.Config.type.labelMedium.size
@@ -811,17 +850,17 @@ WlSessionLockSurface {
 
         LockButton {
           Layout.fillWidth: true
-          text: "Suspend"
+          text: qsTr("Suspend")
           onClicked: root.runPowerAction("suspend")
         }
         LockButton {
           Layout.fillWidth: true
-          text: "Reboot"
+          text: qsTr("Reboot")
           onClicked: root.runPowerAction("reboot")
         }
         LockButton {
           Layout.fillWidth: true
-          text: "Power Off"
+          text: qsTr("Power Off")
           danger: true
           onClicked: root.runPowerAction("poweroff")
         }
@@ -845,17 +884,17 @@ WlSessionLockSurface {
 
             LockButton {
               Layout.fillWidth: true
-              text: "Hibernate"
+              text: qsTr("Hibernate")
               onClicked: root.runPowerAction("hibernate")
             }
             LockButton {
               Layout.fillWidth: true
-              text: "Reboot to Windows"
+              text: qsTr("Reboot to Windows")
               onClicked: root.runPowerAction("windows")
             }
             LockButton {
               Layout.fillWidth: true
-              text: "Logout Hyprland"
+              text: qsTr("Logout Hyprland")
               danger: true
               onClicked: root.runPowerAction("logout")
             }
@@ -872,11 +911,7 @@ WlSessionLockSurface {
       radius: 16
       anchors.right: parent.right
       anchors.bottom: parent.bottom
-      color: powerFabMouse.pressed
-        ? Qt.alpha(root.colors.surface_container_highest, 0.98)
-        : (powerFabMouse.containsMouse
-          ? Qt.alpha(root.colors.surface_container_high, 0.95)
-          : Qt.alpha(root.colors.surface_container_highest, 0.88))
+      color: powerFabSurface.pressed ? Qt.alpha(root.colors.surface_container_highest, 0.98) : (powerFabSurface.hovered ? Qt.alpha(root.colors.surface_container_high, 0.95) : Qt.alpha(root.colors.surface_container_highest, 0.88))
       border.width: 1
       border.color: Qt.alpha(root.colors.outline_variant, 0.8)
 
@@ -899,39 +934,19 @@ WlSessionLockSurface {
         }
       }
 
-      Rectangle {
+      MK.ClickableSurface {
+        id: powerFabSurface
+
         anchors.fill: parent
-        color: "transparent"
         radius: powerFab.radius
-        clip: true
-
-        MK.HybridRipple {
-          anchors.fill: parent
-          color: root.colors.error
-          pressX: powerFabMouse.pressX
-          pressY: powerFabMouse.pressY
-          pressed: powerFabMouse.pressed
-          radius: powerFab.radius
-          stateOpacity: 0
-        }
-      }
-
-      MouseArea {
-        id: powerFabMouse
-
-        property real pressX: width / 2
-        property real pressY: height / 2
-
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) {
-          pressX = mouse.x;
-          pressY = mouse.y;
-        }
-        onClicked: function(mouse) {
-          const advanced = (mouse.modifiers & Qt.ShiftModifier) !== 0;
-          root.togglePowerMenu(advanced);
+        backgroundColor: "transparent"
+        hoverBackgroundColor: "transparent"
+        pressedBackgroundColor: "transparent"
+        rippleColor: root.colors.error
+        rippleStateOpacity: 0
+        onClicked: function (mouse) {
+          const advanced = (mouse.modifiers & Qt.ShiftModifier) !== 0
+          root.togglePowerMenu(advanced)
         }
       }
     }
@@ -943,10 +958,10 @@ WlSessionLockSurface {
     sequence: "Escape"
     onActivated: {
       if (root.powerMenuVisible) {
-        root.powerMenuVisible = false;
-        root.advancedPowerOptions = false;
+        root.powerMenuVisible = false
+        root.advancedPowerOptions = false
       } else {
-        root.clearPasswordField();
+        root.clearPasswordField()
       }
     }
   }
@@ -968,12 +983,12 @@ WlSessionLockSurface {
 
       waitForEnd: true
       onStreamFinished: {
-        const lines = wallpaperOutput.text.split("\n").map(function(line) {
-          return line.trim();
-        }).filter(function(line) {
-          return line.length > 0;
-        });
-        root.wallpaperPath = lines.length > 0 ? lines[0] : "";
+        const lines = wallpaperOutput.text.split("\n").map(function (line) {
+          return line.trim()
+        }).filter(function (line) {
+          return line.length > 0
+        })
+        root.wallpaperPath = lines.length > 0 ? lines[0] : ""
       }
     }
   }
@@ -982,16 +997,15 @@ WlSessionLockSurface {
     target: root.context
 
     function onFailed() {
-      shakeAnim.restart();
-      passField.forceActiveFocus();
+      shakeAnim.restart()
+      passField.forceActiveFocus()
     }
   }
 
   Component.onCompleted: {
-    wallpaperProcess.running = true;
-    root.startAnim = true;
+    wallpaperProcess.running = true
+    root.startAnim = true
   }
 
-  Component.onDestruction: {
-  }
+  Component.onDestruction: {}
 }

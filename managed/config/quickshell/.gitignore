@@ -1,3 +1,7 @@
 data/
 .crush
 leftpanel/config.toml
+.cache/
+.qmlls.ini
+build-clang-tidy/
+node_modules/

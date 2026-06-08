@@ -67,53 +67,54 @@ public:
   explicit QsGoAiSession(QObject* parent = nullptr);
 
   // QAbstractListModel
-  int rowCount(const QModelIndex& parent = {}) const override;
-  QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
-  QHash<int, QByteArray> roleNames() const override;
+  [[nodiscard]] auto rowCount(const QModelIndex& parent = {}) const -> int override;
+  [[nodiscard]] auto data(const QModelIndex& index, int role = Qt::DisplayRole) const
+      -> QVariant override;
+  [[nodiscard]] auto roleNames() const -> QHash<int, QByteArray> override;
 
   // Properties
-  QString modelId() const {
+  [[nodiscard]] auto modelId() const -> QString {
     return m_modelId;
   }
-  QVariantList commands() const;
+  [[nodiscard]] static auto commands() -> QVariantList;
 
-  QString systemPrompt() const {
+  [[nodiscard]] auto systemPrompt() const -> QString {
     return m_systemPrompt;
   }
-  QVariantMap providerConfig() const {
+  [[nodiscard]] auto providerConfig() const -> QVariantMap {
     return m_providerConfig;
   }
-  QVariantList mcpConfig() const {
+  [[nodiscard]] auto mcpConfig() const -> QVariantList {
     return m_mcpConfig;
   }
-  bool busy() const {
+  [[nodiscard]] auto busy() const -> bool {
     return m_busy;
   }
-  QString status() const {
+  [[nodiscard]] auto status() const -> QString {
     return m_status;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
-  QVariantList mcpServers() const {
+  [[nodiscard]] auto mcpServers() const -> QVariantList {
     return m_mcpServers;
   }
-  QVariantList mcpTools() const {
+  [[nodiscard]] auto mcpTools() const -> QVariantList {
     return m_mcpTools;
   }
-  QVariantList mcpPrompts() const {
+  [[nodiscard]] auto mcpPrompts() const -> QVariantList {
     return m_mcpPrompts;
   }
-  QVariantList mcpResources() const {
+  [[nodiscard]] auto mcpResources() const -> QVariantList {
     return m_mcpResources;
   }
-  QString mcpStatus() const {
+  [[nodiscard]] auto mcpStatus() const -> QString {
     return m_mcpStatus;
   }
-  QString mcpError() const {
+  [[nodiscard]] auto mcpError() const -> QString {
     return m_mcpError;
   }
-  QVariantList resumeConversations() const {
+  [[nodiscard]] auto resumeConversations() const -> QVariantList {
     return m_resumeConversations;
   }
 
@@ -132,16 +133,16 @@ public:
   Q_INVOKABLE void editMessage(const QString& messageId, const QString& newBody);
   Q_INVOKABLE void resetForModelSwitch(const QString& newModelId);
   Q_INVOKABLE void appendInfo(const QString& text);
-  Q_INVOKABLE QString copyAllText() const;
-  Q_INVOKABLE QVariantList pasteImageFromClipboard();
-  Q_INVOKABLE QVariantList pasteAttachmentFromClipboard();
-  Q_INVOKABLE bool restoreHistory();
-  Q_INVOKABLE bool refreshMcp();
-  Q_INVOKABLE QVariantMap getMcpPrompt(const QString& serverId, const QString& promptName,
-                                       const QVariantMap& arguments = QVariantMap{});
-  Q_INVOKABLE QVariantMap readMcpResource(const QString& serverId, const QString& uri);
-  Q_INVOKABLE bool refreshResumeConversations(const QString& query = QString());
-  Q_INVOKABLE bool resumeConversation(const QString& conversationId);
+  Q_INVOKABLE [[nodiscard]] auto copyAllText() const -> QString;
+  Q_INVOKABLE static auto pasteImageFromClipboard() -> QVariantList;
+  Q_INVOKABLE static auto pasteAttachmentFromClipboard() -> QVariantList;
+  Q_INVOKABLE auto restoreHistory() -> bool;
+  Q_INVOKABLE auto refreshMcp() -> bool;
+  Q_INVOKABLE auto getMcpPrompt(const QString& serverId, const QString& promptName,
+                                const QVariantMap& arguments = QVariantMap{}) -> QVariantMap;
+  Q_INVOKABLE auto readMcpResource(const QString& serverId, const QString& uri) -> QVariantMap;
+  Q_INVOKABLE auto refreshResumeConversations(const QString& query = QString()) -> bool;
+  Q_INVOKABLE auto resumeConversation(const QString& conversationId) -> bool;
 
 signals:
   void modelIdChanged();
@@ -165,34 +166,35 @@ signals:
 private:
   static void tokenCallback(void* ctx, const char* token, int done);
   void startStream(const QString& text, const QVariantList& attachments);
-  bool ensureHistoryConversation();
-  bool createHistoryConversation();
-  bool resumeHistoryConversation(const QString& conversationId = QString());
-  bool closeHistoryConversation();
-  QVariantMap applyHistoryAction(const QVariantMap& action) const;
-  QVariantMap messageToHistoryMap(const Message& msg, int ordinal,
-                                  const QString& statusOverride = QString(),
-                                  const QString& completedAt = QString()) const;
+  auto ensureHistoryConversation() -> bool;
+  auto createHistoryConversation() -> bool;
+  auto resumeHistoryConversation(const QString& conversationId = QString()) -> bool;
+  auto closeHistoryConversation() -> bool;
+  [[nodiscard]] static auto applyHistoryAction(const QVariantMap& action) -> QVariantMap;
+  [[nodiscard]] auto messageToHistoryMap(const Message& msg, int ordinal,
+                                         const QString& statusOverride = QString(),
+                                         const QString& completedAt = QString()) const
+      -> QVariantMap;
   void persistMessageAt(int row, const QString& statusOverride = QString(),
                         const QString& completedAt = QString());
   void persistToolCallAt(int row);
   void persistResponseItems(const QJsonArray& items, const QString& source);
   void persistDeletedFromOrdinal(int ordinal);
-  QVariantMap extraForMessage(const Message& msg) const;
-  QVariantMap metricsForMessage(const Message& msg) const;
-  QString utcNow() const;
+  [[nodiscard]] static auto extraForMessage(const Message& msg) -> QVariantMap;
+  [[nodiscard]] static auto metricsForMessage(const Message& msg) -> QVariantMap;
+  [[nodiscard]] static auto utcNow() -> QString;
   void restoreMessages(const QVariantList& messages);
   void restoreReplayItems();
-  QString buildHistoryJson() const;
-  QByteArray buildProviderConfigJson() const;
-  QByteArray buildMcpConfigJson() const;
+  [[nodiscard]] auto buildHistoryJson() const -> QString;
+  [[nodiscard]] auto buildProviderConfigJson() const -> QByteArray;
+  [[nodiscard]] auto buildMcpConfigJson() const -> QByteArray;
   void refreshMcpStateAsync();
-  QString activeProviderId() const;
-  QVariantMap activeProviderConfig() const;
-  QVariantMap resumeOptionFromSummary(const QVariantMap& summary) const;
-  int indexOfMessage(const QString& id) const;
-  int indexOfToolCall(const QString& toolCallId) const;
-  int lastAssistantChatIndex() const;
+  [[nodiscard]] auto activeProviderId() const -> QString;
+  [[nodiscard]] auto activeProviderConfig() const -> QVariantMap;
+  [[nodiscard]] static auto resumeOptionFromSummary(const QVariantMap& summary) -> QVariantMap;
+  [[nodiscard]] auto indexOfMessage(const QString& id) const -> int;
+  [[nodiscard]] auto indexOfToolCall(const QString& toolCallId) const -> int;
+  [[nodiscard]] auto lastAssistantChatIndex() const -> int;
   void handleToolEventJson(const QString& json);
   void setBusy(bool v);
   void setStatus(const QString& v);

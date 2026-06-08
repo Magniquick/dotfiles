@@ -27,24 +27,23 @@ Item {
 
   function startWave(x, y) {
     if (!root.waveEnabled || root.width <= 0 || root.height <= 0)
-      return;
-
-    root.waveCenterX = Math.max(0, Math.min(root.width, Number(x)));
-    root.waveCenterY = Math.max(0, Math.min(root.height, Number(y)));
-    root.waveRadius = Math.max(2, Math.min(root.width, root.height) * 0.04);
-    waveShape.opacity = 0.2;
-    waveAnim.restart();
+      return
+    root.waveCenterX = Math.max(0, Math.min(root.width, Number(x)))
+    root.waveCenterY = Math.max(0, Math.min(root.height, Number(y)))
+    root.waveRadius = Math.max(2, Math.min(root.width, root.height) * 0.04)
+    waveShape.opacity = 0.2
+    waveAnim.restart()
   }
 
   function trigger(x, y) {
-    root.startWave(x, y);
+    root.startWave(x, y)
   }
 
   visible: root.running
 
   onPressedChanged: {
     if (root.pressed)
-      root.startWave(root.pressX, root.pressY);
+      root.startWave(root.pressX, root.pressY)
   }
 
   Rectangle {
@@ -75,37 +74,61 @@ Item {
         focalX: centerX
         focalY: centerY
 
-        GradientStop { position: 0; color: Qt.alpha(root.color, 1.0) }
-        GradientStop { position: 0.78; color: Qt.alpha(root.color, 1.0) }
-        GradientStop { position: 0.80; color: Qt.alpha(root.color, 0.0) }
-        GradientStop { position: 1; color: Qt.alpha(root.color, 0.0) }
+        GradientStop {
+          position: 0
+          color: Qt.alpha(root.color, 1.0)
+        }
+        GradientStop {
+          position: 0.78
+          color: Qt.alpha(root.color, 1.0)
+        }
+        GradientStop {
+          position: 0.80
+          color: Qt.alpha(root.color, 0.0)
+        }
+        GradientStop {
+          position: 1
+          color: Qt.alpha(root.color, 0.0)
+        }
       }
 
       startX: root.clampedRadius
       startY: 0
 
-      PathLine { x: root.width - root.clampedRadius; y: 0 }
+      PathLine {
+        x: root.width - root.clampedRadius
+        y: 0
+      }
       PathArc {
         relativeX: root.clampedRadius
         relativeY: root.clampedRadius
         radiusX: root.clampedRadius
         radiusY: root.clampedRadius
       }
-      PathLine { x: root.width; y: root.height - root.clampedRadius }
+      PathLine {
+        x: root.width
+        y: root.height - root.clampedRadius
+      }
       PathArc {
         relativeX: -root.clampedRadius
         relativeY: root.clampedRadius
         radiusX: root.clampedRadius
         radiusY: root.clampedRadius
       }
-      PathLine { x: root.clampedRadius; y: root.height }
+      PathLine {
+        x: root.clampedRadius
+        y: root.height
+      }
       PathArc {
         relativeX: -root.clampedRadius
         relativeY: -root.clampedRadius
         radiusX: root.clampedRadius
         radiusY: root.clampedRadius
       }
-      PathLine { x: 0; y: root.clampedRadius }
+      PathLine {
+        x: 0
+        y: root.clampedRadius
+      }
       PathArc {
         x: root.clampedRadius
         y: 0
@@ -126,7 +149,7 @@ Item {
 
     onStopped: {
       if (waveShape.opacity > 0.001)
-        fadeAnim.restart();
+        fadeAnim.restart()
     }
   }
 

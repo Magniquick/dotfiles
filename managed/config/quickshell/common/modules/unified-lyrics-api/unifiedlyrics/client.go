@@ -6,8 +6,6 @@ import (
 	"errors"
 	"log"
 	"math"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,23 +38,42 @@ type ResultMetadata struct {
 // Client coordinates Spotify, NetEase, and LRCLIB providers.
 type Client struct {
 	cacheDir  string
+	noCache   bool
 	providers []lyricsprovider.Provider
 }
 
+// Option customizes a Client.
+type Option func(*Client)
+
+// WithNoCache disables all cache reads and writes for the unified provider stack.
+func WithNoCache(noCache bool) Option {
+	return func(c *Client) { c.noCache = noCache }
+}
+
 // New creates a unified lyrics client.
-func New(cacheDir string) *Client {
+func New(cacheDir string, opts ...Option) *Client {
 	cacheDir = strings.TrimSpace(cacheDir)
 	if cacheDir == "" {
 		cacheDir = cache.DefaultDir()
 	}
-	return &Client{
-		cacheDir: cacheDir,
-		providers: []lyricsprovider.Provider{
-			spotify.New(cacheDir),
-			netease.New(cacheDir),
-			lrclib.New(),
-		},
+
+	c := &Client{cacheDir: cacheDir}
+	for _, opt := range opts {
+		opt(c)
 	}
+
+	spotifyOpts := []spotify.Option{}
+	neteaseOpts := []netease.Option{}
+	if c.noCache {
+		spotifyOpts = append(spotifyOpts, spotify.WithCacheEnabled(false), spotify.WithLyricsCacheEnabled(false))
+		neteaseOpts = append(neteaseOpts, netease.WithCacheEnabled(false))
+	}
+	c.providers = []lyricsprovider.Provider{
+		spotify.New(cacheDir, spotifyOpts...),
+		netease.New(cacheDir, neteaseOpts...),
+		lrclib.New(),
+	}
+	return c
 }
 
 // Fetch returns the best available lyrics for a request.
@@ -66,35 +83,41 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	}
 
 	tuple := identityTuple(req)
-	if tuple != "" {
+	if !c.noCache && tuple != "" {
 		key := cache.FinalLyricsKey(tuple)
 		if payload, _, err := cache.ReadPayload(c.cacheDir, key); err == nil {
 			var cached finalLyricsCachePayload
 			if json.Unmarshal(payload, &cached) == nil && len(cached.Result.Lines) > 0 {
-				log.Printf("unifiedlyrics: cache hit tuple=%q source=%s provider=%s sync=%s lines=%d", tuple, cached.Result.Source, cached.Result.Metadata.Provider, cached.Result.SyncType, len(cached.Result.Lines))
+				log.Printf(
+					"unifiedlyrics: cache hit tuple=%q source=%s provider=%s sync=%s lines=%d",
+					tuple,
+					cached.Result.Source,
+					cached.Result.Metadata.Provider,
+					cached.Result.SyncType,
+					len(cached.Result.Lines),
+				)
 				return cloneResult(&cached.Result), nil
 			}
 		}
 	}
 
-	disabledCache := cacheDisabled(c.cacheDir)
-	providers := c.providers
-	if disabledCache {
-		providers = disabledCacheProviderOrder(c.providers)
-	}
 	providerPriority := providerPriority(c.providers)
 
 	var best *Result
 	var providerErrs []string
-	if disabledCache {
-		best, providerErrs = c.fetchProvidersConcurrent(ctx, req, providers, providerPriority)
-	} else {
-		best, providerErrs = c.fetchProvidersSerial(ctx, req, providers, providerPriority)
-	}
+	best, providerErrs = c.fetchProvidersSerial(ctx, req, c.providers, providerPriority)
 
 	if best != nil {
-		log.Printf("unifiedlyrics: final source=%s provider=%s sync=%s lines=%d", best.Source, best.Metadata.Provider, best.SyncType, len(best.Lines))
-		c.writeFinalCache(tuple, best)
+		log.Printf(
+			"unifiedlyrics: final source=%s provider=%s sync=%s lines=%d",
+			best.Source,
+			best.Metadata.Provider,
+			best.SyncType,
+			len(best.Lines),
+		)
+		if !c.noCache {
+			c.writeFinalCache(tuple, best)
+		}
 		return best, nil
 	}
 	if len(providerErrs) > 1 {
@@ -106,19 +129,24 @@ func (c *Client) Fetch(ctx context.Context, req Request) (*Result, error) {
 	return nil, errors.New("no lyrics available")
 }
 
-func (c *Client) fetchProvidersSerial(ctx context.Context, req Request, providers []lyricsprovider.Provider, providerPriority map[string]int) (*Result, []string) {
+func (c *Client) fetchProvidersSerial(
+	ctx context.Context,
+	req Request,
+	providers []lyricsprovider.Provider,
+	providerPriority map[string]int,
+) (*Result, []string) {
 	var best *Result
 	bestRank := 0
 	bestPriority := math.MaxInt
 	var providerErrs []string
 	for i, provider := range providers {
 		if !provider.Supports(req) {
-			log.Printf("unifiedlyrics: skip provider=%s unsupported track=%q artist=%q album=%q spotifyRef=%t", provider.Name(), req.TrackName, req.ArtistName, req.AlbumName, strings.TrimSpace(req.SpotifyTrackRef) != "")
+			logUnsupportedProvider(provider.Name(), req)
 			continue
 		}
 		out, err := provider.Fetch(ctx, req)
 		if err != nil {
-			log.Printf("unifiedlyrics: provider=%s error=%v track=%q artist=%q album=%q", provider.Name(), err, req.TrackName, req.ArtistName, req.AlbumName)
+			logProviderError(provider.Name(), err, req)
 			providerErrs = append(providerErrs, provider.Name())
 			continue
 		}
@@ -129,13 +157,13 @@ func (c *Client) fetchProvidersSerial(ctx context.Context, req Request, provider
 
 		result := newResult(out.Provider, out.SyncType, out.Lines)
 		rank := lyricsprovider.RankSyncType(strings.TrimSpace(out.SyncType))
-		log.Printf("unifiedlyrics: candidate provider=%s source=%s sync=%s rank=%d lines=%d", out.Provider, result.Source, out.SyncType, rank, len(out.Lines))
+		logProviderCandidate(out.Provider, result.Source, out.SyncType, rank, len(out.Lines))
 		priority := providerPriority[provider.Name()]
 		if best == nil || rank > bestRank || (rank == bestRank && priority < bestPriority) {
 			best = result
 			bestRank = rank
 			bestPriority = priority
-			log.Printf("unifiedlyrics: selected provider=%s source=%s sync=%s rank=%d", best.Metadata.Provider, best.Source, best.SyncType, bestRank)
+			logProviderSelected(best.Metadata.Provider, best.Source, best.SyncType, bestRank)
 			if bestRank >= lyricsprovider.RankSyncType(lyricsprovider.SyncTypeWord) {
 				break
 			}
@@ -147,150 +175,47 @@ func (c *Client) fetchProvidersSerial(ctx context.Context, req Request, provider
 	return best, providerErrs
 }
 
-type providerCandidate struct {
-	index    int
-	provider lyricsprovider.Provider
-	priority int
-	maxRank  int
+func logUnsupportedProvider(provider string, req Request) {
+	log.Printf(
+		"unifiedlyrics: skip provider=%s unsupported track=%q artist=%q album=%q spotifyRef=%t",
+		provider,
+		req.TrackName,
+		req.ArtistName,
+		req.AlbumName,
+		strings.TrimSpace(req.SpotifyTrackRef) != "",
+	)
 }
 
-type providerFetchResult struct {
-	candidate providerCandidate
-	result    *Result
-	rank      int
-	err       error
-	empty     bool
+func logProviderError(provider string, err error, req Request) {
+	log.Printf(
+		"unifiedlyrics: provider=%s error=%v track=%q artist=%q album=%q",
+		provider,
+		err,
+		req.TrackName,
+		req.ArtistName,
+		req.AlbumName,
+	)
 }
 
-func (c *Client) fetchProvidersConcurrent(ctx context.Context, req Request, providers []lyricsprovider.Provider, providerPriority map[string]int) (*Result, []string) {
-	raceCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	candidates := make([]providerCandidate, 0, len(providers))
-	for _, provider := range providers {
-		if !provider.Supports(req) {
-			log.Printf("unifiedlyrics: skip provider=%s unsupported track=%q artist=%q album=%q spotifyRef=%t", provider.Name(), req.TrackName, req.ArtistName, req.AlbumName, strings.TrimSpace(req.SpotifyTrackRef) != "")
-			continue
-		}
-		candidates = append(candidates, providerCandidate{
-			index:    len(candidates),
-			provider: provider,
-			priority: providerPriority[provider.Name()],
-			maxRank:  maxProviderRank(provider.Name()),
-		})
-	}
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	results := make(chan providerFetchResult, len(candidates))
-	pending := make(map[int]providerCandidate, len(candidates))
-	running := make(map[int]providerCandidate, len(candidates))
-	waiting := make([]providerCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		pending[candidate.index] = candidate
-		if shouldStartInitialRace(candidate) {
-			startProviderFetch(raceCtx, req, candidate, results)
-			running[candidate.index] = candidate
-		} else {
-			waiting = append(waiting, candidate)
-		}
-	}
-	if len(running) == 0 {
-		startNextCandidate(raceCtx, req, &waiting, running, results)
-	}
-
-	var best *Result
-	bestRank := 0
-	bestPriority := math.MaxInt
-	var providerErrs []string
-
-	for len(pending) > 0 {
-		if len(running) == 0 {
-			if shouldStopCandidateSearch(bestRank, bestPriority, pending) {
-				cancel()
-				return best, providerErrs
-			}
-			if !startNextCandidate(raceCtx, req, &waiting, running, results) {
-				break
-			}
-		}
-
-		fetchResult := <-results
-		candidate := fetchResult.candidate
-		delete(pending, candidate.index)
-		delete(running, candidate.index)
-
-		if fetchResult.err != nil {
-			log.Printf("unifiedlyrics: provider=%s error=%v track=%q artist=%q album=%q", candidate.provider.Name(), fetchResult.err, req.TrackName, req.ArtistName, req.AlbumName)
-			providerErrs = append(providerErrs, candidate.provider.Name())
-		} else if fetchResult.empty {
-			log.Printf("unifiedlyrics: provider=%s empty result", candidate.provider.Name())
-		} else {
-			log.Printf("unifiedlyrics: candidate provider=%s source=%s sync=%s rank=%d lines=%d", candidate.provider.Name(), fetchResult.result.Source, fetchResult.result.SyncType, fetchResult.rank, len(fetchResult.result.Lines))
-			if best == nil || fetchResult.rank > bestRank || (fetchResult.rank == bestRank && candidate.priority < bestPriority) {
-				best = fetchResult.result
-				bestRank = fetchResult.rank
-				bestPriority = candidate.priority
-				log.Printf("unifiedlyrics: selected provider=%s source=%s sync=%s rank=%d", best.Metadata.Provider, best.Source, best.SyncType, bestRank)
-			}
-		}
-
-		if shouldStopCandidateSearch(bestRank, bestPriority, pending) {
-			cancel()
-			return best, providerErrs
-		}
-	}
-
-	return best, providerErrs
+func logProviderCandidate(provider string, source string, syncType string, rank int, lineCount int) {
+	log.Printf(
+		"unifiedlyrics: candidate provider=%s source=%s sync=%s rank=%d lines=%d",
+		provider,
+		source,
+		syncType,
+		rank,
+		lineCount,
+	)
 }
 
-func shouldStartInitialRace(candidate providerCandidate) bool {
-	switch candidate.provider.Name() {
-	case "netease", "spotify":
-		return true
-	default:
-		return false
-	}
-}
-
-func startNextCandidate(ctx context.Context, req Request, waiting *[]providerCandidate, running map[int]providerCandidate, results chan<- providerFetchResult) bool {
-	if len(*waiting) == 0 {
-		return false
-	}
-	candidate := (*waiting)[0]
-	*waiting = (*waiting)[1:]
-	startProviderFetch(ctx, req, candidate, results)
-	running[candidate.index] = candidate
-	return true
-}
-
-func startProviderFetch(ctx context.Context, req Request, candidate providerCandidate, results chan<- providerFetchResult) {
-	go func() {
-		out, err := candidate.provider.Fetch(ctx, req)
-		fetchResult := providerFetchResult{candidate: candidate, err: err}
-		if err == nil {
-			if out == nil || len(out.Lines) == 0 {
-				fetchResult.empty = true
-			} else {
-				fetchResult.result = newResult(out.Provider, out.SyncType, out.Lines)
-				fetchResult.rank = lyricsprovider.RankSyncType(strings.TrimSpace(out.SyncType))
-			}
-		}
-		results <- fetchResult
-	}()
-}
-
-func cacheDisabled(cacheDir string) bool {
-	cacheDir = strings.TrimSpace(cacheDir)
-	if cacheDir == "" {
-		return false
-	}
-	if cacheDir == os.DevNull {
-		return true
-	}
-	cleaned := filepath.Clean(cacheDir)
-	return cleaned == filepath.Clean(os.DevNull)
+func logProviderSelected(provider string, source string, syncType string, rank int) {
+	log.Printf(
+		"unifiedlyrics: selected provider=%s source=%s sync=%s rank=%d",
+		provider,
+		source,
+		syncType,
+		rank,
+	)
 }
 
 func providerPriority(providers []lyricsprovider.Provider) map[string]int {
@@ -303,25 +228,12 @@ func providerPriority(providers []lyricsprovider.Provider) map[string]int {
 	return out
 }
 
-func disabledCacheProviderOrder(providers []lyricsprovider.Provider) []lyricsprovider.Provider {
-	out := make([]lyricsprovider.Provider, 0, len(providers))
-	for _, name := range []string{"netease", "spotify"} {
-		for _, provider := range providers {
-			if provider.Name() == name {
-				out = append(out, provider)
-			}
-		}
-	}
-	for _, provider := range providers {
-		if provider.Name() == "netease" || provider.Name() == "spotify" {
-			continue
-		}
-		out = append(out, provider)
-	}
-	return out
-}
-
-func shouldStopProviderSearch(bestRank int, bestPriority int, remaining []lyricsprovider.Provider, priorities map[string]int) bool {
+func shouldStopProviderSearch(
+	bestRank int,
+	bestPriority int,
+	remaining []lyricsprovider.Provider,
+	priorities map[string]int,
+) bool {
 	if bestRank == 0 {
 		return false
 	}
@@ -331,21 +243,6 @@ func shouldStopProviderSearch(bestRank int, bestPriority int, remaining []lyrics
 			return false
 		}
 		if rank == bestRank && priorities[provider.Name()] < bestPriority {
-			return false
-		}
-	}
-	return true
-}
-
-func shouldStopCandidateSearch(bestRank int, bestPriority int, pending map[int]providerCandidate) bool {
-	if bestRank == 0 {
-		return false
-	}
-	for _, candidate := range pending {
-		if candidate.maxRank > bestRank {
-			return false
-		}
-		if candidate.maxRank == bestRank && candidate.priority < bestPriority {
 			return false
 		}
 	}

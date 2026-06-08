@@ -2,32 +2,32 @@ import ".."
 import QtQuick
 
 Item {
-    id: root
+  id: root
 
-    property int barHeight: 6
-    property color fillColor: Config.color.primary
-    property color trackColor: Config.color.surface_variant
-    property real value: 0
+  property int barHeight: 6
+  property color fillColor: Config.color.primary
+  property color trackColor: Config.color.surface_variant
+  property real value: 0
 
-    implicitHeight: root.barHeight
-    implicitWidth: 180
+  implicitHeight: root.barHeight
+  implicitWidth: 180
 
-    Rectangle {
-        id: track
+  Rectangle {
+    id: track
 
-        anchors.fill: parent
-        color: root.trackColor
-        opacity: 0.9
-        radius: root.barHeight / 2
-    }
-    Rectangle {
-        id: fill
+    anchors.fill: parent
+    color: root.trackColor
+    opacity: 0.9
+    radius: root.barHeight / 2
+  }
+  Rectangle {
+    id: fill
 
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        color: root.fillColor
-        height: parent.height
-        radius: track.radius
-        width: Math.max(0, Math.min(1, root.value)) * parent.width
-    }
+    anchors.left: parent.left
+    anchors.verticalCenter: parent.verticalCenter
+    color: root.fillColor
+    height: parent.height
+    radius: track.radius
+    width: Math.max(0, Math.min(1, root.value)) * parent.width
+  }
 }

@@ -83,6 +83,20 @@ func TestToolDescriptorsIncludesBuiltinsWithoutRemoteConfig(t *testing.T) {
 	if names["builtin__date_time"] {
 		t.Fatalf("date_time should not be exposed as a builtin descriptor: %#v", names)
 	}
+
+	var shellSchema map[string]any
+	for _, tool := range tools {
+		if tool.Name == "shell_command" {
+			shellSchema = tool.InputSchema
+			break
+		}
+	}
+	props, _ := shellSchema["properties"].(map[string]any)
+	for _, compat := range []string{"login", "sandbox_permissions", "justification", "prefix_rule"} {
+		if _, ok := props[compat]; !ok {
+			t.Fatalf("shell_command schema should keep Codex compatibility field %q: %#v", compat, props)
+		}
+	}
 }
 
 func TestToolReadOnlyUsesMCPAnnotation(t *testing.T) {
@@ -235,19 +249,16 @@ func TestBuiltinShellExecUsesBubblewrapSandbox(t *testing.T) {
 	if result.Data["sandbox_home"] == "" || result.Data["workspace"] != "/workspace" {
 		t.Fatalf("expected sandbox-facing paths in result: %#v", result.Data)
 	}
-	if result.Name != "shell_command" || !strings.HasPrefix(result.Text, "Exit code: 0\nWall time: ") || !strings.Contains(result.Text, "\nOutput:\nhello") {
+	hasHeader := strings.HasPrefix(result.Text, "Exit code: 0\nWall time: ")
+	hasOutput := strings.Contains(result.Text, "\nOutput:\nhello")
+	if result.Name != "shell_command" || !hasHeader || !hasOutput {
 		t.Fatalf("expected Codex shell_command output text, got %#v", result)
+	}
+	if result.Data["cwd"] == "" || result.Data["workdir"] == "" {
+		t.Fatalf("expected Codex-compatible cwd/workdir aliases in result: %#v", result.Data)
 	}
 	if _, exists := result.Data["sandbox_root"]; exists {
 		t.Fatalf("result should not expose host sandbox_root path: %#v", result.Data)
-	}
-
-	alias, err := CallTool(`[]`, "", "shell_exec", map[string]any{"command": "printf alias"})
-	if err != nil {
-		t.Fatalf("shell_exec alias returned error: %v", err)
-	}
-	if alias.Name != "shell_exec" || !strings.Contains(alias.Text, "\nOutput:\nalias") {
-		t.Fatalf("shell_exec should remain a compatibility alias, got %#v", alias)
 	}
 
 	fileName := fmt.Sprintf("persist-%d.txt", time.Now().UnixNano())

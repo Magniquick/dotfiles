@@ -22,7 +22,7 @@ D-Bus NotificationServer
     -> ListView observes changes
 ```
 
-**NotificationEntry** (inline component): Holds notification state including `notificationId`, `notification` reference, `popup` flag, `timer`, and derived properties (`appName`, `title`, `body`, `urgency`, `iconSource`).
+**NotificationEntry** (inline component): Holds notification state including `notificationId`, `notification` reference, `timer`, and derived properties (`appName`, `title`, `body`, `urgency`).
 
 **notificationStore** (QtObject): Central state manager with methods:
 
@@ -72,14 +72,14 @@ components/
 
 **Root-controlled visibility**: The root shell animates the right panel in/out and manages focus; `RightPanel.qml` should stay focused on notification content/state.
 
-**Popup visibility**: `popupWindow.visible` is bound to `popupContent.opacity > 0.01` to account for fade animations.
+**Popup visibility**: `popupWindow.visible` follows whether `popupModel` has visible entries. Popup removal is delayed for a short transform-only exit animation; avoid long-running shader/progress animations in this path.
 
 **Notification count**: `notificationStore.syncNotificationCount()` writes to `Common.GlobalState.notificationCount` for the bar module.
 
 ## Testing Checklist
 
 - Clicking outside panel or pressing Escape closes it
-- Popup appears at top-right, fades out after timeout
+- Popup appears at top-right and slides out after timeout/dismissal
 - Critical notifications persist until dismissed
 - Action buttons invoke notification actions
 - Inline reply works for apps that support it

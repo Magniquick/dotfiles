@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	providerName        = "netease"
-	baseURL             = "https://interface.music.163.com"
-	appVersion          = "3.1.3.203419"
-	defaultUserAgent    = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.1.3.203419"
+	providerName     = "netease"
+	baseURL          = "https://interface.music.163.com"
+	appVersion       = "3.1.3.203419"
+	defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 " +
+		"Chrome/91.0.4472.164 NeteaseMusicDesktop/3.1.3.203419"
 	defaultModel        = "ASUS ROG STRIX Z790"
 	defaultOSVersion    = "Microsoft-Windows-10--build-22631-64bit"
 	searchLimit         = 20
@@ -54,11 +56,20 @@ var (
 
 // Client fetches lyrics from NetEase's desktop EAPI.
 type Client struct {
-	hc       *http.Client
-	cacheDir string
+	hc           *http.Client
+	cacheDir     string
+	cacheEnabled bool
 
 	mu      sync.Mutex
 	session *sessionState
+}
+
+// Option customizes a Client.
+type Option func(*Client)
+
+// WithCacheEnabled toggles NetEase session cache reads and writes.
+func WithCacheEnabled(enabled bool) Option {
+	return func(c *Client) { c.cacheEnabled = enabled }
 }
 
 type sessionState struct {
@@ -118,15 +129,20 @@ type scoredSong struct {
 }
 
 // New creates a NetEase provider client.
-func New(cacheDir string) *Client {
+func New(cacheDir string, opts ...Option) *Client {
 	cacheDir = strings.TrimSpace(cacheDir)
 	if cacheDir == "" {
 		cacheDir = cache.DefaultDir()
 	}
-	return &Client{
-		hc:       &http.Client{Timeout: requestTimeout},
-		cacheDir: cacheDir,
+	c := &Client{
+		hc:           &http.Client{Timeout: requestTimeout},
+		cacheDir:     cacheDir,
+		cacheEnabled: true,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Name returns the provider identifier.
@@ -398,6 +414,9 @@ func (c *Client) ensureSession(ctx context.Context) (*sessionState, error) {
 }
 
 func (c *Client) readCachedSession() (*sessionState, bool) {
+	if !c.cacheEnabled {
+		return nil, false
+	}
 	b, _, err := cache.ReadPayload(c.cacheDir, cache.ProviderSessionKey(providerName, "anonymous"))
 	if err != nil {
 		return nil, false
@@ -413,7 +432,7 @@ func (c *Client) readCachedSession() (*sessionState, bool) {
 }
 
 func (c *Client) writeCachedSession(state *sessionState) {
-	if state == nil {
+	if !c.cacheEnabled || state == nil {
 		return
 	}
 	b, err := json.Marshal(state)
@@ -451,7 +470,12 @@ func (c *Client) bootstrapAnonymousSession(ctx context.Context) (*sessionState, 
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/eapi/register/anonimous", strings.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		baseURL+"/eapi/register/anonimous",
+		strings.NewReader(body),
+	)
 	if err != nil {
 		return nil, err
 	}

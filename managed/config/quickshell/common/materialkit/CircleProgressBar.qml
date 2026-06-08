@@ -10,13 +10,13 @@ Item {
   property real strokeWidth: 2
 
   readonly property real progress: {
-    const low = Number(from) || 0;
-    const high = Number(to) || 0;
-    const v = Number(value) || 0;
-    const span = high - low;
+    const low = Number(from) || 0
+    const high = Number(to) || 0
+    const v = Number(value) || 0
+    const span = high - low
     if (span <= 0)
-      return 0;
-    return Math.max(0, Math.min(1, (v - low) / span));
+      return 0
+    return Math.max(0, Math.min(1, (v - low) / span))
   }
 
   CircleProgressShape {

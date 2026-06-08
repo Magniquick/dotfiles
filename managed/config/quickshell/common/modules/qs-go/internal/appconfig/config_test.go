@@ -115,17 +115,17 @@ func TestResolveJSONCombinesConfigWithSecretKeys(t *testing.T) {
 	defer cleanup()
 
 	raw := ResolveJSON(testResolver{
-		"OPENAI_API_KEY":     "openai-secret",
-		"GEMINI_API_KEY":     "gemini-secret",
-		"TODOIST_API_TOKEN":  "todoist-secret",
-		"CALENDAR_ICAL_URL":  "https://calendar.example/ics",
-		"EMAIL_IIT_PASSWORD": "email-secret",
+		"OPENAI_API_KEY":        "openai-secret",
+		"GEMINI_API_KEY":        "gemini-secret",
+		"TODOIST_API_TOKEN":     "todoist-secret",
+		"GOOGLE_IIT_TOKEN_JSON": "google-token-secret",
+		"EMAIL_IIT_PASSWORD":    "email-secret",
 	})
 
 	if !strings.Contains(raw, "openai-secret") || !strings.Contains(raw, "https://api.example/v1") {
 		t.Fatalf("expected provider config and API secret in json: %s", raw)
 	}
-	for _, hidden := range []string{"todoist-secret", "calendar.example", "email-secret"} {
+	for _, hidden := range []string{"todoist-secret", "google-token-secret", "email-secret"} {
 		if strings.Contains(raw, hidden) {
 			t.Fatalf("json exposed non-provider secret %q in %s", hidden, raw)
 		}

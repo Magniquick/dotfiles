@@ -17,6 +17,7 @@ type Config struct {
 	Model     ModelConfig               `toml:"model"`
 	Providers map[string]ProviderConfig `toml:"providers"`
 	Email     EmailConfig               `toml:"email"`
+	Calendar  CalendarConfig            `toml:"calendar"`
 }
 
 // ModelConfig contains the default model selection.
@@ -45,6 +46,17 @@ type EmailAccountConfig struct {
 	IMAPHost string `toml:"imap_host"`
 	IMAPPort int    `toml:"imap_port"`
 	IMAPTLS  string `toml:"imap_tls"`
+}
+
+// CalendarConfig lists Google Calendar API sources.
+type CalendarConfig struct {
+	Accounts []CalendarAccountConfig `toml:"accounts"`
+}
+
+// CalendarAccountConfig maps a configured Google account to calendar ids.
+type CalendarAccountConfig struct {
+	Account     string   `toml:"account"`
+	CalendarIDs []string `toml:"calendar_ids"`
 }
 
 var (
@@ -222,6 +234,17 @@ func normalize(cfg Config) Config {
 	for key, provider := range cfg.Providers {
 		provider.BaseURL = strings.TrimSpace(provider.BaseURL)
 		cfg.Providers[key] = provider
+	}
+	for i, source := range cfg.Calendar.Accounts {
+		source.Account = strings.TrimSpace(source.Account)
+		ids := make([]string, 0, len(source.CalendarIDs))
+		for _, id := range source.CalendarIDs {
+			if id = strings.TrimSpace(id); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		source.CalendarIDs = ids
+		cfg.Calendar.Accounts[i] = source
 	}
 	return cfg
 }

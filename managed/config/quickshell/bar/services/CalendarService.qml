@@ -2,69 +2,68 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
 import qsgo
-import "../components/JsonUtils.js" as JsonUtils
-import ".."
+import "../../common/JsonUtils.js" as JsonUtils
 
 Item {
-    id: root
-    visible: false
+  id: root
+  visible: false
 
-    property int days: 180
+  property int days: 180
 
-    readonly property var client: calendarClient
+  readonly property var client: calendarClient
 
-    property string status: ""
-    property string generatedAt: ""
-    property string error: ""
-    property string eventsJson: ""
-    property bool refreshing: false
+  property string status: ""
+  property string generatedAt: ""
+  property string error: ""
+  property string eventsJson: ""
+  property bool refreshing: false
 
-    function applyClientPayload() {
-        root.eventsJson = calendarClient.events_json || "";
+  function applyClientPayload() {
+    root.eventsJson = calendarClient.events_json || ""
 
-        const parsed = JsonUtils.parseObject(root.eventsJson);
-        if (!parsed || typeof parsed !== "object") {
-            root.status = "error";
-            root.generatedAt = "";
-            root.error = calendarClient.error || "Failed to parse calendar payload";
-            root.refreshing = false;
-            return;
-        }
-
-        root.status = parsed.status ? String(parsed.status) : "";
-        root.generatedAt = parsed.generatedAt ? String(parsed.generatedAt) : "";
-        root.error = parsed.error ? String(parsed.error) : (calendarClient.error || "");
-        root.refreshing = false;
+    const parsed = JsonUtils.parseObject(root.eventsJson)
+    if (!parsed || typeof parsed !== "object") {
+      root.status = "error"
+      root.generatedAt = ""
+      root.error = calendarClient.error || "Failed to parse calendar payload"
+      root.refreshing = false
+      return
     }
 
-    function refresh(reason) {
-        root.refreshing = true;
-        calendarClient.refresh(root.days);
+    root.status = parsed.status ? String(parsed.status) : ""
+    root.generatedAt = parsed.generatedAt ? String(parsed.generatedAt) : ""
+    root.error = parsed.error ? String(parsed.error) : (calendarClient.error || "")
+    root.refreshing = false
+  }
+
+  function refresh(reason) {
+    root.refreshing = true
+    calendarClient.refresh(root.days)
+  }
+
+  IcalCache {
+    id: calendarClient
+  }
+
+  Timer {
+    interval: 3600000
+    repeat: true
+    running: true
+    triggeredOnStart: true
+
+    onTriggered: root.refresh("timer")
+  }
+
+  Connections {
+    target: calendarClient
+
+    function onErrorChanged() {
+      if (calendarClient.error)
+        root.error = calendarClient.error
+      root.refreshing = false
     }
-
-    IcalCache {
-        id: calendarClient
+    function onEvents_jsonChanged() {
+      root.applyClientPayload()
     }
-
-    Timer {
-        interval: 3600000
-        repeat: true
-        running: true
-        triggeredOnStart: true
-
-        onTriggered: root.refresh("timer")
-    }
-
-    Connections {
-        target: calendarClient
-
-        function onErrorChanged() {
-            if (calendarClient.error)
-                root.error = calendarClient.error;
-            root.refreshing = false;
-        }
-        function onEvents_jsonChanged() {
-            root.applyClientPayload();
-        }
-    }
+  }
 }

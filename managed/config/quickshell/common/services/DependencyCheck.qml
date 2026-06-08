@@ -22,71 +22,69 @@ import ".." as Common
  * If missing, sends a desktop notification via notify-send.
  */
 QtObject {
-    id: root
+  id: root
 
-    // Track which deps we've already notified about to avoid spam
-    property var notifiedDeps: ({})
+  // Track which deps we've already notified about to avoid spam
+  property var notifiedDeps: ({})
 
-    function require(command, moduleName, callback) {
-        _check(`command -v ${command}`, command, moduleName, callback, "not found in PATH");
-    }
+  function require(command, moduleName, callback) {
+    _check(`command -v ${command}`, command, moduleName, callback, "not found in PATH")
+  }
 
-    function requireExecutable(path, moduleName, callback) {
-        _check(`test -f "${path}" && test -x "${path}" && echo found`, path, moduleName, callback, "not found or not executable");
-    }
+  function requireExecutable(path, moduleName, callback) {
+    _check(`test -f "${path}" && test -x "${path}" && echo found`, path, moduleName, callback, "not found or not executable")
+  }
 
-    function _check(shellCommand, depName, moduleName, callback, errorSuffix) {
-        const proc = checkProcess.createObject(root, {
-            shellCommand: shellCommand,
-            depName: depName,
-            moduleName: moduleName || "Quickshell",
-            callback: callback || null,
-            errorSuffix: errorSuffix
-        });
-        proc.running = true;
-    }
+  function _check(shellCommand, depName, moduleName, callback, errorSuffix) {
+    const proc = checkProcess.createObject(root, {
+      shellCommand: shellCommand,
+      depName: depName,
+      moduleName: moduleName || "Quickshell",
+      callback: callback || null,
+      errorSuffix: errorSuffix
+    })
+    proc.running = true
+  }
 
-    property Component checkProcess: Component {
-        Process {
-            id: proc
+  property Component checkProcess: Component {
+    Process {
+      id: proc
 
-            property string shellCommand: ""
-            property string depName: ""
-            property string moduleName: ""
-            property var callback: null
-            property string errorSuffix: ""
+      property string shellCommand: ""
+      property string depName: ""
+      property string moduleName: ""
+      property var callback: null
+      property string errorSuffix: ""
 
-            function callCallback(available) {
-                const cb = proc.callback;
-                if (typeof cb === "function")
-                    cb(available);
-            }
+      function callCallback(available) {
+        const cb = proc.callback
+        if (typeof cb === "function")
+          cb(available)
+      }
 
-            command: Common.ProcessHelper.normalize(shellCommand)
+      command: Common.ProcessHelper.normalize(shellCommand)
 
-            stdout: SplitParser {
-                onRead: data => {
-                    // Dependency exists
-                    proc.callCallback(true);
-                    proc.destroy();
-                }
-            }
-            // qmllint disable signal-handler-parameters
-            onExited: code => {
-                if (code !== 0) {
-                    // Dependency not found
-                    proc.callCallback(false);
-
-                    // Only notify once per dependency
-                    if (!root.notifiedDeps[proc.depName]) {
-                        root.notifiedDeps[proc.depName] = true;
-                        console.warn(`${proc.moduleName}: ${proc.depName} ${proc.errorSuffix}`);
-                        Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "normal", "Dependency Missing", `${proc.moduleName}: '${proc.depName}' ${proc.errorSuffix}`]);
-                    }
-                }
-                proc.destroy();
-            }
-            // qmllint enable signal-handler-parameters
+      stdout: SplitParser {
+        onRead: data => {
+          // Dependency exists
+          proc.callCallback(true)
+          proc.destroy()
         }
+      }
+      function onExited(code) {
+        if (code !== 0) {
+          // Dependency not found
+          proc.callCallback(false);
+
+          // Only notify once per dependency
+          if (!root.notifiedDeps[proc.depName]) {
+            root.notifiedDeps[proc.depName] = true
+            console.warn(`${proc.moduleName}: ${proc.depName} ${proc.errorSuffix}`)
+            Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "normal", "Dependency Missing", `${proc.moduleName}: '${proc.depName}' ${proc.errorSuffix}`])
+          }
+        }
+        proc.destroy()
+      }
     }
+  }
 }

@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import ".."
 import "../../common/materialkit" as MK
 
-Rectangle {
+MK.ClickableSurface {
   id: root
 
   property string title: ""
@@ -17,18 +17,20 @@ Rectangle {
   property bool active: false
   property bool interactive: true
   property int rowHeight: 44
-  property real pressX: width / 2
-  property real pressY: height / 2
-  signal clicked
 
   Layout.fillWidth: true
   Layout.preferredHeight: rowHeight
   width: ListView.view ? ListView.view.width : (parent ? parent.width : implicitWidth)
   height: rowHeight
   radius: Config.shape.corner.md
-  color: rowMouseArea.containsMouse
-    ? Qt.alpha(Config.color.surface_variant, 0.45)
-    : (active ? Qt.alpha(Config.color.primary_container, 0.45) : Config.color.surface_container_high)
+  enabled: root.interactive
+  backgroundColor: active ? Qt.alpha(Config.color.primary_container, 0.45) : Config.color.surface_container_high
+  disabledOpacity: 1
+  hoverBackgroundColor: Qt.alpha(Config.color.surface_variant, 0.45)
+  pressedBackgroundColor: root.hoverBackgroundColor
+  rippleColor: root.active ? Config.color.on_primary_container : Config.color.on_surface
+  rippleStateLayerEnabled: false
+  rippleStateOpacity: 0
 
   RowLayout {
     anchors.fill: parent
@@ -112,31 +114,6 @@ Rectangle {
       verticalAlignment: Text.AlignVCenter
       text: root.trailingIcon
       visible: root.trailingIcon.length > 0
-    }
-  }
-
-  MK.HybridRipple {
-    anchors.fill: parent
-    color: root.active ? Config.color.on_primary_container : Config.color.on_surface
-    pressX: root.pressX
-    pressY: root.pressY
-    pressed: rowMouseArea.pressed
-    radius: parent.radius
-    stateLayerEnabled: false
-    stateOpacity: 0
-  }
-
-  MouseArea {
-    id: rowMouseArea
-
-    anchors.fill: parent
-    enabled: root.interactive
-    hoverEnabled: root.interactive
-    cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: root.clicked()
-    onPressed: function(mouse) {
-      root.pressX = mouse.x;
-      root.pressY = mouse.y;
     }
   }
 }

@@ -23,6 +23,7 @@ import (
 	"qs-go/internal/ical"
 	"qs-go/internal/pacman"
 	"qs-go/internal/secrets"
+	"qs-go/internal/sysstats"
 	"qs-go/internal/systemd"
 	"qs-go/internal/todoist"
 )
@@ -55,6 +56,20 @@ func QsGo_Ical_Refresh(days C.int) *C.char {
 //nolint:revive // exported name is part of the C ABI.
 func QsGo_SystemdFailed_Refresh() *C.char {
 	return C.CString(systemd.Refresh())
+}
+
+// ----- System stats -----
+
+//export QsGo_SysStats_Snapshot
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_SysStats_Snapshot() *C.char {
+	return C.CString(sysstats.SnapshotJSON())
+}
+
+//export QsGo_SysStats_NetDev
+//nolint:revive // exported name is part of the C ABI.
+func QsGo_SysStats_NetDev(iface *C.char) *C.char {
+	return C.CString(sysstats.NetDevJSON(C.GoString(iface)))
 }
 
 // ----- Config / secrets resolver -----

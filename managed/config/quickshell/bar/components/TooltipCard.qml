@@ -3,29 +3,29 @@ import QtQuick
 import QtQuick.Layouts
 
 Rectangle {
-    id: root
+  id: root
 
-    property color backgroundColor: Config.barPopupSurface
-    property color borderColor: Config.color.outline_variant
-    property alias content: contentColumn.data
-    property bool outlined: false
-    property int padding: Config.space.md
-    property int spacing: Config.space.sm
+  property color backgroundColor: Config.barPopupSurface
+  property color borderColor: Config.color.outline_variant
+  property alias content: contentColumn.data
+  property bool outlined: false
+  property int padding: Config.space.md
+  property int spacing: Config.space.sm
 
-    Layout.fillWidth: true
-    antialiasing: true
-    border.color: root.borderColor
-    border.width: root.outlined ? 1 : 0
-    color: root.backgroundColor
-    implicitHeight: contentColumn.implicitHeight + root.padding * 2
-    implicitWidth: contentColumn.implicitWidth + root.padding * 2
-    radius: Config.shape.corner.sm
+  Layout.fillWidth: true
+  antialiasing: true
+  border.color: root.borderColor
+  border.width: root.outlined ? 1 : 0
+  color: root.backgroundColor
+  implicitHeight: contentColumn.implicitHeight + root.padding * 2
+  implicitWidth: contentColumn.implicitWidth + root.padding * 2
+  radius: Config.shape.corner.sm
 
-    ColumnLayout {
-        id: contentColumn
+  ColumnLayout {
+    id: contentColumn
 
-        anchors.fill: parent
-        anchors.margins: root.padding
-        spacing: root.spacing
-    }
+    anchors.fill: parent
+    anchors.margins: root.padding
+    spacing: root.spacing
+  }
 }

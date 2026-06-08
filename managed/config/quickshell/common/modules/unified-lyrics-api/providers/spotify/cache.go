@@ -10,8 +10,7 @@ import (
 const providerName = "spotify"
 
 type lyricsCache struct {
-	SavedAt int64           `json:"savedAt"`
-	Body    json.RawMessage `json:"body"`
+	Body json.RawMessage `json:"body"`
 }
 
 func tokenCacheKey(spdc string) string {
@@ -26,28 +25,12 @@ func lyricsCacheKey(trackID string) string {
 	return cache.ProviderLyricsKey(providerName, trackID)
 }
 
-func cacheEntryPath(cacheDir, logicalKey string) string {
-	return cache.EntryPath(cacheDir, logicalKey)
-}
-
-func readCachePayload(cacheDir, logicalKey string) (json.RawMessage, int64, error) {
-	return cache.ReadPayload(cacheDir, logicalKey)
-}
-
-func writeCachePayload(cacheDir, logicalKey string, payload []byte) error {
-	return cache.WritePayload(cacheDir, logicalKey, payload)
-}
-
-func deleteCachePayload(cacheDir, logicalKey string) {
-	cache.DeletePayload(cacheDir, logicalKey)
-}
-
 func readLyricsCache(cacheDir, cacheKey string, ttl time.Duration) (*LyricsResponse, bool) {
 	if cacheDir == "" || cacheKey == "" || ttl <= 0 {
 		return nil, false
 	}
 
-	b, savedAt, err := readCachePayload(cacheDir, cacheKey)
+	b, savedAt, err := cache.ReadPayload(cacheDir, cacheKey)
 	if err != nil {
 		return nil, false
 	}
@@ -79,12 +62,11 @@ func writeLyricsCache(cacheDir, cacheKey string, body []byte) error {
 	}
 
 	lc := lyricsCache{
-		SavedAt: time.Now().Unix(),
-		Body:    json.RawMessage(body),
+		Body: json.RawMessage(body),
 	}
 	b, err := json.Marshal(lc)
 	if err != nil {
 		return err
 	}
-	return writeCachePayload(cacheDir, cacheKey, b)
+	return cache.WritePayload(cacheDir, cacheKey, b)
 }

@@ -1,10 +1,25 @@
 [package]
-name = "qsmath-render-svg"
+name = "qsmath_stream"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "qsmath_stream"
+crate-type = ["staticlib", "rlib"]
+
+[[bin]]
+name = "qsmath-render-svg"
+path = "src/main.rs"
+
 [dependencies]
+cxx = "1.0.194"
+cxx-qt = "0.8.1"
+cxx-qt-lib = "0.8.1"
+mdstream = "0.2.0"
 ratex-layout = "0.1.4"
 ratex-parser = "0.1.4"
 ratex-svg = { version = "0.1.4", features = ["standalone", "embed-fonts"] }
 ratex-types = "0.1.4"
+
+[build-dependencies]
+cxx-qt-build = "0.8.1"

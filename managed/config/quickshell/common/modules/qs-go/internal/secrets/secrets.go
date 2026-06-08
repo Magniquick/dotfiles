@@ -3,6 +3,7 @@ package secrets
 
 import (
 	"errors"
+	"maps"
 	"strings"
 	"sync"
 
@@ -15,6 +16,12 @@ const DefaultService = "quickshell"
 // Resolver is the lookup boundary for values stored in Secret Service.
 type Resolver interface {
 	Lookup(key string) (string, bool)
+}
+
+// Store is a resolver that can also persist updated secret values.
+type Store interface {
+	Resolver
+	Set(key, value string) error
 }
 
 type keyringResolver struct {
@@ -40,6 +47,13 @@ func NewResolver() Resolver {
 	return factory()
 }
 
+// NewStore returns the current process-wide secret store when it supports writes.
+func NewStore() Store {
+	resolver := NewResolver()
+	store, _ := resolver.(Store)
+	return store
+}
+
 // NewKeyringResolver returns a Secret Service-backed resolver.
 func NewKeyringResolver(service string) Resolver {
 	service = strings.TrimSpace(service)
@@ -51,10 +65,13 @@ func NewKeyringResolver(service string) Resolver {
 
 // NewMapResolver returns an in-memory resolver for tests.
 func NewMapResolver(values map[string]string) Resolver {
+	return NewMapStore(values)
+}
+
+// NewMapStore returns an in-memory writable secret store for tests.
+func NewMapStore(values map[string]string) Store {
 	copyValues := make(map[string]string, len(values))
-	for key, value := range values {
-		copyValues[key] = value
-	}
+	maps.Copy(copyValues, values)
 	return mapResolver{values: copyValues}
 }
 
@@ -83,9 +100,26 @@ func (r keyringResolver) Lookup(key string) (string, bool) {
 	return value, true
 }
 
+func (r keyringResolver) Set(key, value string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("secret key is required")
+	}
+	return keyring.Set(r.service, key, value)
+}
+
 func (r mapResolver) Lookup(key string) (string, bool) {
 	value, ok := r.values[key]
 	return value, ok
+}
+
+func (r mapResolver) Set(key, value string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("secret key is required")
+	}
+	r.values[key] = value
+	return nil
 }
 
 // Set writes a secret under the default service.

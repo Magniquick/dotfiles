@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(qsgo LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -11,8 +12,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Network DBus)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml DBus)
 
 # Build the Go shared library once and keep it next to the QML module output.
 find_program(GO_EXECUTABLE go REQUIRED)
@@ -58,12 +60,12 @@ add_library(qsgo_plugin SHARED
     cpp/QsGoSysInfo.cpp
     cpp/QsGoBacklight.cpp
     cpp/QsGoConfigResolver.cpp
-    cpp/QsGoHyprlandSnapshot.cpp
     cpp/QsGoAiSession.cpp
     cpp/QsGoPacman.cpp
     cpp/QsGoIcal.cpp
     cpp/QsGoTodoist.cpp
     cpp/QsGoSystemdFailed.cpp
+    cpp/QsGoNetStats.cpp
 )
 
 set_target_properties(qsgo_plugin
@@ -76,19 +78,11 @@ target_include_directories(qsgo_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
 )
 
-if(QS_NATIVE_CPU)
-    target_compile_options(qsgo_plugin PRIVATE
-        $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:Release>:-march=native>>
-        $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:Release>:-mtune=native>>
-        $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:RelWithDebInfo>:-march=native>>
-        $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:RelWithDebInfo>:-mtune=native>>
-    )
-endif()
-
 target_compile_options(qsgo_plugin PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:Release>:-O3>>
     $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:RelWithDebInfo>:-O3>>
 )
+qs_apply_common_compile_options(qsgo_plugin)
 
 add_dependencies(qsgo_plugin qsgo_go_lib)
 
@@ -96,7 +90,6 @@ target_link_libraries(qsgo_plugin PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
-    Qt6::Network
     Qt6::DBus
     "${QSGO_GO_LIB}"
 )

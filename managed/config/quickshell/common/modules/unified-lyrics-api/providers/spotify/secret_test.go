@@ -1,13 +1,14 @@
 package spotify
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"unified-lyrics-api/cache"
 )
 
 func TestFetchLatestSecret_TransformsAndSelectsLatest(t *testing.T) {
@@ -22,7 +23,7 @@ func TestFetchLatestSecret_TransformsAndSelectsLatest(t *testing.T) {
 	cacheDir := t.TempDir()
 	cacheKey := secretCacheKey(srv.URL)
 	hc := &http.Client{Timeout: 2 * time.Second}
-	secret, ver, err := fetchLatestSecret(context.Background(), hc, srv.URL, cacheDir, cacheKey)
+	secret, ver, err := fetchLatestSecret(t.Context(), hc, srv.URL, cacheDir, cacheKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,18 +57,18 @@ func TestFetchLatestSecret_UsesETagCacheOn304(t *testing.T) {
 	cacheKey := secretCacheKey(srv.URL)
 	hc := &http.Client{Timeout: 2 * time.Second}
 
-	secret1, ver1, err := fetchLatestSecret(context.Background(), hc, srv.URL, cacheDir, cacheKey)
+	secret1, ver1, err := fetchLatestSecret(t.Context(), hc, srv.URL, cacheDir, cacheKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ver1 != "1" || secret1 != "65" {
 		t.Fatalf("first: ver=%q secret=%q", ver1, secret1)
 	}
-	if _, err := os.Stat(cacheEntryPath(cacheDir, cacheKey)); err != nil {
+	if _, err := os.Stat(cache.EntryPath(cacheDir, cacheKey)); err != nil {
 		t.Fatalf("cache not written: %v", err)
 	}
 
-	secret2, ver2, err := fetchLatestSecret(context.Background(), hc, srv.URL, cacheDir, cacheKey)
+	secret2, ver2, err := fetchLatestSecret(t.Context(), hc, srv.URL, cacheDir, cacheKey)
 	if err != nil {
 		t.Fatal(err)
 	}

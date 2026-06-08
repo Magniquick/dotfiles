@@ -47,123 +47,60 @@ pragma ComponentBehavior: Bound
 import ".."
 import "../components"
 import QtQuick
-import QtQuick.Layouts
 
 ModuleContainer {
-    id: root
+  id: root
 
-    readonly property bool cameraActive: PrivacyService.cameraActive
-    readonly property string cameraApps: root.cameraActive ? (PrivacyService.cameraAppsSummary || "Active") : ""
-    property color cameraColor: Config.color.secondary
-    property string cameraIcon: ""
-    property bool locationActive: false
-    property string locationApps: ""
-    property color locationColor: Config.color.tertiary
-    property string locationIcon: ""
-    readonly property bool micActive: PrivacyService.microphoneActive
-    readonly property string micApps: root.micActive ? "Active" : ""
-    property color micColor: Config.color.tertiary
-    property string micIcon: ""
-    readonly property bool screenActive: PrivacyService.screensharingActive
-    readonly property string screenApps: root.screenActive ? "Active" : ""
-    property color screenColor: Config.color.primary
-    property string screenIcon: "󰍹"
-    readonly property bool presentFrozen: PrivacyService.wlPresentFrozen
-    property color presentFreezeColor: Config.color.primary
-    property string presentFreezeIcon: ""
-    readonly property string statusTooltip: {
-        const micStatus = root.buildStatus("Mic", root.micApps);
-        const camStatus = root.buildStatus("Cam", root.cameraApps);
-        const locStatus = root.buildStatus("Location", root.locationApps);
-        const scrStatus = root.buildStatus("Screen sharing", root.screenApps);
-        return micStatus + "  |  " + camStatus + "  |  " + locStatus + "  |  " + scrStatus;
+  readonly property bool cameraActive: PrivacyService.cameraActive
+  property color cameraColor: Config.color.secondary
+  property string cameraIcon: ""
+  property bool locationActive: false
+  property color locationColor: Config.color.tertiary
+  property string locationIcon: ""
+  readonly property bool micActive: PrivacyService.microphoneActive
+  property color micColor: Config.color.tertiary
+  property string micIcon: ""
+  readonly property bool screenActive: PrivacyService.screensharingActive
+  property color screenColor: Config.color.primary
+  property string screenIcon: "󰍹"
+  readonly property bool presentFrozen: PrivacyService.wlPresentFrozen
+  property color presentFreezeColor: Config.color.primary
+  property string presentFreezeIcon: ""
+
+  collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive && !root.presentFrozen
+  contentSpacing: Config.space.sm
+
+  onClicked: PrivacyService.togglePresentFreeze()
+
+  content: [
+    Row {
+      spacing: root.contentSpacing
+
+      IconLabel {
+        color: root.micColor
+        text: root.micIcon
+        visible: root.micActive
+      }
+      IconLabel {
+        color: root.cameraColor
+        text: root.cameraIcon
+        visible: root.cameraActive
+      }
+      IconLabel {
+        color: root.locationColor
+        text: root.locationIcon
+        visible: root.locationActive
+      }
+      IconLabel {
+        color: root.screenColor
+        text: root.screenIcon
+        visible: root.screenActive
+      }
+      IconLabel {
+        color: root.presentFreezeColor
+        text: root.presentFreezeIcon
+        visible: root.presentFrozen
+      }
     }
-
-    function appLabel(apps) {
-        if (!apps || apps.trim() === "")
-            return "Off";
-
-        return root.truncateApps(apps.trim());
-    }
-    function buildStatus(label, apps) {
-        return apps !== "" ? label + ": " + apps : label + ": off";
-    }
-    function truncateApps(apps) {
-        if (apps.length <= 32)
-            return apps;
-
-        return apps.slice(0, 29) + "...";
-    }
-    // statusTooltip is a binding; no imperative syncing needed.
-
-    collapsed: !root.micActive && !root.cameraActive && !root.screenActive && !root.locationActive && !root.presentFrozen
-    contentSpacing: Config.space.sm
-    // tooltipHoverable: true
-    // tooltipText: root.statusTooltip
-    // tooltipTitle: "Privacy"
-
-    onClicked: PrivacyService.togglePresentFreeze()
-
-    content: [
-        Row {
-            spacing: root.contentSpacing
-
-            IconLabel {
-                color: root.micColor
-                text: root.micIcon
-                visible: root.micActive
-            }
-            IconLabel {
-                color: root.cameraColor
-                text: root.cameraIcon
-                visible: root.cameraActive
-            }
-            IconLabel {
-                color: root.locationColor
-                text: root.locationIcon
-                visible: root.locationActive
-            }
-            IconLabel {
-                color: root.screenColor
-                text: root.screenIcon
-                visible: root.screenActive
-            }
-            IconLabel {
-                color: root.presentFreezeColor
-                text: root.presentFreezeIcon
-                visible: root.presentFrozen
-            }
-        }
-    ]
-    // tooltipContent: Component {
-    //     ColumnLayout {
-    //         spacing: Config.space.sm
-    //
-    //         TooltipCard {
-    //             content: [
-    //                 InfoRow {
-    //                     label: "Mic"
-    //                     value: root.appLabel(root.micApps)
-    //                     valueColor: root.micActive ? root.micColor : Config.color.on_surface_variant
-    //                 },
-    //                 InfoRow {
-    //                     label: "Camera"
-    //                     value: root.appLabel(root.cameraApps)
-    //                     valueColor: root.cameraActive ? root.cameraColor : Config.color.on_surface_variant
-    //                 },
-    //                 InfoRow {
-    //                     label: "Location"
-    //                     value: root.appLabel(root.locationApps)
-    //                     valueColor: root.locationActive ? root.locationColor : Config.color.on_surface_variant
-    //                 },
-    //                 InfoRow {
-    //                     label: "Screen"
-    //                     value: root.appLabel(root.screenApps)
-    //                     valueColor: root.screenActive ? root.screenColor : Config.color.on_surface_variant
-    //                 }
-    //             ]
-    //         }
-    //     }
-    // }
-
+  ]
 }

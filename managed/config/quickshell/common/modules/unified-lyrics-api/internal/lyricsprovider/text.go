@@ -1,8 +1,9 @@
 package lyricsprovider
 
 import (
+	"cmp"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -17,8 +18,7 @@ func ParseSyncedLRC(text string) []Line {
 	}
 
 	out := make([]Line, 0, 64)
-	rows := strings.Split(text, "\n")
-	for _, row := range rows {
+	for row := range strings.SplitSeq(text, "\n") {
 		row = strings.TrimSpace(row)
 		if row == "" {
 			continue
@@ -48,10 +48,10 @@ func ParseSyncedLRC(text string) []Line {
 		}
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		li, _ := strconv.Atoi(out[i].StartTimeMs)
-		lj, _ := strconv.Atoi(out[j].StartTimeMs)
-		return li < lj
+	slices.SortFunc(out, func(a, b Line) int {
+		ai, _ := strconv.Atoi(a.StartTimeMs)
+		bi, _ := strconv.Atoi(b.StartTimeMs)
+		return cmp.Compare(ai, bi)
 	})
 
 	return out

@@ -17,59 +17,59 @@ import QtQuick.Layouts
 import Quickshell.Hyprland
 
 Item {
-    id: root
+  id: root
 
-    readonly property var hyprland: Hyprland
-    property var iconMap: ({})
-    property var monitor: root.screen ? hyprland.monitorFor(root.screen) : null
-    property var screen
+  readonly property var hyprland: Hyprland
+  property var iconMap: ({})
+  property var monitor: root.screen ? hyprland.monitorFor(root.screen) : null
+  property var screen
 
-    function iconFor(workspace) {
-        const name = specialName(workspace.name);
-        return root.iconMap[name] || "";
+  function iconFor(workspace) {
+    const name = specialName(workspace.name)
+    return root.iconMap[name] || ""
+  }
+  function isSpecial(workspace) {
+    if (!workspace)
+      return false
+
+    if (workspace.name && workspace.name.startsWith("special:"))
+      return true
+
+    return workspace.id < 0
+  }
+  function specialName(name) {
+    if (!name)
+      return ""
+
+    return name.startsWith("special:") ? name.slice(8) : name
+  }
+
+  implicitHeight: workspaceRow.implicitHeight
+  implicitWidth: workspaceRow.implicitWidth
+
+  RowLayout {
+    id: workspaceRow
+
+    spacing: Config.groupModuleSpacing
+
+    Repeater {
+      model: root.hyprland.workspaces
+
+      delegate: WorkspaceButton {
+        id: workspaceButton
+        required property var modelData
+
+        active: workspaceButton.modelData.active
+        dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
+        fontFamily: Config.iconFontFamily
+        fontSize: Config.iconSize
+        hypr: root.hyprland
+        label: root.iconFor(workspaceButton.modelData)
+        uniformWidth: false
+        urgent: workspaceButton.modelData.urgent
+        visible: root.isSpecial(workspaceButton.modelData) && root.iconFor(workspaceButton.modelData) !== "" && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
+        workspace: workspaceButton.modelData
+      }
     }
-    function isSpecial(workspace) {
-        if (!workspace)
-            return false;
-
-        if (workspace.name && workspace.name.startsWith("special:"))
-            return true;
-
-        return workspace.id < 0;
-    }
-    function specialName(name) {
-        if (!name)
-            return "";
-
-        return name.startsWith("special:") ? name.slice(8) : name;
-    }
-
-    implicitHeight: workspaceRow.implicitHeight
-    implicitWidth: workspaceRow.implicitWidth
-
-    RowLayout {
-        id: workspaceRow
-
-        spacing: Config.groupModuleSpacing
-
-        Repeater {
-            model: root.hyprland.workspaces
-
-            delegate: WorkspaceButton {
-                id: workspaceButton
-                required property var modelData
-
-                active: workspaceButton.modelData.active
-                dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
-                fontFamily: Config.iconFontFamily
-                fontSize: Config.iconSize
-                hypr: root.hyprland
-                label: root.iconFor(workspaceButton.modelData)
-                uniformWidth: false
-                urgent: workspaceButton.modelData.urgent
-                visible: root.isSpecial(workspaceButton.modelData) && root.iconFor(workspaceButton.modelData) !== "" && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
-                workspace: workspaceButton.modelData
-            }
-        }
-    }
+  }
 }

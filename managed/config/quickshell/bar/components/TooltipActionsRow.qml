@@ -2,8 +2,8 @@ import ".."
 import QtQuick.Layouts
 
 RowLayout {
-    id: root
+  id: root
 
-    Layout.fillWidth: true
-    spacing: Config.space.sm
+  Layout.fillWidth: true
+  spacing: Config.space.sm
 }

@@ -1,7 +1,6 @@
 package chatstore
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -46,7 +45,7 @@ func TestStoreMigratesAndPersistsSearchableMessages(t *testing.T) {
 
 	var metricType string
 	var metricValid int
-	if err := store.db.QueryRowContext(context.Background(), `SELECT typeof(metrics), json_valid(metrics, 8) FROM messages WHERE id = ?`, msg.ID).Scan(&metricType, &metricValid); err != nil {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT typeof(metrics), json_valid(metrics, 8) FROM messages WHERE id = ?`, msg.ID).Scan(&metricType, &metricValid); err != nil {
 		t.Fatalf("query metrics jsonb: %v", err)
 	}
 	if metricType != "blob" || metricValid != 1 {
@@ -116,7 +115,7 @@ func TestToolCallsStoreStructuredJSONB(t *testing.T) {
 	var toolName string
 	var firstDetail string
 	var valid int
-	if err := store.db.QueryRowContext(context.Background(), `
+	if err := store.db.QueryRowContext(t.Context(), `
 		SELECT tool_name, json_extract(payload, '$.detail_sections[0].content'), json_valid(payload, 8)
 		FROM tool_calls
 		WHERE tool_call_id = ?`, call.ToolCallID).Scan(&toolName, &firstDetail, &valid); err != nil {
@@ -137,7 +136,7 @@ func TestResponseItemsStoreRawLedgerAndDeleteWithTurn(t *testing.T) {
 	}()
 
 	var versionSeen int
-	if err := store.db.QueryRowContext(context.Background(), `SELECT count(*) FROM schema_migrations WHERE version = 2`).Scan(&versionSeen); err != nil {
+	if err := store.db.QueryRowContext(t.Context(), `SELECT count(*) FROM schema_migrations WHERE version = 2`).Scan(&versionSeen); err != nil {
 		t.Fatalf("query migration version: %v", err)
 	}
 	if versionSeen != 1 {
@@ -212,7 +211,7 @@ func TestMigrationBackfillsResponseItemsFromAgentPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open raw db: %v", err)
 	}
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.ExecContext(t.Context(), `
 		CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT '');
 		CREATE TABLE conversations (
 			id TEXT PRIMARY KEY,
@@ -273,7 +272,7 @@ func TestMigrationBackfillsResponseItemsFromAgentPayload(t *testing.T) {
 			{"type": "function_call_output", "call_id": "call_email", "output": "1 result"},
 		}),
 	}
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.ExecContext(t.Context(), `
 		INSERT INTO tool_calls(id, message_id, tool_call_id, tool_name, phase, status, payload, created_at)
 		VALUES ('call_email', 'tool_msg_1', 'call_email', 'email_search', 'tool_done', 'success', jsonb(?), 't1')`,
 		mustJSON(payload)); err != nil {
@@ -327,7 +326,7 @@ func TestStoreFileIsPrivate(t *testing.T) {
 
 func assertNoColumn(t *testing.T, db *sql.DB, table string, column string) {
 	t.Helper()
-	rows, err := db.QueryContext(context.Background(), `SELECT name FROM pragma_table_info(?)`, table)
+	rows, err := db.QueryContext(t.Context(), `SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
 		t.Fatalf("pragma table info: %v", err)
 	}

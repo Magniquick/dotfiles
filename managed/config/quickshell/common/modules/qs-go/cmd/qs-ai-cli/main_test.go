@@ -188,6 +188,7 @@ func TestCanonicalModelIDMatchesLeftpanelDefaultRules(t *testing.T) {
 	}{
 		{raw: "gpt-5.4-mini", want: "local/gpt-5.4-mini"},
 		{raw: "gemini-2.5-flash", want: "gemini/gemini-2.5-flash"},
+		{raw: "test", want: "test/test"},
 		{raw: "openai/gpt-5.5", want: "openai/gpt-5.5"},
 	} {
 		if got := canonicalModelID(tc.raw); got != tc.want {

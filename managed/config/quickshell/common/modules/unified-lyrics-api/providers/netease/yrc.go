@@ -20,7 +20,7 @@ func parseYRC(text string) []lyricsprovider.Line {
 	}
 
 	out := make([]lyricsprovider.Line, 0, 64)
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		raw = strings.TrimSpace(raw)
 		if raw == "" {
 			continue

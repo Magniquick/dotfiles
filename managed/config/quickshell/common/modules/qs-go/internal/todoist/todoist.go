@@ -2,11 +2,12 @@
 package todoist
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -192,10 +193,14 @@ func renderListOutput(state *cacheState, usingCache bool, errMsg string) listOut
 		out.SyncedAt = time.Unix(state.SyncedAt, 0).UTC().Format(time.RFC3339)
 	}
 
-	sort.Slice(out.Today, func(i, j int) bool { return out.Today[i].Title < out.Today[j].Title })
+	slices.SortFunc(out.Today, func(a, b taskOutput) int {
+		return cmp.Compare(a.Title, b.Title)
+	})
 	for k := range out.Projects {
 		p := out.Projects[k]
-		sort.Slice(p, func(i, j int) bool { return p[i].Title < p[j].Title })
+		slices.SortFunc(p, func(a, b taskOutput) int {
+			return cmp.Compare(a.Title, b.Title)
+		})
 		out.Projects[k] = p
 	}
 

@@ -4,115 +4,112 @@ import Quickshell.Io
 import "../../common" as Common
 
 Item {
-    id: root
+  id: root
 
-    // Public contract:
-    // - output is the last successful command stdout (trimmed).
-    // - output is never cleared on trigger, so consumers can render stable
-    //   last-known data while a refresh is in-flight.
-    // - consume success via onRan(output); use onError/onTimeout for failures.
+  // Public contract:
+  // - output is the last successful command stdout (trimmed).
+  // - output is never cleared on trigger, so consumers can render stable
+  //   last-known data while a refresh is in-flight.
+  // - consume success via onRan(output); use onError/onTimeout for failures.
 
-    // String uses `sh -c` for backward-compat. Prefer passing an argv array.
-    property var command: ""
-    property int intervalMs: 10000
-    property string output: ""
-    property string errorOutput: ""
-    property bool logErrors: false
-    readonly property bool running: process.running
-    property int timeoutMs: 0
-    property string _pendingStdout: ""
+  // String uses `sh -c` for backward-compat. Prefer passing an argv array.
+  property var command: ""
+  property int intervalMs: 10000
+  property string output: ""
+  property string errorOutput: ""
+  property bool logErrors: false
+  readonly property bool running: process.running
+  property int timeoutMs: 0
+  property string _pendingStdout: ""
 
-    signal ran(string output)
-    signal error(string errorOutput, int exitCode)
-    signal timeout
+  signal ran(string output)
+  signal error(string errorOutput, int exitCode)
+  signal timeout
 
-    function trigger() {
-        if (!enabled)
-            return;
-        if (!command)
-            return;
-        if (typeof command === "string" && command.trim() === "")
-            return;
-        if (Array.isArray(command) && command.length === 0)
-            return;
+  function trigger() {
+    if (!enabled)
+      return
+    if (!command)
+      return
+    if (typeof command === "string" && command.trim() === "")
+      return
+    if (Array.isArray(command) && command.length === 0)
+      return
+    root.errorOutput = ""
+    root._pendingStdout = ""
 
-        root.errorOutput = "";
-        root._pendingStdout = "";
+    process.command = Common.ProcessHelper.normalize(command)
+    process.running = true
 
-        process.command = Common.ProcessHelper.normalize(command);
-        process.running = true;
+    if (root.timeoutMs > 0) {
+      timeoutTimer.restart()
+    }
+  }
 
-        if (root.timeoutMs > 0) {
-            timeoutTimer.restart();
+  visible: false
+
+  Timer {
+    interval: root.intervalMs
+    repeat: true
+    running: root.enabled && root.intervalMs > 0
+    triggeredOnStart: true
+
+    onTriggered: root.trigger()
+  }
+  Timer {
+    id: timeoutTimer
+
+    interval: root.timeoutMs
+    repeat: false
+    running: false
+
+    onTriggered: {
+      if (process.running) {
+        if (root.logErrors) {
+          const cmdText = Array.isArray(root.command) ? root.command.join(" ") : String(root.command)
+          console.warn(`CommandRunner: Command '${cmdText}' timed out after ${root.timeoutMs}ms`)
         }
+        process.running = false
+        root.timeout()
+      }
+    }
+  }
+  Process {
+    id: process
+
+    stdout: StdioCollector {
+      id: stdoutCollector
+
+      waitForEnd: true
+
+      onStreamFinished: {
+        root._pendingStdout = stdoutCollector.text.trim()
+      }
     }
 
-    visible: false
+    stderr: StdioCollector {
+      id: stderrCollector
 
-    Timer {
-        interval: root.intervalMs
-        repeat: true
-        running: root.enabled && root.intervalMs > 0
-        triggeredOnStart: true
-
-        onTriggered: root.trigger()
+      waitForEnd: true
     }
-    Timer {
-        id: timeoutTimer
+    function onExited(code) {
+      timeoutTimer.stop()
+      root.errorOutput = stderrCollector.text.trim()
 
-        interval: root.timeoutMs
-        repeat: false
-        running: false
+      if (code === 0 && root.errorOutput === "") {
+        root.output = root._pendingStdout
+        root.ran(root.output)
+        return
+      }
 
-        onTriggered: {
-            if (process.running) {
-                if (root.logErrors) {
-                    const cmdText = Array.isArray(root.command) ? root.command.join(" ") : String(root.command);
-                    console.warn(`CommandRunner: Command '${cmdText}' timed out after ${root.timeoutMs}ms`);
-                }
-                process.running = false;
-                root.timeout();
-            }
+      if (code !== 0 || root.errorOutput !== "") {
+        if (root.logErrors) {
+          console.error(`CommandRunner: Command '${root.command}' failed with exit code ${code}`)
+          if (root.errorOutput !== "")
+            console.error(`CommandRunner: stderr: ${root.errorOutput}`)
         }
+        root.error(root.errorOutput, code)
+      }
     }
-    Process {
-        id: process
-
-        stdout: StdioCollector {
-            id: stdoutCollector
-
-            waitForEnd: true
-
-            onStreamFinished: {
-                root._pendingStdout = stdoutCollector.text.trim();
-            }
-        }
-
-        stderr: StdioCollector {
-            id: stderrCollector
-
-            waitForEnd: true
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: code => {
-            timeoutTimer.stop();
-            root.errorOutput = stderrCollector.text.trim();
-
-            if (code === 0 && root.errorOutput === "") {
-                root.output = root._pendingStdout;
-                root.ran(root.output);
-                return;
-            }
-
-            if (code !== 0 || root.errorOutput !== "") {
-                if (root.logErrors) {
-                    console.error(`CommandRunner: Command '${root.command}' failed with exit code ${code}`);
-                    if (root.errorOutput !== "")
-                        console.error(`CommandRunner: stderr: ${root.errorOutput}`);
-                }
-                root.error(root.errorOutput, code);
-            }
-        }
-        // qmllint enable signal-handler-parameters
-    }
+  }
 }

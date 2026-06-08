@@ -12,38 +12,38 @@ import ".."
 import "../components"
 
 ModuleContainer {
-    id: root
+  id: root
 
-    property var parentWindow
+  property var parentWindow
 
-    backgroundColor: Config.barModuleBackground
-    contentSpacing: 0
-    marginRight: Config.groupEdgeMargin
-    marginTop: Config.outerGaps
-    paddingBottom: 0
-    paddingLeft: Config.groupPaddingX
-    paddingRight: Config.groupPaddingX
-    paddingTop: 0
+  backgroundColor: Config.barModuleBackground
+  contentSpacing: 0
+  marginRight: Config.groupEdgeMargin
+  marginTop: Config.outerGaps
+  paddingBottom: 0
+  paddingLeft: Config.groupPaddingX
+  paddingRight: Config.groupPaddingX
+  paddingTop: 0
 
-    content: [
-        DrawerGroup {
-            drawerLeft: true
-            duration: Config.motion.duration.medium
+  content: [
+    DrawerGroup {
+      drawerLeft: true
+      duration: Config.motion.duration.medium
 
-            alwaysContent: [
-                NotificationModule {
-                    backgroundColor: "transparent"
-                    marginBottom: 0
-                    marginLeft: 0
-                    marginRight: 0
-                    marginTop: 0
-                }
-            ]
-            drawerContent: [
-                TrayModule {
-                    parentWindow: root.parentWindow
-                }
-            ]
+      alwaysContent: [
+        NotificationModule {
+          backgroundColor: "transparent"
+          marginBottom: 0
+          marginLeft: 0
+          marginRight: 0
+          marginTop: 0
         }
-    ]
+      ]
+      drawerContent: [
+        TrayModule {
+          parentWindow: root.parentWindow
+        }
+      ]
+    }
+  ]
 }

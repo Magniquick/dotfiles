@@ -10,3 +10,12 @@ provider = "gmail"
 label = "Personal Mail"
 address = "you@example.com"
 username = "you@example.com"
+
+# Gmail accounts use the Gmail API, not IMAP. Store matching refresh-capable
+# OAuth credentials in Secret Service:
+#   cd common/modules/qs-go
+#   go run ./cmd/qs-google-auth provision --account personal --client-json /path/to/client.json
+
+[[calendar.accounts]]
+account = "personal"
+calendar_ids = ["you@example.com"]

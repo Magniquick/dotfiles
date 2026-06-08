@@ -1,6 +1,7 @@
 package pacman
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -50,6 +51,19 @@ func TestParseYayQuaOutputRejectsUnexpectedLines(t *testing.T) {
 	want := []UpdateItem{{Name: "ok", OldVersion: "1", NewVersion: "2", Source: "aur"}}
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("updates = %#v, want %#v", got, want)
+	}
+}
+
+func TestCommandOutputIncludesStderrOnFailure(t *testing.T) {
+	_, err := commandOutput(context.Background(), "sh", "-c", "printf 'helpful failure\\n' >&2; exit 1")
+	if err == nil {
+		t.Fatal("expected command failure")
+	}
+	if !strings.Contains(err.Error(), "exit status 1") {
+		t.Fatalf("error = %q, want exit status", err)
+	}
+	if !strings.Contains(err.Error(), "helpful failure") {
+		t.Fatalf("error = %q, want stderr detail", err)
 	}
 }
 

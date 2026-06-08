@@ -3,13 +3,15 @@ package oai
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"qs-go/internal/ai/shared"
@@ -104,11 +106,11 @@ func BuildResponsesTools(tools []shared.ToolDescriptor, includeWebSearch bool) [
 	if hasDeferred {
 		out = append(out, map[string]any{"type": "tool_search"})
 	}
-	sort.Strings(namespaceOrder)
+	slices.Sort(namespaceOrder)
 	for _, namespace := range namespaceOrder {
 		group := namespaceGroups[namespace]
-		sort.Slice(group.tools, func(i, j int) bool {
-			return fmt.Sprint(group.tools[i]["name"]) < fmt.Sprint(group.tools[j]["name"])
+		slices.SortFunc(group.tools, func(a, b map[string]any) int {
+			return cmp.Compare(fmt.Sprint(a["name"]), fmt.Sprint(b["name"]))
 		})
 		out = append(out, map[string]any{
 			"type":        "namespace",
@@ -267,10 +269,8 @@ func cloneRawItems(items []map[string]any) []map[string]any {
 		if len(item) == 0 {
 			continue
 		}
-		next := map[string]any{}
-		for key, value := range item {
-			next[key] = value
-		}
+		next := make(map[string]any, len(item))
+		maps.Copy(next, item)
 		out = append(out, next)
 	}
 	return out
@@ -319,14 +319,15 @@ func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResul
 			return out, err
 		}
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "event:") {
-			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		if event, ok := strings.CutPrefix(line, "event:"); ok {
+			currentEvent = strings.TrimSpace(event)
 			continue
 		}
-		if !strings.HasPrefix(line, "data:") {
+		data, ok := strings.CutPrefix(line, "data:")
+		if !ok {
 			continue
 		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		data = strings.TrimSpace(data)
 		if data == "" || data == "[DONE]" {
 			continue
 		}
@@ -371,10 +372,8 @@ func ParseResponsesStream(r io.Reader, onToken func(string)) (shared.StreamResul
 func NormalizeCompactOutput(input []map[string]any) []map[string]any {
 	out := make([]map[string]any, len(input))
 	for i, item := range input {
-		next := map[string]any{}
-		for key, value := range item {
-			next[key] = value
-		}
+		next := make(map[string]any, len(item))
+		maps.Copy(next, item)
 		if next["type"] == "message" && next["role"] == "assistant" {
 			if content, ok := next["content"].([]any); ok {
 				for _, part := range content {

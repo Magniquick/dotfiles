@@ -11,6 +11,7 @@ For `qs-go` and the other Go-backed plugins/helpers, use full-sweep migrations. 
 - `qs-go/`: Go -> CGO -> C++ Qt plugin (import: `qsgo`). **Primary native module.**
 - `qs-capture/`: C++/Qt capture plugin used by HyprQuickshot.
 - `qsmath/`: C++/Qt math rendering plugin used by left-panel message math blocks.
+- `material-popups/`: Rust/CXX-Qt clipboard and input watcher backend for the QML clipboard popup.
 - `unified-lyrics-api/`: Go helper + C++ QML plugin with transparent Spotify/LRCLIB fallback.
 - `../materialkit/`: Local MaterialKit QML primitives (Pane/Card/Button/IconButton/Slider/Progress/Ripple).
 - `rounded_polygon_qmljs/`: JS/QML shape helpers tracked as a git submodule.
@@ -36,8 +37,10 @@ Build native modules:
   - Import path: `common/modules/qs-capture/build/qml`
 - `qsmath`: `bash tools/build-qsmath.sh`
   - Import path: `common/modules/qsmath/build/qml`
+- `material-popups`: `bash tools/build-material-popups.sh`
+  - Import path: `common/modules/material-popups/build/qml`
 - `unified-lyrics-api`:
-  - `cd common/modules/unified-lyrics-api && cmake -S . -B build && cmake --build build`
+  - `bash tools/build-cmake-module.sh unified-lyrics-api`
   - Import path: `common/modules/unified-lyrics-api/build/qml`
 
 No root-level test runner is wired up. For Go changes, run focused package tests in the module you touched (for example `cd common/modules/qs-go && go test ./... -count=1`), rebuild the affected native module, then finish with `bash tools/reload-quickshell.sh`.
@@ -76,9 +79,6 @@ QML types (all in `import qsgo`):
   - Invokable: `refresh()`
   - Properties: `values`
   - Notes: central QML-facing bridge combining `internal/appconfig` non-secret TOML with `internal/secrets` provider API keys
-- `HyprlandSnapshotProvider`
-  - Invokables: `start()`, `stop()`, `refresh()`
-  - Properties: `activeWorkspace`, `clients`, `error`, `running`, `revision`
 - `AiChatSession`
   - Invokables: `submitInput`, `submitInputWithAttachments`, `cancel`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
     `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`, `pasteAttachmentFromClipboard`, `restoreHistory`,
@@ -126,7 +126,7 @@ AI architecture notes:
 - The local email MCP server is read-only by default. It reads account metadata from ignored `leftpanel/config.toml` and passwords from Secret Service as `EMAIL_<ID>_PASSWORD` or compatible secret keys. `provider = "gmail"` defaults IMAP to `imap.gmail.com:993` with TLS. Do not expose send tools unless the user explicitly asks for a separate opt-in design.
 - Chat streams temporarily install MCP sampling/elicitation handlers onto the shared runtime so server-initiated sampling can reuse the active provider/model.
 - When extending the catalog or chat surface, prefer Qt-native structured data at the C++/QML boundary and keep any unavoidable JSON confined to the Go/C ABI layer.
-- MCP/tool-call UI rows must only show content that is sent back to the model. Keep provider output serialization aligned through `internal/ai/shared.ToolResultModelPayload` and `ToolResultModelOutput`; do not maintain provider-specific result/data shapes.
+- MCP/tool-call UI rows must only show content that is sent back to the model. Keep provider output serialization aligned through `internal/ai/shared.ToolResultTranscriptPayload` and `ToolResultTranscriptOutput`; do not maintain provider-specific result/data shapes.
 
 ## Coding Style & Naming
 

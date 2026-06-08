@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"unified-lyrics-api/cache"
 )
 
 //nolint:gosec // Public Spotify web-player secret dictionary URL, not a credential.
@@ -59,7 +61,7 @@ func decodeSecretDictOrdered(body []byte) ([]secretDictEntry, error) {
 }
 
 func readSecretCache(cacheDir, cacheKey string) (*secretCache, error) {
-	b, _, err := readCachePayload(cacheDir, cacheKey)
+	b, _, err := cache.ReadPayload(cacheDir, cacheKey)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +85,7 @@ func writeSecretCache(cacheDir, cacheKey, etag string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	return writeCachePayload(cacheDir, cacheKey, b)
+	return cache.WritePayload(cacheDir, cacheKey, b)
 }
 
 func fetchLatestSecret(ctx context.Context, hc *http.Client, url string, cacheDir string, cacheKey string) (secret string, version string, _ error) {

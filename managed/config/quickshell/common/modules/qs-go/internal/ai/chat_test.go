@@ -42,7 +42,7 @@ func (p toolCallProvider) Stream(_ context.Context, req shared.StreamRequest, _ 
 
 func TestStreamWithToolsUsesBuiltinsForLocalEvenWithoutCatalogCaps(t *testing.T) {
 	prov := &captureProvider{}
-	_, err := streamWithTools(context.Background(), prov, shared.StreamRequest{
+	_, err := streamWithTools(t.Context(), prov, shared.StreamRequest{
 		ModelID:    "local/gpt-5.4-mini",
 		RawModelID: "gpt-5.4-mini",
 		Provider:   "local",
@@ -64,7 +64,7 @@ func TestStreamWithToolsUsesBuiltinsForLocalEvenWithoutCatalogCaps(t *testing.T)
 
 func TestStreamWithToolsEmitsToolLifecycleEvents(t *testing.T) {
 	events := []toolUIEvent{}
-	_, err := streamWithTools(context.Background(), toolCallProvider{}, shared.StreamRequest{
+	_, err := streamWithTools(t.Context(), toolCallProvider{}, shared.StreamRequest{
 		ModelID:    "local/gpt-5.4-mini",
 		RawModelID: "gpt-5.4-mini",
 		Provider:   "local",

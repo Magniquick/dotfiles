@@ -1,0 +1,18 @@
+[package]
+name = "material_popups_backend"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "material_popups_backend"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+cxx = "1.0.194"
+cxx-qt = "0.8.1"
+cxx-qt-lib = "0.8.1"
+evdev = "0.13"
+wayland-clipboard-listener = { version = "0.6.1", features = ["wlr-data-control"] }
+
+[build-dependencies]
+cxx-qt-build = "0.8.1"

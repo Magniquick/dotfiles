@@ -86,7 +86,7 @@ func (t *streamMetricTracker) totalMS() float64 {
 }
 
 var (
-	sessionIDCounter int32
+	sessionIDCounter atomic.Int32
 	sessions         sync.Map // int32 → *sessionEntry
 
 	lastMetricsMu sync.Mutex
@@ -94,7 +94,7 @@ var (
 )
 
 func nextSessionID() int32 {
-	return atomic.AddInt32(&sessionIDCounter, 1)
+	return sessionIDCounter.Add(1)
 }
 
 // LastMetricsJSON returns JSON for the most recently completed (or failed) stream.
@@ -271,7 +271,7 @@ func streamWithTools(
 	attachments := req.Attachments
 
 	var combined shared.StreamResult
-	for round := 0; round < 8; round++ {
+	for round := range 8 {
 		req.History = history
 		req.Message = message
 		req.Attachments = attachments

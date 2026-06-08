@@ -2,8 +2,11 @@
 package pacman
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -106,10 +109,11 @@ func Sync() string {
 func runCheckupdates() ([]UpdateItem, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "checkupdates").Output()
+	out, err := commandOutput(ctx, "checkupdates")
 	// checkupdates exits 2 when there are no updates (not an error).
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 2 {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 2 {
 			return nil, nil
 		}
 		return nil, err
@@ -119,7 +123,7 @@ func runCheckupdates() ([]UpdateItem, error) {
 
 func parseCheckupdatesOutput(output string) []UpdateItem {
 	var items []UpdateItem
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}
@@ -149,16 +153,36 @@ func checkAUR() ([]UpdateItem, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, "yay", "-Qua").Output()
+	out, err := commandOutput(ctx, "yay", "-Qua")
 	if err != nil {
 		return nil, err
 	}
 	return parseYayQuaOutput(string(out)), nil
 }
 
+func commandOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, commandError(err, stderr.String())
+	}
+	return out, nil
+}
+
+func commandError(err error, stderr string) error {
+	detail := strings.TrimSpace(stderr)
+	if detail == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, detail)
+}
+
 func parseYayQuaOutput(output string) []UpdateItem {
 	var items []UpdateItem
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 4 || fields[2] != "->" {
 			continue

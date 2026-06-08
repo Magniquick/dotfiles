@@ -12,20 +12,20 @@ class QsGoIcal : public QObject {
 public:
   explicit QsGoIcal(QObject* parent = nullptr);
 
-  QString eventsJson() const {
+  [[nodiscard]] auto eventsJson() const -> QString {
     return m_eventsJson;
   }
-  QString generatedAt() const {
+  [[nodiscard]] auto generatedAt() const -> QString {
     return m_generatedAt;
   }
-  QString status() const {
+  [[nodiscard]] auto status() const -> QString {
     return m_status;
   }
-  QString error() const {
+  [[nodiscard]] auto error() const -> QString {
     return m_error;
   }
 
-  Q_INVOKABLE bool refresh(int days);
+  Q_INVOKABLE auto refresh(int days) -> bool;
 
 signals:
   void eventsJsonChanged();

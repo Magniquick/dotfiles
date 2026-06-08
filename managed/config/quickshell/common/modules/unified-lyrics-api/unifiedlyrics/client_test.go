@@ -2,12 +2,14 @@ package unifiedlyrics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"sync"
-	"sync/atomic"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"unified-lyrics-api/cache"
 	"unified-lyrics-api/internal/lyricsprovider"
 )
 
@@ -59,7 +61,7 @@ func TestFetch_PrefersFirstSameTierByRegistryOrder(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +95,7 @@ func TestFetch_PrefersSyncedOverEarlierUnsynced(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestFetch_PrefersWordSyncedOverEarlierLineSynced(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +172,7 @@ func TestFetch_PrefersFirstUnsyncedWhenNoSyncedExists(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +198,7 @@ func TestFetch_SkipsUnsupportedProviders(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,16 +217,113 @@ func TestFetch_ReportsCombinedProviderFailure(t *testing.T) {
 		},
 	}
 
-	_, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist", SPDC: "x", SpotifyTrackRef: "spotify:track:1"})
+	_, err := client.Fetch(t.Context(), Request{
+		TrackName:       "Song",
+		ArtistName:      "Artist",
+		SPDC:            "x",
+		SpotifyTrackRef: "spotify:track:1",
+	})
 	if err == nil || err.Error() != "spotify and netease and lrclib failed" {
 		t.Fatalf("err = %v, want combined provider failure", err)
 	}
 }
 
-func TestFetch_DisabledCacheStopsAfterNeteaseWordSynced(t *testing.T) {
+func TestFetch_NoCacheSkipsFinalCacheReadAndWrite(t *testing.T) {
+	cacheDir := t.TempDir()
+	req := Request{TrackName: "Song", ArtistName: "Artist"}
+	tuple := identityTuple(req)
+	cached := finalLyricsCachePayload{
+		Result: Result{
+			Source:   "cached_synced",
+			SyncType: lyricsprovider.SyncTypeLine,
+			Lines:    []Line{{StartTimeMs: "1", Words: "cached"}},
+			Metadata: ResultMetadata{Provider: "cached"},
+		},
+		IdentityTuple: tuple,
+	}
+	cachedPayload, err := json.Marshal(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.WritePayload(cacheDir, cache.FinalLyricsKey(tuple), cachedPayload); err != nil {
+		t.Fatal(err)
+	}
+
+	providerCalls := 0
+	client := &Client{
+		cacheDir: cacheDir,
+		noCache:  true,
+		providers: []lyricsprovider.Provider{
+			stubProvider{
+				name:     "netease",
+				supports: true,
+				calls:    &providerCalls,
+				result: &lyricsprovider.Result{
+					Provider: "netease",
+					SyncType: lyricsprovider.SyncTypeWord,
+					Lines: []lyricsprovider.Line{{
+						StartTimeMs: "1000",
+						EndTimeMs:   "2000",
+						Words:       "fresh",
+						Segments: []lyricsprovider.Segment{{
+							StartTimeMs: "1000",
+							EndTimeMs:   "1500",
+							Text:        "fresh",
+						}},
+					}},
+				},
+			},
+		},
+	}
+
+	got, err := client.Fetch(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if providerCalls != 1 {
+		t.Fatalf("provider calls = %d, want 1", providerCalls)
+	}
+	if got.Source != "netease_word" {
+		t.Fatalf("Source = %q, want netease_word", got.Source)
+	}
+	payload, _, err := cache.ReadPayload(cacheDir, cache.FinalLyricsKey(tuple))
+	if err != nil || string(payload) != string(cachedPayload) {
+		t.Fatalf("final cache was unexpectedly rewritten")
+	}
+}
+
+func TestFetch_NoCacheDoesNotCreateFinalCache(t *testing.T) {
+	cacheDir := t.TempDir()
+	client := &Client{
+		cacheDir: cacheDir,
+		noCache:  true,
+		providers: []lyricsprovider.Provider{
+			stubProvider{
+				name:     "netease",
+				supports: true,
+				result: &lyricsprovider.Result{
+					Provider: "netease",
+					SyncType: lyricsprovider.SyncTypeLine,
+					Lines:    []lyricsprovider.Line{{StartTimeMs: "1000", Words: "fresh"}},
+				},
+			},
+		},
+	}
+
+	_, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "entries")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("entries dir stat err = %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestFetch_NoCacheStopsAfterNeteaseWordSynced(t *testing.T) {
 	spotifyCalls := 0
 	client := &Client{
-		cacheDir: "/dev/null",
+		cacheDir: t.TempDir(),
+		noCache:  true,
 		providers: []lyricsprovider.Provider{
 			stubProvider{
 				name:     "spotify",
@@ -266,7 +365,7 @@ func TestFetch_DisabledCacheStopsAfterNeteaseWordSynced(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{
+	got, err := client.Fetch(t.Context(), Request{
 		SPDC:            "x",
 		SpotifyTrackRef: "spotify:track:1",
 		TrackName:       "Song",
@@ -280,79 +379,11 @@ func TestFetch_DisabledCacheStopsAfterNeteaseWordSynced(t *testing.T) {
 	}
 }
 
-func TestFetch_DisabledCacheCancelsSpotifyAfterNeteaseWordSynced(t *testing.T) {
-	spotifyStarted := make(chan struct{})
-	spotifyCanceled := make(chan struct{})
-	var closeSpotifyStarted sync.Once
-	var closeSpotifyCanceled sync.Once
-
-	client := &Client{
-		cacheDir: "/dev/null",
-		providers: []lyricsprovider.Provider{
-			stubProvider{
-				name:     "spotify",
-				supports: true,
-				fetch: func(ctx context.Context) (*lyricsprovider.Result, error) {
-					closeSpotifyStarted.Do(func() { close(spotifyStarted) })
-					<-ctx.Done()
-					closeSpotifyCanceled.Do(func() { close(spotifyCanceled) })
-					return nil, ctx.Err()
-				},
-			},
-			stubProvider{
-				name:     "netease",
-				supports: true,
-				fetch: func(ctx context.Context) (*lyricsprovider.Result, error) {
-					select {
-					case <-spotifyStarted:
-					case <-ctx.Done():
-						return nil, ctx.Err()
-					}
-					return &lyricsprovider.Result{
-						Provider: "netease",
-						SyncType: lyricsprovider.SyncTypeWord,
-						Lines: []lyricsprovider.Line{{
-							StartTimeMs: "1000",
-							EndTimeMs:   "2000",
-							Words:       "netease",
-							Segments: []lyricsprovider.Segment{{
-								StartTimeMs: "1000",
-								EndTimeMs:   "1500",
-								Text:        "nete",
-							}},
-						}},
-					}, nil
-				},
-			},
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	got, err := client.Fetch(ctx, Request{
-		SPDC:            "x",
-		SpotifyTrackRef: "spotify:track:1",
-		TrackName:       "Song",
-		ArtistName:      "Artist",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Source != "netease_word" {
-		t.Fatalf("Source = %q, want netease_word", got.Source)
-	}
-	select {
-	case <-spotifyCanceled:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("spotify provider was not canceled after word-synced netease result")
-	}
-}
-
-func TestFetch_DisabledCacheKeepsSpotifyTiePreference(t *testing.T) {
+func TestFetch_NoCacheKeepsSpotifyTiePreference(t *testing.T) {
 	spotifyCalls := 0
 	client := &Client{
-		cacheDir: "/dev/null",
+		cacheDir: t.TempDir(),
+		noCache:  true,
 		providers: []lyricsprovider.Provider{
 			stubProvider{
 				name:     "spotify",
@@ -385,7 +416,7 @@ func TestFetch_DisabledCacheKeepsSpotifyTiePreference(t *testing.T) {
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{
+	got, err := client.Fetch(t.Context(), Request{
 		SPDC:            "x",
 		SpotifyTrackRef: "spotify:track:1",
 		TrackName:       "Song",
@@ -402,71 +433,11 @@ func TestFetch_DisabledCacheKeepsSpotifyTiePreference(t *testing.T) {
 	}
 }
 
-func TestFetch_DisabledCacheStartsTieCandidatesConcurrently(t *testing.T) {
-	var spotifyCalls int
-	var neteaseSawSpotifyStarted atomic.Bool
-	spotifyStarted := make(chan struct{})
-	var closeSpotifyStarted sync.Once
-
-	client := &Client{
-		cacheDir: "/dev/null",
-		providers: []lyricsprovider.Provider{
-			stubProvider{
-				name:     "spotify",
-				supports: true,
-				calls:    &spotifyCalls,
-				fetch: func(context.Context) (*lyricsprovider.Result, error) {
-					closeSpotifyStarted.Do(func() { close(spotifyStarted) })
-					return &lyricsprovider.Result{
-						Provider: "spotify",
-						SyncType: lyricsprovider.SyncTypeLine,
-						Lines:    []lyricsprovider.Line{{StartTimeMs: "1000", Words: "spotify"}},
-					}, nil
-				},
-			},
-			stubProvider{
-				name:     "netease",
-				supports: true,
-				fetch: func(context.Context) (*lyricsprovider.Result, error) {
-					select {
-					case <-spotifyStarted:
-						neteaseSawSpotifyStarted.Store(true)
-					case <-time.After(75 * time.Millisecond):
-					}
-					return &lyricsprovider.Result{
-						Provider: "netease",
-						SyncType: lyricsprovider.SyncTypeLine,
-						Lines:    []lyricsprovider.Line{{StartTimeMs: "1000", Words: "netease"}},
-					}, nil
-				},
-			},
-		},
-	}
-
-	got, err := client.Fetch(context.Background(), Request{
-		SPDC:            "x",
-		SpotifyTrackRef: "spotify:track:1",
-		TrackName:       "Song",
-		ArtistName:      "Artist",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Source != "spotify_synced" {
-		t.Fatalf("Source = %q, want spotify_synced", got.Source)
-	}
-	if spotifyCalls != 1 {
-		t.Fatalf("spotify calls = %d, want 1", spotifyCalls)
-	}
-	if !neteaseSawSpotifyStarted.Load() {
-		t.Fatal("netease returned before spotify fetch started; providers were not raced")
-	}
-}
-
-func TestFetch_DisabledCacheDoesNotStartLowerPriorityLRCLIB(t *testing.T) {
+func TestFetch_NoCacheDoesNotStartLowerPriorityLRCLIB(t *testing.T) {
 	lrclibStarted := make(chan struct{})
 	client := &Client{
-		cacheDir: "/dev/null",
+		cacheDir: t.TempDir(),
+		noCache:  true,
 		providers: []lyricsprovider.Provider{
 			stubProvider{name: "spotify", supports: false},
 			stubProvider{
@@ -494,7 +465,7 @@ func TestFetch_DisabledCacheDoesNotStartLowerPriorityLRCLIB(t *testing.T) {
 	}
 
 	start := time.Now()
-	got, err := client.Fetch(context.Background(), Request{TrackName: "Song", ArtistName: "Artist"})
+	got, err := client.Fetch(t.Context(), Request{TrackName: "Song", ArtistName: "Artist"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,9 +482,10 @@ func TestFetch_DisabledCacheDoesNotStartLowerPriorityLRCLIB(t *testing.T) {
 	}
 }
 
-func TestFetch_DisabledCacheUsesLRCLIBFallbackAfterPrimaryFailures(t *testing.T) {
+func TestFetch_NoCacheUsesLRCLIBFallbackAfterPrimaryFailures(t *testing.T) {
 	client := &Client{
-		cacheDir: "/dev/null",
+		cacheDir: t.TempDir(),
+		noCache:  true,
 		providers: []lyricsprovider.Provider{
 			stubProvider{name: "spotify", supports: true, err: errors.New("spotify failed")},
 			stubProvider{name: "netease", supports: true, err: errors.New("netease failed")},
@@ -529,7 +501,7 @@ func TestFetch_DisabledCacheUsesLRCLIBFallbackAfterPrimaryFailures(t *testing.T)
 		},
 	}
 
-	got, err := client.Fetch(context.Background(), Request{
+	got, err := client.Fetch(t.Context(), Request{
 		SPDC:            "x",
 		SpotifyTrackRef: "spotify:track:1",
 		TrackName:       "Song",

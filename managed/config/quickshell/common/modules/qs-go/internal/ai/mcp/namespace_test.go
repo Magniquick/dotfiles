@@ -79,7 +79,7 @@ func TestDescriptorsFromSnapshotDefersRemoteNamespacesWhenWholeCatalogIsLarge(t 
 			ReadOnly:      true,
 		})
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		name := "calendar_tool"
 		snapshot.Tools = append(snapshot.Tools, ToolSnapshot{
 			ServerID:      "calendar",

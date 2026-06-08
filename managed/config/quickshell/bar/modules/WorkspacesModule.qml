@@ -18,37 +18,37 @@ import QtQuick.Layouts
 import Quickshell.Hyprland
 
 Item {
-    id: root
+  id: root
 
-    readonly property var hyprland: Hyprland
-    property var monitor: root.screen ? hyprland.monitorFor(root.screen) : null
-    property var screen
+  readonly property var hyprland: Hyprland
+  property var monitor: root.screen ? hyprland.monitorFor(root.screen) : null
+  property var screen
 
-    implicitHeight: workspaceRow.implicitHeight
-    implicitWidth: workspaceRow.implicitWidth
+  implicitHeight: workspaceRow.implicitHeight
+  implicitWidth: workspaceRow.implicitWidth
 
-    RowLayout {
-        id: workspaceRow
+  RowLayout {
+    id: workspaceRow
 
-        spacing: Config.groupModuleSpacing
+    spacing: Config.groupModuleSpacing
 
-        Repeater {
-            model: root.hyprland.workspaces
+    Repeater {
+      model: root.hyprland.workspaces
 
-            delegate: WorkspaceButton {
-                id: workspaceButton
-                required property var modelData
+      delegate: WorkspaceButton {
+        id: workspaceButton
+        required property var modelData
 
-                active: workspaceButton.modelData.active
-                dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
-                fontFamily: Config.fontFamily
-                fontSize: Config.fontSize
-                hypr: root.hyprland
-                label: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
-                urgent: workspaceButton.modelData.urgent
-                visible: workspaceButton.modelData.id >= 0 && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
-                workspace: workspaceButton.modelData
-            }
-        }
+        active: workspaceButton.modelData.active
+        dispatchName: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
+        fontFamily: Config.fontFamily
+        fontSize: Config.fontSize
+        hypr: root.hyprland
+        label: (workspaceButton.modelData.name && workspaceButton.modelData.name !== "") ? workspaceButton.modelData.name : workspaceButton.modelData.id
+        urgent: workspaceButton.modelData.urgent
+        visible: workspaceButton.modelData.id >= 0 && (!root.monitor || !workspaceButton.modelData.monitor || workspaceButton.modelData.monitor.name === root.monitor.name)
+        workspace: workspaceButton.modelData
+      }
     }
+  }
 }

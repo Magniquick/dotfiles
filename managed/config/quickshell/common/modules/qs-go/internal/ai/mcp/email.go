@@ -5,12 +5,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,12 +20,12 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message/charset"
 	emersionmail "github.com/emersion/go-message/mail"
-	"golang.org/x/oauth2"
 	gmail "google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 
 	"qs-go/internal/ai/shared"
 	"qs-go/internal/appconfig"
+	"qs-go/internal/googleauth"
 	"qs-go/internal/secrets"
 )
 
@@ -34,7 +34,7 @@ const (
 	emailServerLabel = "Email Accounts"
 )
 
-const emailServerInstructions = "Email Accounts provides read-only mailbox tools for configured IMAP accounts. Use these tools only when the user asks about email, inbox messages, unread mail, message subjects, or reading a specific email UID. Do not use email tools for Todoist tasks, projects, reminders, or general task management."
+const emailServerInstructions = "Email Accounts provides read-only mailbox tools for configured email accounts. Gmail accounts use the Gmail API with refreshable OAuth credentials. Use these tools only when the user asks about email, inbox messages, unread mail, message subjects, or reading a specific email UID or Gmail message id. Do not use email tools for Todoist tasks, projects, reminders, or general task management."
 
 type emailAccount struct {
 	ID       string
@@ -48,8 +48,7 @@ type emailAccount struct {
 	IMAPPort int
 	IMAPTLS  string
 
-	GmailAccessToken string
-	GmailTokenJSON   string
+	Google googleauth.Account
 }
 
 func emailServerSnapshot() ServerSnapshot {
@@ -100,7 +99,7 @@ func emailToolSnapshots() []ToolSnapshot {
 			Name:          "email_search",
 			QualifiedName: "email__email_search",
 			Title:         "Search email",
-			Description:   "Search an IMAP mailbox for messages by text, headers, unread state, and date.",
+			Description:   "Search an email account for messages by text, headers, unread state, and date. Gmail accounts pass Gmail-style query operators directly to the Gmail API.",
 			InputSchema: objectSchema(map[string]any{
 				"account":     emailAccountProp(),
 				"mailbox":     stringProp("Mailbox name. Defaults to INBOX."),
@@ -318,14 +317,32 @@ func emailAccountFromEnv(env map[string]string, id string, allowUnprefixed bool)
 	if id == "" {
 		return emailAccount{}, fmt.Errorf("email account id is required")
 	}
-	get := func(key string) string {
-		value := strings.TrimSpace(env["EMAIL_"+envID(id)+"_"+key])
+	getWithKey := func(key string) (string, string) {
+		fullKey := "EMAIL_" + envID(id) + "_" + key
+		value := strings.TrimSpace(env[fullKey])
 		if value == "" && allowUnprefixed {
-			value = strings.TrimSpace(env["EMAIL_"+key])
+			fullKey = "EMAIL_" + key
+			value = strings.TrimSpace(env[fullKey])
 		}
+		return value, fullKey
+	}
+	get := func(key string) string {
+		value, _ := getWithKey(key)
 		return value
 	}
+	firstSecret := func(keys ...string) (string, string) {
+		for _, key := range keys {
+			value, fullKey := getWithKey(key)
+			if value != "" {
+				return value, fullKey
+			}
+		}
+		return "", ""
+	}
 
+	googleTokenJSON, googleTokenKey := firstSecret("GOOGLE_TOKEN_JSON")
+	googleClientID, googleClientIDKey := firstSecret("GOOGLE_CLIENT_ID")
+	googleSecret, googleSecretKey := firstSecret("GOOGLE_CLIENT_SECRET")
 	address := firstNonEmpty(get("ADDRESS"), get("EMAIL"))
 	provider := strings.ToLower(firstNonEmpty(get("PROVIDER"), detectEmailProvider(address), "generic"))
 	account := emailAccount{
@@ -339,8 +356,16 @@ func emailAccountFromEnv(env map[string]string, id string, allowUnprefixed bool)
 		IMAPHost: get("IMAP_HOST"),
 		IMAPTLS:  normalizeTLSMode(get("IMAP_TLS"), "ssl"),
 
-		GmailAccessToken: firstNonEmpty(get("GMAIL_ACCESS_TOKEN"), get("GOOGLE_ACCESS_TOKEN"), get("OAUTH_ACCESS_TOKEN")),
-		GmailTokenJSON:   firstNonEmpty(get("GMAIL_TOKEN_JSON"), get("GOOGLE_TOKEN_JSON"), get("OAUTH_TOKEN_JSON")),
+		Google: googleauth.Account{
+			ID:              id,
+			Address:         address,
+			TokenJSON:       googleTokenJSON,
+			ClientID:        googleClientID,
+			ClientSecret:    googleSecret,
+			TokenKey:        googleTokenKey,
+			ClientIDKey:     googleClientIDKey,
+			ClientSecretKey: googleSecretKey,
+		},
 	}
 	if account.Provider == "gmail" {
 		if account.IMAPHost == "" {
@@ -352,9 +377,9 @@ func emailAccountFromEnv(env map[string]string, id string, allowUnprefixed bool)
 	if account.Address == "" {
 		return emailAccount{}, fmt.Errorf("EMAIL_%s_ADDRESS is required", envID(id))
 	}
-	if account.Password == "" && (!isGmailAccount(account) || !account.hasGmailAPIToken()) {
+	if account.Password == "" && (!isGmailAccount(account) || !account.hasGoogleToken()) {
 		if isGmailAccount(account) {
-			return emailAccount{}, fmt.Errorf("EMAIL_%s_PASSWORD or EMAIL_%s_GMAIL_ACCESS_TOKEN is required", envID(id), envID(id))
+			return emailAccount{}, fmt.Errorf("GOOGLE_%s_TOKEN_JSON is required", envID(id))
 		}
 		return emailAccount{}, fmt.Errorf("EMAIL_%s_PASSWORD is required", envID(id))
 	}
@@ -382,10 +407,17 @@ func loadEmailEnv(cfg appconfig.Config, resolver secrets.Resolver) map[string]st
 	}
 	for _, id := range ids {
 		prefix := "EMAIL_" + envID(id) + "_"
-		for _, key := range []string{"PASSWORD", "APP_PASSWORD", "TOKEN", "GMAIL_ACCESS_TOKEN", "GOOGLE_ACCESS_TOKEN", "OAUTH_ACCESS_TOKEN", "GMAIL_TOKEN_JSON", "GOOGLE_TOKEN_JSON", "OAUTH_TOKEN_JSON"} {
+		for _, key := range []string{"PASSWORD", "APP_PASSWORD", "TOKEN"} {
 			fullKey := prefix + key
 			if value, ok := resolver.Lookup(fullKey); ok {
 				env[fullKey] = value
+			}
+		}
+		googlePrefix := "GOOGLE_" + envID(id) + "_"
+		for _, key := range []string{"TOKEN_JSON", "CLIENT_ID", "CLIENT_SECRET"} {
+			fullKey := googlePrefix + key
+			if value, ok := resolver.Lookup(fullKey); ok {
+				env[prefix+"GOOGLE_"+key] = value
 			}
 		}
 	}
@@ -473,8 +505,8 @@ func isGmailAccount(account emailAccount) bool {
 	return strings.EqualFold(account.Provider, "gmail")
 }
 
-func (account emailAccount) hasGmailAPIToken() bool {
-	return strings.TrimSpace(account.GmailAccessToken) != "" || strings.TrimSpace(account.GmailTokenJSON) != ""
+func (account emailAccount) hasGoogleToken() bool {
+	return strings.TrimSpace(account.Google.TokenJSON) != ""
 }
 
 func dialIMAP(account emailAccount) (*imapclient.Client, error) {
@@ -741,35 +773,19 @@ type gmailServiceClient struct {
 }
 
 var newGmailClient = func(ctx context.Context, account emailAccount) (gmailClient, error) {
-	token, err := gmailOAuthToken(account)
+	httpClient, err := gmailOAuthHTTPClient(ctx, account)
 	if err != nil {
 		return nil, err
 	}
-	service, err := gmail.NewService(ctx, option.WithHTTPClient(oauth2.NewClient(ctx, oauth2.StaticTokenSource(token))))
+	service, err := gmail.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
 	return gmailServiceClient{service: service}, nil
 }
 
-func gmailOAuthToken(account emailAccount) (*oauth2.Token, error) {
-	if raw := strings.TrimSpace(account.GmailTokenJSON); raw != "" {
-		var token oauth2.Token
-		if err := json.Unmarshal([]byte(raw), &token); err != nil {
-			return nil, fmt.Errorf("account %s has invalid Gmail OAuth token JSON: %w", account.ID, err)
-		}
-		if strings.TrimSpace(token.TokenType) == "" {
-			token.TokenType = "Bearer"
-		}
-		if strings.TrimSpace(token.AccessToken) == "" {
-			return nil, fmt.Errorf("account %s Gmail OAuth token JSON has no access_token", account.ID)
-		}
-		return &token, nil
-	}
-	if accessToken := strings.TrimSpace(account.GmailAccessToken); accessToken != "" {
-		return &oauth2.Token{AccessToken: accessToken, TokenType: "Bearer"}, nil
-	}
-	return nil, fmt.Errorf("account %s is configured as gmail but has no Gmail API OAuth token; set EMAIL_%s_GMAIL_ACCESS_TOKEN or EMAIL_%s_GMAIL_TOKEN_JSON with a token that can use %s", account.ID, envID(account.ID), envID(account.ID), gmail.GmailReadonlyScope)
+func gmailOAuthHTTPClient(ctx context.Context, account emailAccount) (*http.Client, error) {
+	return googleauth.NewHTTPClient(ctx, account.Google, []string{gmail.GmailReadonlyScope})
 }
 
 func (c gmailServiceClient) listMessages(ctx context.Context, query string, limit int) (gmailListResult, error) {
@@ -1122,7 +1138,7 @@ func (account emailAccount) publicMap() map[string]any {
 	canRead := account.IMAPHost != ""
 	authSource := "secret-service"
 	if isGmailAccount(account) {
-		canRead = account.hasGmailAPIToken()
+		canRead = account.hasGoogleToken()
 		if canRead {
 			authSource = "google-oauth-token"
 		}

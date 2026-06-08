@@ -18,6 +18,7 @@ Caching behavior:
 
 - The unified client does not keep an in-memory cache.
 - Cache root is configured at construction time in Go (`unifiedlyrics.New(cacheDir)`), and the C API reads it from `UNIFIED_LYRICS_CACHE_DIR`.
+- Disable cache reads and writes with `unifiedlyrics.WithNoCache(true)` in Go or `lyrics-lookup --no-cache` for the CLI helper.
 - Cache storage is owned by `unified-lyrics-api` and uses a unified namespace under the cache root.
 
 ## QML module

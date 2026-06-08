@@ -8,15 +8,15 @@
 
 QsGoIcal::QsGoIcal(QObject* parent) : QObject(parent) {}
 
-bool QsGoIcal::refresh(int days) {
-  QThreadPool::globalInstance()->start([this, days]() {
+auto QsGoIcal::refresh(int days) -> bool {
+  QThreadPool::globalInstance()->start([this, days]() -> void {
     char* raw = QsGo_Ical_Refresh(days);
-    QByteArray json(raw);
+    QByteArray const json(raw);
     QsGo_Free(raw);
 
     QMetaObject::invokeMethod(
         this,
-        [this, json]() {
+        [this, json]() -> void {
           const QJsonDocument doc = QJsonDocument::fromJson(json);
           if (!doc.isObject()) {
             const QString err = QStringLiteral("Invalid response");

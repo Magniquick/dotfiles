@@ -22,9 +22,10 @@ void QsGoTodoist::setPreferCache(bool v) {
   }
 }
 
-bool QsGoTodoist::refresh() {
-  if (m_loading)
+auto QsGoTodoist::refresh() -> bool {
+  if (m_loading) {
     return false;
+  }
   m_loading = true;
   emit loadingChanged();
   m_error = QString();
@@ -32,14 +33,14 @@ bool QsGoTodoist::refresh() {
 
   const QByteArray cp = m_cachePath.toUtf8();
   const int preferCache = m_preferCache ? 1 : 0;
-  QThreadPool::globalInstance()->start([this, cp, preferCache]() {
+  QThreadPool::globalInstance()->start([this, cp, preferCache]() -> void {
     char* raw = QsGo_Todoist_List(cp.constData(), preferCache);
-    QByteArray json(raw);
+    QByteArray const json(raw);
     QsGo_Free(raw);
 
     QMetaObject::invokeMethod(
         this,
-        [this, json]() {
+        [this, json]() -> void {
           m_loading = false;
           emit loadingChanged();
 
@@ -78,17 +79,17 @@ bool QsGoTodoist::refresh() {
   return true;
 }
 
-bool QsGoTodoist::action(const QString& verb, const QString& argsJson) {
+auto QsGoTodoist::action(const QString& verb, const QString& argsJson) -> bool {
   const QByteArray vb = verb.toUtf8();
   const QByteArray args = argsJson.toUtf8();
-  QThreadPool::globalInstance()->start([this, vb, args]() {
+  QThreadPool::globalInstance()->start([this, vb, args]() -> void {
     char* raw = QsGo_Todoist_Action(vb.constData(), args.constData());
-    QByteArray json(raw);
+    QByteArray const json(raw);
     QsGo_Free(raw);
 
     QMetaObject::invokeMethod(
         this,
-        [this, json]() {
+        [this, json]() -> void {
           // After any action, refresh to get updated state
           const QJsonDocument doc = QJsonDocument::fromJson(json);
           if (doc.isObject()) {

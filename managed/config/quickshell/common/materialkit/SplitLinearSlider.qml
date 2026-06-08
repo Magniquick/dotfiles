@@ -26,7 +26,7 @@ Item {
   implicitHeight: thickness
 
   function setValue(v) {
-    value = Math.max(0, Math.min(1, v));
+    value = Math.max(0, Math.min(1, v))
   }
 
   readonly property real _clamped: Math.max(0, Math.min(1, value))
@@ -35,9 +35,7 @@ Item {
   readonly property real _halfSpanBase: _dw + gapOnEachSide
   readonly property real _availLeft: _centerX
   readonly property real _availRight: root.width - _centerX
-  readonly property real _s: Math.min(1,
-                                      Math.max(0, _availLeft / Math.max(1, _halfSpanBase)),
-                                      Math.max(0, _availRight / Math.max(1, _halfSpanBase)))
+  readonly property real _s: Math.min(1, Math.max(0, _availLeft / Math.max(1, _halfSpanBase)), Math.max(0, _availRight / Math.max(1, _halfSpanBase)))
   readonly property real _leftEdge: Math.max(0, _centerX - _s * _halfSpanBase)
   readonly property real _rightEdge: Math.min(root.width, _centerX + _s * _halfSpanBase)
 
@@ -67,7 +65,12 @@ Item {
       anchors.verticalCenter: parent.verticalCenter
     }
 
-    Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.InOutQuad } }
+    Behavior on width {
+      NumberAnimation {
+        duration: 140
+        easing.type: Easing.InOutQuad
+      }
+    }
   }
 
   Item {
@@ -96,8 +99,18 @@ Item {
       anchors.verticalCenter: parent.verticalCenter
     }
 
-    Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.InOutQuad } }
-    Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.InOutQuad } }
+    Behavior on x {
+      NumberAnimation {
+        duration: 140
+        easing.type: Easing.InOutQuad
+      }
+    }
+    Behavior on width {
+      NumberAnimation {
+        duration: 140
+        easing.type: Easing.InOutQuad
+      }
+    }
   }
 
   Rectangle {
@@ -109,7 +122,12 @@ Item {
     x: root._centerX - width / 2
     z: 10
 
-    Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.InOutQuad } }
+    Behavior on x {
+      NumberAnimation {
+        duration: 140
+        easing.type: Easing.InOutQuad
+      }
+    }
   }
 
   Rectangle {
@@ -134,24 +152,24 @@ Item {
     preventStealing: true
     cursorShape: Qt.PointingHandCursor
 
-    onPressed: function(e) {
-      var rel = e.x / Math.max(1, root.width);
-      root.hoverRatio = Math.max(0, Math.min(1, rel));
-      root.setValue(rel);
+    onPressed: function (e) {
+      var rel = e.x / Math.max(1, root.width)
+      root.hoverRatio = Math.max(0, Math.min(1, rel))
+      root.setValue(rel)
     }
 
-    onPositionChanged: function(e) {
-      var rel = e.x / Math.max(1, root.width);
-      root.hoverRatio = Math.max(0, Math.min(1, rel));
+    onPositionChanged: function (e) {
+      var rel = e.x / Math.max(1, root.width)
+      root.hoverRatio = Math.max(0, Math.min(1, rel))
       if (!pressed)
-        return;
-      root.setValue(rel);
+        return
+      root.setValue(rel)
     }
 
     onEntered: {
-      var xPos = mouseX;
-      var rel = xPos / Math.max(1, root.width);
-      root.hoverRatio = Math.max(0, Math.min(1, rel));
+      var xPos = mouseX
+      var rel = xPos / Math.max(1, root.width)
+      root.hoverRatio = Math.max(0, Math.min(1, rel))
     }
 
     onExited: root.hoverRatio = 0
