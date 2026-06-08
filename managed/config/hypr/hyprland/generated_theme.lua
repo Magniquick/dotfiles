@@ -1,0 +1,16 @@
+return {
+    border = "rgb(a0cafd)",
+    red = "rgb(ffb4ab)",
+    surface1 = "rgb(272a2f)",
+    base = "rgb(111418)",
+
+    text_hex = "e1e2e8",
+    subtext_hex = "c3c7cf",
+
+    text = "rgb(e1e2e8)",
+    subtext = "rgb(c3c7cf)",
+    overlay1 = "rgb(8d9199)",
+    overlay2 = "rgb(42474e)",
+
+    blue_glow = "rgba(a0cafd)",
+}
