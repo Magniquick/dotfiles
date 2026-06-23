@@ -1,11 +1,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "../common" as Common
-import "./components" as Components
+import "../common/JsonUtils.js" as JsonUtils
 import "./services" as Services
 import "./views" as Views
-import qsgo
+import qsnative
 
 Item {
   id: root
@@ -32,13 +33,46 @@ Item {
     id: envLoader
   }
 
-  Services.McpConfig {
-    id: mcpConfig
+  readonly property var providerConfig: envLoader.providerConfig
+  property var providerOrder: ["local", "openai", "gemini"]
+  property string modelId: envLoader.modelId
+
+  FileView {
+    id: leftpanelConfigFile
+    path: Qt.resolvedUrl("config.json")
+    blockLoading: true
+    blockWrites: true
   }
 
-  readonly property var providerConfig: envLoader.providerConfig
-  readonly property var mcpConfigList: mcpConfig.servers
-  property string modelId: envLoader.modelId
+  function providerOrderFromConfig(order) {
+    const out = []
+    const add = value => {
+      const provider = String(value || "").trim()
+      if (provider && out.indexOf(provider) < 0)
+        out.push(provider)
+    }
+    if (Array.isArray(order)) {
+      for (const provider of order)
+        add(provider)
+    }
+    return out.length > 0 ? out : ["local", "openai", "gemini"]
+  }
+
+  function loadProviderOrder() {
+    const payload = JsonUtils.parseObject(leftpanelConfigFile.text()) || {}
+    root.providerOrder = root.providerOrderFromConfig(payload.provider_order)
+  }
+
+  function saveProviderOrder() {
+    const payload = JsonUtils.parseObject(leftpanelConfigFile.text())
+    if (!payload)
+      return
+    payload.provider_order = root.providerOrder
+    leftpanelConfigFile.setText(JSON.stringify(payload, null, "\t") + "\n")
+    leftpanelConfigFile.reload()
+  }
+
+  Component.onCompleted: root.loadProviderOrder()
 
   readonly property color _linkColor: Common.Config.color.primary
   on_LinkColorChanged: chatSession.setAppLinkColor(_linkColor)
@@ -48,12 +82,12 @@ Item {
     return parts.length > 1 ? parts[0] : ""
   }
   readonly property var activeProviderConfig: providerConfig[currentProvider] || ({})
-  readonly property string activeApiKey: activeProviderConfig.api_key || ""
-  readonly property bool hasApiKey: activeApiKey.length > 0
+  readonly property bool providerOnline: currentProvider === "local"
+    ? String(activeProviderConfig.base_url || "").trim().length > 0
+    : String(activeProviderConfig.api_key || "").trim().length > 0
 
   property string currentMood: "default"
   property bool showCommandPicker: false
-  property bool showMcpAddDialog: false
   property string activeCommand: ""
 
   // Check if syntax highlighting is available
@@ -83,36 +117,86 @@ Item {
 
   Services.ModelConfig {
     id: modelConfig
-    providerConfig: root.providerConfig
+    modelBackend: chatSession
+    providerOrder: root.providerOrder
   }
 
   readonly property var availableMoods: moodConfig.availableMoods
   readonly property var moodPrompts: moodConfig.moodPrompts
   readonly property var moodModels: moodConfig.moodModels
   readonly property var availableModels: modelConfig.availableModels
+  readonly property var availableProviders: modelConfig.availableProviders
 
   readonly property string currentMoodIcon: moodConfig.moodIcon(root.currentMood)
   readonly property string currentMoodName: moodConfig.moodName(root.currentMood)
+  readonly property var currentModel: root.modelEntry(root.modelId)
 
   readonly property string currentModelLabel: {
-    const model = availableModels.find(m => m.value === modelId)
-    return model ? model.label : (String(modelId || "").split("/").slice(1).join("/") || modelId)
+    if (root.currentModel)
+      return root.currentModel.label
+    return root.modelRawId(root.modelId) || root.modelId
   }
 
   function closePanel() {
     Common.GlobalState.leftPanelVisible = false
   }
 
-  function canonicalModelId(rawId) {
-    const trimmed = String(rawId || "").trim()
+  function modelRawId(model) {
+    const trimmed = String(model || "").trim()
+    if (trimmed.indexOf("/") !== -1)
+      return trimmed.split("/").slice(1).join("/")
+    return trimmed
+  }
+
+  function modelEntry(value) {
+    const rawId = root.modelRawId(value)
+    const entry = availableModels.find(m => m.rawId === rawId)
+    return entry || null
+  }
+
+  function canonicalModelId(model) {
+    const trimmed = String(model || "").trim()
     if (!trimmed)
       return root.modelId
-    if (trimmed.indexOf("/") !== -1)
-      return trimmed
-    if (trimmed === "test")
-      return "test/test"
-    const provider = trimmed.startsWith("gemini-") ? "gemini" : (trimmed.startsWith("gpt-5.") ? "local" : "openai")
-    return provider + "/" + trimmed
+    const entry = root.modelEntry(trimmed)
+    return entry && entry.canonicalId ? entry.canonicalId : trimmed
+  }
+
+  function refreshCurrentModelProvider() {
+    const next = root.canonicalModelId(root.modelId)
+    if (next && next !== root.modelId)
+      root.modelId = next
+  }
+
+  function openProviderPicker() {
+    root.activeCommand = "providers"
+    root.showCommandPicker = true
+  }
+
+  function promoteProvider(providerId) {
+    const provider = String(providerId || "").trim()
+    if (!provider)
+      return
+    root.providerOrder = [provider].concat(root.providerOrder.filter(p => p !== provider))
+    root.saveProviderOrder()
+    root.refreshCurrentModelProvider()
+  }
+
+  function moveProviderBefore(providerId, beforeProviderId) {
+    const provider = String(providerId || "").trim()
+    const before = String(beforeProviderId || "").trim()
+    if (!provider || provider === before)
+      return
+
+    const ordered = root.providerOrder.filter(p => p !== provider)
+    const beforeIndex = before ? ordered.indexOf(before) : -1
+    if (beforeIndex >= 0)
+      ordered.splice(beforeIndex, 0, provider)
+    else
+      ordered.push(provider)
+    root.providerOrder = ordered
+    root.saveProviderOrder()
+    root.refreshCurrentModelProvider()
   }
 
   AiChatSession {
@@ -120,31 +204,20 @@ Item {
     model_id: String(root.modelId)
     system_prompt: root.moodPrompts[root.currentMood] || ""
     provider_config: root.providerConfig
-    mcp_config: root.mcpConfigList
 
     onOpenModelPickerRequested: {
-      root.showMcpAddDialog = false
       root.activeCommand = "model"
       root.showCommandPicker = true
     }
     onOpenMoodPickerRequested: {
-      root.showMcpAddDialog = false
       root.activeCommand = "mood"
       root.showCommandPicker = true
     }
     onOpenResumePickerRequested: {
-      root.showMcpAddDialog = false
       root.activeCommand = "resume"
       root.showCommandPicker = true
     }
-    onOpenMcpAddRequested: {
-      root.showCommandPicker = false
-      root.showMcpAddDialog = true
-      Qt.callLater(() => {
-        if (mcpAddDialog && mcpAddDialog.visible && mcpAddDialog.focusPrimaryField)
-          mcpAddDialog.focusPrimaryField()
-      })
-    }
+    onOpenProviderPickerRequested: root.openProviderPicker()
     onScrollToEndRequested: panelView.scrollToEnd()
     onCopyAllRequested: function (text) {
       root.setClipboardText(text)
@@ -156,6 +229,8 @@ Item {
     chatSession.resetForModelSwitch(root.modelId)
     panelView.scrollToEnd()
   }
+
+  onAvailableModelsChanged: root.refreshCurrentModelProvider()
 
   Views.LeftPanelView {
     id: panelView
@@ -169,15 +244,16 @@ Item {
     modelLabel: root.currentModelLabel
     moodIcon: root.currentMoodIcon
     moodName: root.currentMoodName
-    connectionOnline: root.hasApiKey
-    connectionStatus: root.hasApiKey ? "online" : "offline"
+    connectionOnline: root.providerOnline
+    connectionStatus: root.providerOnline ? "online" : "offline"
     showCommandPicker: root.showCommandPicker
     activeCommand: root.activeCommand
     availableModels: root.availableModels
+    availableProviders: root.availableProviders
     availableMoods: root.availableMoods
     resumeConversations: chatSession.resume_conversations
 
-    footerDotColor: panelView.currentTabIndex === 0 ? (root.hasApiKey ? Common.Config.color.tertiary : Common.Config.color.error) : (panelView.metricsHealthy ? Common.Config.color.tertiary : Common.Config.color.secondary)
+    footerDotColor: panelView.currentTabIndex === 0 ? (root.providerOnline ? Common.Config.color.tertiary : Common.Config.color.error) : (panelView.metricsHealthy ? Common.Config.color.tertiary : Common.Config.color.secondary)
     footerLeftText: panelView.currentTabIndex === 0 ? ("MODEL: " + root.currentModelLabel.toUpperCase()) : ("UPTIME: " + panelView.metricsUptime)
     footerRightText: panelView.currentTabIndex === 0 ? ("PROVIDER: " + root.currentProvider.toUpperCase()) : (panelView.metricsHealthy ? "HEALTH: OK" : "HEALTH: WARN")
 
@@ -201,6 +277,16 @@ Item {
       root.showCommandPicker = false
     }
 
+    onProviderSelected: value => {
+      root.promoteProvider(value)
+      chatSession.appendInfo(`Provider priority: ${root.providerOrder.join(" -> ")}`)
+    }
+
+    onProviderMoved: (value, beforeValue) => {
+      root.moveProviderBefore(value, beforeValue)
+      chatSession.appendInfo(`Provider priority: ${root.providerOrder.join(" -> ")}`)
+    }
+
     onMoodSelected: value => {
       root.currentMood = value
       const newModel = root.moodModels[value]
@@ -219,55 +305,5 @@ Item {
     }
 
     onResumeSearchChanged: query => chatSession.refreshResumeConversations(query)
-  }
-
-  Rectangle {
-    anchors.fill: parent
-    color: Qt.alpha(Common.Config.color.surface_dim, 0.92)
-    visible: root.showMcpAddDialog
-    z: 10
-
-    MouseArea {
-      id: mcpOverlayDismissArea
-      anchors.fill: parent
-      onClicked: mouse => {
-        if (!mcpAddDialog || !mcpAddDialog.visible) {
-          root.showMcpAddDialog = false
-          return
-        }
-        const p = mcpAddDialog.mapFromItem(mcpOverlayDismissArea, mouse.x, mouse.y)
-        const inside = p.x >= 0 && p.y >= 0 && p.x <= mcpAddDialog.width && p.y <= mcpAddDialog.height
-        if (!inside)
-          root.showMcpAddDialog = false
-      }
-    }
-
-    Components.McpAddDialog {
-      id: mcpAddDialog
-      anchors.centerIn: parent
-      visible: root.showMcpAddDialog
-
-      onDismissed: {
-        clearForm()
-        root.showMcpAddDialog = false
-      }
-
-      onSubmitted: function (url, label) {
-        errorText = ""
-        const result = mcpConfig.addServer(url, label)
-        if (!result || !result.ok) {
-          errorText = result && result.error ? result.error : "Failed to add MCP server."
-          return
-        }
-
-        clearForm()
-        root.showMcpAddDialog = false
-        chatSession.refreshMcp()
-        const server = result.server || {}
-        const labelText = server.label || server.id || "MCP server"
-        const idText = server.id || "(generated)"
-        chatSession.appendInfo(`Added MCP server **${labelText}** (\`${idText}\`).\n\n` + `Advanced auth and custom headers can be edited in \`leftpanel/mcp_servers.json\`.`)
-      }
-    }
   }
 }

@@ -10,8 +10,10 @@ MK.Card {
   property string command: ""
   property var options: []
   property bool showAllToggle: false
+  property bool reorderable: false
 
   signal optionSelected(string value)
+  signal optionMoved(string value, string beforeValue)
   signal dismissed
 
   property string filterText: ""
@@ -231,9 +233,13 @@ MK.Card {
         required property var modelData
 
         readonly property color itemAccent: optionItem.modelData.accent || Common.Config.color.primary
+        property bool dragMoved: false
+        property bool suppressClick: false
+        property real dragY: 0
 
         width: optionsList.width
         height: 56
+        z: dragHandler.active ? 10 : 0
         radius: Common.Config.shape.corner.md
         backgroundColor: Common.Config.color.surface
         hoverBackgroundColor: optionItem.itemAccent
@@ -243,7 +249,55 @@ MK.Card {
         rippleColor: Common.Config.color.on_surface
         rippleStateOpacity: 0
 
-        onClicked: root.optionSelected(optionItem.modelData.value)
+        transform: Translate {
+          y: dragHandler.active ? dragHandler.translation.y : 0
+        }
+
+        Timer {
+          id: clickResetTimer
+          interval: 200
+          repeat: false
+          onTriggered: optionItem.suppressClick = false
+        }
+
+        DragHandler {
+          id: dragHandler
+          enabled: root.reorderable
+          target: null
+          onTranslationChanged: {
+            optionItem.dragY = translation.y
+            if (Math.abs(optionItem.dragY) > 4)
+              optionItem.dragMoved = true
+          }
+          onActiveChanged: {
+            if (active) {
+              optionItem.dragMoved = false
+              optionItem.dragY = 0
+              return
+            }
+            if (!optionItem.dragMoved)
+              return
+
+            optionItem.suppressClick = true
+            clickResetTimer.restart()
+
+            const dropY = optionItem.y + optionItem.height / 2 + optionItem.dragY
+            let targetIndex = optionsList.indexAt(optionItem.width / 2, dropY)
+            if (targetIndex < 0)
+              targetIndex = dropY < 0 ? 0 : root.filteredOptions.length
+
+            const target = targetIndex >= 0 && targetIndex < root.filteredOptions.length ? root.filteredOptions[targetIndex] : null
+            const beforeValue = target ? String(target.value || "") : ""
+            if (beforeValue !== String(optionItem.modelData.value || ""))
+              root.optionMoved(String(optionItem.modelData.value || ""), beforeValue)
+          }
+        }
+
+        onClicked: {
+          if (optionItem.suppressClick)
+            return
+          root.optionSelected(optionItem.modelData.value)
+        }
 
         Behavior on backgroundColor {
           ColorAnimation {
@@ -260,6 +314,21 @@ MK.Card {
           anchors.fill: parent
           anchors.margins: Common.Config.space.md
           spacing: Common.Config.space.md
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\udb80\udddd" // nf-md-drag_vertical
+            color: optionItem.hovered || dragHandler.active ? optionItem.itemAccent : Common.Config.color.on_surface_variant
+            font.family: Common.Config.iconFontFamily
+            font.pixelSize: 16
+            visible: root.reorderable
+
+            Behavior on color {
+              ColorAnimation {
+                duration: 150
+              }
+            }
+          }
 
           Image {
             anchors.verticalCenter: parent.verticalCenter

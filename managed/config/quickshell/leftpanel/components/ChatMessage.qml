@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import qsmath 1.0
+import "../../bar/components" as BarComponents
 import "../../common" as Common
 import "../../common/components" as CommonComponents
 
@@ -26,7 +27,12 @@ Item {
   property var metrics: ({})
   property var attachments: []
 
-  property var attachmentList: Array.isArray(root.attachments) ? root.attachments : []
+  property var attachmentList: normalizedAttachments(root.attachments)
+  property Item actionTooltipTarget: null
+  property Item pendingActionTooltipTarget: null
+  property string actionTooltipText: ""
+  property string pendingActionTooltipText: ""
+  property bool actionTooltipOpen: false
 
   signal regenerateRequested
   signal deleteRequested
@@ -84,6 +90,97 @@ Item {
   function containsMath(text) {
     const source = String(text || "")
     return /(^|[^\\])\$[^\s$][\s\S]*?[^\\]\$/.test(source) || /\\\([\s\S]+?\\\)/.test(source) || /\$\$[\s\S]+?\$\$/.test(source) || /\\\[[\s\S]+?\\\]/.test(source) || /\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|matrix\*?|bmatrix|pmatrix|vmatrix|Vmatrix)\}[\s\S]+?\\end\{(?:equation\*?|align\*?|gather\*?|multline\*?|matrix\*?|bmatrix|pmatrix|vmatrix|Vmatrix)\}/.test(source)
+  }
+
+  function normalizedAttachments(value) {
+    if (!value)
+      return []
+    if (Array.isArray(value))
+      return value
+    if (typeof value.length === "number") {
+      const items = []
+      for (let i = 0; i < value.length; i++)
+        items.push(value[i])
+      return items
+    }
+    if (Array.from) {
+      try {
+        return Array.from(value)
+      } catch (e) {
+        return []
+      }
+    }
+    return []
+  }
+
+  function attachmentSource(attachment) {
+    if (!attachment)
+      return ""
+    const path = String(attachment.path || "").trim()
+    if (path.length > 0)
+      return "file://" + path
+    const mime = String(attachment.mime || "").trim()
+    const b64 = String(attachment.b64 || "").trim()
+    if (mime.length > 0 && b64.length > 0)
+      return "data:" + mime + ";base64," + b64
+    return ""
+  }
+
+  function showActionTooltip(target, text) {
+    root.pendingActionTooltipTarget = target
+    root.pendingActionTooltipText = text
+    root.actionTooltipOpen = false
+    actionTooltipDelay.restart()
+  }
+
+  function hideActionTooltip(target) {
+    if (root.pendingActionTooltipTarget === target) {
+      actionTooltipDelay.stop()
+      root.pendingActionTooltipTarget = null
+      root.pendingActionTooltipText = ""
+    }
+    if (root.actionTooltipTarget === target) {
+      root.actionTooltipOpen = false
+      root.actionTooltipTarget = null
+      root.actionTooltipText = ""
+    }
+  }
+
+  function updateActionTooltip(target, text) {
+    if (root.actionTooltipTarget === target)
+      root.actionTooltipText = text
+    if (root.pendingActionTooltipTarget === target)
+      root.pendingActionTooltipText = text
+  }
+
+  Timer {
+    id: actionTooltipDelay
+    interval: 400
+    onTriggered: {
+      root.actionTooltipTarget = root.pendingActionTooltipTarget
+      root.actionTooltipText = root.pendingActionTooltipText
+      root.actionTooltipOpen = !!root.actionTooltipTarget && root.actionTooltipText.length > 0
+    }
+  }
+
+  Component {
+    id: actionTooltipContent
+
+    Text {
+      color: Common.Config.color.on_surface
+      font.family: Common.Config.fontFamily
+      font.pixelSize: Common.Config.type.labelMedium.size
+      font.weight: Common.Config.type.labelMedium.weight
+      text: root.actionTooltipText
+    }
+  }
+
+  BarComponents.TooltipPopup {
+    contentComponent: actionTooltipContent
+    enabled: root.actionTooltipTarget !== null && root.actionTooltipText.length > 0
+    hoverable: false
+    open: root.actionTooltipOpen
+    targetItem: root.actionTooltipTarget
   }
 
   implicitHeight: mainRow.implicitHeight + separator.height + 16
@@ -181,22 +278,19 @@ Item {
           }
 
           MessageControlButton {
+            id: regenerateButton
             visible: root.isAssistant && root.done
-            icon: "\udb81\udc50"
+            icon: "\uea77"
             onClicked: root.regenerateRequested()
-            ToolTip.visible: h1.hovered
-            ToolTip.text: "Regenerate"
-            ToolTip.delay: 400
-            HoverHandler {
-              id: h1
-            }
+            onHoveredChanged: hovered ? root.showActionTooltip(regenerateButton, qsTr("Regenerate")) : root.hideActionTooltip(regenerateButton)
           }
 
           MessageControlButton {
             id: copyBtn
             property bool copied: false
-            icon: copied ? "\udb80\udd91" : "\uf0c5"
+            icon: copied ? "\ueab2" : "\uebcc"
             activated: copied
+            onCopiedChanged: root.updateActionTooltip(copyBtn, copied ? qsTr("Copied") : qsTr("Copy"))
             onClicked: {
               Quickshell.clipboardText = root.content
               copied = true
@@ -207,18 +301,15 @@ Item {
               interval: 1500
               onTriggered: copyBtn.copied = false
             }
-            ToolTip.visible: h2.hovered
-            ToolTip.text: copied ? "Copied!" : "Copy"
-            ToolTip.delay: 400
-            HoverHandler {
-              id: h2
-            }
+            onHoveredChanged: hovered ? root.showActionTooltip(copyBtn, copied ? qsTr("Copied") : qsTr("Copy")) : root.hideActionTooltip(copyBtn)
           }
 
           MessageControlButton {
+            id: editButton
             visible: root.done
-            icon: "\uf044"
+            icon: "\uea73"
             activated: root.editing
+            onHoveredChanged: hovered ? root.showActionTooltip(editButton, root.editing ? qsTr("Save") : qsTr("Edit")) : root.hideActionTooltip(editButton)
             onClicked: {
               if (root.editing) {
                 root.editSaved(fullEditArea.text)
@@ -227,36 +318,26 @@ Item {
                 root.editing = true
                 fullEditArea.text = root.content
               }
-            }
-            ToolTip.visible: h3.hovered
-            ToolTip.text: root.editing ? "Save" : "Edit"
-            ToolTip.delay: 400
-            HoverHandler {
-              id: h3
+              root.updateActionTooltip(editButton, root.editing ? qsTr("Save") : qsTr("Edit"))
             }
           }
 
           MessageControlButton {
-            icon: "\uf121"
+            id: sourceButton
+            icon: "\ueac4"
             activated: !root.renderMarkdown
-            onClicked: root.renderMarkdown = !root.renderMarkdown
-            ToolTip.visible: h4.hovered
-            ToolTip.text: root.renderMarkdown ? "Source" : "Render"
-            ToolTip.delay: 400
-            HoverHandler {
-              id: h4
+            onHoveredChanged: hovered ? root.showActionTooltip(sourceButton, root.renderMarkdown ? qsTr("Source") : qsTr("Render")) : root.hideActionTooltip(sourceButton)
+            onClicked: {
+              root.renderMarkdown = !root.renderMarkdown
+              root.updateActionTooltip(sourceButton, root.renderMarkdown ? qsTr("Source") : qsTr("Render"))
             }
           }
 
           MessageControlButton {
-            icon: "\uf00d"
+            id: deleteButton
+            icon: "\uea81"
             onClicked: root.deleteRequested()
-            ToolTip.visible: h5.hovered
-            ToolTip.text: "Delete"
-            ToolTip.delay: 400
-            HoverHandler {
-              id: h5
-            }
+            onHoveredChanged: hovered ? root.showActionTooltip(deleteButton, qsTr("Delete")) : root.hideActionTooltip(deleteButton)
           }
         }
       }
@@ -478,6 +559,7 @@ Item {
 
       // Image attachment thumbnails (user messages with attached images)
       Flow {
+        id: attachmentFlow
         visible: root.isUser && root.attachmentList.length > 0
         spacing: 6
         Layout.fillWidth: true
@@ -485,20 +567,20 @@ Item {
 
         Repeater {
           model: root.attachmentList
-          Rectangle {
+          Image {
             id: attachmentPreview
             required property var modelData
-            width: 80
-            height: 80
-            radius: 6
-            clip: true
-            color: Common.Config.color.surface_container_highest
+            readonly property real maxPreviewWidth: Math.max(1, Math.min(attachmentFlow.width, 500))
+            readonly property real maxPreviewHeight: 100
+            readonly property real imageAspect: status === Image.Ready && implicitHeight > 0 ? implicitWidth / implicitHeight : 1
 
-            Image {
-              anchors.fill: parent
-              source: attachmentPreview.modelData.b64 ? "data:" + attachmentPreview.modelData.mime + ";base64," + attachmentPreview.modelData.b64 : ""
-              fillMode: Image.PreserveAspectCrop
-            }
+            width: status === Image.Ready ? Math.min(maxPreviewWidth, maxPreviewHeight * imageAspect) : 0
+            height: status === Image.Ready ? Math.min(maxPreviewHeight, width / imageAspect) : 0
+            source: root.attachmentSource(attachmentPreview.modelData)
+            fillMode: Image.PreserveAspectFit
+            sourceSize.height: maxPreviewHeight
+            asynchronous: true
+            cache: false
           }
         }
       }

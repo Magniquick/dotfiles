@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import "../../common" as Common
 import "./" as Components
-import qsgo
+import qsnative
 
 Item {
   id: root

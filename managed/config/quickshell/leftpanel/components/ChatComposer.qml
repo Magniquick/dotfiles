@@ -450,6 +450,7 @@ Item {
                 contentWidth: width
                 contentHeight: inputEdit.height
                 clip: true
+                interactive: contentHeight > height + 1
                 onContentHeightChanged: Qt.callLater(root.syncInputScroll)
 
                 TextEdit {
@@ -517,7 +518,7 @@ Item {
                 }
 
                 ScrollBar.vertical: MK.ScrollBar {
-                  policy: ScrollBar.AsNeeded
+                  policy: textFlick.contentHeight > textFlick.height + 1 ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                 }
               }
 

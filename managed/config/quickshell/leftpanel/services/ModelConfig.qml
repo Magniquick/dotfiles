@@ -9,7 +9,8 @@ Item {
   visible: false
 
   property url configFileUrl: Qt.resolvedUrl("../models.json")
-  property var providerConfig: ({})
+  property var modelBackend: null
+  property var providerOrder: ["local", "openai", "gemini"]
 
   FileView {
     id: configFile
@@ -22,48 +23,24 @@ Item {
     return payload && Array.isArray(payload.models) ? payload.models : []
   }
 
-  readonly property var defaultCapabilities: ({
-      supports_images: true,
-      supports_tools: true,
-      supports_multimodal: true
-    })
+  function accentColor(role) {
+    if (role === "primary")
+      return Common.Config.color.primary
+    if (role === "secondary")
+      return Common.Config.color.secondary
+    return Common.Config.color.tertiary
+  }
 
-  readonly property var availableModels: modelsData.map(m => {
-    const providerId = String(m.provider || "").trim()
-    const rawId = String(m.raw_id || "").trim()
-    const value = providerId && rawId ? providerId + "/" + rawId : ""
-    const providerEntry = root.providerConfig[providerId] || {}
-    const enabled = providerId === "test" || String(providerEntry.api_key || "").length > 0
-    const providerLabel = m.provider_label || providerId
-    const label = m.label || rawId || value
-    const capabilities = m.capabilities || root.defaultCapabilities
+  function withAccent(items) {
+    return (items || []).map(item => Object.assign({}, item, {
+          accent: root.accentColor(item.accentRole)
+        }))
+  }
 
-    return {
-      value,
-      label,
-      description: m.description || "",
-      recommended: m.recommended !== false,
-      provider: providerId,
-      capabilities,
-      rawId,
-      providerLabel,
-      enabled,
-      model: {
-        id: value,
-        raw_id: rawId,
-        provider: providerId,
-        label,
-        description: m.description || "",
-        recommended: m.recommended !== false,
-        capabilities
-      },
-      providerEntry: {
-        id: providerId,
-        label: providerLabel,
-        enabled
-      },
-      iconImage: providerId === "gemini" ? "./assets/Google_Gemini_icon_2025.svg.png" : "./assets/OpenAI-white-monoblossom.svg",
-      accent: providerId === "gemini" ? Common.Config.color.primary : Common.Config.color.tertiary
-    }
-  }).filter(m => m.value.length > 0)
+  readonly property var catalog: root.modelBackend && root.modelBackend.modelCatalog
+    ? root.modelBackend.modelCatalog(root.modelsData, root.providerOrder)
+    : ({ models: [], providers: [] })
+
+  readonly property var availableModels: root.withAccent(root.catalog.models)
+  readonly property var availableProviders: root.withAccent(root.catalog.providers)
 }

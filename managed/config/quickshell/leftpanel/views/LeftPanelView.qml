@@ -26,6 +26,7 @@ Item {
   property bool showCommandPicker: false
   property string activeCommand: ""
   property var availableModels: []
+  property var availableProviders: []
   property var availableMoods: []
   property var resumeConversations: []
 
@@ -45,6 +46,8 @@ Item {
   signal deleteRequested(string messageId)
   signal editRequested(string messageId, string newContent)
   signal modelSelected(string value)
+  signal providerSelected(string value)
+  signal providerMoved(string value, string beforeValue)
   signal moodSelected(string value)
   signal resumeSelected(string value)
   signal resumeSearchChanged(string query)
@@ -150,6 +153,7 @@ Item {
           visible: root.showCommandPicker
 
           readonly property bool isModelPicker: root.activeCommand === "model"
+          readonly property bool isProviderPicker: root.activeCommand === "providers"
           readonly property bool isResumePicker: root.activeCommand === "resume"
 
           MouseArea {
@@ -170,9 +174,10 @@ Item {
           Components.CommandPicker {
             id: commandPicker
             anchors.centerIn: parent
-            command: parent.isModelPicker ? "/MODEL" : (parent.isResumePicker ? "/RESUME" : "/MOOD")
-            options: parent.isModelPicker ? root.availableModels : (parent.isResumePicker ? root.resumeConversations : root.availableMoods)
+            command: parent.isModelPicker ? "/MODEL" : (parent.isProviderPicker ? "/PROVIDERS" : (parent.isResumePicker ? "/RESUME" : "/MOOD"))
+            options: parent.isModelPicker ? root.availableModels : (parent.isProviderPicker ? root.availableProviders : (parent.isResumePicker ? root.resumeConversations : root.availableMoods))
             showAllToggle: parent.isModelPicker
+            reorderable: parent.isProviderPicker
             visible: root.showCommandPicker
             onFilterTextChanged: {
               if (root.activeCommand === "resume")
@@ -182,12 +187,15 @@ Item {
             onOptionSelected: value => {
               if (root.activeCommand === "model")
                 root.modelSelected(value)
+              else if (root.activeCommand === "providers")
+                root.providerSelected(value)
               else if (root.activeCommand === "resume")
                 root.resumeSelected(value)
               else
                 root.moodSelected(value)
             }
 
+            onOptionMoved: (value, beforeValue) => root.providerMoved(value, beforeValue)
             onDismissed: root.dismissCommandPickerRequested()
           }
         }

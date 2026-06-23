@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import qsgo
+import qsnative
 
 Item {
   id: root
@@ -25,8 +25,6 @@ Item {
       return "local/gpt-5.4-mini"
     if (trimmed.indexOf("/") !== -1)
       return trimmed
-    if (trimmed === "test")
-      return "test/test"
     if (trimmed.startsWith("gpt-5."))
       return "local/" + trimmed
     return trimmed.startsWith("gemini-") ? ("gemini/" + trimmed) : ("openai/" + trimmed)
@@ -43,9 +41,6 @@ Item {
       },
       gemini: {
         api_key: geminiApiKey
-      },
-      test: {
-        api_key: "test"
       }
     })
 
