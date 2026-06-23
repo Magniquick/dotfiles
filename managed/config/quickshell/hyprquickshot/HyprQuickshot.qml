@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtCore as Core
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -12,6 +11,7 @@ import "src/ScreenshotUtils.js" as ScreenshotUtils
 import "ui" as Ui
 import "common" as Common
 import "../common" as SharedCommon
+import "../common/JsonUtils.js" as JsonUtils
 
 Src.FreezeScreen {
   id: root
@@ -33,15 +33,17 @@ Src.FreezeScreen {
   property string currentRecordingAudioDevice: ""
   property string currentRecordingPath: ""
   readonly property string recordFlagPath: runtimeDir ? `${runtimeDir}/hyprquickshot-recording` : ""
-  property string _recordAudioModeFallback: "monitor"
-  readonly property string recordAudioMode: settings.recordAudioMode
+  property string _recordAudioMode: "monitor"
+  readonly property string recordAudioMode: root._recordAudioMode
   property bool recordMode: recordingState !== "idle" || recordProcess.running
   property var pendingRecordingPlan: null
   property var recordingSelection: null
   property string recordingState: "idle"
   property var regionSelectorItem: regionSelectorLoader.item
-  property bool _saveToDiskFallback: true
-  readonly property bool saveToDisk: settings.saveToDisk
+  property bool _saveToDisk: true
+  readonly property bool saveToDisk: root._saveToDisk
+  property bool settingsLoaded: false
+  readonly property string settingsPath: Quickshell.shellPath("data/hyprquickshot.conf")
   property bool sessionVisible: false
   property bool screenshotFailureKeepsSession: false
   property string tempPath
@@ -65,6 +67,27 @@ Src.FreezeScreen {
 
   function createRequestId(prefix) {
     return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`
+  }
+  function normalizeRecordAudioMode(modeValue) {
+    return modeValue === "defaultMic" || modeValue === "off" ? modeValue : "monitor"
+  }
+  function loadSettings() {
+    const data = JsonUtils.parseObject(settingsFile.text())
+    if (data) {
+      if (typeof data.saveToDisk === "boolean")
+        root._saveToDisk = data.saveToDisk
+      if (typeof data.recordAudioMode === "string")
+        root._recordAudioMode = root.normalizeRecordAudioMode(data.recordAudioMode)
+    }
+    root.settingsLoaded = true
+  }
+  function saveSettings() {
+    if (!root.settingsLoaded)
+      return
+    settingsFile.setText(JSON.stringify({
+      saveToDisk: root._saveToDisk,
+      recordAudioMode: root._recordAudioMode
+    }))
   }
   function resolveScreenshotOutput() {
     return ScreenshotUtils.resolveScreenshotOutput({
@@ -528,9 +551,8 @@ Src.FreezeScreen {
     root.setSaveToDisk(!root.saveToDisk)
   }
   function setSaveToDisk(value) {
-    const next = !!value
-    root._saveToDiskFallback = next
-    settings.saveToDisk = next
+    root._saveToDisk = !!value
+    root.saveSettings()
   }
   function resetSelectionState() {
     if (regionSelectorItem && typeof regionSelectorItem.resetSelection === "function")
@@ -539,9 +561,8 @@ Src.FreezeScreen {
       windowSelectorItem.resetSelection()
   }
   function setRecordAudioMode(modeValue) {
-    const next = modeValue === "defaultMic" || modeValue === "off" ? modeValue : "monitor"
-    root._recordAudioModeFallback = next
-    settings.recordAudioMode = next
+    root._recordAudioMode = root.normalizeRecordAudioMode(modeValue)
+    root.saveSettings()
   }
   function isPreRecordState() {
     return recordingState === "selecting" || recordingState === "countdown"
@@ -745,13 +766,8 @@ Src.FreezeScreen {
   visible: active && sessionVisible
 
   Component.onCompleted: {
+    root.loadSettings()
     SharedCommon.GlobalState.registerHyprQuickshot(root)
-    if (!Qt.application.organization || Qt.application.organization === "")
-      Qt.application.organization = "Hyprquickshot"
-    if (!Qt.application.domain || Qt.application.domain === "")
-      Qt.application.domain = "hyprquickshot"
-    if (!Qt.application.name || Qt.application.name === "")
-      Qt.application.name = "Hyprquickshot"
     Common.DependencyCheck.require("wl-screenrec", "HyprQuickshot", function (available) {
       root.wlScreenrecAvailable = available
     })
@@ -834,12 +850,11 @@ Src.FreezeScreen {
     }
   }
 
-  Core.Settings {
-    id: settings
-    property bool saveToDisk: true
-    property string recordAudioMode: "monitor"
-    category: "Hyprquickshot"
-    location: Quickshell.shellPath("data/hyprquickshot.conf")
+  FileView {
+    id: settingsFile
+    path: root.settingsPath
+    blockLoading: true
+    atomicWrites: true
   }
   CaptureProvider {
     id: captureProvider

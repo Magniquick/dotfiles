@@ -13,14 +13,14 @@
 ## Runtime Data Sources
 
 - Audio: `Quickshell.Services.Pipewire` in `WireplumberModule`.
-- Backlight: internal display through `qsgo.BacklightProvider`; external monitors through `ddcutil` in `BrightnessService`.
+- Backlight: internal display through `qsnative.BacklightProvider`; external monitors through `ddcutil` in `BrightnessService`.
 - Bluetooth: `Quickshell.Bluetooth`; optional debug-only `dbus-monitor`/`busctl`/`ps` helpers can inspect discovery holders and librepods tray metadata.
-- Calendar: `qsgo.IcalCache` through `CalendarService`.
-- Failed units: `qsgo.SystemdFailedProvider` snapshots structured `systemctl --output=json` and refreshes from systemd D-Bus events.
+- Calendar: `qsnative.IcalCache` through `CalendarService`.
+- Failed units: `qsnative.SystemdFailedProvider` snapshots structured `systemctl --output=json` and refreshes from systemd D-Bus events.
 - MPRIS: `Quickshell.Services.Mpris`; lyrics come from `unifiedlyrics`.
-- Network: `Quickshell.Networking`; `ip` is used only for address/gateway details and sysfs/device metadata fills ethernet labels.
+- Network: `Quickshell.Networking` for live device/network objects; `qsnative.NetStatsProvider` owns traffic rates, source sorting/switch state, address/gateway parsing, and ethernet sysfs/udev metadata. `ip` is used only as the address/gateway data source.
 - Privacy: `Quickshell.Services.Pipewire` for mic/screencast, `inotifywait`/`fuser`/`ps` for camera owners, and `wl-present toggle-freeze` for the privacy freeze control.
-- Updates: `qsgo.PacmanUpdatesProvider` (`checkupdates`, `yay -Qua`).
+- Updates: `qsnative.PacmanUpdatesProvider` (`checkupdates`, `yay -Qua`).
 
 ## UI / Design Notes
 

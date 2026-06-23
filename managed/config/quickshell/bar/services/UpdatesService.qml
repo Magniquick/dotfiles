@@ -1,7 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
-import qsgo
+import qsnative
 
 Item {
   id: root

@@ -1,7 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
-import qsgo
+import qsnative
 import "../../common/JsonUtils.js" as JsonUtils
 
 Item {
@@ -10,22 +10,19 @@ Item {
 
   property int days: 180
 
-  readonly property var client: calendarClient
-
   property string status: ""
   property string generatedAt: ""
   property string error: ""
-  property string eventsJson: ""
+  property var eventsByDay: ({})
   property bool refreshing: false
 
   function applyClientPayload() {
-    root.eventsJson = calendarClient.events_json || ""
-
-    const parsed = JsonUtils.parseObject(root.eventsJson)
+    const parsed = JsonUtils.parseObject(calendarClient.events_json || "")
     if (!parsed || typeof parsed !== "object") {
       root.status = "error"
       root.generatedAt = ""
       root.error = calendarClient.error || "Failed to parse calendar payload"
+      root.eventsByDay = ({})
       root.refreshing = false
       return
     }
@@ -33,6 +30,7 @@ Item {
     root.status = parsed.status ? String(parsed.status) : ""
     root.generatedAt = parsed.generatedAt ? String(parsed.generatedAt) : ""
     root.error = parsed.error ? String(parsed.error) : (calendarClient.error || "")
+    root.eventsByDay = (parsed.eventsByDay && typeof parsed.eventsByDay === "object") ? parsed.eventsByDay : ({})
     root.refreshing = false
   }
 

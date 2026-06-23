@@ -11,6 +11,7 @@ import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Wayland
+import qsnative
 import "../../common/materialkit" as MK
 
 ModuleContainer {
@@ -33,6 +34,10 @@ ModuleContainer {
   property int sleepIndex: root.sleepIndexFromState()
   readonly property string iconText: root.inhibitEnabled ? "" : "󰒲"
   readonly property color iconColor: root.inhibitEnabled ? Config.color.on_primary_container : Config.color.on_surface_variant
+
+  BarModuleLogic {
+    id: uiLogic
+  }
 
   backgroundColor: root.inhibitEnabled ? Config.color.primary_container : Config.barModuleBackground
   tooltipHoverable: true
@@ -465,44 +470,11 @@ ModuleContainer {
   }
 
   function parseSystemdIdleInhibitors(output) {
-    const names = []
-    const seen = {}
-    const lines = String(output || "").split("\n")
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (line === "" || line.indexOf("WHO") === 0 || line.indexOf("inhibitors listed.") !== -1)
-        continue
-      const match = rawLine.match(/^\s*(.+?)\s+\d+\s+\S+\s+\d+\s+\S+\s+(\S+)\s+(.+?)\s+(block|delay)\s*$/)
-      if (!match)
-        continue
-      const who = match[1].trim()
-      const what = match[2].trim().toLowerCase()
-      if (what.split(":").indexOf("idle") === -1)
-        continue
-      if (!seen[who]) {
-        seen[who] = true
-        names.push(who)
-      }
-    }
-
-    return names
+    return uiLogic.parseSystemdIdleInhibitors(String(output || ""))
   }
 
   function parsePortalSessionCount(output) {
-    const lines = String(output || "").split("\n")
-    let count = 0
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (line.indexOf("/org/freedesktop/portal/desktop/session/") === -1)
-        continue
-      if (line === "/org/freedesktop/portal/desktop/session")
-        continue
-      count += 1
-    }
-
-    return count
+    return uiLogic.parsePortalSessionCount(String(output || ""))
   }
 
   function dpmsSummary() {

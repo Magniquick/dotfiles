@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "../../common/JsonUtils.js" as JsonUtils
-import qsgo
+import qsnative
 
 Item {
   id: root

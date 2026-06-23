@@ -9,7 +9,7 @@
  * - Refresh button to sync tasks
  *
  * Dependencies:
- * - tools/todoist-sync.sh: Go Sync API helper launcher
+ * - qs-native Todoist provider: Sync API helper
  * - ~/.local/bin/custom/todoist.sh: Todoist launcher script
  */
 pragma ComponentBehavior: Bound

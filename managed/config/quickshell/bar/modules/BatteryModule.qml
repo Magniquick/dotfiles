@@ -18,6 +18,7 @@ import "../components"
 import QtQuick
 import QtQuick.Layouts
 import Quickshell.Services.UPower
+import qsnative
 
 ModuleContainer {
   id: root
@@ -28,6 +29,10 @@ ModuleContainer {
   property bool chargeControlAvailable: false
   property bool chargeControlWaitingForApplyRefresh: false
   property string chargeControlMode: ""
+
+  BarModuleLogic {
+    id: uiLogic
+  }
 
   function normalizePercent(value) {
     if (!isFinite(value))
@@ -134,16 +139,6 @@ ModuleContainer {
   function healthLabel() {
     return root.healthPercent >= 0 ? root.healthPercent + "%" : "—"
   }
-  function chargeControlField(output, name, separator) {
-    const lines = String(output || "").split("\n")
-    const prefix = String(name) + String(separator)
-    for (const line of lines) {
-      if (line.indexOf(prefix) === 0)
-        return line.replace(prefix, "").trim()
-    }
-
-    return ""
-  }
   function chargeControlIsLimit() {
     return root.chargeControlMode === "limit"
   }
@@ -159,17 +154,12 @@ ModuleContainer {
       return
     root.chargeControlApplying = true
     root.chargeControlWaitingForApplyRefresh = false
-    if (root.chargeControlIsLimit()) {
-      root.chargeControlMode = "auto"
-      chargeControlRunner.command = ["sh", "-c", "hp-charge-control config auto && hp-charge-control resume"]
-    } else {
-      root.chargeControlMode = "limit"
-      chargeControlRunner.command = ["sh", "-c", "hp-charge-control config limit 50 30 && hp-charge-control limit 50 30"]
-    }
+    root.chargeControlMode = root.chargeControlIsLimit() ? "auto" : "limit"
+    chargeControlRunner.command = uiLogic.chargeControlCommand(root.chargeControlMode)
     chargeControlRunner.trigger()
   }
   function updateChargeControlConfig(output) {
-    root.chargeControlMode = root.chargeControlField(output, "MODE", "=").toLowerCase()
+    root.chargeControlMode = String(uiLogic.parseChargeControlConfig(String(output || "")).mode || "").toLowerCase()
     if (root.chargeControlWaitingForApplyRefresh) {
       root.chargeControlWaitingForApplyRefresh = false
       root.chargeControlApplying = false
@@ -406,7 +396,7 @@ ModuleContainer {
   CommandRunner {
     id: chargeControlConfigRunner
 
-    command: ["hp-charge-control", "config", "show"]
+    command: ["/usr/local/bin/hp-charge-control", "config", "show"]
     enabled: root.chargeControlAvailable
     intervalMs: 0
     timeoutMs: 2000
@@ -447,7 +437,7 @@ ModuleContainer {
   }
   Component.onCompleted: {
     root.refreshHealth()
-    DependencyCheck.require("hp-charge-control", "BatteryModule", function (available) {
+    DependencyCheck.requireExecutable("/usr/local/bin/hp-charge-control", "BatteryModule", function (available) {
       root.chargeControlAvailable = available
       if (available)
         root.refreshChargeControl()

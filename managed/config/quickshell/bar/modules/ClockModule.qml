@@ -1,15 +1,15 @@
 /**
  * @module ClockModule
- * @description Time and calendar module with iCal integration
+ * @description Time and Google Calendar module
  *
  * Features:
  * - Time display (hh:mm ap format)
  * - Date display toggle on click
  * - Calendar tooltip with event integration
- * - iCal cache for calendar events
+ * - Google Calendar cache for calendar events
  *
  * Dependencies:
- * - Secret Service: CALENDAR_ICAL_URL
+ * - Google OAuth client/token secrets for configured calendar accounts
  */
 pragma ComponentBehavior: Bound
 import ".."
@@ -68,13 +68,7 @@ ModuleContainer {
             id: calendarRef
 
             active: root.tooltipActive
-            calendarClient: CalendarService.client
             currentDate: clock.date
-            refreshDays: CalendarService.days
-
-            onDataLoaded: function () {
-            // CalendarService controls refreshing state.
-            }
 
             // Handle refresh signal from parent
             Connections {

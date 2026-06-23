@@ -4,7 +4,7 @@
  *
  * Features:
  * - Monitors both system and user systemd instances
- * - Refreshes from a qs-go provider on startup, manually, and on systemd D-Bus events
+ * - Refreshes from a qs-native provider on startup, manually, and on systemd D-Bus events
  * - Displays count of failed units with error indicator
  * - Interactive tooltip listing all failed units
  * - Per-unit controls (restart, stop) via systemctl
@@ -20,7 +20,7 @@
  * - Event-driven refresh avoids fixed-interval sampling
  *
  * Failed Unit Detection:
- * - qs-go snapshots system/user failed units from structured systemctl JSON
+ * - qs-native snapshots system/user failed units from structured systemctl JSON
  * - systemd D-Bus manager signals trigger debounced refreshes
  * - Combined count displayed in bar
  * - Detailed unit list in tooltip with status and controls

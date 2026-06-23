@@ -19,6 +19,7 @@ import Quickshell.Services.Pipewire
 import "../../common/materialkit" as MK
 import ".."
 import "../components"
+import "../../common/JsonUtils.js" as JsonUtils
 
 ModuleContainer {
   id: root
@@ -140,12 +141,12 @@ ModuleContainer {
   }
   function collectAppStreams(nodes) {
     const result = []
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return result
 
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.isStream)
         continue
       if (!root.showVirtualIo && root.isVirtualIoNode(node))
@@ -155,12 +156,12 @@ ModuleContainer {
     return root.sortNodes(result, null)
   }
   function countAudioStreams(nodes, requireAudio) {
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return 0
     let total = 0
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.isStream)
         continue
       if (requireAudio && !node.audio)
@@ -171,12 +172,12 @@ ModuleContainer {
   }
   function collectInputDevices(nodes) {
     const result = []
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return result
 
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.audio || node.isStream || node.isSink)
         continue
       if (!root.showVirtualIo && root.isVirtualIoNode(node))
@@ -187,12 +188,12 @@ ModuleContainer {
   }
   function collectOutputDevices(nodes) {
     const result = []
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return result
 
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.audio || node.isStream || !node.isSink)
         continue
       if (!root.showVirtualIo && root.isVirtualIoNode(node))
@@ -202,13 +203,13 @@ ModuleContainer {
     return root.sortNodes(result, root.selectedOutput)
   }
   function countVirtualDevices(nodes, sinkDevices) {
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return 0
 
     let total = 0
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.audio || node.isStream)
         continue
       if (!!node.isSink !== !!sinkDevices)
@@ -220,13 +221,13 @@ ModuleContainer {
     return total
   }
   function countVirtualStreams(nodes) {
-    const n = root.modelCount(nodes)
+    const n = JsonUtils.modelCount(nodes)
     if (n === 0)
       return 0
 
     let total = 0
     for (let i = 0; i < n; i++) {
-      const node = root.modelAt(nodes, i)
+      const node = JsonUtils.modelAt(nodes, i)
       if (!node || !node.isStream)
         continue
       if (!root.isVirtualIoNode(node))
@@ -317,26 +318,6 @@ ModuleContainer {
         return true
     }
     return false
-  }
-  function modelAt(model, index) {
-    if (!model || index < 0)
-      return null
-    if (model.values && typeof model.values.length === "number")
-      return model.values[index]
-    if (typeof model.get === "function")
-      return model.get(index)
-    return model[index]
-  }
-  function modelCount(model) {
-    if (!model)
-      return 0
-    if (model.values && typeof model.values.length === "number")
-      return model.values.length
-    if (typeof model.count === "number")
-      return model.count
-    if (typeof model.length === "number")
-      return model.length
-    return 0
   }
   function refreshSink() {
     root.logEvent("refreshSink")
@@ -823,9 +804,9 @@ ModuleContainer {
         addNode(root.sink)
         addNode(root.selectedInput)
         addNode(root.selectedOutput)
-        const allNodesCount = root.modelCount(root.allAudioNodes)
+        const allNodesCount = JsonUtils.modelCount(root.allAudioNodes)
         for (let i = 0; i < allNodesCount; i++)
-          addNode(root.modelAt(root.allAudioNodes, i))
+          addNode(JsonUtils.modelAt(root.allAudioNodes, i))
         for (let i = 0; i < root.inputDevices.length; i++)
           addNode(root.inputDevices[i])
         for (let i = 0; i < root.outputDevices.length; i++)

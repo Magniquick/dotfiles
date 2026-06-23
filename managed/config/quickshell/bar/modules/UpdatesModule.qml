@@ -8,7 +8,7 @@
  * - Click opens yay for system upgrade
  *
  * Dependencies:
- * - qsgo PacmanUpdatesProvider (checkupdates + pacman -Qm + AUR API)
+ * - qsnative PacmanUpdatesProvider (checkupdates + yay -Qua)
  * - yay: AUR helper for updates (click action)
  */
 pragma ComponentBehavior: Bound

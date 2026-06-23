@@ -3,8 +3,8 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
+import qsnative
 import ".." as Common
-import "../JsonUtils.js" as JsonUtils
 
 Scope {
   id: root
@@ -15,51 +15,43 @@ Scope {
   readonly property string settingsPath: Quickshell.shellPath("data/idle_settings.json")
   readonly property bool ignoreLidEvents: Common.GlobalState.idleIgnoreLidEvents
 
-  FileView {
-    id: settingsFile
-
-    path: root.settingsPath
-    blockLoading: true
-    atomicWrites: true
+  IdleProvider {
+    id: idleProvider
   }
 
   Component.onCompleted: {
-    const raw = settingsFile.text()
-    if (raw && raw.length > 0) {
-      const data = JsonUtils.parseObject(raw)
-      if (!data) {
-        console.warn("[IdleManager] failed to parse settings")
-      } else {
-        if (Number.isFinite(data.displayOffTimeoutSec))
-          Common.GlobalState.idleMonitorSleepTimeoutSec = data.displayOffTimeoutSec
-        if (Number.isFinite(data.suspendTimeoutSec))
-          Common.GlobalState.idleSuspendTimeoutSec = data.suspendTimeoutSec
-        if (typeof data.suspendEnabled === "boolean")
-          Common.GlobalState.idleSuspendEnabled = data.suspendEnabled
-        if (typeof data.ignoreLidEvents === "boolean")
-          Common.GlobalState.idleIgnoreLidEvents = data.ignoreLidEvents
-      }
-    }
+    if (!idleProvider.loadSettings(root.settingsPath) && idleProvider.error.length > 0)
+      console.warn("[IdleManager] " + idleProvider.error)
+
+    Common.GlobalState.idleMonitorSleepTimeoutSec = idleProvider.displayOffTimeoutSec
+    Common.GlobalState.idleSuspendTimeoutSec = idleProvider.suspendTimeoutSec
+    Common.GlobalState.idleSuspendEnabled = idleProvider.suspendEnabled
+    Common.GlobalState.idleIgnoreLidEvents = idleProvider.ignoreLidEvents
+    if (!idleProvider.syncLidInhibitProcess(root.ignoreLidEvents) && idleProvider.error.length > 0)
+      console.warn("[IdleManager] " + idleProvider.error)
 
     root.initialized = true
   }
 
   function displayOffTimeoutSec() {
-    return Math.max(0, Math.round(Common.GlobalState.idleMonitorSleepTimeoutSec || 0))
+    return idleProvider.clampTimeout(Math.round(Common.GlobalState.idleMonitorSleepTimeoutSec || 0))
   }
 
   function suspendTimeoutSec() {
-    return Math.max(0, Math.round(Common.GlobalState.idleSuspendTimeoutSec || 0))
+    return idleProvider.clampTimeout(Math.round(Common.GlobalState.idleSuspendTimeoutSec || 0))
   }
 
   function saveSettings() {
-    const data = {
-      displayOffTimeoutSec: root.displayOffTimeoutSec(),
-      suspendTimeoutSec: root.suspendTimeoutSec(),
-      suspendEnabled: Common.GlobalState.idleSuspendEnabled,
-      ignoreLidEvents: Common.GlobalState.idleIgnoreLidEvents
+    if (!idleProvider.saveSettings(
+          root.settingsPath,
+          root.displayOffTimeoutSec(),
+          root.suspendTimeoutSec(),
+          Common.GlobalState.idleSuspendEnabled,
+          Common.GlobalState.idleIgnoreLidEvents
+        )
+        && idleProvider.error.length > 0) {
+      console.warn("[IdleManager] " + idleProvider.error)
     }
-    settingsFile.setText(JSON.stringify(data))
   }
 
   function persistIdleSettings() {
@@ -71,12 +63,6 @@ Scope {
   function scheduleSuspend() {
     const timeout = root.suspendTimeoutSec()
     root.nextSuspendAtMs = timeout > 0 && Common.GlobalState.idleSuspendEnabled && root.dpmsOff ? Date.now() + timeout * 1000 : 0
-  }
-
-  function secondsLeft(targetMs) {
-    if (!(targetMs > 0))
-      return 0
-    return Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
   }
 
   function setDpms(on, reason) {
@@ -173,21 +159,16 @@ Scope {
     target: "idle"
 
     function status(): string {
-      return JSON.stringify({
-        managedBy: "quickshell",
-        dpmsOff: root.dpmsOff,
-        displayOffTimeoutSec: root.displayOffTimeoutSec(),
-        displayOffSecondsLeft: root.dpmsOff ? 0 : null,
-        suspendEnabled: Common.GlobalState.idleSuspendEnabled,
-        suspendTimeoutSec: root.suspendTimeoutSec(),
-        suspendSecondsLeft: root.secondsLeft(root.nextSuspendAtMs),
-        sleepInhibited: Common.GlobalState.idleSleepInhibited,
-        ignoreLidEvents: Common.GlobalState.idleIgnoreLidEvents
-      })
+      return idleProvider.statusJson(
+        root.dpmsOff,
+        root.nextSuspendAtMs,
+        Common.GlobalState.idleSleepInhibited,
+        Date.now()
+      )
     }
 
     function setDisplayOffTimeout(seconds: int): void {
-      Common.GlobalState.idleMonitorSleepTimeoutSec = Math.max(0, seconds)
+      Common.GlobalState.idleMonitorSleepTimeoutSec = idleProvider.clampTimeout(seconds)
     }
 
     function wake(): void {
@@ -195,10 +176,11 @@ Scope {
     }
   }
 
-  Process {
-    id: lidInhibitProcess
+  onIgnoreLidEventsChanged: {
+    if (!root.initialized)
+      return
 
-    command: ["systemd-inhibit", "--what=handle-lid-switch", "--who=Quickshell", "--why=Ignore lid close from Caffeine", "--mode=block", "sleep", "infinity"]
-    running: root.ignoreLidEvents
+    if (!idleProvider.syncLidInhibitProcess(root.ignoreLidEvents) && idleProvider.error.length > 0)
+      console.warn("[IdleManager] " + idleProvider.error)
   }
 }

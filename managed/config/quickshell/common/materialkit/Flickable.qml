@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import "ScrollConstants.js" as Scroll
+import "../" as Common
 
 Flickable {
   id: flickable
@@ -9,10 +10,16 @@ Flickable {
   property bool showVerticalScrollBar: true
   property bool autoHideVerticalScrollBar: true
   property int verticalScrollBarHideDelay: 900
-  property real mouseWheelSpeed: Scroll.mouseWheelSpeed
-  property real momentumVelocity: 0
-  property bool isMomentumActive: false
-  property real friction: Scroll.friction
+  property bool smoothTouchpadScroll: true
+  property real smoothTouchpadScrollFactor: Scroll.smoothTouchpadScrollFactor
+  property real smoothTouchpadAngleThreshold: Scroll.smoothTouchpadAngleThreshold
+  property real scrollTargetY: 0
+  property real smoothScrollDurationMs: Scroll.smoothTouchpadDurationMs
+  property real touchpadMomentumVelocity: 0
+  property real touchpadMomentumFrameVelocity: 0
+  property real touchpadMomentumElapsedMs: 0
+  property bool suppressContentYBehavior: false
+  property var velocitySamples: []
 
   function showScrollBar() {
     if (flickable.showVerticalScrollBar)
@@ -22,6 +29,25 @@ Flickable {
   function hideScrollBar() {
     if (flickable.autoHideVerticalScrollBar)
       vbar.policy = ScrollBar.AlwaysOff
+  }
+
+  function startTouchpadMomentum() {
+    const currentTime = Date.now()
+    const latestSample = flickable.velocitySamples.length > 0 ? flickable.velocitySamples[flickable.velocitySamples.length - 1] : null
+    if (!latestSample || currentTime - latestSample.time > Scroll.momentumReleaseWindowMs) {
+      flickable.touchpadMomentumVelocity = 0
+      flickable.velocitySamples = []
+      return
+    }
+
+    if (Math.abs(flickable.touchpadMomentumVelocity) < Scroll.minMomentumVelocity)
+      return
+
+    flickable.touchpadMomentumFrameVelocity = flickable.touchpadMomentumVelocity * Scroll.smoothTouchpadMomentumFrameScale
+    flickable.touchpadMomentumElapsedMs = 0
+    flickable.touchpadMomentumVelocity = 0
+    flickable.velocitySamples = []
+    momentumAnim.running = true
   }
 
   clip: true
@@ -34,118 +60,103 @@ Flickable {
   pressDelay: 0
   flickableDirection: Flickable.VerticalFlick
 
-  WheelHandler {
-    id: wheelHandler
+  MouseArea {
+    anchors.fill: parent
+    acceptedButtons: Qt.NoButton
+    enabled: flickable.smoothTouchpadScroll
 
-    property real touchpadSpeed: Scroll.touchpadSpeed
-    property real momentumRetention: Scroll.momentumRetention
-    property real lastWheelTime: 0
-    property real momentum: 0
-    property var velocitySamples: []
-    property bool sessionUsedMouseWheel: false
-
-    function startMomentum() {
-      flickable.isMomentumActive = true
-      momentumAnim.running = true
-    }
-
-    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-
-    onWheel: event => {
-      const maxY = Math.max(0, flickable.contentHeight - flickable.height)
-      if (maxY <= 0 || !flickable.interactive) {
-        event.accepted = false
+    onWheel: wheel => {
+      const hasHorizontalDelta = (wheel.pixelDelta && wheel.pixelDelta.x !== 0) || wheel.angleDelta.x !== 0
+      if (hasHorizontalDelta || (wheel.modifiers & Qt.ShiftModifier)) {
+        wheel.accepted = false
         return
       }
 
+      const maxY = Math.max(0, flickable.contentHeight - flickable.height)
+      if (maxY <= 0 || !flickable.interactive) {
+        wheel.accepted = false
+        return
+      }
+
+      const hasPixel = wheel.pixelDelta && wheel.pixelDelta.y !== 0
+      const angleY = wheel.angleDelta.y
+      const hasPhase = wheel.phase !== undefined && wheel.phase !== Qt.NoScrollPhase
+      const isScrollEnd = hasPhase && wheel.phase === Qt.ScrollEnd
+      const touchpadLike = hasPixel || (angleY !== 0 && Math.abs(angleY) < flickable.smoothTouchpadAngleThreshold)
+      if (isScrollEnd) {
+        flickable.startTouchpadMomentum()
+        wheel.accepted = true
+        return
+      }
+
+      if (!touchpadLike) {
+        wheel.accepted = false
+        return
+      }
+
+      momentumAnim.running = false
+      flickable.touchpadMomentumFrameVelocity = 0
+      flickable.smoothScrollDurationMs = Scroll.smoothTouchpadDurationMs
       flickable.showScrollBar()
       if (flickable.autoHideVerticalScrollBar)
         hideBarTimer.restart()
 
+      const delta = hasPixel ? wheel.pixelDelta.y : angleY / flickable.smoothTouchpadAngleThreshold * flickable.smoothTouchpadScrollFactor
+      const base = scrollAnim.running ? flickable.scrollTargetY : flickable.contentY
       const currentTime = Date.now()
-      const timeDelta = currentTime - lastWheelTime
-      lastWheelTime = currentTime
+      const contentDelta = -delta
+      flickable.velocitySamples.push({
+        "delta": contentDelta,
+        "time": currentTime
+      })
+      flickable.velocitySamples = flickable.velocitySamples.filter(sample => currentTime - sample.time < Scroll.velocitySampleWindowMs)
 
-      const hasPixel = event.pixelDelta && event.pixelDelta.y !== 0
-      const deltaY = event.angleDelta.y
-      const isTraditionalMouse = !hasPixel && Math.abs(deltaY) >= 120 && (Math.abs(deltaY) % 120) === 0
-      const isHighDpiMouse = !hasPixel && !isTraditionalMouse && deltaY !== 0
-      const isTouchpad = hasPixel
-
-      if (isTraditionalMouse) {
-        sessionUsedMouseWheel = true
-        momentumAnim.running = false
-        flickable.isMomentumActive = false
-        velocitySamples = []
-        momentum = 0
-        flickable.momentumVelocity = 0
-
-        const lines = Math.round(Math.abs(deltaY) / 120)
-        const scrollAmount = (deltaY > 0 ? -lines : lines) * flickable.mouseWheelSpeed
-        flickable.contentY = Math.max(0, Math.min(maxY, flickable.contentY + scrollAmount))
-
-        if (flickable.flicking)
-          flickable.cancelFlick()
-      } else if (isHighDpiMouse) {
-        sessionUsedMouseWheel = true
-        momentumAnim.running = false
-        flickable.isMomentumActive = false
-        velocitySamples = []
-        momentum = 0
-        flickable.momentumVelocity = 0
-
-        const delta = deltaY / 8 * touchpadSpeed
-        flickable.contentY = Math.max(0, Math.min(maxY, flickable.contentY - delta))
-
-        if (flickable.flicking)
-          flickable.cancelFlick()
-      } else if (isTouchpad) {
-        sessionUsedMouseWheel = false
-        momentumAnim.running = false
-        flickable.isMomentumActive = false
-
-        let delta = event.pixelDelta.y * touchpadSpeed
-
-        velocitySamples.push({
-          "delta": delta,
-          "time": currentTime
-        })
-        velocitySamples = velocitySamples.filter(sample => currentTime - sample.time < Scroll.velocitySampleWindowMs)
-
-        if (velocitySamples.length > 1) {
-          const totalDelta = velocitySamples.reduce((sum, sample) => sum + sample.delta, 0)
-          const timeSpan = currentTime - velocitySamples[0].time
-          if (timeSpan > 0) {
-            flickable.momentumVelocity = Math.max(-Scroll.maxMomentumVelocity, Math.min(Scroll.maxMomentumVelocity, totalDelta / timeSpan * 1000))
-          }
-        }
-
-        if (timeDelta < Scroll.momentumTimeThreshold) {
-          momentum = momentum * momentumRetention + delta * Scroll.momentumDeltaFactor
-          delta += momentum
-        } else {
-          momentum = 0
-        }
-
-        flickable.contentY = Math.max(0, Math.min(maxY, flickable.contentY - delta))
-
-        if (flickable.flicking)
-          flickable.cancelFlick()
+      if (flickable.velocitySamples.length > 1) {
+        const totalDelta = flickable.velocitySamples.reduce((sum, sample) => sum + sample.delta, 0)
+        const timeSpan = currentTime - flickable.velocitySamples[0].time
+        if (timeSpan > 0)
+          flickable.touchpadMomentumVelocity = Math.max(-Scroll.maxMomentumVelocity, Math.min(Scroll.maxMomentumVelocity, totalDelta / timeSpan * 1000))
       }
 
-      event.accepted = true
-    }
+      flickable.scrollTargetY = Math.max(0, Math.min(base - delta, maxY))
+      flickable.suppressContentYBehavior = true
+      flickable.contentY = flickable.scrollTargetY
+      flickable.suppressContentYBehavior = false
 
-    onActiveChanged: {
-      if (!active) {
-        if (!sessionUsedMouseWheel && Math.abs(flickable.momentumVelocity) >= Scroll.minMomentumVelocity) {
-          startMomentum()
-        } else {
-          velocitySamples = []
-          flickable.momentumVelocity = 0
-        }
-      }
+      if (flickable.flicking)
+        flickable.cancelFlick()
+
+      if (hasPhase)
+        touchpadMomentumTimer.stop()
+      else
+        touchpadMomentumTimer.restart()
+      wheel.accepted = true
     }
+  }
+
+  Timer {
+    id: touchpadMomentumTimer
+    interval: Scroll.momentumTimeThreshold
+
+    onTriggered: {
+      flickable.startTouchpadMomentum()
+    }
+  }
+
+  Behavior on contentY {
+    enabled: !momentumAnim.running && !flickable.suppressContentYBehavior
+
+    NumberAnimation {
+      id: scrollAnim
+      alwaysRunToEnd: true
+      duration: flickable.smoothScrollDurationMs
+      easing.type: Common.Config.motion.easing.standard
+    }
+  }
+
+  onContentYChanged: {
+    if (!scrollAnim.running)
+      flickable.scrollTargetY = flickable.contentY
   }
 
   onMovementStarted: {
@@ -158,42 +169,45 @@ Flickable {
       hideBarTimer.restart()
   }
 
+  Timer {
+    id: hideBarTimer
+    interval: flickable.verticalScrollBarHideDelay
+    onTriggered: flickable.hideScrollBar()
+  }
+
   FrameAnimation {
     id: momentumAnim
     running: false
 
     onTriggered: {
       const dt = frameTime
+      flickable.touchpadMomentumElapsedMs += dt * 1000
+      if (flickable.touchpadMomentumElapsedMs >= Scroll.maxMomentumDurationMs) {
+        flickable.touchpadMomentumFrameVelocity = 0
+        running = false
+        return
+      }
+
       const maxY = Math.max(0, flickable.contentHeight - flickable.height)
-      const newY = flickable.contentY - flickable.momentumVelocity * dt
+      const newY = flickable.contentY + flickable.touchpadMomentumFrameVelocity * dt
 
       if (newY < 0 || newY > maxY) {
         flickable.contentY = newY < 0 ? 0 : maxY
+        flickable.scrollTargetY = flickable.contentY
+        flickable.touchpadMomentumFrameVelocity = 0
         running = false
-        flickable.isMomentumActive = false
-        flickable.momentumVelocity = 0
-        if (flickable.autoHideVerticalScrollBar)
-          hideBarTimer.restart()
         return
       }
 
       flickable.contentY = newY
-      flickable.momentumVelocity *= Math.pow(flickable.friction, dt / 0.016)
+      flickable.scrollTargetY = newY
+      flickable.touchpadMomentumFrameVelocity *= Math.pow(Scroll.friction, dt / 0.016)
 
-      if (Math.abs(flickable.momentumVelocity) < Scroll.momentumStopThreshold) {
+      if (Math.abs(flickable.touchpadMomentumFrameVelocity) < Scroll.momentumStopThreshold) {
+        flickable.touchpadMomentumFrameVelocity = 0
         running = false
-        flickable.isMomentumActive = false
-        flickable.momentumVelocity = 0
-        if (flickable.autoHideVerticalScrollBar)
-          hideBarTimer.restart()
       }
     }
-  }
-
-  Timer {
-    id: hideBarTimer
-    interval: flickable.verticalScrollBarHideDelay
-    onTriggered: flickable.hideScrollBar()
   }
 
   ScrollBar.vertical: ScrollBar {

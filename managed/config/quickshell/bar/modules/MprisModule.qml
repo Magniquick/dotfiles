@@ -68,6 +68,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Quickshell.Services.Mpris
+import qsnative
 import "../../common/materialkit" as MK
 import unifiedlyrics 1.0
 
@@ -140,6 +141,10 @@ ModuleContainer {
     return root.clampNumber(base + delta, 0, Math.max(0, length))
   }
 
+  BarModuleLogic {
+    id: uiLogic
+  }
+
   function lengthMicrosForLyrics(player) {
     if (!player)
       return ""
@@ -162,7 +167,7 @@ ModuleContainer {
     const artist = root.trackArtist ? String(root.trackArtist).trim() : ""
     const album = root.trackAlbum ? String(root.trackAlbum).trim() : ""
     const lengthMicros = root.lengthMicrosForLyrics(root.activePlayer)
-    return [track, artist, album, lengthMicros].join("\u241E")
+    return uiLogic.lyricsLookupKey(track, artist, album, lengthMicros)
   }
 
   function chooseLyricsSource() {
@@ -215,38 +220,15 @@ ModuleContainer {
   }
 
   function isNoLyricsError(errorText) {
-    const msg = errorText ? String(errorText).toLowerCase() : ""
-    if (msg === "")
-      return false
-    if (msg.indexOf("no lyrics") >= 0)
-      return true
-    if (msg.indexOf("lyrics not found") >= 0)
-      return true
-    if (msg.indexOf("spotify and lrclib failed") >= 0)
-      return true
-    return false
+    return uiLogic.isNoLyricsError(String(errorText || ""))
   }
 
   function lyricsSourceIcon(source) {
-    const value = source ? String(source).toLowerCase() : ""
-    if (value.indexOf("spotify") === 0)
-      return ""
-    if (value.indexOf("netease") === 0)
-      return "󰋋"
-    if (value.indexOf("lrclib") === 0)
-      return ""
-    return ""
+    return String(uiLogic.lyricsSourceInfo(String(source || "")).icon || "")
   }
 
   function lyricsSourceLabel(source) {
-    const value = source ? String(source).toLowerCase() : ""
-    if (value.indexOf("spotify") === 0)
-      return "Spotify"
-    if (value.indexOf("netease") === 0)
-      return "NetEase"
-    if (value.indexOf("lrclib") === 0)
-      return "LRCLIB"
-    return ""
+    return String(uiLogic.lyricsSourceInfo(String(source || "")).label || "")
   }
 
   function updateLyricsModel() {
@@ -478,37 +460,7 @@ ModuleContainer {
   function spotifyLyricsTrackRef(player) {
     if (!player)
       return ""
-
-    // Avoid wasting requests for non-Spotify players.
-    const desktopEntry = player.desktopEntry ? String(player.desktopEntry).toLowerCase() : ""
-    const identity = player.identity ? String(player.identity).toLowerCase() : ""
-    if (desktopEntry.indexOf("spotify") < 0 && identity.indexOf("spotify") < 0)
-      return ""
-
-    const md = player.metadata || ({});
-
-    // Prefer xesam:url, if present (often a https://open.spotify.com/track/... URL).
-    const xesamUrl = md["xesam:url"]
-    if (typeof xesamUrl === "string" && xesamUrl !== "")
-      return xesamUrl
-    if (Array.isArray(xesamUrl) && xesamUrl.length > 0 && typeof xesamUrl[0] === "string")
-      return xesamUrl[0]
-
-    // Fall back to mpris:trackid, which for Spotify commonly ends in the 22-char track ID.
-    const mprisTrackId = md["mpris:trackid"]
-    if (typeof mprisTrackId === "string" && mprisTrackId !== "") {
-      const parts = mprisTrackId.split("/")
-      const last = parts.length > 0 ? parts[parts.length - 1] : ""
-      if (last)
-        return last
-    }
-
-    // Last resort: uniqueId sometimes looks like a stable identifier, but is not guaranteed.
-    const uniqueId = player.uniqueId ? String(player.uniqueId) : ""
-    if (/^[A-Za-z0-9]{22}$/.test(uniqueId))
-      return uniqueId
-
-    return ""
+    return uiLogic.spotifyTrackRef(root.mprisPlayerSummary(player, 0))
   }
 
   function scheduleLyricsRefresh() {
@@ -613,15 +565,6 @@ ModuleContainer {
 
     return ""
   }
-  function isIgnoredPlayer(player) {
-    if (!player)
-      return true
-
-    const dbusName = player.dbusName ? player.dbusName.toLowerCase() : ""
-    const identity = player.identity ? player.identity.toLowerCase() : ""
-    const desktopEntry = player.desktopEntry ? player.desktopEntry.toLowerCase() : ""
-    return dbusName.indexOf("playerctld") >= 0 || identity === "playerctld" || desktopEntry === "playerctld"
-  }
   function lengthSeconds(player) {
     if (!player)
       return 0
@@ -636,20 +579,31 @@ ModuleContainer {
     return 0
   }
   function pickActivePlayer() {
-    const list = (root.players || []).filter(player => {
-      return !root.isIgnoredPlayer(player)
-    })
-    for (let i = 0; i < list.length; i++) {
-      const player = list[i]
-      if (player && player.playbackState === MprisPlaybackState.Playing)
-        return player
+    const list = root.players || []
+    const index = uiLogic.activeMprisPlayerIndex(list.map((player, i) => root.mprisPlayerSummary(player, i)))
+    return index >= 0 && index < list.length ? list[index] : null
+  }
+
+  function mprisPlayerIndex(player) {
+    const list = root.players || []
+    for (let i = 0; i < list.length; ++i) {
+      if (list[i] === player)
+        return i
     }
-    for (let i = 0; i < list.length; i++) {
-      const player = list[i]
-      if (player && player.playbackState === MprisPlaybackState.Paused)
-        return player
+    return -1
+  }
+
+  function mprisPlayerSummary(player, index) {
+    return {
+      index: index,
+      playbackState: player ? player.playbackState : 0,
+      stateRank: player && player.playbackState === MprisPlaybackState.Playing ? 0 : (player && player.playbackState === MprisPlaybackState.Paused ? 1 : 2),
+      dbusName: String(player && player.dbusName ? player.dbusName : ""),
+      identity: String(player && player.identity ? player.identity : ""),
+      desktopEntry: String(player && player.desktopEntry ? player.desktopEntry : ""),
+      uniqueId: String(player && player.uniqueId ? player.uniqueId : ""),
+      metadata: player && player.metadata ? player.metadata : ({})
     }
-    return list.length > 0 ? list[0] : null
   }
   function playbackStateLabel(status) {
     if (status === MprisPlaybackState.Playing)

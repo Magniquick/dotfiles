@@ -3,22 +3,11 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
-import qsgo
-
-import "../../common" as Common
-import "../components/DdcUtils.js" as DdcUtils
+import qsnative
 
 Item {
   id: root
   visible: false
-
-  // Dependencies
-  property bool ddcutilAvailable: false
-
-  // Map: connector name (e.g. "DP-1") -> i2c bus number (string, e.g. "3")
-  property var ddcByConnector: ({})
-  property int ddcVersion: 0
 
   // Created per-screen monitor objects.
   property var _monitors: []
@@ -63,20 +52,12 @@ Item {
   }
 
   function scheduleDdcDetect() {
-    if (!root.ddcutilAvailable)
-      return
     if (!ddcDetectTimer.running)
       ddcDetectTimer.start()
   }
 
   Component.onCompleted: {
     backlightProvider.start()
-    Common.DependencyCheck.require("ddcutil", "BrightnessService", function (available) {
-      root.ddcutilAvailable = available
-      if (available)
-        root.scheduleDdcDetect()
-    })
-
     root.scheduleRebuild()
   }
 
@@ -97,32 +78,7 @@ Item {
     id: ddcDetectTimer
     interval: 200
     repeat: false
-    onTriggered: {
-      if (ddcDetectProc.running)
-        ddcDetectProc.running = false
-      ddcDetectProc.running = true
-    }
-  }
-
-  Process {
-    id: ddcDetectProc
-    running: false
-    // External monitors still need ddcutil because Quickshell has no DDC/CI API.
-    command: ["ddcutil", "detect", "--brief", "--sleep-multiplier=0.5"]
-
-    stdout: StdioCollector {
-      onStreamFinished: {
-        const text = (this.text || "").trim()
-        if (text === "") {
-          root.ddcByConnector = ({})
-          root.ddcVersion++
-          return
-        }
-
-        root.ddcByConnector = DdcUtils.parseDdcDetect(text)
-        root.ddcVersion++
-      }
-    }
+    onTriggered: root.backlight.refreshDdc()
   }
 
   BacklightProvider {
@@ -147,14 +103,13 @@ Item {
 
     // DDC mapping. This is intentionally connector-name based.
     readonly property string ddcBusNum: {
-      root.ddcVersion
-      // reactive
-      const bus = root.ddcByConnector[monitor.screenName]
+      root.backlight.ddc_version
+      const bus = root.backlight.ddcBusForConnector(monitor.screenName)
       return bus ? String(bus) : ""
     }
     // Prefer the native backlight provider for internal panels (eDP/LVDS/DSI), even
     // if ddcutil detects an i2c bus for them.
-    readonly property bool isDdc: root.ddcutilAvailable && monitor.ddcBusNum !== "" && !monitor.isInternalOutput
+    readonly property bool isDdc: root.backlight.ddcutil_available && monitor.ddcBusNum !== "" && !monitor.isInternalOutput
 
     // Internal backlight paths (if available).
     readonly property string backlightDevice: root.backlight.device || ""
@@ -172,15 +127,12 @@ Item {
     }
     readonly property bool brightnessControlAvailable: {
       if (monitor.method === "ddc")
-        return root.ddcutilAvailable && monitor.ddcBusNum !== ""
+        return root.backlight.ddcutil_available && monitor.ddcBusNum !== ""
       if (monitor.method === "backlight")
         return root.backlight.available
       return false
     }
 
-    // DDC state
-    property bool _ddcGetRunning: false
-    property bool _ddcSetRunning: false
     property real _pendingSet: NaN
 
     function clamp01(x) {
@@ -188,15 +140,6 @@ Item {
       if (!isFinite(n))
         return 0
       return Math.max(0, Math.min(1, n))
-    }
-
-    function percentToNormalized(p) {
-      const n = Number(p)
-      if (!isFinite(n))
-        return 0
-      // Prevent fully black by clamping to 1% on controllable displays.
-      const clamped = Math.max(1, Math.min(100, Math.round(n)))
-      return clamped / 100.0
     }
 
     function setBrightness(value) {
@@ -220,8 +163,7 @@ Item {
 
     function refresh() {
       if (monitor.method === "ddc") {
-        if (!ddcGetProc.running)
-          ddcGetProc.running = true
+        root.backlight.refreshDdcBrightness(monitor.screenName)
         return
       }
       if (monitor.method === "backlight") {
@@ -259,6 +201,15 @@ Item {
         if (monitor.method === "backlight")
           monitor.error = root.backlight.error || ""
       }
+      function onDdc_versionChanged() {
+        if (monitor.method === "ddc") {
+          monitor.maxBrightness = root.backlight.ddcMaxBrightness(monitor.screenName)
+          monitor.error = root.backlight.ddcError(monitor.screenName)
+          const percent = root.backlight.ddcBrightnessPercent(monitor.screenName)
+          if (percent > 0)
+            monitor.brightness = Math.max(0, Math.min(1, percent / 100.0))
+        }
+      }
     }
 
     readonly property Timer ddcSetTimer: Timer {
@@ -267,58 +218,13 @@ Item {
       onTriggered: {
         if (monitor.method !== "ddc")
           return
-        if (monitor._ddcSetRunning)
-          return
         const next = monitor._pendingSet
         if (!isFinite(next))
           return
         monitor._pendingSet = NaN;
 
-        // Compute raw value based on last known max. If unknown, assume 100.
-        const max = monitor.maxBrightness > 0 ? monitor.maxBrightness : 100
-        const raw = Math.max(1, Math.min(max, Math.round(next * max)))
-
-        monitor._ddcSetRunning = true
-        monitor.ddcSetProc.command = ["ddcutil", "-b", monitor.ddcBusNum, "--sleep-multiplier=0.05", "setvcp", "10", String(raw)]
-        monitor.ddcSetProc.running = true
-      }
-    }
-
-    readonly property Process ddcGetProc: Process {
-      running: false
-      // External monitors still need ddcutil because Quickshell has no DDC/CI API.
-      command: ["ddcutil", "-b", monitor.ddcBusNum, "--sleep-multiplier=0.05", "getvcp", "10", "--brief"]
-      stdout: StdioCollector {
-        onStreamFinished: {
-          monitor._ddcGetRunning = false
-          const parsed = DdcUtils.parseDdcVcp10(this.text || "")
-          if (!parsed) {
-            monitor.error = "DDC read failed"
-            return
-          }
-          monitor.error = ""
-          monitor.maxBrightness = parsed.max
-          monitor.brightness = Math.max(0, Math.min(1, parsed.current / parsed.max))
-        }
-      }
-      onRunningChanged: {
-        if (running)
-          monitor._ddcGetRunning = true
-      }
-      function onExited(exitCode, exitStatus) {
-        // Make running edge-triggered for repeated refreshes.
-        if (monitor.ddcGetProc.running)
-          monitor.ddcGetProc.running = false
-      }
-    }
-
-    readonly property Process ddcSetProc: Process {
-      running: false
-      // External monitors still need ddcutil because Quickshell has no DDC/CI API.
-      function onExited(exitCode, exitStatus) {
-        monitor._ddcSetRunning = false;
-        // Refresh after setting to sync with actual device state.
-        monitor.refresh()
+        const percent = Math.max(1, Math.min(100, Math.round(next * 100)))
+        root.backlight.setDdcBrightness(monitor.screenName, percent)
       }
     }
   }

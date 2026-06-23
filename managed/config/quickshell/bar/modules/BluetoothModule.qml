@@ -7,6 +7,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell.Bluetooth
 import Quickshell.Io
+import qsnative
 import ".."
 import "../components"
 import "../../common" as Common
@@ -18,6 +19,7 @@ ModuleContainer {
   property var adapter: bluetooth.defaultAdapter
   property var devices: adapter && adapter.devices ? adapter.devices.values : []
   property var deviceSnapshot: []
+  property var deviceInfoByKey: ({})
 
   property string iconConnected: ""
   property string iconDisabled: "󰂲"
@@ -57,6 +59,42 @@ ModuleContainer {
   readonly property bool adapterDiscovering: !!(root.adapter && root.adapter.discovering)
   readonly property string adapterName: root.adapter && root.adapter.name ? String(root.adapter.name) : "Bluetooth"
 
+  BarModuleLogic {
+    id: uiLogic
+  }
+
+  BluetoothDiagnosticsProvider {
+    id: bluetoothDiagnostics
+  }
+
+  Connections {
+    target: bluetoothDiagnostics
+
+    function onLast_start_discovery_senderChanged() {
+      root.lastStartDiscoverySender = bluetoothDiagnostics.last_start_discovery_sender
+      root.lastStartDiscoveryPid = bluetoothDiagnostics.last_start_discovery_pid
+      root.lastStartDiscoveryProcess = bluetoothDiagnostics.last_start_discovery_process
+      root.logDebug("resolved StartDiscovery caller sender=" + root.lastStartDiscoverySender + " pid=" + root.lastStartDiscoveryPid + " process=" + root.lastStartDiscoveryProcess)
+    }
+
+    function onLast_scan_holdersChanged() {
+      root.lastScanHolders = bluetoothDiagnostics.last_scan_holders
+      if (root.lastScanHolders.length > 0)
+        root.logDebug("possible scan holders:\n" + root.lastScanHolders)
+      else
+        root.logDebug("possible scan holders: none matched")
+    }
+
+    function onLibrepods_tooltipChanged() {
+      root.applyLibrepodsTooltip(bluetoothDiagnostics.librepods_tooltip)
+    }
+
+    function onErrorChanged() {
+      if (bluetoothDiagnostics.error.length > 0)
+        root.logDebug("bluetooth diagnostics: " + bluetoothDiagnostics.error)
+    }
+  }
+
   function logDebug(message) {
     if (!root.debugLogging)
       return
@@ -64,90 +102,27 @@ ModuleContainer {
   }
 
   function deviceLabel(device) {
-    if (!device)
-      return ""
-    const alias = String(device.alias || "").trim()
-    const name = String(device.name || "").trim()
-    if (root.isReadableDeviceName(alias, device))
-      return alias
-    if (root.isReadableDeviceName(name, device))
-      return name
-    return ""
-  }
-
-  function normalizeId(text) {
-    return String(text || "").trim().toUpperCase().replace(/[^0-9A-F]/g, "")
-  }
-
-  function isRawBluetoothId(text, device) {
-    const value = String(text || "").trim()
-    if (value.length === 0)
-      return true
-
-    const normalized = root.normalizeId(value)
-    const addressNormalized = root.normalizeId(device && device.address ? device.address : "")
-    if (addressNormalized.length === 12 && normalized === addressNormalized)
-      return true
-
-    return false
-  }
-
-  function isReadableDeviceName(text, device) {
-    const value = String(text || "").trim()
-    if (value.length === 0)
-      return false
-    if (root.isRawBluetoothId(value, device))
-      return false
-    if (value.toLowerCase() === "unknown device")
-      return false
-    return true
+    const info = root.deviceInfo(device)
+    return info && info.label ? String(info.label) : ""
   }
 
   function deviceTypeIcon(device) {
-    if (!device)
-      return "󰂯"
-
-    const iconName = String(device.icon || "").toLowerCase()
-    if (iconName.indexOf("headset") >= 0)
-      return "󰋎"
-    if (iconName.indexOf("headphone") >= 0)
-      return "󰋋"
-    if (iconName.indexOf("audio") >= 0 || iconName.indexOf("speaker") >= 0)
-      return "󰓃"
-    if (iconName.indexOf("phone") >= 0)
-      return "󰄜"
-    if (iconName.indexOf("keyboard") >= 0)
-      return "󰌌"
-    if (iconName.indexOf("mouse") >= 0)
-      return "󰍽"
-    if (iconName.indexOf("gamepad") >= 0 || iconName.indexOf("joystick") >= 0)
-      return "󰊗"
-    if (iconName.indexOf("tablet") >= 0)
-      return "󰓷"
-    if (iconName.indexOf("camera") >= 0)
-      return "󰄀"
-    if (iconName.indexOf("watch") >= 0)
-      return "󰋋"
-    if (iconName.indexOf("computer") >= 0 || iconName.indexOf("laptop") >= 0)
-      return "󰌢"
-
-    return "󰂯"
+    const info = root.deviceInfo(device)
+    return info && info.icon ? String(info.icon) : "󰂯"
   }
 
   function deviceKey(device) {
+    const info = root.deviceInfo(device)
+    if (info && info.key)
+      return String(info.key)
     if (!device)
       return ""
-    return device.dbusPath || device.address || root.deviceLabel(device)
+    return device.dbusPath || device.address || ""
   }
 
   function deviceBatteryValue(device) {
-    if (!device)
-      return -1
-    if (Number.isFinite(device.batteryPercentage))
-      return Math.max(0, Math.min(100, Math.round(device.batteryPercentage)))
-    if (Number.isFinite(device.battery))
-      return Math.max(0, Math.min(100, Math.round(device.battery)))
-    return -1
+    const info = root.deviceInfo(device)
+    return info && Number.isFinite(info.battery) ? info.battery : -1
   }
 
   function parseLibrepodsTooltip(text) {
@@ -156,47 +131,33 @@ ModuleContainer {
   }
 
   function parseLibrepodsTooltipParts(text) {
-    const raw = String(text || "")
-    const m = raw.match(/L:\s*([0-9-]+)%?\s+R:\s*([0-9-]+)%?\s+C:\s*([0-9-]+)/i)
-    if (!m)
-      return {
-        left: -1,
-        right: -1,
-        caseBattery: -1,
-        average: -1
-      }
+    return uiLogic.parseLibrepodsTooltip(String(text || ""))
+  }
 
-    const values = []
-    const parsedValues = []
-    for (let i = 1; i <= 3; i++) {
-      const n = parseInt(m[i], 10)
-      if (Number.isFinite(n) && n > 0 && n <= 100) {
-        values.push(n)
-        parsedValues.push(n)
-      } else {
-        parsedValues.push(-1)
-      }
-    }
-    if (values.length === 0)
-      return {
-        left: parsedValues[0],
-        right: parsedValues[1],
-        caseBattery: parsedValues[2],
-        average: -1
-      }
+  function applyLibrepodsTooltip(text) {
+    const parsed = root.parseLibrepodsTooltipParts(text)
+    if (parsed.average > 0) {
+      const changed = parsed.average !== root.librepodsBattery || parsed.left !== root.librepodsBatteryLeft || parsed.right !== root.librepodsBatteryRight || parsed.caseBattery !== root.librepodsBatteryCase
 
-    const sum = values.reduce((acc, v) => acc + v, 0)
-    return {
-      left: parsedValues[0],
-      right: parsedValues[1],
-      caseBattery: parsedValues[2],
-      average: Math.round(sum / values.length)
+      root.librepodsBattery = parsed.average
+      root.librepodsBatteryLeft = parsed.left
+      root.librepodsBatteryRight = parsed.right
+      root.librepodsBatteryCase = parsed.caseBattery
+
+      root.logDebug("librepods tooltip battery parsed avg=" + parsed.average + " L=" + parsed.left + " R=" + parsed.right + " C=" + parsed.caseBattery)
+      if (changed && root.connectedBattery <= 0 && root.connectedCount > 0)
+        root.refreshBluetooth()
+    } else {
+      root.librepodsBattery = -1
+      root.librepodsBatteryLeft = -1
+      root.librepodsBatteryRight = -1
+      root.librepodsBatteryCase = -1
     }
   }
 
   function isAirpodsDevice(device) {
-    const label = root.deviceLabel(device).toLowerCase()
-    return label.indexOf("airpods") >= 0
+    const info = root.deviceInfo(device)
+    return !!(info && info.airpods)
   }
 
   function displayBatteryValue(device, directBattery) {
@@ -365,27 +326,48 @@ ModuleContainer {
   }
 
   function sortedDevices(list) {
-    const copy = (list || []).slice(0)
-    copy.sort((a, b) => {
-      const aConnected = a && a.connected ? 1 : 0
-      const bConnected = b && b.connected ? 1 : 0
-      if (aConnected !== bConnected)
-        return bConnected - aConnected
+    const source = list || []
+    const infos = uiLogic.bluetoothDevices(source.map((device, index) => root.bluetoothDeviceSummary(device, index)))
+    const infoMap = {}
+    const sorted = []
+    for (let i = 0; i < infos.length; ++i) {
+      const info = infos[i]
+      const device = source[Number(info.index)]
+      if (!device)
+        continue
+      infoMap[String(info.key)] = info
+      sorted.push(device)
+    }
+    root.deviceInfoByKey = infoMap
+    return sorted
+  }
 
-      const aPaired = a && a.paired ? 1 : 0
-      const bPaired = b && b.paired ? 1 : 0
-      if (aPaired !== bPaired)
-        return bPaired - aPaired
+  function bluetoothDeviceSummary(device, index) {
+    return {
+      index: index,
+      alias: String(device && device.alias ? device.alias : ""),
+      name: String(device && device.name ? device.name : ""),
+      address: String(device && device.address ? device.address : ""),
+      dbusPath: String(device && device.dbusPath ? device.dbusPath : ""),
+      icon: String(device && device.icon ? device.icon : ""),
+      connected: !!(device && device.connected),
+      paired: !!(device && device.paired),
+      batteryPercentage: device && Number.isFinite(device.batteryPercentage) ? Number(device.batteryPercentage) : null,
+      battery: device && Number.isFinite(device.battery) ? Number(device.battery) : null
+    }
+  }
 
-      const aLabel = root.deviceLabel(a).toLowerCase()
-      const bLabel = root.deviceLabel(b).toLowerCase()
-      if (aLabel < bLabel)
-        return -1
-      if (aLabel > bLabel)
-        return 1
-      return 0
-    })
-    return copy
+  function deviceInfo(device) {
+    if (!device)
+      return null
+    const dbusPath = String(device.dbusPath || "")
+    if (dbusPath.length > 0 && root.deviceInfoByKey[dbusPath])
+      return root.deviceInfoByKey[dbusPath]
+    const address = String(device.address || "")
+    if (address.length > 0 && root.deviceInfoByKey[address])
+      return root.deviceInfoByKey[address]
+    const infos = uiLogic.bluetoothDevices([root.bluetoothDeviceSummary(device, 0)])
+    return infos.length > 0 ? infos[0] : null
   }
 
   function refreshBluetooth() {
@@ -480,33 +462,23 @@ ModuleContainer {
     root.setDiscovery(!currentlyScanning)
   }
 
-  function parseDiscoveryOwnerLine(line) {
-    const text = String(line || "").trim()
-    if (text.length === 0)
-      return
-    if (text.indexOf("member=StartDiscovery") < 0)
-      return
-    const senderMatch = text.match(/sender=([^ ]+)/)
-    if (!senderMatch || senderMatch.length < 2)
-      return
-    const sender = String(senderMatch[1]).trim()
-    if (sender.length === 0 || sender === root.lastStartDiscoverySender)
-      return
-    root.lastStartDiscoverySender = sender
-    root.lastStartDiscoveryPid = -1
-    root.lastStartDiscoveryProcess = ""
-    root.logDebug("StartDiscovery caller seen sender=" + sender + "; resolving pid")
-    resolveDiscoveryPidRunner.trigger()
-  }
-
   function logDiscoveryOwner(context) {
     if (root.lastStartDiscoverySender.length === 0) {
       root.logDebug(context + " discovery owner unknown (no StartDiscovery sender seen)")
-      probeScanHoldersRunner.trigger()
+      bluetoothDiagnostics.probeScanHolders()
       return
     }
     root.logDebug(context + " possible holder sender=" + root.lastStartDiscoverySender + " pid=" + root.lastStartDiscoveryPid + " process=" + root.lastStartDiscoveryProcess)
-    probeScanHoldersRunner.trigger()
+    bluetoothDiagnostics.probeScanHolders()
+  }
+
+  function refreshBluetoothDiagnostics() {
+    if (root.debugBluetooth && root.adapterEnabled) {
+      bluetoothDiagnostics.startDiscoveryMonitor()
+      bluetoothDiagnostics.probeLibrepodsTooltip()
+    } else {
+      bluetoothDiagnostics.stopDiscoveryMonitor()
+    }
   }
 
   function notifyScanStopFailure() {
@@ -660,6 +632,9 @@ ModuleContainer {
     onTriggered: root.updatePendingDeviceActions()
   }
 
+  onDebugBluetoothChanged: root.refreshBluetoothDiagnostics()
+  onAdapterEnabledChanged: root.refreshBluetoothDiagnostics()
+
   function requestScanState() {
     if (!root.adapterEnabled) {
       root.scanActive = false
@@ -674,93 +649,13 @@ ModuleContainer {
       root.logDebug("scan appears to be held by another client/session")
   }
 
-  ProcessMonitor {
-    id: discoveryOwnerMonitor
-    enabled: root.adapterEnabled && root.debugBluetooth
-    processName: "BlueZStartDiscoveryMonitor"
-    command: ["dbus-monitor", "--system", "type='method_call',destination='org.bluez',interface='org.bluez.Adapter1',member='StartDiscovery'"]
-    onOutput: data => root.parseDiscoveryOwnerLine(data)
-  }
-
-  CommandRunner {
-    id: resolveDiscoveryPidRunner
-    intervalMs: 0
-    timeoutMs: 3000
-    command: root.lastStartDiscoverySender.length > 0 ? ["busctl", "--system", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixProcessID", "s", root.lastStartDiscoverySender] : []
-    onRan: function (output) {
-      const m = String(output || "").match(/\bu\s+([0-9]+)/)
-      if (!m) {
-        root.logDebug("discovery pid parse failed sender=" + root.lastStartDiscoverySender + " output=" + output)
-        return
-      }
-      const pid = parseInt(m[1], 10)
-      if (!Number.isFinite(pid))
-        return
-      root.lastStartDiscoveryPid = pid
-      resolveDiscoveryProcessRunner.trigger()
-    }
-  }
-
-  CommandRunner {
-    id: resolveDiscoveryProcessRunner
-    intervalMs: 0
-    timeoutMs: 3000
-    command: root.lastStartDiscoveryPid > 0 ? ["sh", "-lc", "ps -p " + root.lastStartDiscoveryPid + " -o comm= 2>/dev/null | head -n1"] : []
-    onRan: function (output) {
-      root.lastStartDiscoveryProcess = String(output || "").trim()
-      root.logDebug("resolved StartDiscovery caller sender=" + root.lastStartDiscoverySender + " pid=" + root.lastStartDiscoveryPid + " process=" + root.lastStartDiscoveryProcess)
-    }
-  }
-
-  CommandRunner {
-    id: probeScanHoldersRunner
-    intervalMs: 0
-    timeoutMs: 3000
-    command: ["sh", "-lc", "ps -eo pid,user,cmd | grep -E '(btmgmt|bluetoothctl|blueman|blueberry|kdeconnectd|librepods)' | grep -v grep | head -n 20"]
-    onRan: function (output) {
-      root.lastScanHolders = String(output || "").trim()
-      if (root.lastScanHolders.length > 0)
-        root.logDebug("possible scan holders:\n" + root.lastScanHolders)
-      else
-        root.logDebug("possible scan holders: none matched")
-    }
-  }
-
-  Process {
-    id: librepodsTooltipProcess
+  Timer {
+    id: librepodsProbeTimer
+    interval: 10000
+    repeat: true
     running: root.debugBluetooth
-    command: ["sh", "-lc", "svc=$(busctl --user list 2>/dev/null | awk '$1 ~ /^org\\.kde\\.StatusNotifierItem-/ {print $1}' | while read -r s; do id=$(busctl --user get-property \"$s\" /StatusNotifierItem org.kde.StatusNotifierItem Id 2>/dev/null); echo \"$id\" | grep -qi '\"librepods\"' && { echo \"$s\"; break; }; done); [ -n \"$svc\" ] && busctl --user get-property \"$svc\" /StatusNotifierItem org.kde.StatusNotifierItem ToolTip 2>/dev/null || true"]
-
-    stdout: StdioCollector {
-      onStreamFinished: {
-        const parsed = root.parseLibrepodsTooltipParts(this.text)
-        if (parsed.average > 0) {
-          const changed = parsed.average !== root.librepodsBattery || parsed.left !== root.librepodsBatteryLeft || parsed.right !== root.librepodsBatteryRight || parsed.caseBattery !== root.librepodsBatteryCase
-
-          root.librepodsBattery = parsed.average
-          root.librepodsBatteryLeft = parsed.left
-          root.librepodsBatteryRight = parsed.right
-          root.librepodsBatteryCase = parsed.caseBattery
-
-          root.logDebug("librepods tooltip battery parsed avg=" + parsed.average + " L=" + parsed.left + " R=" + parsed.right + " C=" + parsed.caseBattery)
-          if (changed && root.connectedBattery <= 0 && root.connectedCount > 0)
-            root.refreshBluetooth()
-        } else {
-          root.librepodsBattery = -1
-          root.librepodsBatteryLeft = -1
-          root.librepodsBatteryRight = -1
-          root.librepodsBatteryCase = -1
-        }
-      }
-    }
-
-    stderr: StdioCollector {
-      onStreamFinished: {
-        const err = String(this.text || "").trim()
-        if (err.length > 0)
-          root.logDebug("librepods probe stderr: " + err)
-      }
-    }
+    triggeredOnStart: true
+    onTriggered: bluetoothDiagnostics.probeLibrepodsTooltip()
   }
 
   Timer {

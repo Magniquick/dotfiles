@@ -2,15 +2,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import ".."
-import "../../common/JsonUtils.js" as JsonUtils
 
 Item {
   id: calendar
 
   property bool active: false
-  property var calendarClient: null
-  property string calendarGeneratedAt: ""
-  property string calendarStatus: ""
+  readonly property string calendarError: CalendarService.error
+  readonly property string calendarGeneratedAt: CalendarService.generatedAt
+  readonly property string calendarStatus: CalendarService.status
   property date currentDate: new Date()
   readonly property int dayCellSize: Config.type.bodyMedium.size + Config.space.md
   readonly property int dayGridHeight: dayCellSize * 6 + Config.space.xs * 5
@@ -24,8 +23,7 @@ Item {
       return []
     return calendar.eventsByDay[key]
   }
-  property var eventsByDay: ({})
-  property int refreshDays: 180
+  readonly property var eventsByDay: CalendarService.eventsByDay
   property date selectedDate: new Date()
   readonly property date today: new Date()
   readonly property int todayDay: today.getDate()
@@ -35,32 +33,6 @@ Item {
 
   signal dataLoaded
 
-  function applyCalendarFromClient() {
-    if (!calendar.calendarClient)
-      return
-    const payload = JsonUtils.parseObject(calendar.calendarClient.events_json)
-    calendar.applyCalendarData(payload)
-    calendar.dataLoaded()
-  }
-  function applyCalendarData(payload) {
-    if (!payload || typeof payload !== "object") {
-      calendar.eventsByDay = ({})
-      calendar.calendarStatus = "error"
-      calendar.calendarGeneratedAt = ""
-      return
-    }
-
-    if (!payload.status || typeof payload.eventsByDay !== "object") {
-      calendar.eventsByDay = ({})
-      calendar.calendarStatus = "error"
-      calendar.calendarGeneratedAt = ""
-      return
-    }
-
-    calendar.calendarStatus = payload.status
-    calendar.calendarGeneratedAt = payload.generatedAt || ""
-    calendar.eventsByDay = payload.eventsByDay || ({})
-  }
   function dayKey(date) {
     if (!date)
       return ""
@@ -104,10 +76,8 @@ Item {
     return Math.min(3, calendar.eventsByDay[key].length)
   }
   function refreshRequested() {
-    if (!calendar.calendarClient)
-      return
     Qt.callLater(function () {
-      calendar.calendarClient.refresh(calendar.refreshDays)
+      CalendarService.refresh("user")
     })
   }
   // `dayEvents` is derived declaratively from `eventsByDay` and `selectedDate`.
@@ -118,6 +88,7 @@ Item {
   implicitWidth: 240
 
   Component.onCompleted: {}
+  onEventsByDayChanged: calendar.dataLoaded()
   onActiveChanged: {
     if (!calendar.active) {
       monthListView.positionViewAtIndex(calendar.monthRangeCenter, ListView.SnapPosition)
@@ -130,22 +101,6 @@ Item {
     calendar.selectedDate = new Date(calendar.currentDate.getTime())
   }
 
-  Connections {
-    target: calendar.calendarClient
-
-    function onEvents_jsonChanged() {
-      calendar.applyCalendarFromClient()
-    }
-    function onGenerated_atChanged() {
-      calendar.calendarGeneratedAt = calendar.calendarClient.generated_at
-    }
-    function onStatusChanged() {
-      calendar.calendarStatus = calendar.calendarClient.status
-    }
-    function onErrorChanged() {
-      calendar.applyCalendarFromClient()
-    }
-  }
   ColumnLayout {
     id: layout
 
@@ -439,11 +394,20 @@ Item {
         }
       }
       Text {
+        Layout.fillWidth: true
+        color: Config.color.error
+        font.family: Config.fontFamily
+        font.pixelSize: Config.type.bodySmall.size
+        text: calendar.calendarError
+        visible: calendar.calendarStatus === "error" && calendar.calendarError !== ""
+        wrapMode: Text.WordWrap
+      }
+      Text {
         color: Config.color.on_surface_variant
         font.family: Config.fontFamily
         font.pixelSize: Config.type.bodySmall.size
         text: "No events"
-        visible: !calendar.dayEvents || calendar.dayEvents.length === 0
+        visible: calendar.calendarStatus !== "error" && (!calendar.dayEvents || calendar.dayEvents.length === 0)
       }
     }
   }

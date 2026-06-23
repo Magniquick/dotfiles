@@ -4,13 +4,13 @@
  *
  * Features:
  * - Per-screen control (each bar instance controls its own `screen`)
- * - Internal backlight via `qsgo.BacklightProvider` (sysfs + udev, no polling)
+ * - Internal backlight via `qsnative.BacklightProvider` (sysfs + udev, no polling)
  * - External monitors via DDC/CI using `ddcutil` (if installed and detected)
  * - Interactive slider control (1-100%)
  * - Mouse wheel adjustment support
  *
  * Dependencies:
- * - Internal: `qsgo` module (BacklightProvider) + permission to write `/sys/class/backlight/<device>/brightness`
+ * - Internal: `qsnative` module (BacklightProvider) + permission to write `/sys/class/backlight/<device>/brightness`
  * - External (optional): `ddcutil`
  *
  * Configuration:
