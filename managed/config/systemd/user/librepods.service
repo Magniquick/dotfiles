@@ -6,8 +6,8 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/magni/Documents/Appimages/LibrePods
-ExecStart=/home/magni/Documents/Appimages/LibrePods/librepods-x86_64.AppImage --start-minimized
+WorkingDirectory=%h/Documents/Appimages/LibrePods
+ExecStart=%h/Documents/Appimages/LibrePods/librepods-x86_64.AppImage --start-minimized
 Restart=on-failure
 RestartSec=5
 

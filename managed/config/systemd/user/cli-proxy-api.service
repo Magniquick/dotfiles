@@ -1,0 +1,12 @@
+[Unit]
+Description=cli-proxy-api Service (mise-managed binary)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/mise/installs/ubi-router-for-me-cli-proxy-api/latest/cli-proxy-api --config %h/.config/cli-proxy-api/config.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

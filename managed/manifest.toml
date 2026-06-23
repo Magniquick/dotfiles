@@ -8,17 +8,19 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "brave-flags.conf"
-  digest = "87c1f59d73e32b07ddabeeeb9589c1a4cfd1067298a9235884676c3171378d77"
-  size = 1079
+  digest = "c6f10762a70d219efa65bb744a7aa013b8f6b74264bff71c26d31c94199e7fd7"
+  size = 1148
   mode = 420
-  mtime_ns = 1765537184890392183
+  mtime_ns = 1778287131601297911
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -30,17 +32,19 @@
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "dconf"
-  digest = "03c6b0f46da7fc55d9f7e8742066776c8f0b5d3b1ade22f1840c44dc44c861f7"
+  digest = "df89b33f3e4a0e384c6f632bf769ccc542aaca9a87c8ed26f27840add4405b0a"
   size = 0
   mode = 448
-  mtime_ns = 1774821416398949910
+  mtime_ns = 1781641843657259579
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -52,6 +56,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -63,6 +68,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -70,54 +76,59 @@
   digest = "584b1015f436d9b35080a00ee89cd3726efa239c8a14d9be77ef855dd7efe868"
   size = 76
   mode = 420
-  mtime_ns = 1777584373344664566
+  mtime_ns = 1778287131601297911
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "gtk-4.0/settings.ini"
-  digest = "584b1015f436d9b35080a00ee89cd3726efa239c8a14d9be77ef855dd7efe868"
-  size = 76
+  digest = "556949ff9f31ec5ff45e3e31bdddcf24dcfa243cc89b4b0ecf8b62dd62c22c68"
+  size = 40
   mode = 420
-  mtime_ns = 1777584373345664569
+  mtime_ns = 1778626310053996029
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "hypr"
-  digest = "5eb108a63265960b13085daf207609685b27b3677cef36f57318b94a9bccd0dc"
+  digest = "c747ffbb607ac965ee574ce505ef6c7d8615ae835f79904a8f51faa01ba9f556"
   size = 0
   mode = 493
-  mtime_ns = 1774824642935901503
+  mtime_ns = 1780900391253800970
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "kitty"
-  digest = "dcfdbaeead350a922eacc7012dad32476a189ff46e8c1eaa830261b0bf401e02"
+  digest = "580f381f38a2b7b7d310d0ecb662bb638ba9cfd47c9be9c053134711e9ecdef5"
   size = 0
   mode = 493
-  mtime_ns = 1774824642936901518
+  mtime_ns = 1781877514175045307
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "metapac"
-  digest = "ec238148d14169493b8517c29716274ecc673dbee96fbfef855cc9ec6a4048b9"
+  digest = "1066ce0e5535ad6ff0353f38c8ec05b720110f4ff42a8cc8d4e2856aa5f6d10a"
   size = 0
   mode = 493
-  mtime_ns = 1771534687715042373
+  mtime_ns = 1775275994988476026
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -129,6 +140,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -140,6 +152,19 @@
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
+
+[[entries]]
+  group = "config"
+  relative_path = "mise/config.toml"
+  digest = "ff784b72871ace992d7b2b3071f344095ab623a70258325f4adf35b1b0a652ed"
+  size = 478
+  mode = 420
+  mtime_ns = 1781876039466037892
+  type = "file"
+  uid = 1000
+  gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -151,17 +176,19 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "quickshell"
-  digest = "e612ec02326b2e2c5080407c0a5a2731d89b6f8dc3277c07266673a725a23ffd"
+  digest = "bc60f15a570549edb51cdb08b754c09adbe7d8fe49e517ca0c23080337bdf09c"
   size = 0
   mode = 493
-  mtime_ns = 1774824642949450261
+  mtime_ns = 1781855499493389170
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -173,6 +200,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -184,6 +212,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -195,28 +224,31 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "systemd"
-  digest = "018b390619be41288b64fbf7781e2cb94d562bba43eb2562d623e6f1e6c37601"
+  digest = "89026c8e6e864775b98350f254f8daf2ce4d46c182c9cbb04130ede6ebf37946"
   size = 0
   mode = 493
   mtime_ns = 1762773703928963989
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "user-dirs.dirs"
-  digest = "f958e9344067e1ec53a5bef99dd6a7cac257e6124984a35b0a4474c97c5ed7c2"
-  size = 676
-  mode = 420
-  mtime_ns = 1774824642949901717
+  digest = "c612daf481245abd583c375d771ee06133d4f822363d0d51d5749abddbfb4884"
+  size = 710
+  mode = 384
+  mtime_ns = 1776088760539540411
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -228,6 +260,7 @@
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -239,17 +272,19 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
   relative_path = "vicinae"
-  digest = "b6adcaaf4a058ceeed9bf7584f66c461f7cc966545dc22d459cb7710a4a90ee5"
+  digest = "ef544db9c721a33b263af7e31904c070d9f0c98c28aa95d0e53c5b1dc16e16b2"
   size = 0
   mode = 493
-  mtime_ns = 1774824642949901717
+  mtime_ns = 1778600401623668344
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "config"
@@ -261,17 +296,43 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "etc"
   relative_path = "brave/policies/managed"
-  digest = "0092635b386f5843086a2f8973aca4fc753d6f6979f0288c2f572e8f6ea5b334"
+  digest = "0c9f3a21eebd50cd053b028db6023b080c895aa2736ca54bdd7011cfcdfed2ab"
   size = 0
   mode = 493
-  mtime_ns = 1762730382565785758
+  mtime_ns = 1777147308056192940
   type = "directory"
   uid = 0
   gid = 0
+  deploy_mode = "symlink"
+
+[[entries]]
+  group = "etc"
+  relative_path = "conf.d/wireless-regdom"
+  digest = "f2dfcf69fb4e7a2d3675bf933dfc3e2cb2406fdff977cad83dc850a741fa830c"
+  size = 4051
+  mode = 420
+  mtime_ns = 1781548016496201641
+  type = "file"
+  uid = 0
+  gid = 0
+  deploy_mode = "symlink"
+
+[[entries]]
+  group = "home"
+  relative_path = "Documents/Appimages/update_appimages.sh"
+  digest = "332d3d7e2b18a97430e9b9dc8914cd25d7068866206ba2d436e3bb049c4da832"
+  size = 11066
+  mode = 493
+  mtime_ns = 1781877017707225104
+  type = "file"
+  uid = 1000
+  gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "home"
@@ -283,17 +344,19 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "local"
   relative_path = "bin"
-  digest = "9d738951c5fc3289f45e01b679f19323cf2240d22cef1bee0ceea88fb0504305"
+  digest = "f74976c8d7cc2b90476c5ee0dc2aa0ea1ea0d97d2b905ed35a719a9385d6b1db"
   size = 0
   mode = 493
-  mtime_ns = 1774824958900544435
+  mtime_ns = 1781560078927166257
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "local"
@@ -305,6 +368,7 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "local"
@@ -316,6 +380,7 @@
   type = "file"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
 
 [[entries]]
   group = "local"
@@ -327,3 +392,16 @@
   type = "directory"
   uid = 1000
   gid = 1000
+  deploy_mode = "symlink"
+
+[[entries]]
+  group = "local"
+  relative_path = "share/icons/rose-pine-hyprcursor"
+  digest = "daf3f247861e1d79c6df30d0508e4ee40d90d36757b0defd0886bc7eee81e517"
+  size = 0
+  mode = 493
+  mtime_ns = 1711301543000000000
+  type = "directory"
+  uid = 1000
+  gid = 1000
+  deploy_mode = "symlink"

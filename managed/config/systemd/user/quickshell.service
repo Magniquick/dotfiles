@@ -8,10 +8,12 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-ExecStart=/home/magni/.config/quickshell/qs
-ExecStop=/usr/bin/quickshell kill --path /home/magni/.local/share/dotbak/managed/config/quickshell
+ExecStart=%E/quickshell/qs
+ExecStop=/usr/bin/quickshell kill --path %h/.local/share/dotbak/managed/config/quickshell
 Restart=on-failure
+RestartPreventExitStatus=SIGABRT
 MemoryMax=2G
+MemorySwapMax=500M
 
 [Install]
 WantedBy=graphical-session.target

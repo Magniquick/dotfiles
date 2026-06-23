@@ -4,7 +4,7 @@ Documentation=file:/home/magni/Projects/shadow/docs/local-extension.md
 
 [Service]
 Type=simple
-ExecStart=/home/magni/Projects/shadow/native-host/target/release/shadow-native-host --daemon
+ExecStart=%h/Projects/shadow/native-host/target/release/shadow-native-host --daemon
 ExecReload=/bin/kill -USR1 $MAINPID
 Restart=on-failure
 RestartSec=1

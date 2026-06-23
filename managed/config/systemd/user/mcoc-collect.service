@@ -7,9 +7,9 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/magni/Projects/mcoc
+WorkingDirectory=%h/Projects/mcoc
 ExecStartPre=/usr/bin/nm-online -q -t 120
-ExecStart=/home/magni/Projects/mcoc/mcoc collect
+ExecStart=%h/Projects/mcoc/mcoc collect
 Restart=on-failure
 RestartSec=30min
 Nice=10

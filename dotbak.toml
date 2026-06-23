@@ -1,16 +1,16 @@
 [groups]
   [groups.config]
     base = "~/.config"
-    entries = ["atuin", "brave-flags.conf", "captive-browser.toml", "dconf", "dunst", "environment.d", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini", "hypr", "kitty", "metapac", "micro/colorschemes", "micro/settings.json", "nautilus", "quickshell", "rofi", "swaync", "sys64", "systemd", "user-dirs.dirs", "user-dirs.locale", "uwsm", "vicinae", "waybar"]
+    entries = ["atuin", "brave-flags.conf", "captive-browser.toml", "dconf", "dunst", "environment.d", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini", "hypr", "kitty", "metapac", "micro/colorschemes", "micro/settings.json", "mise/config.toml", "nautilus", "quickshell", "rofi", "swaync", "sys64", "systemd", "user-dirs.dirs", "user-dirs.locale", "uwsm", "vicinae", "waybar"]
   [groups.etc]
     base = "/etc"
-    entries = ["brave/policies/managed"]
+    entries = ["brave/policies/managed", "conf.d/wireless-regdom"]
   [groups.home]
     base = "~"
-    entries = ["Templates"]
+    entries = ["Templates", "Documents/Appimages/update_appimages.sh"]
   [groups.local]
     base = "~/.local"
-    entries = ["bin", "share/applications", "share/dbus-1/services/org.freedesktop.Notifications.service", "share/icons/Adwaita"]
+    entries = ["bin", "share/applications", "share/dbus-1/services/org.freedesktop.Notifications.service", "share/icons/Adwaita", "share/icons/rose-pine-hyprcursor"]
 
 [settings]
   dot_prefix_style = "underscore"

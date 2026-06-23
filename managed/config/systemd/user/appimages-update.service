@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/magni/Documents/Appimages
-ExecStart=/usr/bin/env bash /home/magni/Documents/Appimages/update_appimages.sh
+WorkingDirectory=%h/Documents/Appimages
+ExecStart=/usr/bin/env bash %h/Documents/Appimages/update_appimages.sh
 Restart=on-failure
 RestartSec=3min
