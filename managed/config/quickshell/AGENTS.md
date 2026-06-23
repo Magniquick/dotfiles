@@ -27,11 +27,11 @@ The Quickshell binary locally tracks the master branch.
 - Reload: auto reload is disabled; use `bash tools/reload-quickshell.sh` for the normal manual check. It restarts `quickshell.service`, waits briefly, then prints recent warnings/errors.
 - Global config is at `quickshell.conf`
 
-**Native modules (Go/C++/QML):**
+**Native modules (Rust/C++/QML):**
 
 - Build, import-path, and module notes live in `common/modules/AGENTS.md`.
-- Current native/module directories include `qs-go` (primary Go/CGO Qt plugin), `qs-capture` (native capture), `qsmath` (math rendering), `material-popups` (Rust/CXX-Qt clipboard popup backend), `unified-lyrics-api`, and `rounded_polygon_qmljs`.
-- Prefer Go-based modules for new native integrations unless asked otherwise.
+- Current native/module directories include `qs-native` (primary Rust/CXX-Qt Qt plugin), `qs-capture` (native capture), `qsmath` (math rendering), `material-popups` (Rust/CXX-Qt clipboard popup backend), `unified-lyrics-api`, and `rounded_polygon_qmljs`.
+- Prefer Rust/CXX-Qt modules for new reusable native integrations unless asked otherwise.
 
 ## Architecture
 
@@ -68,29 +68,29 @@ The bar uses a **modular architecture** with key directories:
    - **Groups**: `StartMenuGroup`, `WorkspaceGroup`, `ControlsGroup`, `WirelessGroup`, `PanelGroup`
    - **Individual modules**: `MprisModule`, `NetworkModule`, `BluetoothModule`, `BatteryModule`, `BacklightModule`, `IdleInhibitModule`, `ScreenRecordingModule`, `PowerProfilesModule`, `NotificationModule`, `PrivacyModule`, `TrayModule`, `SystemdFailedModule`, `UpdatesModule`, `ClockModule`, `WireplumberModule`, `ToDoModule`, etc.
 
-### Native Modules (Go/C++/QML)
+### Native Modules (Rust/C++/QML)
 
-Native module notes live in `common/modules/AGENTS.md`. The primary QML plugin is `qs-go` (`import qsgo`), with focused modules for capture (`qs-capture`), math rendering (`qsmath`), lyrics (`unified-lyrics-api`), and rounded shape helpers (`rounded_polygon_qmljs`).
+Native module notes live in `common/modules/AGENTS.md`. The primary QML plugin is `qs-native` (`import qsnative`), with focused modules for capture (`qs-capture`), math rendering (`qsmath`), lyrics (`unified-lyrics-api`), and rounded shape helpers (`rounded_polygon_qmljs`).
 
 ### Data Sources & Runtime Integration
 
 Modules integrate with system services via:
 
 - **Quickshell services/APIs**: `Quickshell.Services.Mpris`, `Quickshell.Services.SystemTray`, `Quickshell.Hyprland`, `Quickshell.Networking`, `Quickshell.Bluetooth`, `Quickshell.Services.Pipewire`, `Quickshell.Services.UPower`
-- **Native helpers**: `qsgo.BacklightProvider`, `PacmanUpdatesProvider`, `IcalCache`, `TodoistClient`, `SysInfoProvider`, `AiChatSession`, plus `qs-capture`, `qsmath`, and `unifiedlyrics`
+- **Native helpers**: `qsnative.BacklightProvider`, `NetStatsProvider`, `PacmanUpdatesProvider`, `IcalCache`, `TodoistClient`, `SysInfoProvider`, `AiChatSession`, plus `qs-capture`, `qsmath`, and `unifiedlyrics`
 - **External commands**:
-  - `ip` for current address/gateway details that `Quickshell.Networking` does not expose
+  - `ip` for current address/gateway details that `Quickshell.Networking` does not expose; ethernet sysfs/udev metadata is owned by `qsnative.NetStatsProvider`
   - `ddcutil` for external monitor brightness
-  - `qsgo.SystemdFailedProvider` for failed unit lists; it snapshots with structured `systemctl --output=json` and refreshes from systemd D-Bus events
+  - `qsnative.SystemdFailedProvider` for failed unit lists; it snapshots with structured `systemctl --output=json` and refreshes from systemd D-Bus events
   - `inotifywait` + `fuser` + `ps` for camera device ownership; PipeWire covers microphone/screencast state
   - Debug-only `busctl`, `dbus-monitor`, and `ps` for Bluetooth discovery diagnostics and librepods tray metadata
   - `hp-charge-control` for battery charge policy controls
   - `wl-screenrec`, `wl-copy`, and `pactl` for HyprQuickshot recording/copy/audio flows
-  - Updates: `checkupdates` and `yay -Qua` (via `qsgo` PacmanUpdatesProvider)
+  - Updates: `checkupdates` and `yay -Qua` (via `qsnative` PacmanUpdatesProvider)
 
-Prefer native Quickshell APIs when available. If not, prefer the existing `qs-go`/Go-native path for reusable integrations; shell out only for narrow command-backed gaps or when the user asks for it.
+Prefer native Quickshell APIs when available. If not, prefer the existing `qs-native` Rust-native path for reusable integrations; shell out only for narrow command-backed gaps or when the user asks for it.
 
-For AI MCP/tool-call rows, the UI must only show content that is sent back to the model. If a row shows structured result data, provider serialization must include that same data through the shared qs-go tool-result helpers; do not add provider-specific result/data splits.
+For AI MCP/tool-call rows, the UI must only show content that is sent back to the model. If a row shows structured result data, provider serialization must include that same data through the shared qs-native tool-result helpers; do not add provider-specific result/data splits.
 
 ### Styling System
 
@@ -212,7 +212,7 @@ Use semantic roles from `Config.color.*` instead of hardcoding hex values. These
 
 ## Testing
 
-No root-wide QML test suite is defined. Native Go modules have focused package tests; follow `common/modules/AGENTS.md` when changing those paths.
+No root-wide QML test suite is defined. Native modules have focused checks; follow `common/modules/AGENTS.md` when changing those paths.
 
 Manual verification should usually use `bash tools/reload-quickshell.sh`; the happy path is a service restart followed by "No warnings or errors" from the recent log tail.
 - In sandboxed/CI-like environments, `libEGL`/`MESA` warnings about `/dev/dri` (for example `failed to open /dev/dri/renderD128: Permission denied`) are expected and can be ignored.
@@ -220,7 +220,7 @@ Manual verification should usually use `bash tools/reload-quickshell.sh`; the ha
 
 ## Dependencies
 
-- **Build**: Qt6 QML modules; native module builds may require `cmake` and/or `go` (see `common/modules/AGENTS.md`)
+- **Build**: Qt6 QML modules; native module builds use CMake, Corrosion/Cargo for Rust/CXX-Qt modules, and Qt C++ tooling for C++ plugins (see `common/modules/AGENTS.md`)
 - **Versioning**: Track Quickshell `master` branch; when using Context7, target the `master` branch docs.
 
 ## Commit & PR Guidelines

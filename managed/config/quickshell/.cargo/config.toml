@@ -1,2 +1,22 @@
 [build]
-target-dir = ".cache/cargo-target"
+target-dir = "common/modules/cxxqt/build/cargo/build"
+target = "x86_64-unknown-linux-gnu"
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=native"]
+
+[env]
+CXX_QT_EXPORT_DIR = { value = "common/modules/cxxqt/build/cxxqt/", relative = true }
+CXX_QT_EXPORT_CRATE_qsnative_rust = "1"
+CXX_QT_EXPORT_CRATE_material_popups_backend = "1"
+CXX_QT_EXPORT_CRATE_qsmath_stream = "1"
+CXX_QT_EXPORT_CRATE_unifiedlyrics_rust = "1"
+CXX_QT_QT_MODULES = "Qt6::Core,Qt6::Gui,Qt6::Qml,Qt6::DBus"
+QMAKE = "/usr/lib/qt6/bin/qmake"
+CXX_x86_64_unknown_linux_gnu = "/usr/bin/clang++"
+CXXFLAGS_x86_64_unknown_linux_gnu = "-O3 -march=native -mtune=native"
+AR_x86_64_unknown_linux_gnu = "/usr/bin/ar"
+CORROSION_BUILD_DIR = { value = "common/modules/cxxqt/build", relative = true }
+
+[profile.release]
+strip = true

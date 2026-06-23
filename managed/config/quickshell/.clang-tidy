@@ -14,7 +14,7 @@ Checks: >
   -portability-avoid-pragma-once,
   -zircon-*
 WarningsAsErrors: 'clang-analyzer-*,bugprone-*,cert-*,cppcoreguidelines-*'
-HeaderFilterRegex: '.*/common/modules/(material-popups|qs-capture|qs-go|qsmath|unified-lyrics-api)/(cpp|tests)/.*'
+HeaderFilterRegex: '.*/common/modules/(material-popups|qs-capture|qs-native|qsmath|unified-lyrics-api)/(cpp|tests)/.*'
 FormatStyle: file
 CheckOptions:
   readability-qualified-auto.AddConstToQualified: true

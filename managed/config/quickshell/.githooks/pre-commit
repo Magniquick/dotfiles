@@ -35,6 +35,6 @@ if [ -n "$staged_cpp_files" ]; then
 fi
 
 if git diff --cached --name-only --diff-filter=ACMR |
-  grep -qE '^managed/config/quickshell/common/modules/(qs-go|unified-lyrics-api)/.*\.go$'; then
-  "$quickshell_root/tools/go-lint.sh"
+  grep -qE '^managed/config/quickshell/common/modules/.*\.(rs|toml)$'; then
+  "$quickshell_root/tools/rust-lint.sh"
 fi

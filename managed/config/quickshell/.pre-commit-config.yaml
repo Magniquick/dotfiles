@@ -15,19 +15,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: gofmt
-        name: gofmt
-        entry: gofmt -w
-        language: system
-        types: [go]
-
-      - id: go-lint
-        name: go lint (golangci-lint)
-        entry: managed/config/quickshell/tools/go-lint.sh
-        language: system
-        pass_filenames: false
-        types: [go]
-
       - id: qmllint
         name: qmllint (qt6)
         entry: managed/config/quickshell/tools/qmllint.sh --all

@@ -22,9 +22,9 @@ where they are obvious from command/module names.
 ## Feature Runtime Commands
 
 - Backlight: `ddcutil` for external monitor DDC/CI. Internal brightness goes
-  through `qsgo.BacklightProvider`.
+  through `qsnative.BacklightProvider`.
 - Updates: `checkupdates` (`pacman-contrib`) and `yay -Qua` (`yay`) via
-  `qsgo.PacmanUpdatesProvider`; update sync
+  `qsnative.PacmanUpdatesProvider`; update sync
   shells to `sudo pacman -Sy`.
 - Battery charge policy: `hp-charge-control` for HP charge limit/auto/resume
   controls. This is local/AUR-style tooling, not a generic system package.
@@ -39,7 +39,7 @@ where they are obvious from command/module names.
 - Lockscreen wallpaper query: `awww query`; package/source is ambiguous in-tree.
 - AI/calendar/Todoist/email: Secret Service provider plus secrets under service
   `quickshell`. Common setup is `gnome-keyring` + `libsecret`/`secret-tool`.
-- Disk health in `qsgo.SysInfoProvider`: optional `smartctl`
+- Disk health in `qsnative.SysInfoProvider`: optional `smartctl`
   (`smartmontools`); missing state displays as unknown.
 
 ## Native Module Build Deps
@@ -49,12 +49,12 @@ Common:
 - `base-devel`, `cmake`, `ninja`, `pkgconf`.
 - Qt 6 development packages for `Core`, `Gui`, `Qml`, `Network`, `Concurrent`
   and `qmlplugindump` (`qt6-base`, `qt6-declarative`).
-- `go`; current `go.mod` files declare Go `1.25.x`.
+- Rust toolchain with Cargo.
 
 Per module:
 
-- `common/modules/qs-go`: Go + CGO + Qt6 Core/Gui/Qml/Network. Build with
-  `./tools/build-qs-go.sh`.
+- `common/modules/qs-native`: Qt6 Core/Gui/Qml/Network. Build with
+  `./tools/build-qs-native.sh`.
 - `common/modules/qs-capture`: Qt6 Core/Gui/Qml/Concurrent, `pixman`,
   `libpng`, `wayland`, `wayland-protocols`, `wayland-scanner`. Build with
   `bash tools/build-qs-capture.sh`.
@@ -64,7 +64,7 @@ Per module:
   clipboard/input backend. Runtime global input dismissal requires readable
   `/dev/input/event*` devices, normally via `input` group membership. Build
   with `bash tools/build-material-popups.sh`.
-- `common/modules/unified-lyrics-api`: Go + CGO + Qt6 Core/Qml/Concurrent.
+- `common/modules/unified-lyrics-api`: Qt6 Core/Qml/Concurrent.
   Build with `bash tools/build-cmake-module.sh unified-lyrics-api`.
 
 ## Math / LaTeX Renderer

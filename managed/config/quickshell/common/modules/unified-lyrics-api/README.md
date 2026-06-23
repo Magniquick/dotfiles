@@ -1,6 +1,6 @@
 # unified-lyrics-api
 
-Unified native lyrics module that wraps multiple lyrics providers behind one Go interface.
+Unified native lyrics module that wraps multiple lyrics providers behind one Rust-backed C ABI.
 
 Fallback order:
 
@@ -10,15 +10,14 @@ Fallback order:
 
 Provider order for tie-breaks:
 
-1. Spotify
+1. Spotify, when both `SP_DC` and `spotifyTrackRef` are supplied
 2. NetEase
 3. LRCLIB
 
 Caching behavior:
 
 - The unified client does not keep an in-memory cache.
-- Cache root is configured at construction time in Go (`unifiedlyrics.New(cacheDir)`), and the C API reads it from `UNIFIED_LYRICS_CACHE_DIR`.
-- Disable cache reads and writes with `unifiedlyrics.WithNoCache(true)` in Go or `lyrics-lookup --no-cache` for the CLI helper.
+- Cache root is configured by the backend worker, and the C API reads it from `UNIFIED_LYRICS_CACHE_DIR`.
 - Cache storage is owned by `unified-lyrics-api` and uses a unified namespace under the cache root.
 
 ## QML module
@@ -41,7 +40,7 @@ Properties:
 - `loaded`
 - `status`
 - `error`
-- `source` (for example `spotify_synced`, `netease_word`, `lrclib_normal`)
+- `source` (for example `netease_word`, `lrclib_synced`, `lrclib_normal`)
 - `metadata` (object, includes `provider`)
 - `syncType` (`WORD_SYNCED`, `LINE_SYNCED`, or `UNSYNCED`)
 - `lines` (array of `{ startTimeMs, endTimeMs, words, segments }`)

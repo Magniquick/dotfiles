@@ -23,12 +23,17 @@ fi
 
 paths=(
   "$ROOT_DIR/.cache/cargo-target"
+  "$ROOT_DIR/common/modules/cxxqt/build/cargo"
+  "$ROOT_DIR/common/modules/qs-native/build/cargo"
   "$ROOT_DIR/common/modules/material-popups/build/cargo"
   "$ROOT_DIR/common/modules/qsmath/build/cargo"
 )
 
 if [[ "$full" == true ]]; then
   paths+=(
+    "$ROOT_DIR/common/modules/cxxqt/build"
+    "$ROOT_DIR/common/modules/qs-native/build"
+    "$ROOT_DIR/common/modules/qs-native/build-clang-tidy"
     "$ROOT_DIR/common/modules/material-popups/build"
     "$ROOT_DIR/common/modules/material-popups/build-clang-tidy"
     "$ROOT_DIR/common/modules/material-popups/material-popups-backend/target"
@@ -39,7 +44,7 @@ if [[ "$full" == true ]]; then
 fi
 
 for path in "${paths[@]}"; do
-  if [[ -e "$path" ]]; then
+  if [[ -e "$path" || -L "$path" ]]; then
     echo "removing ${path#$ROOT_DIR/}"
     rm -rf "$path"
   fi

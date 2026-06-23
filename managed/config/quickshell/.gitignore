@@ -5,3 +5,5 @@ leftpanel/config.toml
 .qmlls.ini
 build-clang-tidy/
 node_modules/
+common/modules/*/build
+common/modules/cxxqt/build

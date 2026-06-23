@@ -79,8 +79,8 @@ add_qmlls_ini_paths() {
 add_import_dir /usr/lib/qt6/qml
 add_qmlls_ini_paths "$ROOT_DIR/.qmlls.ini"
 
-add_import_dir "$ROOT_DIR/common/modules/qs-go/build/qml"
-add_import_dir "$ROOT_DIR/common/modules/qs-go/qml"
+add_import_dir "$ROOT_DIR/common/modules/qs-native/build/qml"
+add_import_dir "$ROOT_DIR/common/modules/qs-native/qml"
 add_import_dir "$ROOT_DIR/common/modules/qs-capture/build/qml"
 add_import_dir "$ROOT_DIR/common/modules/qs-capture/qml"
 add_import_dir "$ROOT_DIR/common/modules/qsmath/build/qml"

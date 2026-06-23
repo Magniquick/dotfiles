@@ -10,7 +10,7 @@ CLANGXX="${CLANGXX:-clang++}"
 modules=(
   material-popups
   qs-capture
-  qs-go
+  qs-native
   qsmath
   unified-lyrics-api
 )
@@ -19,7 +19,7 @@ lint_build_target() {
   case "$1" in
     material-popups) echo materialpopups_plugin ;;
     qs-capture) echo qscapture_plugin ;;
-    qs-go) echo qsgo_plugin ;;
+    qs-native) echo qsnative_plugin ;;
     qsmath) echo qsmath_plugin ;;
     unified-lyrics-api) echo unifiedlyrics_plugin ;;
     *) return 1 ;;

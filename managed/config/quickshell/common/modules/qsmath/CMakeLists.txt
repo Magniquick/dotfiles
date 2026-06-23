@@ -14,42 +14,16 @@ option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Concurrent)
-find_program(CARGO_EXECUTABLE cargo REQUIRED)
-
-include(FetchContent)
-FetchContent_Declare(
-    CxxQt
-    GIT_REPOSITORY https://github.com/kdab/cxx-qt-cmake.git
-    GIT_TAG main
-)
-FetchContent_MakeAvailable(CxxQt)
-
-cxx_qt_import_crate(
-    MANIFEST_PATH "${CMAKE_CURRENT_LIST_DIR}/ratex-helper/Cargo.toml"
-    CRATES qsmath_stream
-    QT_MODULES Qt6::Core Qt6::Gui Qt6::Qml
-)
-
-# qsmath registers Rust-backed types from the existing QML plugin below. The
-# crate is not a standalone CXX-Qt QML module, so cxx-qt-cmake's static-module
-# initializer object is intentionally absent.
-get_target_property(QSMATH_STREAM_LINK_LIBRARIES qsmath_stream INTERFACE_LINK_LIBRARIES)
-if(QSMATH_STREAM_LINK_LIBRARIES)
-    list(FILTER QSMATH_STREAM_LINK_LIBRARIES EXCLUDE REGEX "qsmath_stream_initializers")
-    list(FILTER QSMATH_STREAM_LINK_LIBRARIES EXCLUDE REGEX "TARGET_OBJECTS:qsmath_stream_initializers")
-    set_target_properties(qsmath_stream PROPERTIES
-        INTERFACE_LINK_LIBRARIES "${QSMATH_STREAM_LINK_LIBRARIES}"
-    )
-endif()
 
 set(QSMATH_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
 add_custom_command(
     OUTPUT "${QSMATH_CXXQT_INCLUDE_DIR}/qsmath_stream/src/markdown_stream.cxxqt.h"
     COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${QSMATH_CXXQT_INCLUDE_DIR}/qsmath_stream/src"
-    COMMAND /bin/sh -c
-        "cp -R ${CMAKE_CURRENT_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/release/build/qsmath_stream-*/out/cxxqtbuild/include/. '${QSMATH_CXXQT_INCLUDE_DIR}/'"
-    DEPENDS qsmath_stream
+        "${QSMATH_CXXQT_INCLUDE_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${QS_CXXQT_CRATES_DIR}/qsmath_stream/include"
+        "${QSMATH_CXXQT_INCLUDE_DIR}"
+    DEPENDS qs_rust_workspace_build
     VERBATIM
 )
 add_custom_target(qsmath_stream_headers
@@ -61,16 +35,10 @@ set(QSMATH_RENDERER "${CMAKE_CURRENT_BINARY_DIR}/qsmath-render-svg")
 
 add_custom_command(
     OUTPUT "${QSMATH_RENDERER}"
-    COMMAND "${CARGO_EXECUTABLE}" build
-        --manifest-path "${CMAKE_CURRENT_LIST_DIR}/ratex-helper/Cargo.toml"
-        --target-dir "${CMAKE_CURRENT_BINARY_DIR}/cargo"
-        --release
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_CURRENT_BINARY_DIR}/cargo/release/qsmath-render-svg"
+        "${QS_CARGO_RELEASE_DIR}/qsmath-render-svg"
         "${QSMATH_RENDERER}"
-    DEPENDS
-        "${CMAKE_CURRENT_LIST_DIR}/ratex-helper/Cargo.toml"
-        "${CMAKE_CURRENT_LIST_DIR}/ratex-helper/src/main.rs"
+    DEPENDS qs_rust_workspace_build
 )
 add_custom_target(qsmath_renderer ALL DEPENDS "${QSMATH_RENDERER}")
 
@@ -97,12 +65,12 @@ target_compile_definitions(qsmath_plugin PRIVATE
 qs_apply_common_compile_options(qsmath_plugin)
 
 target_link_libraries(qsmath_plugin PRIVATE
-    qsmath_stream
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
     Qt6::Concurrent
 )
+qs_link_rust_static(qsmath_plugin qsmath_stream)
 add_dependencies(qsmath_plugin qsmath_renderer)
 add_dependencies(qsmath_plugin qsmath_stream_headers)
 
@@ -133,12 +101,12 @@ if(BUILD_TESTING)
         "${QSMATH_CXXQT_INCLUDE_DIR}"
     )
     target_link_libraries(qsmath_render_smoke PRIVATE
-        qsmath_stream
         Qt6::Core
         Qt6::Gui
         Qt6::Concurrent
         Qt6::Test
     )
+    qs_link_rust_static(qsmath_render_smoke qsmath_stream)
     target_compile_definitions(qsmath_render_smoke PRIVATE
         QSMATH_RENDERER_PATH="${QSMATH_RENDERER}"
     )

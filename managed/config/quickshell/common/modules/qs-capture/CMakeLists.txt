@@ -119,6 +119,10 @@ set_target_properties(qscapture_plugin PROPERTIES
 
 add_custom_command(
     OUTPUT "${QML_MODULE_DIR}/types.qmltypes"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${QML_MODULE_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_LIST_DIR}/qml/qscapture/qmldir"
+        "${QML_MODULE_DIR}/qmldir"
     COMMAND "${CMAKE_COMMAND}"
         -DQMLPLUGINDUMP_EXECUTABLE="${QMLPLUGINDUMP_EXECUTABLE}"
         -DMODULE_URI=qscapture

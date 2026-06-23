@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 project(unifiedlyrics LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
@@ -14,46 +14,40 @@ endif()
 option(QS_NATIVE_CPU "Enable native CPU optimizations" ON)
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Qml Concurrent)
-find_program(GO_EXECUTABLE go REQUIRED)
-file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}" UNIFIEDLYRICS_SOURCE_DIR)
+find_package(Qt6 REQUIRED COMPONENTS Core Qml)
 if(EXISTS "/usr/lib/qt6/bin/qmlplugindump")
     set(QMLPLUGINDUMP_EXECUTABLE "/usr/lib/qt6/bin/qmlplugindump")
 else()
     find_program(QMLPLUGINDUMP_EXECUTABLE qmlplugindump REQUIRED)
 endif()
-set(UNIFIEDLYRICS_GO_BUILD_FLAGS "-trimpath" "-ldflags=-s -w")
-set(UNIFIEDLYRICS_CGO_CFLAGS "-O3")
-set(UNIFIEDLYRICS_CGO_CXXFLAGS "-O3")
-if(QS_NATIVE_CPU)
-    list(APPEND UNIFIEDLYRICS_CGO_CFLAGS "-march=native" "-mtune=native")
-    list(APPEND UNIFIEDLYRICS_CGO_CXXFLAGS "-march=native" "-mtune=native")
-endif()
-string(JOIN " " UNIFIEDLYRICS_CGO_CFLAGS_STR ${UNIFIEDLYRICS_CGO_CFLAGS})
-string(JOIN " " UNIFIEDLYRICS_CGO_CXXFLAGS_STR ${UNIFIEDLYRICS_CGO_CXXFLAGS})
 
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/unifiedlyrics")
-set(UNIFIED_LYRICS_GO_LIB "${QML_MODULE_DIR}/libunifiedlyrics_go.so")
-file(GLOB_RECURSE UNIFIEDLYRICS_GO_SOURCES CONFIGURE_DEPENDS
-    "${UNIFIEDLYRICS_SOURCE_DIR}/*.go"
-)
 
+set(UNIFIEDLYRICS_RUST_CRATE unifiedlyrics_rust)
+set(UNIFIEDLYRICS_RUST_DIR "${CMAKE_CURRENT_LIST_DIR}/unifiedlyrics-rust")
+
+if(NOT EXISTS "${UNIFIEDLYRICS_RUST_DIR}/Cargo.toml")
+    message(FATAL_ERROR
+        "unifiedlyrics Rust backend missing: expected ${UNIFIEDLYRICS_RUST_DIR}/Cargo.toml"
+    )
+endif()
+
+set(UNIFIEDLYRICS_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
 add_custom_command(
-    OUTPUT "${UNIFIED_LYRICS_GO_LIB}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${QML_MODULE_DIR}"
-    COMMAND "${CMAKE_COMMAND}" -E env
-        "CGO_CFLAGS=${UNIFIEDLYRICS_CGO_CFLAGS_STR}"
-        "CGO_CXXFLAGS=${UNIFIEDLYRICS_CGO_CXXFLAGS_STR}"
-        "${GO_EXECUTABLE}" build -buildmode=c-shared ${UNIFIEDLYRICS_GO_BUILD_FLAGS} -o "${UNIFIED_LYRICS_GO_LIB}" ./capi
-    DEPENDS ${UNIFIEDLYRICS_GO_SOURCES}
-    WORKING_DIRECTORY "${UNIFIEDLYRICS_SOURCE_DIR}"
-    COMMENT "Building unified-lyrics Go shared library"
+    OUTPUT "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src/lib.cxxqt.h"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src"
+    COMMAND /bin/sh -c
+        "cp -R ${QS_CXXQT_CRATES_DIR}/unifiedlyrics_rust/include/. '${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/'"
+    DEPENDS qs_rust_workspace_build
+    VERBATIM
 )
-add_custom_target(unifiedlyrics_go_lib DEPENDS "${UNIFIED_LYRICS_GO_LIB}")
+add_custom_target(unifiedlyrics_rust_headers
+    DEPENDS "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src/lib.cxxqt.h"
+)
 
 add_library(unifiedlyrics_plugin SHARED
     cpp/unifiedlyrics_plugin.cpp
-    cpp/UnifiedLyricsClient.cpp
 )
 
 set_target_properties(unifiedlyrics_plugin
@@ -63,20 +57,18 @@ set_target_properties(unifiedlyrics_plugin
 )
 
 target_include_directories(unifiedlyrics_plugin PRIVATE
+    "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
-    "${QML_MODULE_DIR}"
 )
 
 qs_apply_common_compile_options(unifiedlyrics_plugin)
 
-add_dependencies(unifiedlyrics_plugin unifiedlyrics_go_lib)
-
 target_link_libraries(unifiedlyrics_plugin PRIVATE
     Qt6::Core
     Qt6::Qml
-    Qt6::Concurrent
-    "${UNIFIED_LYRICS_GO_LIB}"
 )
+qs_link_rust_static(unifiedlyrics_plugin ${UNIFIEDLYRICS_RUST_CRATE})
+add_dependencies(unifiedlyrics_plugin unifiedlyrics_rust_headers)
 
 set_target_properties(unifiedlyrics_plugin PROPERTIES
     BUILD_RPATH "$ORIGIN"

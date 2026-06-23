@@ -139,22 +139,35 @@ print_service_diagnostics() {
 if [[ "$MODE" == "service" ]]; then
   systemctl --user reset-failed "$SERVICE_NAME" || true
   timeout "$(sleep_seconds)" env -u XDG_RUNTIME_DIR systemctl --user --wait restart "$SERVICE_NAME" || RESTART_STATUS=$?
+  if [[ "$RESTART_STATUS" -ne 0 && "$RESTART_STATUS" -ne 124 ]] || ! service_state_is_ok; then
+    print_service_diagnostics
+    exit 1
+  fi
+  # Record the invocation that just started and watch for post-startup crashes.
+  STARTED_INVOCATION="$(service_property InvocationID)"
+  sleep "$(sleep_seconds)"
+  CURRENT_INVOCATION="$(service_property InvocationID)"
+  if [[ "$CURRENT_INVOCATION" != "$STARTED_INVOCATION" ]] || ! service_state_is_ok; then
+    echo "quickshell.service crashed after startup (invocation changed or not running)." >&2
+    echo >&2
+    echo "quickshell.service state:" >&2
+    service_properties >&2 || true
+    echo >&2
+    echo "quickshell.service journal from last start:" >&2
+    last_start_journal >&2 || true
+    exit 1
+  fi
 else
   quickshell ipc -n -p "$ROOT_DIR" call dev "$MODE"
   sleep "$(sleep_seconds)"
-fi
-
-if [[ "$RESTART_STATUS" -ne 0 && "$RESTART_STATUS" -ne 124 ]] || ! service_state_is_ok; then
-  print_service_diagnostics
-  exit 1
+  if ! service_state_is_ok; then
+    print_service_diagnostics
+    exit 1
+  fi
 fi
 
 JOURNAL_OUTPUT="$(last_start_journal || true)"
 JOURNAL_ISSUES="$(last_start_journal_issues || true)"
-if ! service_state_is_ok; then
-  print_service_diagnostics
-  exit 1
-fi
 
 if [[ "$SHOW_ALL" -eq 1 ]]; then
   echo "== quickshell log =="

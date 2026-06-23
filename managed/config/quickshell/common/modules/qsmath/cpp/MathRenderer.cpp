@@ -53,14 +53,12 @@ struct RenderedSize {
 std::mutex ratexMutex;
 
 auto formulaHash(const QString& formula, Segment::Type type, const QString& rendererCacheKey,
-                 int maxWidth, qreal textSize, qreal padding, const QColor& color,
-                 qreal renderScale) -> QString {
+                 qreal textSize, qreal padding, const QColor& color, qreal renderScale) -> QString {
   QCryptographicHash hash(QCryptographicHash::Sha256);
   hash.addData(rendererCacheKey.toUtf8());
   hash.addData(formula.toUtf8());
   hash.addData(type == Segment::Type::InlineMath ? QByteArrayLiteral("inline")
                                                  : QByteArrayLiteral("display"));
-  hash.addData(QByteArray::number(maxWidth));
   hash.addData(QByteArray::number(textSize, 'f', 2));
   hash.addData(QByteArray::number(padding, 'f', 2));
   hash.addData(color.name(QColor::HexArgb).toUtf8());
@@ -505,9 +503,8 @@ auto renderFormulaWithRatex(const Segment& segment, const QString& svgPath, qrea
   return copyRenderedSvg(renderedPath, svgPath, error);
 }
 
-auto renderSegment(const Segment& segment, const QString& cacheDir, int maxWidth, qreal textSize,
-                   qreal padding, const QColor& foreground, qreal renderScale, QString* error)
-    -> RenderedMath {
+auto renderSegment(const Segment& segment, const QString& cacheDir, qreal textSize, qreal padding,
+                   const QColor& foreground, qreal renderScale, QString* error) -> RenderedMath {
   const QString executable = ratexExecutable();
   if (executable.isEmpty()) {
     if (error != nullptr) {
@@ -520,8 +517,8 @@ auto renderSegment(const Segment& segment, const QString& cacheDir, int maxWidth
   const qreal scale = std::max<qreal>(1.0, renderScale);
   const QString formula = formulaForRatex(segment);
   const QString svgPath = cacheDir + QLatin1Char('/') +
-                          formulaHash(formula, segment.type, ratexCacheKey(executable), maxWidth,
-                                      textSize, padding, foreground, scale) +
+                          formulaHash(formula, segment.type, ratexCacheKey(executable), textSize,
+                                      padding, foreground, scale) +
                           QStringLiteral(".svg");
 
   RenderedSize size;
@@ -564,9 +561,9 @@ auto injectRenderedMath(QString html, const std::vector<RenderedMath>& rendered)
   return html;
 }
 
-auto renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, int maxWidth,
-                          qreal textSize, qreal padding, const QColor& foreground,
-                          qreal renderScale, QString* error) -> QString {
+auto renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, qreal textSize,
+                          qreal padding, const QColor& foreground, qreal renderScale,
+                          QString* error) -> QString {
   if (!QDir().mkpath(cacheDir)) {
     if (error != nullptr) {
       *error = QStringLiteral("Failed to create cache directory: %1").arg(cacheDir);
@@ -594,8 +591,8 @@ auto renderMarkdownToHtml(const QString& markdown, const QString& cacheDir, int 
     if (segment.type == Segment::Type::Text) {
       continue;
     }
-    RenderedMath const math = renderSegment(segment, cacheDir, maxWidth, textSize, padding,
-                                            foreground, renderScale, error);
+    RenderedMath const math =
+        renderSegment(segment, cacheDir, textSize, padding, foreground, renderScale, error);
     if ((error != nullptr) && !error->isEmpty()) {
       return {};
     }
@@ -612,16 +609,17 @@ MathRenderer::MathRenderer(QObject* parent) : QObject(parent) {}
 void MathRenderer::renderMarkdown(const QString& requestId, const QString& markdown,
                                   const QString& cacheDir, int maxWidth, qreal textSize,
                                   qreal padding, const QString& foreground, qreal renderScale) {
+  Q_UNUSED(maxWidth)
   QPointer<MathRenderer> const self(this);
-  (void)QtConcurrent::run([self, requestId, markdown, cacheDir, maxWidth, textSize, padding,
-                           foreground, renderScale]() -> void {
+  (void)QtConcurrent::run([self, requestId, markdown, cacheDir, textSize, padding, foreground,
+                           renderScale]() -> void {
     const QColor color(foreground);
     const QColor resolvedColor = color.isValid() ? color : QColor(QStringLiteral("#000000"));
     const qreal resolvedScale = std::clamp<qreal>(renderScale, 1.0, 4.0);
     QString error;
-    const QString html = renderMarkdownToHtml(
-        markdown, cacheDir, std::max(120, maxWidth), textSize > 0 ? textSize : 18.0,
-        padding >= 0 ? padding : 4.0, resolvedColor, resolvedScale, &error);
+    const QString html =
+        renderMarkdownToHtml(markdown, cacheDir, textSize > 0 ? textSize : 18.0,
+                             padding >= 0 ? padding : 4.0, resolvedColor, resolvedScale, &error);
 
     if (!self) {
       return;

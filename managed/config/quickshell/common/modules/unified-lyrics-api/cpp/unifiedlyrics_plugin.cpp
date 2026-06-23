@@ -1,7 +1,7 @@
 #include <QtQml/qqml.h>
 #include <QtQml/qqmlextensionplugin.h>
 
-#include "UnifiedLyricsClient.h"
+#include <unifiedlyrics_rust/src/lib.cxxqt.h>
 
 class unifiedlyrics_plugin : public QQmlExtensionPlugin {
   Q_OBJECT
