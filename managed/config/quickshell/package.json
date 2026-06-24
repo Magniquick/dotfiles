@@ -2,11 +2,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint:qml-js": "eslint --no-warn-ignored bar/**/*.js common/**/*.js hyprquickshot/**/*.js rightpanel/**/*.js"
+    "lint:qml-js": "eslint --no-error-on-unmatched-pattern --no-warn-ignored bar/**/*.js common/**/*.js hyprquickshot/**/*.js rightpanel/**/*.js"
   },
   "devDependencies": {
-    "eslint": "^10.4.1",
+    "eslint": "^10.5.0",
     "eslint-plugin-qml-js": "^0.1.0",
-    "eslint-plugin-sonarjs": "^4.0.3"
+    "eslint-plugin-sonarjs": "^4.1.0"
   }
 }

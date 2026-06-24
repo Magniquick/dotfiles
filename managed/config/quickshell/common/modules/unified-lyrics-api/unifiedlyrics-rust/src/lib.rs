@@ -1,10 +1,10 @@
 use aes::Aes128;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyInit};
+use cipher::{block_padding::Pkcs7, BlockModeDecrypt, BlockModeEncrypt, KeyInit as _};
 use cookie::Cookie;
 use hmac::{Hmac, Mac};
 use md5::{Digest as _, Md5};
-use rand::{rngs::OsRng, Rng, RngCore};
+use rand::RngExt;
 use regex::Regex;
 use secret_service::{blocking::SecretService, EncryptionType};
 use serde::{Deserialize, Serialize};
@@ -679,8 +679,7 @@ fn spotify_totp(server_time: i64, secret: &str) -> Result<String, String> {
     if server_time <= 0 {
         return Err("invalid spotify server time".to_owned());
     }
-    let mut mac =
-        <Hmac<Sha1> as Mac>::new_from_slice(secret.as_bytes()).map_err(|e| e.to_string())?;
+    let mut mac = Hmac::<Sha1>::new_from_slice(secret.as_bytes()).map_err(|e| e.to_string())?;
     mac.update(&((server_time / 30) as u64).to_be_bytes());
     let sum = mac.finalize().into_bytes();
     let offset = (sum[sum.len() - 1] & 0x0f) as usize;
@@ -965,7 +964,7 @@ fn bootstrap_session() -> Result<Session, String> {
         ("os".to_owned(), "pc".to_owned()),
         ("deviceId".to_owned(), device_id.to_owned()),
         ("osver".to_owned(), DEFAULT_OS_VERSION.to_owned()),
-        ("clientSign".to_owned(), random_client_sign()?),
+        ("clientSign".to_owned(), random_client_sign()),
         ("channel".to_owned(), "netease".to_owned()),
         ("mode".to_owned(), DEFAULT_MODEL.to_owned()),
         ("appver".to_owned(), APP_VERSION.to_owned()),
@@ -998,7 +997,7 @@ fn bootstrap_session() -> Result<Session, String> {
         precookie.insert(key, value);
     }
     if !precookie.contains_key("WNMCID") {
-        precookie.insert("WNMCID".to_owned(), random_wnmcid()?);
+        precookie.insert("WNMCID".to_owned(), random_wnmcid());
     }
     Ok(Session {
         user_id: payload.user_id,
@@ -1108,14 +1107,14 @@ fn decrypt_eapi(ciphertext: &[u8]) -> Result<Vec<u8>, String> {
     }
     ecb::Decryptor::<Aes128>::new_from_slice(EAPI_KEY)
         .map_err(|e| e.to_string())?
-        .decrypt_padded_vec_mut::<Pkcs7>(ciphertext)
+        .decrypt_padded_vec::<Pkcs7>(ciphertext)
         .map_err(|_| "invalid pkcs7 padding".to_owned())
 }
 
 fn aes_ecb_encrypt(plain: &[u8]) -> Result<Vec<u8>, String> {
     ecb::Encryptor::<Aes128>::new_from_slice(EAPI_KEY)
         .map_err(|e| e.to_string())
-        .map(|cipher| cipher.encrypt_padded_vec_mut::<Pkcs7>(plain))
+        .map(|cipher| cipher.encrypt_padded_vec::<Pkcs7>(plain))
 }
 
 fn anonymous_username(device_id: &str) -> String {
@@ -1128,45 +1127,36 @@ fn anonymous_username(device_id: &str) -> String {
     BASE64.encode(format!("{device_id} {}", BASE64.encode(digest)))
 }
 
-fn random_client_sign() -> Result<String, String> {
+fn random_client_sign() -> String {
     let mac = (0..6)
-        .map(|_| format!("{:02X}", OsRng.gen::<u8>()))
+        .map(|_| format!("{:02X}", rand::random::<u8>()))
         .collect::<Vec<_>>()
         .join(":");
     let letters = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let random = random_letters(letters, 8);
-    Ok(format!("{mac}@@@{random}@@@@@@{}", random_hex(32)?))
+    format!("{mac}@@@{random}@@@@@@{}", random_hex(32))
 }
 
-fn random_hex(bytes: usize) -> Result<String, String> {
+fn random_hex(bytes: usize) -> String {
     let mut out = vec![0; bytes];
-    fill_random(&mut out)?;
-    Ok(hex::encode(out))
+    rand::rng().fill(&mut out);
+    hex::encode(out)
 }
 
-fn random_wnmcid() -> Result<String, String> {
+fn random_wnmcid() -> String {
     let letters = b"abcdefghijklmnopqrstuvwxyz";
     let prefix = random_letters(letters, 6);
-    Ok(format!(
-        "{prefix}.{}.01.0",
-        now_millis().saturating_sub(5000)
-    ))
+    format!("{prefix}.{}.01.0", now_millis().saturating_sub(5000))
 }
 
 fn random_index(len: usize) -> usize {
-    OsRng.gen_range(0..len)
+    rand::rng().random_range(0..len)
 }
 
 fn random_letters(letters: &[u8], count: usize) -> String {
     (0..count)
         .map(|_| letters[random_index(letters.len())] as char)
         .collect()
-}
-
-fn fill_random(bytes: &mut [u8]) -> Result<(), String> {
-    OsRng
-        .try_fill_bytes(bytes)
-        .map_err(|error| format!("random bytes: {error}"))
 }
 
 fn parse_lrc(text: &str) -> Vec<Line> {
@@ -1632,14 +1622,14 @@ mod tests {
 
     #[test]
     fn random_netease_identifiers_keep_wire_shape() {
-        let sign = random_client_sign().expect("client sign");
+        let sign = random_client_sign();
         let (mac, rest) = sign.split_once("@@@").expect("mac delimiter");
         let (letters, hex) = rest.split_once("@@@@@@").expect("hex delimiter");
         assert_eq!(mac.split(':').count(), 6);
         assert_eq!(letters.len(), 8);
         assert_eq!(hex.len(), 64);
 
-        let wnmcid = random_wnmcid().expect("wnmcid");
+        let wnmcid = random_wnmcid();
         assert!(wnmcid.ends_with(".01.0"));
         assert_eq!(wnmcid.split('.').next().unwrap_or_default().len(), 6);
     }

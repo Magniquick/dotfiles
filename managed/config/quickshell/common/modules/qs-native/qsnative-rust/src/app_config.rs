@@ -109,12 +109,14 @@ pub fn load_account(path: &Path, account_id: &str) -> Result<EmailAccount, Strin
         .find(|a| a.id.trim().eq_ignore_ascii_case(wanted))
         .ok_or_else(|| format!("unknown email account {account_id:?}"))
         .and_then(|a| {
-            let address =
-                crate::utils::non_empty_trimmed(&a.address).ok_or_else(|| format!("email account {account_id} has no address"))?;
-            let provider =
-                crate::utils::non_empty_trimmed(&a.provider).ok_or_else(|| format!("email account {account_id} has no provider"))?;
+            let address = crate::utils::non_empty_trimmed(&a.address)
+                .ok_or_else(|| format!("email account {account_id} has no address"))?;
+            let provider = crate::utils::non_empty_trimmed(&a.provider)
+                .ok_or_else(|| format!("email account {account_id} has no provider"))?;
             if provider != "gmail" {
-                return Err(format!("email account {account_id} is not a Google/Gmail account"));
+                return Err(format!(
+                    "email account {account_id} is not a Google/Gmail account"
+                ));
             }
             Ok(EmailAccount {
                 id: a.id.trim().to_owned(),
@@ -148,10 +150,18 @@ pub fn load_calendar_sources(path: &Path) -> Result<Vec<CalendarSource>, String>
             if calendar_ids.is_empty() {
                 return None;
             }
-            if !config.email.accounts.iter().any(|a| a.id.trim().eq_ignore_ascii_case(&account_id)) {
+            if !config
+                .email
+                .accounts
+                .iter()
+                .any(|a| a.id.trim().eq_ignore_ascii_case(&account_id))
+            {
                 return None;
             }
-            Some(CalendarSource { account_id, calendar_ids })
+            Some(CalendarSource {
+                account_id,
+                calendar_ids,
+            })
         })
         .collect();
     Ok(sources)
@@ -170,14 +180,19 @@ pub fn load_all_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
         .map(|a| {
             let id = a.id.trim().to_owned();
             let label = a.label.trim().to_owned();
-            let address =
-                crate::utils::non_empty_trimmed(&a.address).ok_or_else(|| format!("email account {id} has no address"))?;
-            let provider =
-                crate::utils::non_empty_trimmed(&a.provider).ok_or_else(|| format!("email account {id} has no provider"))?;
+            let address = crate::utils::non_empty_trimmed(&a.address)
+                .ok_or_else(|| format!("email account {id} has no address"))?;
+            let provider = crate::utils::non_empty_trimmed(&a.provider)
+                .ok_or_else(|| format!("email account {id} has no provider"))?;
             if provider != "gmail" {
                 return Err(format!("email account {id} is not a Google/Gmail account"));
             }
-            Ok(EmailAccount { id, label, address, provider })
+            Ok(EmailAccount {
+                id,
+                label,
+                address,
+                provider,
+            })
         })
         .collect()
 }
@@ -215,5 +230,3 @@ pub fn select_account_by_id_or_address<'a>(
         "unknown email account {selector:?}; available accounts: {available}"
     ))
 }
-
-

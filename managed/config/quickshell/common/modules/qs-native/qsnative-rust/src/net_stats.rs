@@ -277,8 +277,7 @@ impl ffi::NetStatsProvider {
     }
 
     pub fn ethernet_metadata_json(&self, device_name: &QString) -> QString {
-        let metadata =
-            ethernet_metadata_for_device(&device_name.to_string()).unwrap_or_default();
+        let metadata = ethernet_metadata_for_device(&device_name.to_string()).unwrap_or_default();
         QString::from(serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_owned()))
     }
 

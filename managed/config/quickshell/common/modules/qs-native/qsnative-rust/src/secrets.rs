@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::error::Error;
 
-use secret_service::{blocking::SecretService, EncryptionType};
 use secret_service::SecretService as AsyncSecretService;
+use secret_service::{blocking::SecretService, EncryptionType};
 
 pub const DEFAULT_SERVICE: &str = "quickshell";
 
@@ -72,7 +72,10 @@ pub async fn lookup_async(key: &str) -> Option<String> {
     let service = AsyncSecretService::connect(EncryptionType::Dh).await.ok()?;
     let items = service.search_items(secret_attrs(&key)).await.ok()?;
     if !items.locked.is_empty() {
-        service.unlock_all(items.locked.iter().collect::<Vec<_>>().as_slice()).await.ok()?;
+        service
+            .unlock_all(items.locked.iter().collect::<Vec<_>>().as_slice())
+            .await
+            .ok()?;
     }
     let item = items.unlocked.iter().chain(items.locked.iter()).next()?;
     String::from_utf8(item.get_secret().await.ok()?).ok()
@@ -85,7 +88,15 @@ pub async fn set_async(key: &str, value: &str) -> SecretResult<()> {
     if collection.is_locked().await? {
         collection.unlock().await?;
     }
-    collection.create_item(&key, secret_attrs(&key), value.as_bytes(), true, "text/plain").await?;
+    collection
+        .create_item(
+            &key,
+            secret_attrs(&key),
+            value.as_bytes(),
+            true,
+            "text/plain",
+        )
+        .await?;
     Ok(())
 }
 

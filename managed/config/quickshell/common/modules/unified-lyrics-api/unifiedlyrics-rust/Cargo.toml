@@ -9,26 +9,26 @@ name = "unifiedlyrics_rust"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-aes = "0.8.4"
+aes = "0.9.1"
 base64 = "0.22.1"
-cipher = "0.4.4"
+cipher = "0.5.2"
 cookie = "0.18.1"
 cxx = "1.0.194"
-cxx-qt = "0.8.1"
-cxx-qt-lib = "0.8.1"
-ecb = { version = "0.1.2", features = ["alloc", "block-padding"] }
+cxx-qt = "0.9.0"
+cxx-qt-lib = "0.9.0"
+ecb = { version = "0.2.0", features = ["alloc", "block-padding"] }
 hex = "0.4.3"
-hmac = "0.12.1"
-md-5 = "0.10.6"
-rand = "0.8.6"
-regex = "1.12.2"
-serde = { version = "1.0.216", features = ["derive"] }
-serde_json = "1.0.133"
-sha1 = "0.10.6"
-sha2 = "0.10.9"
+hmac = "0.13.0"
+md-5 = "0.11.0"
+rand = "0.10.1"
+regex = "1.12.4"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sha1 = "0.11.0"
+sha2 = "0.11.0"
 secret-service = { version = "5.1.0", default-features = false, features = ["rt-tokio-crypto-rust"] }
-url = "2.5.7"
+url = "2.5.8"
 ureq = { version = "3.3.0", features = ["json"] }
 
 [build-dependencies]
-cxx-qt-build = "0.8.1"
+cxx-qt-build = "0.9.0"

@@ -81,7 +81,10 @@ fn resolve_values() -> BTreeMap<String, String> {
     let mut values = load_config(default_path()).public_values();
 
     for key in SECRET_KEYS {
-        if let Some(secret) = secrets::lookup(key).as_deref().and_then(crate::utils::non_empty_trimmed) {
+        if let Some(secret) = secrets::lookup(key)
+            .as_deref()
+            .and_then(crate::utils::non_empty_trimmed)
+        {
             values.insert(key.to_owned(), secret);
         }
     }

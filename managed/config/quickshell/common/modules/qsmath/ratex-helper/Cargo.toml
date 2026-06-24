@@ -13,13 +13,13 @@ path = "src/main.rs"
 
 [dependencies]
 cxx = "1.0.194"
-cxx-qt = "0.8.1"
-cxx-qt-lib = "0.8.1"
+cxx-qt = "0.9.0"
+cxx-qt-lib = "0.9.0"
 mdstream = "0.2.0"
-ratex-layout = "=0.1.4"
-ratex-parser = "=0.1.4"
-ratex-svg = { version = "=0.1.4", features = ["standalone", "embed-fonts"] }
-ratex-types = "=0.1.4"
+ratex-layout = "=0.1.11"
+ratex-parser = "=0.1.11"
+ratex-svg = { version = "=0.1.11", features = ["standalone", "embed-fonts"] }
+ratex-types = "=0.1.11"
 
 [build-dependencies]
-cxx-qt-build = "0.8.1"
+cxx-qt-build = "0.9.0"

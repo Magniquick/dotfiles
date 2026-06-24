@@ -166,7 +166,11 @@ fn fetch_all_sources_threaded(
     range_end: DateTime<Local>,
 ) -> Result<(Vec<ParsedEvent>, Vec<String>, usize), String> {
     std::thread::spawn(move || {
-        crate::utils::build_multi_thread_runtime()?.block_on(fetch_all_sources(sources, range_start, range_end))
+        crate::utils::build_multi_thread_runtime()?.block_on(fetch_all_sources(
+            sources,
+            range_start,
+            range_end,
+        ))
     })
     .join()
     .expect("calendar worker panicked")
@@ -280,8 +284,15 @@ fn event_from_api(item: &calendar3::api::Event) -> Option<ParsedEvent> {
     } else {
         local_midnight(end.date_naive() + Duration::days(1))?
     };
-    let title = item.summary.as_deref().and_then(crate::utils::non_empty_trimmed).unwrap_or_else(|| "Untitled".to_owned());
-    let uid = item.i_cal_uid.as_deref().and_then(crate::utils::non_empty_trimmed)
+    let title = item
+        .summary
+        .as_deref()
+        .and_then(crate::utils::non_empty_trimmed)
+        .unwrap_or_else(|| "Untitled".to_owned());
+    let uid = item
+        .i_cal_uid
+        .as_deref()
+        .and_then(crate::utils::non_empty_trimmed)
         .or_else(|| item.id.as_deref().and_then(crate::utils::non_empty_trimmed))
         .unwrap_or_else(|| format!("{}-{}", title, start.timestamp()));
 
@@ -356,7 +367,9 @@ fn organize_events(
 }
 
 fn local_midnight(date: NaiveDate) -> Option<DateTime<Local>> {
-    Local.from_local_datetime(&date.and_time(NaiveTime::MIN)).single()
+    Local
+        .from_local_datetime(&date.and_time(NaiveTime::MIN))
+        .single()
 }
 
 fn eq_ignore_ascii_case(value: Option<&str>, expected: &str) -> bool {

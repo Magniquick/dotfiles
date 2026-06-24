@@ -195,7 +195,7 @@ where
             ) => {}
             MultiTurnStreamItem::StreamUserItem(StreamedUserContent::ToolResult { .. }) => {}
             MultiTurnStreamItem::CompletionCall(call) => {
-                apply_usage(&mut combined, call.usage);
+                apply_usage(&mut combined, Some(call.usage));
                 metrics.begin_provider_round();
             }
             MultiTurnStreamItem::FinalResponse(response) => {

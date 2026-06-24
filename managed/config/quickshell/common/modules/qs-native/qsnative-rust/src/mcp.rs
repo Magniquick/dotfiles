@@ -254,7 +254,8 @@ fn snapshot() -> Snapshot {
     let mut tools = builtin_tool_snapshots();
     tools.append(&mut email_tool_snapshots());
 
-    servers.sort_by(|a, b| (a.label.as_str(), a.id.as_str()).cmp(&(b.label.as_str(), b.id.as_str())));
+    servers
+        .sort_by(|a, b| (a.label.as_str(), a.id.as_str()).cmp(&(b.label.as_str(), b.id.as_str())));
     tools.sort_by(|a, b| {
         (a.server_label.as_str(), a.name.as_str()).cmp(&(b.server_label.as_str(), b.name.as_str()))
     });

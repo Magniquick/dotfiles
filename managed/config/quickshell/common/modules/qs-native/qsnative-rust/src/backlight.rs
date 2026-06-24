@@ -200,7 +200,12 @@ impl ffi::BacklightProvider {
             .rust()
             .ddc_displays
             .get(&connector)
-            .and_then(|display| display.current.zip(display.max).map(|(c, m)| normalized_percent(c, m)))
+            .and_then(|display| {
+                display
+                    .current
+                    .zip(display.max)
+                    .map(|(c, m)| normalized_percent(c, m))
+            })
             .unwrap_or(0)
     }
 

@@ -19,8 +19,7 @@ pub(crate) fn write_file_atomic(
         .parent()
         .ok_or_else(|| "path has no parent".to_owned())?;
     fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    let mut file =
-        tempfile::NamedTempFile::new_in(dir).map_err(|error| error.to_string())?;
+    let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|error| error.to_string())?;
     file.write_all(data).map_err(|error| error.to_string())?;
     if let Some(m) = mode {
         file.as_file()

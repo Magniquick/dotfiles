@@ -333,7 +333,6 @@ async fn systemd_signal_stream(
     MessageStream::for_match_rule(rule, connection, Some(8)).await
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{parse_failed_units_json, FailedUnit};

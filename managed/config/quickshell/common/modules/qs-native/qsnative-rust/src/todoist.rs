@@ -409,7 +409,12 @@ fn apply_sync_response(cached_state: Option<CacheState>, response: SyncResponse)
         }
     }
 
-    if let Some(t) = response.sync_token.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+    if let Some(t) = response
+        .sync_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
         state.sync_token = t.to_owned();
     }
 

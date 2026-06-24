@@ -507,18 +507,9 @@ pub unsafe extern "C" fn QsNative_AiHistory_UpsertResponseItems(
     let conversation_id = unsafe { c_arg(conversation_id) };
     let turn_id = unsafe { c_arg(turn_id) };
     let raw = unsafe { c_arg(response_items_json) };
-    alloc_c_string(&upsert_json(
-        &raw,
-        decode_response_items,
-        |store, items| {
-            store.upsert_response_items(
-                &conversation_id,
-                &turn_id,
-                i64::from(turn_ordinal),
-                items,
-            )
-        },
-    ))
+    alloc_c_string(&upsert_json(&raw, decode_response_items, |store, items| {
+        store.upsert_response_items(&conversation_id, &turn_id, i64::from(turn_ordinal), items)
+    }))
 }
 
 fn with_store(path: &str, f: impl FnOnce(&mut Store) -> rusqlite::Result<String>) -> String {

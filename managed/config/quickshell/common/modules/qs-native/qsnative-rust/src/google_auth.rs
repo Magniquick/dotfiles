@@ -2,11 +2,11 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use async_trait::async_trait;
-use rustls::crypto::aws_lc_rs;
 use chrono::{SecondsFormat, Utc};
 use google_calendar3 as calendar3;
 use google_gmail1 as gmail1;
 use google_gmail1::common::GetToken;
+use rustls::crypto::aws_lc_rs;
 use serde::Serialize;
 
 use crate::app_config::EmailAccount;
