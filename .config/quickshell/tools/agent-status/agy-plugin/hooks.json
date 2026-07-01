@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreInvocation": [
+      { "hooks": [ { "type": "command", "command": "/home/magni/.config/quickshell/tools/agent-status/report.sh antigravity PreInvocation" } ] }
+    ],
+    "PreToolUse": [
+      { "hooks": [ { "type": "command", "command": "/home/magni/.config/quickshell/tools/agent-status/report.sh antigravity PreToolUse" } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "/home/magni/.config/quickshell/tools/agent-status/report.sh antigravity PostToolUse" } ] }
+    ],
+    "PostInvocation": [
+      { "hooks": [ { "type": "command", "command": "/home/magni/.config/quickshell/tools/agent-status/report.sh antigravity PostInvocation" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "/home/magni/.config/quickshell/tools/agent-status/report.sh antigravity Stop" } ] }
+    ]
+  }
+}

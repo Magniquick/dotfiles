@@ -8,14 +8,14 @@ MK.ClickableSurface {
   property string label: ""
   property string icon: ""
 
-  radius: Common.Config.shape.corner.sm
-  backgroundColor: Common.Config.color.surface_variant
-  hoverBackgroundColor: Common.Config.color.surface_variant
-  pressedBackgroundColor: Common.Config.color.surface_variant
+  radius: Common.Config.shape.corner.lg
+  backgroundColor: Common.Config.color.surface_container_highest
+  hoverBackgroundColor: Common.Config.color.surface_container_highest
+  pressedBackgroundColor: Common.Config.color.surface_container_highest
   rippleColor: Common.Config.color.on_surface
   rippleStateOpacity: root.hovered ? Common.Config.state.hoverOpacity : 0
-  implicitHeight: Common.Config.space.xl
-  implicitWidth: contentRow.implicitWidth + Common.Config.space.md * 2
+  implicitHeight: 28
+  implicitWidth: contentRow.implicitWidth + Common.Config.space.sm * 2
 
   Row {
     id: contentRow
@@ -27,7 +27,7 @@ MK.ClickableSurface {
       text: root.icon
       color: Common.Config.color.on_surface
       font.family: Common.Config.iconFontFamily
-      font.pixelSize: Common.Config.type.labelMedium.size
+      font.pixelSize: Common.Config.type.labelSmall.size
       anchors.verticalCenter: parent.verticalCenter
     }
 
@@ -35,8 +35,8 @@ MK.ClickableSurface {
       text: root.label
       color: Common.Config.color.on_surface
       font.family: Common.Config.fontFamily
-      font.pixelSize: Common.Config.type.labelMedium.size
-      font.weight: Common.Config.type.labelMedium.weight
+      font.pixelSize: Common.Config.type.labelSmall.size
+      font.weight: Common.Config.type.labelSmall.weight
       anchors.verticalCenter: parent.verticalCenter
     }
   }

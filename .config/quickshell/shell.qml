@@ -187,6 +187,7 @@ ShellRoot {
     model: Quickshell.screens
     delegate: Bar.BarWindow {}
   }
+  Bar.BarPopupHost {}
   LazyLoader {
     id: powermenuLoader
 
@@ -341,7 +342,7 @@ ShellRoot {
   PanelWindow {
     id: rightPanelWindow
 
-    readonly property int panelWidth: 420
+    readonly property int panelWidth: 360
 
     color: "transparent"
     visible: shellRoot.rightPanelShouldShow || shellRoot.rightPanelAnimating

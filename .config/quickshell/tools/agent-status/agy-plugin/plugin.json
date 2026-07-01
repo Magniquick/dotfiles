@@ -1,0 +1,5 @@
+{
+  "name": "agent-status",
+  "version": "1.0.0",
+  "description": "Report Antigravity agent state to quickshell (bash prototype)"
+}

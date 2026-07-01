@@ -93,7 +93,7 @@ RowLayout {
     return Common.Config.color.primary
   }
 
-  spacing: 8
+  spacing: 10
 
   function resolveActionIcon(identifier) {
     if (!entry || !entry.notification || !entry.notification.hasActionIcons)
@@ -211,18 +211,42 @@ RowLayout {
 
   ColumnLayout {
     Layout.fillWidth: true
-    spacing: 4
+    spacing: 6
 
     RowLayout {
       Layout.fillWidth: true
-      spacing: 8
+      spacing: 9
 
       Text {
+        Layout.preferredWidth: 18
+        Layout.alignment: Qt.AlignBaseline
         text: root.headerIconText
         color: root.headerIconColor
         font.family: Common.Config.iconFontFamily
-        font.pointSize: 12
-        Layout.alignment: Qt.AlignBaseline
+        font.pixelSize: 17
+        horizontalAlignment: Text.AlignHCenter
+      }
+
+      Rectangle {
+        id: leadingIcon
+        Layout.preferredWidth: 30
+        Layout.preferredHeight: 30
+        Layout.alignment: Qt.AlignTop
+        radius: Common.Config.shape.corner.md
+        clip: true
+        color: "transparent"
+        visible: root.imageSource.length > 0 && leadingIconImage.status === Image.Ready
+
+        Image {
+          id: leadingIconImage
+          anchors.fill: parent
+          source: root.resolvedImageSource
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          sourceSize.height: Math.round(height * Screen.devicePixelRatio)
+          sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+          visible: root.inListViewport
+        }
       }
 
       Text {
@@ -230,9 +254,9 @@ RowLayout {
         Layout.alignment: Qt.AlignBaseline
         text: root.headerText
         color: Common.Config.color.on_surface
-        font.family: "Kyok"
-        font.weight: Font.Medium
-        font.pointSize: 12
+        font.family: Common.Config.fontFamily
+        font.weight: Common.Config.type.titleMedium.weight
+        font.pixelSize: Common.Config.type.titleMedium.size
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
         visible: root.headerText.length > 0
       }
@@ -244,37 +268,16 @@ RowLayout {
 
         Row {
           id: headerActions
-          spacing: 8
-
-          Rectangle {
-            id: leadingIcon
-            width: 32
-            height: 32
-            radius: width / 2
-            clip: true
-            color: "transparent"
-            visible: root.imageSource.length > 0 && leadingIconImage.status === Image.Ready
-
-            Image {
-              id: leadingIconImage
-              anchors.fill: parent
-              source: root.resolvedImageSource
-              fillMode: Image.PreserveAspectCrop
-              asynchronous: true
-              sourceSize.height: Math.round(height * Screen.devicePixelRatio)
-              sourceSize.width: Math.round(width * Screen.devicePixelRatio)
-              visible: root.inListViewport
-            }
-          }
+          spacing: 4
 
           MK.ClickableSurface {
             id: chevronButton
-            implicitWidth: 24
-            implicitHeight: 24
-            radius: 12
-            backgroundColor: "transparent"
-            hoverBackgroundColor: "transparent"
-            pressedBackgroundColor: "transparent"
+            implicitWidth: 26
+            implicitHeight: 26
+            radius: 13
+            backgroundColor: Common.Config.color.surface_container_highest
+            hoverBackgroundColor: Common.Config.color.surface_container_highest
+            pressedBackgroundColor: Common.Config.color.surface_container_highest
             rippleColor: Common.Config.color.on_surface
             rippleStateOpacity: hovered ? Common.Config.state.hoverOpacity : 0
             visible: root.showBodyChevron && root.bodyOverflows && !root.showSourceDetails && root.bodyMaxLines > 0 && root.bodyExpandable
@@ -283,9 +286,9 @@ RowLayout {
             Text {
               anchors.centerIn: parent
               text: root.bodyExpanded ? "\uf077" : "\uf078"
-              color: chevronButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface
+              color: chevronButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface_variant
               font.family: Common.Config.iconFontFamily
-              font.pointSize: 9
+              font.pixelSize: 11
               font.weight: Font.Bold
               opacity: 0.95
 
@@ -300,12 +303,12 @@ RowLayout {
 
           MK.ClickableSurface {
             id: closeButton
-            implicitWidth: 24
-            implicitHeight: 24
-            radius: 12
-            backgroundColor: "transparent"
-            hoverBackgroundColor: "transparent"
-            pressedBackgroundColor: "transparent"
+            implicitWidth: 26
+            implicitHeight: 26
+            radius: 13
+            backgroundColor: Common.Config.color.surface_container_highest
+            hoverBackgroundColor: Common.Config.color.surface_container_highest
+            pressedBackgroundColor: Common.Config.color.surface_container_highest
             rippleColor: Common.Config.color.on_surface
             rippleStateOpacity: hovered ? Common.Config.state.hoverOpacity : 0
             visible: root.showCloseButton
@@ -314,9 +317,9 @@ RowLayout {
             Text {
               anchors.fill: parent
               text: "×"
-              color: closeButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface
+              color: closeButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface_variant
               font.family: Common.Config.fontFamily
-              font.pixelSize: 16
+              font.pixelSize: 15
               font.weight: Font.DemiBold
               opacity: 0.95
               horizontalAlignment: Text.AlignHCenter
@@ -333,12 +336,12 @@ RowLayout {
 
           MK.ClickableSurface {
             id: sourceButton
-            implicitWidth: 24
-            implicitHeight: 24
-            radius: 12
-            backgroundColor: "transparent"
-            hoverBackgroundColor: "transparent"
-            pressedBackgroundColor: "transparent"
+            implicitWidth: 26
+            implicitHeight: 26
+            radius: 13
+            backgroundColor: Common.Config.color.surface_container_highest
+            hoverBackgroundColor: Common.Config.color.surface_container_highest
+            pressedBackgroundColor: Common.Config.color.surface_container_highest
             rippleColor: Common.Config.color.on_surface
             rippleStateOpacity: hovered ? Common.Config.state.hoverOpacity : 0
             visible: root.showSourceButton
@@ -347,9 +350,9 @@ RowLayout {
             Text {
               anchors.centerIn: parent
               text: "\uf121"
-              color: sourceButton.hovered ? Common.Config.color.on_surface : Common.Config.color.surface_container_highest
+              color: sourceButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface_variant
               font.family: Common.Config.iconFontFamily
-              font.pointSize: 11
+              font.pixelSize: 12
 
               Behavior on color {
                 ColorAnimation {
@@ -371,10 +374,10 @@ RowLayout {
       Rectangle {
         Layout.fillWidth: true
         Layout.preferredHeight: sourceEdit.contentHeight + (Common.Config.space.sm * 2)
-        color: Qt.alpha(Common.Config.color.on_surface, 0.03)
+        color: Common.Config.color.surface_container_highest
         radius: Common.Config.shape.corner.sm
         border.width: 1
-        border.color: Common.Config.color.outline_variant
+        border.color: Qt.alpha(Common.Config.color.outline_variant, 0.42)
 
         CommonComponents.SelectableTextBlock {
           id: sourceEdit
@@ -405,9 +408,9 @@ RowLayout {
         Text {
           anchors.centerIn: parent
           text: root.hasDefaultAction ? "󰁜" : "\uea9c"
-          color: Common.Config.color.primary_fixed_dim
+          color: Qt.alpha(root.urgencyColor, 0.72)
           font.family: Common.Config.iconFontFamily
-          font.pointSize: root.hasDefaultAction ? 9 : 10
+          font.pixelSize: root.hasDefaultAction ? 11 : 12
         }
       }
 
@@ -422,9 +425,9 @@ RowLayout {
           text: root.detailSummaryText
           textFormat: Text.PlainText
           color: Common.Config.color.on_surface
-          font.family: "Kyok"
-          font.weight: Font.Medium
-          font.pointSize: 12
+          font.family: Common.Config.fontFamily
+          font.weight: Common.Config.type.titleSmall.weight
+          font.pixelSize: Common.Config.type.titleSmall.size
           wrapMode: Text.WrapAtWordBoundaryOrAnywhere
           visible: root.detailSummaryText.length > 0
         }
@@ -439,9 +442,9 @@ RowLayout {
           elide: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive && !root._manualExpandActive) ? Text.ElideRight : Text.ElideNone
           clip: (root.bodyMaxLines > 0 && root.bodyExpandable && !root._hoverExpandActive && !root._manualExpandActive)
           color: Common.Config.color.on_surface
-          font.family: "Kyok"
-          font.weight: Font.Medium
-          font.pointSize: 12
+          font.family: Common.Config.fontFamily
+          font.weight: Common.Config.type.bodyMedium.weight
+          font.pixelSize: Common.Config.type.bodyMedium.size
           wrapMode: Text.WrapAtWordBoundaryOrAnywhere
           visible: root.cleanBody.length > 0
         }
@@ -457,7 +460,7 @@ RowLayout {
           color: "transparent"
           font.family: bodyText.font.family
           font.weight: bodyText.font.weight
-          font.pointSize: bodyText.font.pointSize
+          font.pixelSize: bodyText.font.pixelSize
           wrapMode: bodyText.wrapMode
         }
       }
@@ -465,8 +468,8 @@ RowLayout {
 
     RowLayout {
       Layout.fillWidth: true
-      Layout.topMargin: 4
-      spacing: 8
+      Layout.topMargin: 5
+      spacing: 6
       visible: actionsRepeater.count > 0 && !root.showSourceDetails
 
       Repeater {
@@ -477,20 +480,20 @@ RowLayout {
           id: actionWrapper
           required property var modelData
           required property int index
-          Layout.preferredHeight: 32
-          Layout.preferredWidth: actionContent.implicitWidth + 32
+          Layout.preferredHeight: 28
+          Layout.preferredWidth: actionContent.implicitWidth + 24
 
           MK.ClickableSurface {
             id: actionButton
             anchors.fill: parent
-            radius: 16
-            backgroundColor: Qt.alpha(Common.Config.color.surface_container_high, 0.6)
-            hoverBackgroundColor: backgroundColor
-            pressedBackgroundColor: backgroundColor
+            radius: 14
+            backgroundColor: Common.Config.color.surface_container_highest
+            hoverBackgroundColor: Common.Config.color.surface_container_highest
+            pressedBackgroundColor: Common.Config.color.surface_container_highest
             rippleColor: Common.Config.color.on_surface
             rippleStateOpacity: hovered ? Common.Config.state.hoverOpacity : 0
             border.width: 1
-            border.color: actionButton.hovered ? Qt.alpha(Common.Config.color.primary, 0.5) : Qt.alpha(Common.Config.color.outline_variant, 0.3)
+            border.color: actionButton.hovered ? Qt.alpha(Common.Config.color.primary, 0.45) : Qt.alpha(Common.Config.color.outline_variant, 0.24)
             scale: actionButton.pressed ? 0.96 : 1.0
             onClicked: actionWrapper.modelData?.invoke()
 
@@ -518,13 +521,13 @@ RowLayout {
             Row {
               id: actionContent
               anchors.centerIn: parent
-              spacing: 6
+              spacing: 5
 
               Image {
                 id: actionIcon
                 source: root.resolveActionIcon(actionWrapper.modelData?.identifier ?? "")
-                width: 12
-                height: 12
+                width: 11
+                height: 11
                 fillMode: Image.PreserveAspectFit
                 sourceSize.height: Math.round(height * Screen.devicePixelRatio)
                 sourceSize.width: Math.round(width * Screen.devicePixelRatio)
@@ -535,9 +538,9 @@ RowLayout {
                 id: actionText
                 text: root.actionDisplayText(actionWrapper.modelData)
                 color: actionButton.hovered ? Common.Config.color.primary : Common.Config.color.on_surface_variant
-                font.family: "Kyok"
-                font.weight: Font.Medium
-                font.pointSize: 9
+                font.family: Common.Config.fontFamily
+                font.weight: Common.Config.type.labelMedium.weight
+                font.pixelSize: Common.Config.type.labelMedium.size
 
                 Behavior on color {
                   ColorAnimation {
@@ -554,15 +557,15 @@ RowLayout {
 
     RowLayout {
       Layout.fillWidth: true
-      Layout.topMargin: 4
+      Layout.topMargin: 5
       spacing: 8
       visible: (entry?.notification?.hasInlineReply ?? false) && !root.showSourceDetails
 
       Text {
         text: "\uf4ad"
-        color: Common.Config.color.surface_container_high
+        color: Qt.alpha(root.urgencyColor, 0.72)
         font.family: Common.Config.iconFontFamily
-        font.pointSize: 12
+        font.pixelSize: 13
         Layout.alignment: Qt.AlignBaseline
       }
 
@@ -570,8 +573,8 @@ RowLayout {
         id: inlineReplyField
         Layout.fillWidth: true
         placeholderText: entry && entry.notification && entry.notification.inlineReplyPlaceholder ? entry.notification.inlineReplyPlaceholder : qsTr("Reply")
-        font.family: "Kyok"
-        font.pixelSize: 14
+        font.family: Common.Config.fontFamily
+        font.pixelSize: Common.Config.type.bodyMedium.size
       }
 
       MK.ClickableSurface {
@@ -579,13 +582,13 @@ RowLayout {
         implicitWidth: 28
         implicitHeight: 28
         radius: 14
-        backgroundColor: Qt.alpha(Common.Config.color.surface_container_high, 0.6)
-        hoverBackgroundColor: backgroundColor
-        pressedBackgroundColor: backgroundColor
+        backgroundColor: Common.Config.color.surface_container_highest
+        hoverBackgroundColor: Common.Config.color.surface_container_highest
+        pressedBackgroundColor: Common.Config.color.surface_container_highest
         rippleColor: Common.Config.color.on_surface
         rippleStateOpacity: hovered ? Common.Config.state.hoverOpacity : 0
         border.width: 1
-        border.color: replyButton.hovered ? Qt.alpha(Common.Config.color.primary, 0.5) : Qt.alpha(Common.Config.color.outline_variant, 0.3)
+        border.color: replyButton.hovered ? Qt.alpha(Common.Config.color.primary, 0.45) : Qt.alpha(Common.Config.color.outline_variant, 0.24)
         onClicked: {
           const replyText = inlineReplyField.text.trim()
           if (!entry || !entry.notification || replyText.length === 0)

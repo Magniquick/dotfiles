@@ -1,0 +1,15 @@
+amends "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Config.pkl"
+
+// Secret scan before pushing the (public) dotfiles backup. gitleaks is the mise
+// PREBUILT binary. Custom (globless) step runs once and scans the committed tip
+// (`gitleaks git --log-opts=-1`) — a commit scan, not a working-tree/dir scan,
+// which is what this whitelist-based jj repo needs. Fires on `git push` (lazygit).
+hooks {
+    ["pre-push"] {
+        steps {
+            ["gitleaks"] {
+                check = "gitleaks git --no-banner --redact --log-opts=-1"
+            }
+        }
+    }
+}

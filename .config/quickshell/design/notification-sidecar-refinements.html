@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notification Sidecar Refinements</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --wall: #e4e9ef;
+      --panel: #11180f;
+      --card: #222a20;
+      --card-hi: #2a3328;
+      --card-top: #283125;
+      --stroke: #3d4939;
+      --stroke-hi: #91ad7d;
+      --text: #f0f6ec;
+      --muted: #c1cab9;
+      --dim: #8f9b87;
+      --accent: #bdeea5;
+      --button: #343e31;
+      --button-hi: #404b3c;
+      font-family: "Google Sans Flex", "Aptos", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(189, 238, 165, 0.24), transparent 24rem),
+        linear-gradient(135deg, #f0f3f6, var(--wall));
+      color: #182016;
+    }
+
+    main {
+      width: min(1280px, 100%);
+      margin: 0 auto;
+      padding: 34px 28px 56px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      max-width: 560px;
+      margin: 0;
+      font-size: clamp(32px, 5vw, 60px);
+      line-height: 0.92;
+      letter-spacing: 0;
+    }
+
+    .brief {
+      max-width: 520px;
+      margin: 0;
+      color: #55604f;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(390px, 1fr));
+      gap: 22px;
+    }
+
+    .variant {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .variant h2 {
+      margin: 0;
+      color: #263120;
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .variant p {
+      margin: 0;
+      color: #617058;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .panel {
+      width: 360px;
+      padding: 12px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, #10180e, #0d140b);
+      border: 1px solid #6f8a63;
+      box-shadow: 0 28px 70px rgba(13, 18, 10, 0.26);
+    }
+
+    .card {
+      position: relative;
+      width: 336px;
+      min-height: 136px;
+      padding: 16px;
+      border-radius: 20px;
+      color: var(--text);
+      background: linear-gradient(180deg, var(--card-hi), var(--card));
+      border: 1px solid var(--stroke);
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.055);
+    }
+
+    .topline {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .glyph {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 28px;
+      color: var(--accent);
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .title {
+      min-width: 0;
+      margin: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 760;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 7px;
+    }
+
+    .action {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--button);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .body {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.36;
+    }
+
+    .media {
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent),
+        linear-gradient(135deg, #161d14, #080b07);
+      border: 1px solid rgba(189, 238, 165, 0.23);
+    }
+
+    .cat {
+      display: grid;
+      place-items: center;
+      color: #f2e7d5;
+      background:
+        radial-gradient(circle at 37% 31%, #9b6238 0 10%, transparent 11%),
+        radial-gradient(circle at 63% 31%, #9b6238 0 10%, transparent 11%),
+        radial-gradient(circle at 50% 54%, #16120e 0 12%, transparent 13%),
+        linear-gradient(135deg, #333a2f, #060705);
+      font-size: 28px;
+      font-weight: 900;
+    }
+
+    .progress {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 4px;
+      height: 3px;
+      border-radius: 99px;
+      background: var(--stroke-hi);
+    }
+
+    .classic .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 74px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .classic .media {
+      width: 74px;
+      height: 74px;
+      border-radius: 16px;
+      margin-top: 2px;
+    }
+
+    .classic .body {
+      max-width: 208px;
+    }
+
+    .hero .card {
+      padding: 0;
+    }
+
+    .hero .topline {
+      margin: 0;
+      padding: 14px 14px 12px;
+      background: var(--card-top);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .hero .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px;
+      gap: 14px;
+      padding: 14px 14px 18px;
+    }
+
+    .hero .media {
+      width: 96px;
+      height: 72px;
+      border-radius: 16px;
+    }
+
+    .hero .body {
+      font-size: 14px;
+    }
+
+    .postcard .card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 88px;
+      gap: 14px;
+      min-height: 124px;
+    }
+
+    .postcard .topline {
+      margin-bottom: 8px;
+    }
+
+    .postcard .media {
+      width: 88px;
+      height: 88px;
+      border-radius: 18px;
+      align-self: center;
+    }
+
+    .postcard .actions {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+    }
+
+    .postcard .textcol {
+      padding-right: 4px;
+    }
+
+    .postcard .title {
+      max-width: 182px;
+    }
+
+    .postcard .body {
+      max-width: 194px;
+    }
+
+    .caption .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 78px;
+      gap: 12px;
+    }
+
+    .caption .media {
+      width: 78px;
+      height: 60px;
+      border-radius: 15px;
+    }
+
+    .caption .media-label {
+      margin-top: 6px;
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .caption .body {
+      max-width: 210px;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        display: block;
+      }
+
+      .brief {
+        margin-top: 12px;
+      }
+
+      .grid {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 10px;
+      }
+
+      .variant {
+        flex: 0 0 390px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Sidecar, but actually composed</h1>
+      <p class="brief">All options keep the image as a real media object, not a tiny icon jammed into the title row. The title and buttons keep predictable positions; the image gets a bounded slot.</p>
+    </header>
+
+    <section class="grid">
+      <article class="variant classic">
+        <h2>1. Balanced sidecar</h2>
+        <p>The safest implementation for the current QML card: text on left, 74px image on right, controls untouched in the top row.</p>
+        <div class="panel">
+          <div class="card">
+            <div class="topline">
+              <div class="glyph">♡</div>
+              <h3 class="title">Image preview left test</h3>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <div class="content">
+              <p class="body">Preview should appear as a proper sidecar, not squeezed into the title line.</p>
+              <div class="media cat">🐱</div>
+            </div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="variant hero">
+        <h2>2. Header shelf</h2>
+        <p>Uses a quiet header band for identity/actions. The body and image then sit in a clean two-column shelf.</p>
+        <div class="panel">
+          <div class="card">
+            <div class="topline">
+              <div class="glyph">♡</div>
+              <h3 class="title">Image preview left test</h3>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <div class="content">
+              <p class="body">A touch more structured; this makes rich notifications feel intentional.</p>
+              <div class="media cat">🐱</div>
+            </div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="variant postcard">
+        <h2>3. Postcard</h2>
+        <p>Most visual. The image is a full-height side plate. Best for screenshot/music/art previews, weaker for long text.</p>
+        <div class="panel">
+          <div class="card">
+            <div class="textcol">
+              <div class="topline">
+                <div class="glyph">♡</div>
+                <h3 class="title">Image preview left test</h3>
+              </div>
+              <p class="body">A larger preview with strong visual weight.</p>
+            </div>
+            <div class="actions">
+              <span class="action">×</span>
+              <span class="action">&lt;/&gt;</span>
+            </div>
+            <div class="media cat">🐱</div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="variant caption">
+        <h2>4. Captioned media</h2>
+        <p>Same sidecar idea, but labels the media. Useful if you want the UI to distinguish icons from attached images.</p>
+        <div class="panel">
+          <div class="card">
+            <div class="topline">
+              <div class="glyph">♡</div>
+              <h3 class="title">Image preview left test</h3>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <div class="content">
+              <p class="body">Preview is readable, but less dominant than postcard.</p>
+              <div>
+                <div class="media cat">🐱</div>
+                <div class="media-label">image</div>
+              </div>
+            </div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

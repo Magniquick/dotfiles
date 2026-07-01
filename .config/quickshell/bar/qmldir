@@ -1,5 +1,7 @@
 module qs.bar
+BarPopupHost 1.0 components/BarPopupHost.qml
 BarWindow 1.0 BarWindow.qml
+singleton BarPopupState 1.0 services/BarPopupState.qml
 singleton Config 1.0 ../common/Config.qml
 singleton DependencyCheck 1.0 ../common/services/DependencyCheck.qml
 singleton GlobalState 1.0 ../common/GlobalState.qml

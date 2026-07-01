@@ -47,8 +47,9 @@ struct CacheEnvelope {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct TodoistProject {
+    #[serde(default, deserialize_with = "string_or_default")]
     id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_default")]
     name: String,
     #[serde(default)]
     is_deleted: bool,
@@ -58,19 +59,20 @@ struct TodoistProject {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct TodoistItem {
+    #[serde(default, deserialize_with = "string_or_default")]
     id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_default")]
     project_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_default")]
     content: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_default")]
     description: String,
     due: Option<TodoistDue>,
     #[serde(default)]
     checked: bool,
     #[serde(default)]
     is_deleted: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_default")]
     updated_at: String,
 }
 
@@ -208,7 +210,10 @@ impl ffi::TodoistClient {
         thread::spawn(move || {
             let result = action_todoist(&verb, &args_json)
                 .and_then(|()| refresh_todoist_result(&cache_path, false))
-                .unwrap_or_else(|error| refresh_todoist(&cache_path, true).with_error(error));
+                .unwrap_or_else(|error| {
+                    log_todoist_error("action", &error);
+                    refresh_todoist(&cache_path, true).with_error(error)
+                });
             let _ = qt_thread.queue(move |mut client| {
                 client.as_mut().apply_refresh_result(result);
                 client.as_mut().set_loading(false);
@@ -235,26 +240,54 @@ impl RefreshResult {
 
 fn refresh_todoist(cache_path: &str, prefer_cache: bool) -> RefreshResult {
     refresh_todoist_result(cache_path, prefer_cache).unwrap_or_else(|error| {
+        log_todoist_error("refresh", &error);
         let cached = read_cache_state(cache_path).ok();
         render_refresh_result(cached.as_ref(), true, &error)
     })
 }
 
 fn refresh_todoist_result(cache_path: &str, prefer_cache: bool) -> Result<RefreshResult, String> {
+    log_todoist(&format!(
+        "refresh start prefer_cache={prefer_cache} cache_path={}",
+        cache_path.trim()
+    ));
+
     let cached_state = read_cache_state(cache_path).ok();
     if prefer_cache {
         if let Some(state) = cached_state.as_ref() {
+            log_todoist(&format!(
+                "refresh cache hit tasks={} projects={} synced_at={}",
+                state.items.len(),
+                state.projects.len(),
+                state.synced_at
+            ));
             return Ok(render_refresh_result(Some(state), true, ""));
         }
     }
 
     let token = read_token()?;
     let sync_token = effective_sync_token(cached_state.as_ref());
-    let response = sync_request(&token, &sync_token)?;
+    let response = sync_request(&token, &sync_token).or_else(|error| {
+        if sync_token == TODOIST_SYNC_TOKEN_FULL {
+            return Err(error);
+        }
+        log_todoist_error("incremental sync failed; retrying full sync", &error);
+        sync_request(&token, TODOIST_SYNC_TOKEN_FULL)
+    })?;
+    let response_full_sync = response.full_sync;
+    let response_items = response.items.len();
+    let response_projects = response.projects.len();
     let mut next_state = apply_sync_response(cached_state, response);
     next_state.synced_at = unix_now();
     write_cache_state(cache_path, &next_state)
         .map_err(|error| format!("cache write failed: {error}"))?;
+
+    log_todoist(&format!(
+        "refresh live ok full_sync={response_full_sync} response_items={response_items} response_projects={response_projects} tasks={} projects={} synced_at={}",
+        next_state.items.len(),
+        next_state.projects.len(),
+        next_state.synced_at
+    ));
 
     Ok(render_refresh_result(Some(&next_state), false, ""))
 }
@@ -272,13 +305,28 @@ fn sync_request(token: &str, sync_token: &str) -> Result<SyncResponse, String> {
         ])
         .map_err(|error| format!("todoist sync: {error}"))?;
 
-    response
+    let status = response.status().as_u16();
+    let body = response
         .body_mut()
-        .read_json::<SyncResponse>()
-        .map_err(|error| format!("todoist sync response: {error}"))
+        .read_to_string()
+        .map_err(|error| format!("todoist sync body: {error}"))?;
+    if !(200..300).contains(&status) {
+        return Err(format!(
+            "todoist sync http {status}: {}",
+            body_snippet(&body)
+        ));
+    }
+
+    serde_json::from_str::<SyncResponse>(&body).map_err(|error| {
+        format!(
+            "todoist sync response json: {error}; body={}",
+            body_snippet(&body)
+        )
+    })
 }
 
 fn action_todoist(verb: &str, args_json: &str) -> Result<(), String> {
+    log_todoist(&format!("action start verb={verb}"));
     let args: BTreeMap<String, String> = serde_json::from_str(args_json).unwrap_or_default();
     let command = build_command(verb, &args)?;
     let command_uuid = command
@@ -297,12 +345,29 @@ fn action_todoist(verb: &str, args_json: &str) -> Result<(), String> {
         .send_form([("commands", commands.as_str())])
         .map_err(|error| format!("todoist action: {error}"))?;
 
-    let response = response
+    let status = response.status().as_u16();
+    let body = response
         .body_mut()
-        .read_json::<CommandResponse>()
-        .map_err(|error| format!("todoist action response: {error}"))?;
+        .read_to_string()
+        .map_err(|error| format!("todoist action body: {error}"))?;
+    if !(200..300).contains(&status) {
+        return Err(format!(
+            "todoist action http {status}: {}",
+            body_snippet(&body)
+        ));
+    }
+
+    let response = serde_json::from_str::<CommandResponse>(&body).map_err(|error| {
+        format!(
+            "todoist action response json: {error}; body={}",
+            body_snippet(&body)
+        )
+    })?;
     match response.sync_status.get(&command_uuid) {
-        Some(Value::String(status)) if status == "ok" => Ok(()),
+        Some(Value::String(status)) if status == "ok" => {
+            log_todoist(&format!("action ok verb={verb}"));
+            Ok(())
+        }
         Some(status) => Err(format!("todoist action failed: {status}")),
         None => Err("todoist action failed: missing sync status".to_owned()),
     }
@@ -375,9 +440,35 @@ fn read_token() -> Result<String, String> {
 
 fn todoist_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
+        .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(15)))
         .build()
         .new_agent()
+}
+
+fn log_todoist(message: &str) {
+    eprintln!("[TodoistClient] {message}");
+}
+
+fn log_todoist_error(stage: &str, error: &str) {
+    eprintln!("[TodoistClient] {stage}: {}", body_snippet(error));
+}
+
+fn body_snippet(body: &str) -> String {
+    const MAX_CHARS: usize = 800;
+    let mut snippet = String::new();
+    for ch in body.trim().chars() {
+        if snippet.chars().count() >= MAX_CHARS {
+            snippet.push_str("...");
+            break;
+        }
+        if ch.is_control() && ch != '\n' && ch != '\t' {
+            snippet.push(' ');
+        } else {
+            snippet.push(ch);
+        }
+    }
+    snippet
 }
 
 fn apply_sync_response(cached_state: Option<CacheState>, response: SyncResponse) -> CacheState {
@@ -563,6 +654,13 @@ fn parse_utc_timestamp(value: &str) -> Option<DateTime<Utc>> {
         .ok()
 }
 
+fn string_or_default<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer).map(|value| value.unwrap_or_default())
+}
+
 fn read_cache_state(cache_path: &str) -> Result<CacheState, String> {
     let cache_path = cache_path.trim();
     if cache_path.is_empty() {
@@ -604,7 +702,7 @@ fn unix_now() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{task_due, TodoistDue, TodoistItem};
+    use super::{task_due, SyncResponse, TodoistDue, TodoistItem};
     use chrono::NaiveDate;
 
     #[test]
@@ -627,5 +725,30 @@ mod tests {
 
         assert_eq!(task_due(&date_only, today).1.as_deref(), Some("Today"));
         assert_eq!(task_due(&timed, today).1.as_deref(), Some("Today 9:30 AM"));
+    }
+
+    #[test]
+    fn parses_deleted_incremental_items_with_null_updated_at() {
+        let response: SyncResponse = serde_json::from_str(
+            r#"{
+                "full_sync": false,
+                "sync_token": "next",
+                "items": [{
+                    "id": "deleted-item",
+                    "project_id": "2222222222222222",
+                    "content": "",
+                    "description": "",
+                    "checked": false,
+                    "is_deleted": true,
+                    "updated_at": null
+                }],
+                "projects": []
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(response.items.len(), 1);
+        assert_eq!(response.items[0].updated_at, "");
+        assert!(response.items[0].is_deleted);
     }
 }

@@ -170,7 +170,13 @@ Item {
     // Popups sit on an overlay layer; the drop shadow makes the container
     // edge harder to read against busy backgrounds.
     elevation: 0
+    paddingLeft: 18
+    paddingRight: 18
+    paddingTop: 16
+    paddingBottom: 16
+    frameRadius: 18
     frameBorderWidth: 1
+    frameColor: Common.Config.color.surface
     frameBorderColor: Qt.alpha(Common.Config.color.outline, 0.42)
     onClicked: root.activatePopup()
 

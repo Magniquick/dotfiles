@@ -41,6 +41,24 @@ PanelWindow {
     anchors.bottomMargin: Config.barPadding + Config.spaceHalfXs
     implicitHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
 
+    function resolvePopupAt(point) {
+      const rect = root.itemRect(content)
+      BarPopupState.resolveWindowPoint(root, rect.x + point.x, rect.y + point.y)
+    }
+
+    HoverHandler {
+      id: contentHover
+
+      target: content
+      onPointChanged: content.resolvePopupAt(point.position)
+      onHoveredChanged: {
+        if (hovered)
+          content.resolvePopupAt(contentHover.point.position)
+        else
+          BarPopupState.leaveWindow(root)
+      }
+    }
+
     RowLayout {
       id: leftRow
 

@@ -10,6 +10,9 @@ Item {
   id: root
 
   readonly property bool active: root.enabled && (root.open || root.pinned || (root.hoverable && root.popupHovered))
+  readonly property int morphDuration: Math.round(280 * Config.motionScale)
+  readonly property int revealCloseDuration: Math.round(240 * Config.motionScale)
+  readonly property int revealOpenDuration: Math.round(320 * Config.motionScale)
   property rect anchorRect: Qt.rect(0, 0, 0, 0)
   property bool autoScroll: true
   // Either a URL string (opened via Qt) or an argv array.
@@ -28,10 +31,11 @@ Item {
   property bool showScrollIndicator: true
   property string subtitle: ""
   property Item targetItem: null
+  property var targetWindow: null
   property string title: ""
   readonly property var contentItem: contentLoader.item
   readonly property bool visualActive: popup.visible
-  readonly property var window: targetItem ? targetItem.QsWindow.window : null
+  readonly property var window: root.targetWindow || (targetItem ? targetItem.QsWindow.window : null)
   property bool _anchorUpdatePending: false
 
   signal refreshRequested
@@ -125,10 +129,15 @@ Item {
       }
     }
 
+    onVisibleChanged: {
+      if (!visible)
+        body.resetWindowSize()
+    }
+
     color: "transparent"
-    implicitHeight: body.implicitHeight
-    implicitWidth: body.implicitWidth
-    visible: root.window && reveal > 0.01
+    implicitHeight: body.windowHeight
+    implicitWidth: body.targetImplicitWidth
+    visible: reveal > 0.01
 
     Behavior on reveal {
       NumberAnimation {
@@ -136,17 +145,15 @@ Item {
         // Snap open when a tooltip is reopened during the dismiss animation.
         duration: {
           if (!root.active)
-            return Config.motion.duration.shortMs
+            return root.revealCloseDuration
           if (popup.reveal > 0 && popup.reveal < 1)
             return 0
-          return Config.motion.duration.medium
+          return root.revealOpenDuration
         }
-        easing.type: root.active ? Config.motion.easing.standard : Easing.InCubic
+        easing.type: root.active ? Easing.OutCubic : Easing.InOutCubic
       }
     }
 
-    onImplicitHeightChanged: root.updateAnchor()
-    onImplicitWidthChanged: root.updateAnchor()
     anchor {
       adjustment: PopupAdjustment.SlideX | PopupAdjustment.ResizeX
       edges: Edges.Top
@@ -165,18 +172,53 @@ Item {
     Item {
       id: body
 
-      implicitHeight: {
+      readonly property real targetImplicitHeight: {
         const naturalHeight = layout.implicitHeight + Config.tooltipPadding * 2
         if (root.maximumHeight > 0) {
           return Math.min(naturalHeight, root.maximumHeight)
         }
         return naturalHeight
       }
-      implicitWidth: layout.implicitWidth + Config.tooltipPadding * 2
+      readonly property real targetImplicitWidth: layout.implicitWidth + Config.tooltipPadding * 2
+      property real displayHeight: targetImplicitHeight
+      property real displayWidth: targetImplicitWidth
+      property real windowHeight: targetImplicitHeight
+
+      function updateWindowSize() {
+        windowHeight = Math.max(windowHeight, targetImplicitHeight)
+      }
+
+      function resetWindowSize() {
+        windowHeight = targetImplicitHeight
+      }
+
+      clip: true
+      height: displayHeight
+      implicitHeight: displayHeight
+      implicitWidth: displayWidth
       opacity: popup.reveal
-      scale: 0.9 + (0.1 * popup.reveal)
+      scale: 0.86 + (0.14 * popup.reveal)
       transformOrigin: Item.Top
-      y: Config.motion.distance.large * (1 - popup.reveal)
+      width: displayWidth
+      x: Math.min(0, (targetImplicitWidth - displayWidth) / 2)
+      y: Math.round(18 * Config.motionScale) * (1 - popup.reveal)
+
+      Behavior on displayHeight {
+        NumberAnimation {
+          duration: root.morphDuration
+          easing.type: Easing.OutCubic
+        }
+      }
+
+      Behavior on displayWidth {
+        NumberAnimation {
+          duration: root.morphDuration
+          easing.type: Easing.OutCubic
+        }
+      }
+
+      onTargetImplicitHeightChanged: body.updateWindowSize()
+      onTargetImplicitWidthChanged: body.updateWindowSize()
 
       Rectangle {
         id: panel
@@ -367,6 +409,23 @@ Item {
           property real loadedContentHeight: 0
           property real loadedContentWidth: 0
 
+          function setContentYImmediate(value) {
+            const maxY = Math.max(0, flickable.contentHeight - flickable.height)
+            const nextY = Math.max(0, Math.min(value, maxY))
+            flickable.suppressContentYBehavior = true
+            flickable.contentY = nextY
+            flickable.scrollTargetY = nextY
+            flickable.suppressContentYBehavior = false
+          }
+
+          function resetContentOffset() {
+            flickable.setContentYImmediate(0)
+          }
+
+          function clampContentOffset() {
+            flickable.setContentYImmediate(flickable.contentY)
+          }
+
           function updateContentSize() {
             if (contentLoader.status === Loader.Ready && contentLoader.item) {
               loadedContentHeight = contentLoader.item.implicitHeight
@@ -384,11 +443,17 @@ Item {
           contentWidth: loadedContentWidth
           showVerticalScrollBar: root.showScrollIndicator
 
+          onHeightChanged: flickable.clampContentOffset()
+
           onContentHeightChanged: {
-            if (root.autoScroll && contentHeight > height) {
+            if (contentHeight <= height) {
+              flickable.resetContentOffset()
+            } else if (root.autoScroll) {
               Qt.callLater(() => {
-                flickable.contentY = Math.max(0, contentHeight - height)
+                flickable.setContentYImmediate(Math.max(0, flickable.contentHeight - flickable.height))
               })
+            } else {
+              flickable.clampContentOffset()
             }
           }
 
@@ -396,10 +461,27 @@ Item {
             id: contentLoader
 
             active: true
+            opacity: 1
             sourceComponent: root.contentComponent
 
-            onStatusChanged: flickable.updateContentSize()
+            Behavior on opacity {
+              NumberAnimation {
+                duration: Math.round(120 * Config.motionScale)
+                easing.type: Easing.OutCubic
+              }
+            }
+
+            onStatusChanged: {
+              flickable.updateContentSize()
+              if (status !== Loader.Loading)
+                flickable.resetContentOffset()
+            }
             onItemChanged: {
+              contentLoader.opacity = 0
+              Qt.callLater(() => {
+                contentLoader.opacity = 1
+              })
+              flickable.resetContentOffset()
               flickable.updateContentSize()
               if (item) {
                 item.implicitHeightChanged.connect(flickable.updateContentSize)

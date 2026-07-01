@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notification Image Layout Concepts</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #dfe5ed;
+      --surface: #20261f;
+      --surface-high: #272e26;
+      --surface-higher: #30372f;
+      --outline: #414b3f;
+      --outline-strong: #8bae7e;
+      --text: #eef6e8;
+      --muted: #c4cdbc;
+      --dim: #94a08d;
+      --accent: #bdeea5;
+      --action: #363f34;
+      --shadow: 0 22px 70px rgba(12, 17, 10, 0.28);
+      font-family: "Google Sans Flex", "Aptos", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #11170f;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(189, 238, 165, 0.34), transparent 24rem),
+        linear-gradient(135deg, #eef2f5, var(--page));
+    }
+
+    main {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 34px 28px 54px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 52px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .brief {
+      max-width: 570px;
+      margin: 0;
+      color: #4b5548;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(420px, 1fr));
+      gap: 22px;
+    }
+
+    .concept {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .concept h2 {
+      margin: 0;
+      color: #263023;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .note {
+      margin: 0;
+      color: #65705f;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      min-height: 310px;
+      padding: 16px;
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.36);
+      border: 1px solid rgba(65, 75, 63, 0.18);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.45);
+    }
+
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: 510px;
+      min-height: 112px;
+      padding: 22px;
+      border-radius: 24px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--outline);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card.compact {
+      max-width: 380px;
+      min-height: 116px;
+      padding: 18px;
+      border-radius: 20px;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    .top {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .glyph {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 30px;
+      flex: 0 0 24px;
+      color: var(--accent);
+      font-size: 27px;
+      line-height: 1;
+    }
+
+    .thumb {
+      flex: 0 0 auto;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, #2a3128, #171d16),
+        #1d241c;
+      border: 1px solid rgba(189, 238, 165, 0.22);
+    }
+
+    .thumb img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .kitty {
+      display: grid;
+      place-items: center;
+      color: #f1e8d6;
+      background:
+        radial-gradient(circle at 36% 26%, #8b5a36 0 12%, transparent 13%),
+        radial-gradient(circle at 64% 26%, #8b5a36 0 12%, transparent 13%),
+        linear-gradient(135deg, #191d18, #030403);
+      font-size: 25px;
+      font-weight: 800;
+    }
+
+    .titleblock {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .titleline {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .title {
+      margin: 0;
+      color: var(--text);
+      font-size: 23px;
+      font-weight: 720;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .compact .title {
+      font-size: 18px;
+    }
+
+    .body {
+      margin: 12px 0 0;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.34;
+    }
+
+    .compact .body {
+      margin-top: 8px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .action {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--action);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .compact .action {
+      width: 32px;
+      height: 32px;
+      font-size: 15px;
+    }
+
+    .progress {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      bottom: 4px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--outline-strong);
+    }
+
+    .rail .card {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .rail .thumb {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+    }
+
+    .rail .glyph {
+      position: absolute;
+      left: 22px;
+      top: 22px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--surface-high);
+      border: 1px solid var(--outline);
+      font-size: 15px;
+      z-index: 2;
+    }
+
+    .strip .media-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .strip .thumb {
+      width: 56px;
+      height: 36px;
+      border-radius: 12px;
+    }
+
+    .strip .glyph {
+      width: 22px;
+      height: 22px;
+      font-size: 22px;
+    }
+
+    .banner {
+      padding-top: 98px;
+    }
+
+    .banner .hero {
+      position: absolute;
+      inset: 0 0 auto;
+      height: 82px;
+      overflow: hidden;
+      border-radius: 24px 24px 0 0;
+      background:
+        linear-gradient(90deg, rgba(32, 38, 31, 0.18), rgba(32, 38, 31, 0.92)),
+        linear-gradient(135deg, #ff4d4d, #ffcc33);
+    }
+
+    .banner .hero::after {
+      content: "preview";
+      position: absolute;
+      right: 18px;
+      bottom: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .banner .top {
+      position: relative;
+      z-index: 1;
+    }
+
+    .banner .glyph {
+      margin-top: -4px;
+    }
+
+    .sidecar .card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 86px;
+      gap: 16px;
+    }
+
+    .sidecar .top {
+      gap: 10px;
+    }
+
+    .sidecar .thumb {
+      width: 86px;
+      height: 86px;
+      border-radius: 18px;
+      align-self: center;
+    }
+
+    .stacked .meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.09);
+      color: var(--dim);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .stacked .thumb {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+    }
+
+    @media (max-width: 980px) {
+      header {
+        display: block;
+      }
+
+      .brief {
+        margin-top: 12px;
+      }
+
+      .board {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 12px;
+      }
+
+      .concept {
+        flex: 0 0 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Image notification layouts</h1>
+      <p class="brief">The current problem is visual crowding: app glyph, preview, title, close, and source action are all competing on one line. These variants separate identity, media, text, and controls so the preview looks intentional.</p>
+    </header>
+
+    <section class="board">
+      <article class="concept rail">
+        <h2>Recommended: thumbnail rail</h2>
+        <p class="note">Use the preview as the left anchor. Put the nerd-font app glyph as a small badge over it. This keeps the title readable and leaves actions alone.</p>
+        <div class="stack">
+          <div class="card compact">
+            <div class="thumb kitty">🐱</div>
+            <div class="glyph">♡</div>
+            <div class="titleblock">
+              <div class="titleline">
+                <h3 class="title">Image preview left test</h3>
+              </div>
+              <p class="body">Preview should appear after the app identity, before this title text.</p>
+            </div>
+            <div class="actions">
+              <span class="action">×</span>
+              <span class="action">&lt;/&gt;</span>
+            </div>
+            <div class="progress"></div>
+          </div>
+
+          <div class="card compact">
+            <div class="thumb kitty">▣</div>
+            <div class="glyph">↗</div>
+            <div class="titleblock">
+              <h3 class="title">Screenshot copied</h3>
+              <p class="body">Copied to clipboard</p>
+            </div>
+            <div class="actions">
+              <span class="action">×</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="concept strip">
+        <h2>Compact media strip</h2>
+        <p class="note">Best when images are contextual but not the main payload. The preview and app glyph become a tiny media cluster above title/body.</p>
+        <div class="stack">
+          <div class="card compact">
+            <div class="media-row">
+              <div class="glyph">♡</div>
+              <div class="thumb kitty">🐱</div>
+              <div class="titleblock">
+                <h3 class="title">Image preview left test</h3>
+              </div>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <p class="body">Preview should appear after the nerd-font icon, before this title text.</p>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="concept sidecar">
+        <h2>Right-side media sidecar</h2>
+        <p class="note">If the preview matters, give it a real slot. This is clean, but only works when panel width stays generous enough.</p>
+        <div class="stack">
+          <div class="card">
+            <div>
+              <div class="top">
+                <div class="glyph">♡</div>
+                <div class="titleblock">
+                  <h3 class="title">Image preview left test</h3>
+                </div>
+                <div class="actions">
+                  <span class="action">×</span>
+                  <span class="action">&lt;/&gt;</span>
+                </div>
+              </div>
+              <p class="body">Larger preview, but the text column still owns the reading path.</p>
+            </div>
+            <div class="thumb kitty">🐱</div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="concept banner">
+        <h2>Media banner</h2>
+        <p class="note">Treat image notifications like rich cards. Strongest visual hierarchy, but taller and less dense.</p>
+        <div class="stack">
+          <div class="card banner">
+            <div class="hero"></div>
+            <div class="top">
+              <div class="glyph">♡</div>
+              <div class="titleblock">
+                <h3 class="title">Image preview left test</h3>
+                <p class="body">The image becomes context, not a tiny competing icon.</p>
+              </div>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="concept stacked">
+        <h2>Stacked metadata footer</h2>
+        <p class="note">Safest for narrow cards: title and actions stay clean, preview moves into a secondary footer with app/source metadata.</p>
+        <div class="stack">
+          <div class="card compact">
+            <div class="top">
+              <div class="glyph">♡</div>
+              <div class="titleblock">
+                <h3 class="title">Image preview left test</h3>
+                <p class="body">Preview should not disturb the title line at all.</p>
+              </div>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <div class="meta">
+              <div class="thumb kitty">🐱</div>
+              <span>Preview Test</span>
+              <span>image attached</span>
+            </div>
+            <div class="progress"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="concept">
+        <h2>Current issue reference</h2>
+        <p class="note">The thing to avoid: glyph + thumbnail + long title + two controls in one cramped line.</p>
+        <div class="stack">
+          <div class="card compact">
+            <div class="top">
+              <div class="glyph">♡</div>
+              <div class="thumb kitty" style="width:30px;height:30px;border-radius:10px">🐱</div>
+              <div class="titleblock">
+                <h3 class="title">Image preview left test</h3>
+              </div>
+              <div class="actions">
+                <span class="action">×</span>
+                <span class="action">&lt;/&gt;</span>
+              </div>
+            </div>
+            <p class="body">Everything fits until the title or action set grows.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

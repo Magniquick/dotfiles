@@ -454,22 +454,22 @@ Item {
   MK.Pane {
     anchors.fill: parent
     radius: Common.Config.shape.corner.lg
-    backgroundColor: Common.Config.color.surface_container
+    backgroundColor: Common.Config.color.surface_container_low
 
     Rectangle {
       anchors.fill: parent
       border.width: 1
-      border.color: Common.Config.color.outline
+      border.color: Qt.alpha(Common.Config.color.outline, 0.42)
       color: "transparent"
       radius: Common.Config.shape.corner.lg
       gradient: Gradient {
         GradientStop {
           position: 0.0
-          color: Common.Config.color.surface_dim
+          color: Common.Config.color.surface_container_lowest
         }
         GradientStop {
           position: 1.0
-          color: Common.Config.color.surface_container
+          color: Common.Config.color.surface_container_low
         }
       }
     }
@@ -480,7 +480,7 @@ Item {
       fill: parent
       margins: Common.Config.space.md
     }
-    spacing: Common.Config.sectionSpacing
+    spacing: Common.Config.space.sm
 
     Item {
       Layout.fillWidth: true
@@ -490,20 +490,25 @@ Item {
     RowLayout {
       id: headerRow
       Layout.fillWidth: true
+      Layout.preferredHeight: 40
       spacing: Common.Config.space.sm
 
       readonly property int headerNotificationCount: root.inGroupFocusView ? notificationStore.focusedEntries.length : notificationStore.model.count
 
-      Item {
-        Layout.preferredWidth: 18
-        Layout.preferredHeight: 18
+      Rectangle {
+        Layout.preferredWidth: 36
+        Layout.preferredHeight: 36
+        radius: Common.Config.shape.corner.lg
+        color: Common.Config.color.surface_container_high
+        border.width: 1
+        border.color: Qt.alpha(Common.Config.color.primary, 0.2)
 
         Text {
           anchors.centerIn: parent
           text: "\uf0f3"
           color: Common.Config.color.primary
           font.family: Common.Config.iconFontFamily
-          font.pixelSize: 16
+          font.pixelSize: 15
         }
 
         Rectangle {
@@ -512,7 +517,7 @@ Item {
           anchors.top: parent.top
           anchors.rightMargin: -4
           anchors.topMargin: -4
-          color: Common.Config.color.error
+          color: Common.GlobalState.notificationDnd ? Common.Config.color.secondary : Common.Config.color.error
           radius: height / 2
           implicitHeight: 14
           implicitWidth: Math.max(14, badgeText.implicitWidth + 6)
@@ -531,7 +536,6 @@ Item {
 
       Text {
         Layout.fillWidth: true
-        Layout.rightMargin: Common.Config.space.xl
         text: root.inGroupFocusView ? notificationStore.focusedGroupTitle : "Notifications"
         color: Common.Config.color.on_surface
         font.family: Common.Config.fontFamily
@@ -542,14 +546,14 @@ Item {
 
       Components.ActionButton {
         visible: root.inGroupFocusView
-        label: "Back"
+        label: qsTr("Back")
         icon: "\uf060"
         onClicked: notificationStore.leaveGroupFocus()
       }
 
       Components.ActionButton {
         visible: notificationStore.model.count > 0
-        label: "Clear"
+        label: qsTr("Clear")
         icon: "\uf1f8"
         onClicked: {
           if (root.inGroupFocusView) {
@@ -564,7 +568,7 @@ Item {
 
     Item {
       Layout.fillWidth: true
-      Layout.preferredHeight: Common.Config.space.sm
+      Layout.preferredHeight: Common.Config.space.xs
     }
 
     Item {
@@ -574,7 +578,7 @@ Item {
       Text {
         anchors.centerIn: parent
         visible: notificationStore.model.count === 0
-        text: "No notifications"
+        text: qsTr("No notifications")
         color: Common.Config.color.on_surface_variant
         font.family: Common.Config.fontFamily
         font.pixelSize: Common.Config.type.bodyMedium.size
@@ -590,7 +594,7 @@ Item {
         clip: true
 
         T.ScrollBar.vertical: MK.ScrollBar {
-          policy: T.ScrollBar.AsNeeded
+          policy: T.ScrollBar.AlwaysOff
         }
 
         add: Transition {
@@ -643,11 +647,11 @@ Item {
 
     Rectangle {
       Layout.fillWidth: true
-      Layout.preferredHeight: 36
-      color: "transparent"
-      radius: Common.Config.shape.corner.md
+      Layout.preferredHeight: 30
+      color: Common.Config.color.surface_container_high
+      radius: Common.Config.shape.corner.lg
       border.width: 1
-      border.color: Qt.alpha(Common.Config.color.on_surface, 0.1)
+      border.color: Qt.alpha(Common.Config.color.outline_variant, 0.24)
 
       RowLayout {
         anchors.fill: parent
@@ -666,12 +670,12 @@ Item {
           }
 
           Text {
-            text: "NOTIFICATION SERVER"
+            text: qsTr("SERVER")
             color: Common.Config.color.on_surface_variant
             font.family: Common.Config.fontFamily
             font.pixelSize: 9
             font.weight: Font.Bold
-            font.letterSpacing: 1.5
+            font.letterSpacing: 1.2
             anchors.verticalCenter: parent.verticalCenter
             opacity: 0.7
           }
@@ -682,7 +686,7 @@ Item {
         }
 
         Text {
-          text: root.notificationServerActive ? "ACTIVE" : "INACTIVE"
+          text: root.notificationServerActive ? qsTr("ACTIVE") : qsTr("INACTIVE")
           color: Common.Config.color.on_surface_variant
           font.family: Common.Config.fontFamily
           font.pixelSize: 9
@@ -720,6 +724,21 @@ Item {
           width: groupedColumn.width
           entry: groupedRoot.group.entries[0]
           onDismissRequested: notificationStore.dismissNotification(entry.notificationId)
+        }
+
+        Item {
+          visible: groupedRoot.group.count > 1
+          width: groupedColumn.width
+          height: groupButton.implicitHeight
+
+          Components.ActionButton {
+            id: groupButton
+            label: qsTr("%1 grouped").arg(groupedRoot.group.count)
+            icon: "\uf0c5"
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: notificationStore.enterGroupFocus(groupedRoot.group.groupKey)
+          }
         }
       }
     }

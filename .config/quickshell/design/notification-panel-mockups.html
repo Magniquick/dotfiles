@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quickshell Notification Panel Mockups</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #dfe4ec;
+      --ink: #eff5ff;
+      --muted: #9da7b8;
+      --panel: #161b24;
+      --panel-2: #1d222d;
+      --panel-3: #242a35;
+      --line: rgba(198, 208, 224, 0.16);
+      --primary: #a8c7ff;
+      --primary-soft: rgba(168, 199, 255, 0.15);
+      --danger: #ffb4ab;
+      --ok: #9bd6aa;
+      --shadow: 0 24px 70px rgba(7, 12, 22, 0.35);
+      font-family: "Google Sans Flex", "Noto Sans", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 40% 20%, rgba(255, 255, 255, 0.55), transparent 28rem),
+        linear-gradient(135deg, #eef2f8, var(--bg));
+      color: #151a22;
+    }
+
+    main {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 40px 28px 60px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .brief {
+      max-width: 530px;
+      margin: 0;
+      color: #4d5563;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 420px repeat(3, 360px);
+      gap: 22px;
+      align-items: start;
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+
+    .case {
+      display: grid;
+      gap: 12px;
+      width: max-content;
+    }
+
+    .case h2 {
+      margin: 0;
+      font-size: 13px;
+      color: #2c3440;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .panel {
+      width: 360px;
+      min-height: 710px;
+      padding: 12px;
+      border-radius: 18px;
+      color: var(--ink);
+      background: linear-gradient(180deg, #111720, var(--panel));
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel.wide {
+      width: 420px;
+      background: linear-gradient(180deg, #202633, #1b212b);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 42px;
+      margin-bottom: 8px;
+    }
+
+    .bell {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 16px;
+      background: var(--primary-soft);
+      border: 1px solid rgba(168, 199, 255, 0.22);
+      color: var(--primary);
+      font-size: 15px;
+    }
+
+    .title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .title strong {
+      display: block;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.1;
+    }
+
+    .title span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: #2b313d;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #242b36;
+      border: 1px solid var(--line);
+    }
+
+    .wide .card {
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      padding: 18px 22px;
+      border-radius: 18px;
+      background: #242b35;
+    }
+
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      color: var(--primary);
+      background: var(--primary-soft);
+      border: 1px solid rgba(168, 199, 255, 0.22);
+      font-size: 13px;
+    }
+
+    .body {
+      min-width: 0;
+    }
+
+    .body strong {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .body p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .body small {
+      display: block;
+      margin-top: 3px;
+      color: rgba(157, 167, 184, 0.72);
+      font-size: 11px;
+    }
+
+    .x {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 13px;
+      color: var(--muted);
+      background: #2b313d;
+      font-size: 14px;
+    }
+
+    .group {
+      position: absolute;
+      top: 4px;
+      right: 44px;
+      height: 25px;
+      padding: 0 9px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      color: var(--ink);
+      background: #2b313d;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 30px;
+      margin-top: 10px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #222935;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+    }
+
+    .section {
+      margin: 12px 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 330px;
+      color: var(--muted);
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      border-radius: 16px;
+      background: #202733;
+      font-size: 13px;
+    }
+
+    .inbox .card {
+      grid-template-columns: 4px minmax(0, 1fr) auto;
+      background: transparent;
+      border-color: rgba(255, 255, 255, 0.11);
+      border-left: 0;
+    }
+
+    .inbox .icon {
+      width: 4px;
+      border-radius: 999px;
+      background: var(--primary);
+      border: 0;
+      color: transparent;
+    }
+
+    .glass {
+      --panel: rgba(17, 23, 32, 0.74);
+      --panel-2: rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(18, 23, 31, 0.83), rgba(18, 23, 31, 0.69));
+    }
+
+    .glass .card {
+      background: #252d39;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    @media (max-width: 900px) {
+      header {
+        display: block;
+      }
+
+      .brief {
+        margin-top: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Notification panel directions</h1>
+      </div>
+      <p class="brief">Static comparison for the Quickshell right panel. The first future concept is the implemented direction: thinner, denser, darker, and closer to the reference control-center surface.</p>
+    </header>
+
+    <section class="stage" aria-label="Notification panel mockups">
+      <article class="case">
+        <h2>Current baseline</h2>
+        <div class="panel wide">
+          <div class="topbar">
+            <div class="bell">B</div>
+            <div class="title">
+              <strong>Notifications</strong>
+              <span>420px wide, large cards</span>
+            </div>
+            <span class="pill">Clear</span>
+          </div>
+          <div class="list">
+            <div class="card">
+              <div class="icon">I</div>
+              <div class="body">
+                <strong>Window Inspector</strong>
+                <p>Class 'kitty' copied to clipboard</p>
+                <small>notify-send</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+            <div class="card">
+              <div class="icon">S</div>
+              <div class="body">
+                <strong>Screenshot</strong>
+                <p>Region capture saved and copied</p>
+                <small>HyprQuickshot</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+            <div class="card">
+              <div class="icon">C</div>
+              <div class="body">
+                <strong>OpenAI Codex</strong>
+                <p>Command finished with warnings in quickshell</p>
+                <small>openai-codex</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+          </div>
+          <div class="status"><span><i class="dot"></i>NOTIFICATION SERVER</span><span>ACTIVE</span></div>
+        </div>
+      </article>
+
+      <article class="case">
+        <h2>Implemented compact surface</h2>
+        <div class="panel">
+          <div class="topbar">
+            <div class="bell">B</div>
+            <div class="title">
+              <strong>Notifications</strong>
+              <span>360px wide, compact rows</span>
+            </div>
+            <span class="pill">Clear</span>
+          </div>
+          <div class="list">
+            <div class="card">
+              <div class="icon">I</div>
+              <div class="body">
+                <strong>Window Inspector</strong>
+                <p>Class 'kitty' copied to clipboard</p>
+                <small>notify-send</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+            <div class="card">
+              <span class="group">3 grouped</span>
+              <div class="icon">C</div>
+              <div class="body">
+                <strong>OpenAI Codex</strong>
+                <p>Updated right panel and generated mockups</p>
+                <small>openai-codex</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+            <div class="card">
+              <div class="icon">!</div>
+              <div class="body">
+                <strong>Battery limit changed</strong>
+                <p>Charge threshold set to 80 percent</p>
+                <small>BatWatch</small>
+              </div>
+              <div class="x">x</div>
+            </div>
+          </div>
+          <div class="status"><span><i class="dot"></i>SERVER</span><span>ACTIVE</span></div>
+        </div>
+      </article>
+
+      <article class="case">
+        <h2>Inbox rail idea</h2>
+        <div class="panel inbox">
+          <div class="topbar">
+            <div class="bell">N</div>
+            <div class="title">
+              <strong>Inbox</strong>
+              <span>group-first scanning</span>
+            </div>
+            <span class="pill">DND</span>
+          </div>
+          <div class="section">Unread groups</div>
+          <div class="list">
+            <div class="card">
+              <div class="icon"></div>
+              <div class="body">
+                <strong>Codex sessions</strong>
+                <p>5 notifications from active development runs</p>
+                <small>Open group</small>
+              </div>
+              <div class="x">5</div>
+            </div>
+            <div class="card">
+              <div class="icon"></div>
+              <div class="body">
+                <strong>System tools</strong>
+                <p>Screenshot, clipboard, and window inspector events</p>
+                <small>Open group</small>
+              </div>
+              <div class="x">4</div>
+            </div>
+          </div>
+          <div class="section">Recent</div>
+          <div class="list">
+            <div class="card">
+              <div class="icon"></div>
+              <div class="body">
+                <strong>Screenshot</strong>
+                <p>Monitor capture copied</p>
+              </div>
+              <div class="x">x</div>
+            </div>
+          </div>
+          <div class="status"><span><i class="dot"></i>SERVER</span><span>ACTIVE</span></div>
+        </div>
+      </article>
+
+      <article class="case">
+        <h2>Quiet glass idea</h2>
+        <div class="panel glass">
+          <div class="topbar">
+            <div class="bell">B</div>
+            <div class="title">
+              <strong>Notifications</strong>
+              <span>lighter, more ambient</span>
+            </div>
+            <span class="pill">Clear</span>
+          </div>
+          <div class="empty">No notifications</div>
+          <div class="status"><span><i class="dot"></i>SERVER</span><span>ACTIVE</span></div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -12,3 +12,5 @@ auto_install = true
 "github:psi4j/sunsetr" = "latest"
 "github:router-for-me/CLIProxyAPI" = { version = "latest", exe = "cli-proxy-api" }
 "github:ssut/payload-dumper-go" = "latest"
+gitleaks = "latest"
+hk = "latest"

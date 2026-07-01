@@ -26,12 +26,13 @@ Rectangle {
   property int paddingRight: Config.modulePaddingX
   property int paddingTop: Config.modulePaddingY
   readonly property color surfaceColor: root.backgroundTransparent ? "transparent" : root.backgroundColor
-  readonly property bool tooltipActive: tooltipPopup.active
-  readonly property bool tooltipVisualActive: tooltipPopup.visualActive
+  readonly property bool tooltipActive: BarPopupState.activeFor(root)
+  readonly property bool tooltipVisualActive: BarPopupState.visualActiveFor(root)
   // If provided as a string, it must be a URL (opened via xdg-open).
   // If provided as a list, it's treated as an argv array and executed detached.
   property var tooltipBrowserLink: ""
   property Component tooltipContent: null
+  readonly property Component effectiveTooltipContent: root.tooltipContent ? root.tooltipContent : defaultTooltipContent
   readonly property bool tooltipEnabled: root.tooltipText !== "" || root.tooltipContent !== null
   property bool tooltipHoverable: true
   property bool tooltipPinned: false
@@ -45,6 +46,10 @@ Rectangle {
   signal tooltipRefreshRequested
   signal clicked
   signal rightClicked
+
+  function refreshSharedPopup() {
+    BarPopupState.refreshFromTarget(root)
+  }
 
   Layout.bottomMargin: root.marginBottom
   Layout.leftMargin: root.marginLeft
@@ -113,6 +118,13 @@ Rectangle {
   }
   HoverHandler {
     id: hoverHandler
+
+    onHoveredChanged: {
+      if (hovered)
+        BarPopupState.requestTarget(root)
+      else
+        BarPopupState.releaseTarget(root)
+    }
   }
   TapHandler {
     acceptedButtons: Qt.LeftButton
@@ -138,22 +150,19 @@ Rectangle {
       wrapMode: Text.WordWrap
     }
   }
-  TooltipPopup {
-    id: tooltipPopup
 
-    browserLink: root.tooltipBrowserLink
-    contentComponent: root.tooltipContent ? root.tooltipContent : defaultTooltipContent
-    enabled: root.tooltipEnabled
-    hoverable: root.tooltipHoverable
-    open: hoverHandler.hovered
-    pinned: root.tooltipPinned
-    refreshing: root.tooltipRefreshing
-    showBrowserIcon: root.tooltipShowBrowserIcon
-    showRefreshIcon: root.tooltipShowRefreshIcon || root.tooltipTitle === "Calendar"
-    subtitle: root.tooltipSubtitle
-    targetItem: root
-    title: root.tooltipTitle
+  Component.onCompleted: BarPopupState.registerTarget(root)
+  Component.onDestruction: BarPopupState.unregisterTarget(root)
 
-    onRefreshRequested: root.tooltipRefreshRequested()
-  }
+  onCollapsedChanged: if (root.collapsed) BarPopupState.releaseTarget(root)
+  onTooltipBrowserLinkChanged: root.refreshSharedPopup()
+  onTooltipContentChanged: root.refreshSharedPopup()
+  onTooltipHoverableChanged: root.refreshSharedPopup()
+  onTooltipRefreshingChanged: root.refreshSharedPopup()
+  onTooltipShowBrowserIconChanged: root.refreshSharedPopup()
+  onTooltipShowRefreshIconChanged: root.refreshSharedPopup()
+  onTooltipSubtitleChanged: root.refreshSharedPopup()
+  onTooltipTextChanged: root.refreshSharedPopup()
+  onTooltipTitleChanged: root.refreshSharedPopup()
+  onVisibleChanged: if (!root.visible) BarPopupState.releaseTarget(root)
 }

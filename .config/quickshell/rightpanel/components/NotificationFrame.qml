@@ -5,18 +5,18 @@ import "../../common" as Common
 MK.ClickableSurface {
   id: root
 
-  property int paddingLeft: 22
-  property int paddingRight: 22
-  property int paddingTop: 18
-  property int paddingBottom: 18
-  property int frameRadius: 18
+  property int paddingLeft: 16
+  property int paddingRight: 16
+  property int paddingTop: 14
+  property int paddingBottom: 14
+  property int frameRadius: 16
   // Hairline outline. The old thick border made cards feel flat.
   property int frameBorderWidth: 1
-  property color frameColor: Common.Config.color.surface
+  property color frameColor: Common.Config.color.surface_container_high
   // Strict parity with bar module borders.
-  property color frameBorderColor: Qt.alpha(Common.Config.color.outline_variant, 0.6)
+  property color frameBorderColor: Qt.alpha(Common.Config.color.outline_variant, 0.42)
   // Conventional "card" depth. Tuned by callers (list vs popup).
-  property int elevation: 1
+  property int elevation: 0
 
   default property alias contentData: contentHost.data
 

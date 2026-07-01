@@ -6,7 +6,7 @@ Item {
   property var entry
   signal dismissRequested
 
-  width: 400
+  width: 332
   implicitHeight: frame.implicitHeight
   // Keep ListView layout stable when content height resolves after creation.
   height: implicitHeight
@@ -17,7 +17,7 @@ Item {
       left: parent.left
       right: parent.right
     }
-    elevation: 1
+    elevation: 0
     onClicked: root.dismissRequested()
 
     NotificationContent {
