@@ -1,0 +1,21 @@
+Checks: >
+  *,
+  -altera-*,
+  -android-*,
+  -darwin-*,
+  -fuchsia-*,
+  -linuxkernel-*,
+  -llvm-header-guard,
+  -llvmlibc-*,
+  -misc-header-include-cycle,
+  -misc-include-cleaner,
+  -mpi-*,
+  -objc-*,
+  -portability-avoid-pragma-once,
+  -zircon-*
+WarningsAsErrors: 'clang-analyzer-*,bugprone-*,cert-*,cppcoreguidelines-*'
+HeaderFilterRegex: '.*/common/modules/(material-popups|qs-capture|qs-native|qsmath|unified-lyrics-api)/(cpp|tests)/.*'
+FormatStyle: file
+CheckOptions:
+  readability-qualified-auto.AddConstToQualified: true
+  cppcoreguidelines-explicit-virtual-functions.IgnoreDestructors: true

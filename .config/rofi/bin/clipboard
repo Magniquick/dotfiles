@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+rofi --async-pre-read 1 -modi clipboard:"$XDG_CONFIG_HOME"/rofi/bin/_clipboard -show clipboard -show-icons -theme "$XDG_CONFIG_HOME/rofi/config/clipboard.rasi"

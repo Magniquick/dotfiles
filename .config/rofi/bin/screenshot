@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+rofi_command="rofi -theme $HOME/.config/rofi/config/screenshot.rasi"
+export HYPRSHOT_DIR="$HOME/Pictures/Screenshots"
+
+# Buttons
+screen="󰍹 Capture Desktop"
+area="󰆞 Capture Area"
+window="󰖲 Capture Window"
+ocr=" OCR"
+view=" View Images"
+
+# Variable passed to rofi
+options="$area\n$screen\n$window\n$ocr\n$view"
+perform_ocr() {
+    local output_file="/tmp/ocr.png"
+    hypr_out=$(grim -g "$(slurp)" /tmp/ocr.png 2>&1)
+
+    if grep -q 'invalid geometry' <<< "$hypr_out"; then
+        notify-send "OCR" "Failed to take screenshot."
+        return
+    fi
+
+    # Try QR/barcode detection first
+    local qr_result
+    local try=5
+    while [ $try -gt 0 ]; do
+        zbar_error=$(mktemp)
+        qr_result=$(zbarimg --oneshot --raw "$output_file" 2> "$zbar_error")
+
+        if grep -q 'ERROR' "$zbar_error"; then
+            sleep 0.2 # Wait for the image to be written
+            echo "Retrying QR detection... ($try attempts left)"
+            ((try--))
+        else
+            break
+        fi
+    done
+
+    rm -f "$zbar_error"
+
+    if [[ -n "$qr_result" ]]; then
+        local type="QR Code"
+        local result="$qr_result"
+    else
+        # If no QR detected, try OCR
+        local ocr_result
+        ocr_result=$(tesseract "$output_file" stdout 2>/dev/null | sed '/^\s*$/d')
+        if [[ -n "$ocr_result" ]]; then
+            local type="Text"
+            local result="$ocr_result"
+        else
+            notify-send "OCR" "No QR code or text detected."
+            return
+        fi
+    fi
+
+    echo -n "$result" | wl-copy
+    notify-send "OCR - $type" "Copied to clipboard."
+    rm -f "$output_file"
+}
+
+chosen="$(echo -e "$options" | $rofi_command -p 'Take A Shot' -dmenu -selected-row 0)"
+case $chosen in
+    "$screen")
+        hyprshot -m output
+        ;;
+    "$area")
+        hyprshot -m region
+        ;;
+    "$window")
+        hyprshot -m window
+        ;;
+    "$ocr")
+        perform_ocr
+        ;;
+    "$view")
+        runapp nautilus "$HYPRSHOT_DIR"
+        ;;
+esac

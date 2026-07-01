@@ -1,0 +1,13 @@
+module qs.bar
+BarWindow 1.0 BarWindow.qml
+singleton Config 1.0 ../common/Config.qml
+singleton DependencyCheck 1.0 ../common/services/DependencyCheck.qml
+singleton GlobalState 1.0 ../common/GlobalState.qml
+singleton HudService 1.0 services/HudService.qml
+singleton PrivacyService 1.0 services/PrivacyService.qml
+singleton SystemdFailedService 1.0 services/SystemdFailedService.qml
+singleton UpdatesService 1.0 services/UpdatesService.qml
+singleton TodoistService 1.0 services/TodoistService.qml
+singleton CalendarService 1.0 services/CalendarService.qml
+singleton BrightnessService 1.0 services/BrightnessService.qml
+singleton NetworkService 1.0 services/NetworkService.qml

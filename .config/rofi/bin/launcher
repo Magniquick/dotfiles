@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+rofi \
+	-show drun \
+	-modi run,drun,window \
+	-scroll-method 0 \
+	-drun-match-fields all \
+	-drun-display-format "{name}" \
+	-no-drun-show-actions \
+	-terminal kitty \
+	-run-command "runapp {cmd}" \
+	-theme "$XDG_CONFIG_HOME"/rofi/config/launcher.rasi

@@ -1,0 +1,42 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: qmllint
+        name: qmllint (qt6)
+        entry: managed/config/quickshell/tools/qmllint.sh --all
+        language: system
+        pass_filenames: false
+
+      - id: qml-js-lint
+        name: QML JavaScript lint
+        entry: managed/config/quickshell/tools/qml-js-lint.sh
+        language: system
+        pass_filenames: false
+
+      - id: rustfmt-clippy
+        name: rust fmt + clippy
+        entry: managed/config/quickshell/tools/rust-lint.sh
+        language: system
+        pass_filenames: false
+        types: [rust]
+
+      - id: cpp-clang-tidy
+        name: C++ clang-tidy
+        entry: managed/config/quickshell/tools/cpp-lint.sh
+        language: system
+        pass_filenames: false
+        types_or: [c++, c]

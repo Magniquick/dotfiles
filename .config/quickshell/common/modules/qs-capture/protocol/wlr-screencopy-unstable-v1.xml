@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="wlr_screencopy_unstable_v1">
+  <copyright>
+    Copyright (c) 2018 Simon Ser
+
+    Permission to use, copy, modify, distribute, and sell this
+    software and its documentation for any purpose is hereby granted
+    without fee, provided that the above copyright notice appear in
+    all copies and that both that copyright notice and this permission
+    notice appear in supporting documentation, and that the name of
+    the copyright holders not be used in advertising or publicity
+    pertaining to distribution of the software without specific,
+    written prior permission.  The copyright holders make no
+    representations about the suitability of this software for any
+    purpose.  It is provided "as is" without express or implied
+    warranty.
+
+    THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS
+    SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+    FITNESS, IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+    AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+    ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+    THIS SOFTWARE.
+  </copyright>
+
+  <interface name="zwlr_screencopy_manager_v1" version="1">
+    <description summary="manager to inform clients and begin capturing">
+      This object is a manager which offers requests to start capturing from a
+      source.
+    </description>
+
+    <request name="capture_output">
+      <arg name="overlay_cursor" type="int"
+           summary="composite cursor onto the frame"/>
+      <arg name="output" type="object" interface="wl_output"
+           summary="output to capture"/>
+      <arg name="frame" type="new_id" interface="zwlr_screencopy_frame_v1"/>
+    </request>
+
+    <request name="capture_output_region">
+      <arg name="overlay_cursor" type="int"
+           summary="composite cursor onto the frame"/>
+      <arg name="output" type="object" interface="wl_output"
+           summary="output to capture"/>
+      <arg name="x" type="int" summary="region x coordinate"/>
+      <arg name="y" type="int" summary="region y coordinate"/>
+      <arg name="width" type="int" summary="region width"/>
+      <arg name="height" type="int" summary="region height"/>
+      <arg name="frame" type="new_id" interface="zwlr_screencopy_frame_v1"/>
+    </request>
+
+    <destroy type="destructor"/>
+  </interface>
+
+  <interface name="zwlr_screencopy_frame_v1" version="1">
+    <description summary="a frame ready for copy">
+      A frame which can be copied.
+    </description>
+
+    <event name="buffer">
+      <arg name="format" type="uint" enum="wl_shm.format"
+           summary="buffer format"/>
+      <arg name="width" type="uint" summary="buffer width"/>
+      <arg name="height" type="uint" summary="buffer height"/>
+      <arg name="stride" type="uint" summary="buffer stride"/>
+    </event>
+
+    <event name="flags">
+      <arg name="flags" type="uint" summary="frame flags"/>
+    </event>
+
+    <request name="copy">
+      <arg name="buffer" type="object" interface="wl_buffer"
+           summary="buffer to copy the frame to"/>
+    </request>
+
+    <event name="ready">
+      <arg name="tv_sec_hi" type="uint" summary="high 32 bits of seconds"/>
+      <arg name="tv_sec_lo" type="uint" summary="low 32 bits of seconds"/>
+      <arg name="tv_nsec" type="uint" summary="nanoseconds"/>
+    </event>
+
+    <event name="failed"/>
+
+    <request name="destroy" type="destructor"/>
+
+    <enum name="flags" bitfield="true">
+      <entry name="y_invert" value="1"
+             summary="contents are y-inverted in the buffer"/>
+    </enum>
+  </interface>
+</protocol>

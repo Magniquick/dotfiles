@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+  "qs-native/qsnative-rust",
+  "material-popups/material-popups-backend",
+  "qsmath/ratex-helper",
+  "unified-lyrics-api/unifiedlyrics-rust",
+]

@@ -1,0 +1,4 @@
+Total messages: 2 (Errors: 2, Warnings: 0)
+
+[ERROR] Failed to load resource: net::ERR_BLOCKED_BY_CLIENT @ https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2:0
+[ERROR] Failed to load resource: net::ERR_BLOCKED_BY_CLIENT @ https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2:0

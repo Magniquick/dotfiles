@@ -1,0 +1,40 @@
+{
+  "models": [
+    {
+      "raw_id": "gpt-5.5",
+      "label": "GPT-5.5",
+      "description": "Frontier model",
+      "recommended": true
+    },
+    {
+      "raw_id": "gpt-5.4-mini",
+      "label": "GPT-5.4 Mini",
+      "description": "Fast GPT-5.4 variant",
+      "recommended": true
+    },
+    {
+      "raw_id": "gpt-5.3-codex",
+      "label": "GPT-5.3 Codex",
+      "description": "Coding-optimized model",
+      "recommended": true
+    },
+    {
+      "raw_id": "gemini-3.1-pro-preview",
+      "label": "Gemini 3.1 Pro",
+      "description": "Google's 3.1 Pro preview model",
+      "recommended": true
+    },
+    {
+      "raw_id": "gemini-3.5-flash",
+      "label": "Gemini 3.5 Flash",
+      "description": "Google's fast 3.5 Flash model",
+      "recommended": true
+    },
+    {
+      "raw_id": "gemini-3.1-flash-lite",
+      "label": "Gemini 3.1 Flash Lite",
+      "description": "Google's lightweight 3.1 Flash model",
+      "recommended": true
+    }
+  ]
+}

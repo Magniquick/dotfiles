@@ -1,0 +1,41 @@
+import QtQuick.tooling 1.2
+
+Module {
+    Component {
+        name: "MathRenderer"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["qsmath/MathRenderer 1.0"]
+        Method {
+            name: "renderMarkdown"
+            Parameter { name: "requestId"; type: "QString" }
+            Parameter { name: "markdown"; type: "QString" }
+            Parameter { name: "cacheDir"; type: "QString" }
+            Parameter { name: "maxWidth"; type: "int" }
+            Parameter { name: "textSize"; type: "double" }
+            Parameter { name: "padding"; type: "double" }
+            Parameter { name: "foreground"; type: "QString" }
+            Parameter { name: "renderScale"; type: "double" }
+        }
+        Signal {
+            name: "requestFinished"
+            Parameter { name: "requestId"; type: "QString" }
+            Parameter { name: "html"; type: "QString" }
+        }
+        Signal {
+            name: "requestFailed"
+            Parameter { name: "requestId"; type: "QString" }
+            Parameter { name: "error"; type: "QString" }
+        }
+    }
+    Component {
+        name: "MarkdownStreamModel"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["qsmath/MarkdownStreamModel 1.0"]
+        Property { name: "content"; type: "QString"; index: 0 }
+        Property { name: "streaming"; type: "bool"; index: 1 }
+        Property { name: "blockCount"; type: "int"; index: 2; isReadonly: true }
+        Method { name: "finalize" }
+    }
+}

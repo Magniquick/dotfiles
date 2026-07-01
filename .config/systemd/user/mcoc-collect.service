@@ -1,0 +1,16 @@
+[Unit]
+Description=Collect free MCOC webstore items
+Documentation=https://store.playcontestofchampions.com/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/mcoc
+ExecStartPre=/usr/bin/nm-online -q -t 120
+ExecStart=%h/Projects/mcoc/mcoc collect
+Restart=on-failure
+RestartSec=30min
+Nice=10
+IOSchedulingClass=idle

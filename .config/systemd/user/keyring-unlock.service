@@ -1,0 +1,16 @@
+[Unit]
+Description=Start + unlock gnome-keyring login keyring (autologin, no PAM/DM)
+Documentation=man:gnome-keyring-daemon(1)
+After=dbus.socket
+Requires=dbus.socket
+
+[Service]
+Type=forking
+# autologin enters no password, so feed the keyring password from a 0600 file.
+# --replace makes this the authoritative daemon, ending the multi-starter race.
+ExecStart=/bin/sh -c 'exec gnome-keyring-daemon --replace --unlock --components=secrets,pkcs11 --daemonize < %h/.config/keyring-unlock'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

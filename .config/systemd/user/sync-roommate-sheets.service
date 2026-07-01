@@ -1,0 +1,7 @@
+[Unit]
+Description=Sync Google Sheets to Roommate Finder and notify matches
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/bubin-rooms
+ExecStart=/usr/bin/uv run --script %h/Projects/bubin-rooms/sync-sheet.py

@@ -1,0 +1,11 @@
+[Unit]
+Description=Update AppImages (Twitch Drops Miner + LibrePods)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Appimages
+ExecStart=/usr/bin/env bash %h/Documents/Appimages/update_appimages.sh
+Restart=on-failure
+RestartSec=3min

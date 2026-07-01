@@ -1,0 +1,21 @@
+[model]
+default = "local/gpt-5.4-mini"
+
+[providers.local]
+base_url = "http://127.0.0.1:8317/v1"
+
+[[email.accounts]]
+id = "personal"
+provider = "gmail"
+label = "Personal Mail"
+address = "you@example.com"
+
+# Gmail accounts use the Gmail API, not IMAP. Store matching refresh-capable
+# OAuth credentials in Secret Service:
+#   common/modules/qs-native/build/qs-google-auth provision-all --client-json /path/to/client.json
+# Re-run without --client-json to refresh all configured Google tokens from the
+# stored OAuth client JSON.
+
+[[calendar.accounts]]
+account = "personal"
+calendar_ids = ["you@example.com"]

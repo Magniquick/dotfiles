@@ -1,0 +1,50 @@
+[package]
+name = "qsnative_rust"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+
+[lib]
+name = "qsnative_rust"
+crate-type = ["staticlib", "rlib"]
+
+[[bin]]
+name = "qs-secrets"
+path = "src/bin/qs-secrets.rs"
+
+[[bin]]
+name = "qs-google-auth"
+path = "src/bin/qs-google-auth.rs"
+
+[dependencies]
+async-trait = "0.1.89"
+base64 = "0.22.1"
+blight = { version = "0.8.0", default-features = false }
+cxx = "1.0.194"
+cxx-qt = "0.9.0"
+cxx-qt-lib = "0.9.0"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+evdev = "0.13.2"
+futures-util = "0.3.32"
+google-calendar3 = "7.0.0"
+google-gmail1 = "7.0.0"
+libc = "0.2.186"
+mime_guess = "2.0.5"
+notify = "8.2.0"
+procfs = { version = "0.18.0", default-features = false }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+secret-service = { version = "5.1.0", default-features = false, features = ["rt-tokio-crypto-rust"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+time = { version = "0.3.51", features = ["formatting", "parsing", "serde"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread"] }
+toml = "1.1.2"
+tempfile = "3.27.0"
+ureq = { version = "3.3.0", features = ["json"] }
+uuid = { version = "1.23.4", features = ["v4"] }
+zbus = { version = "5.16.0", default-features = false, features = ["tokio"] }
+rig-core = { version = "0.39.0", default-features = false, features = ["rmcp", "reqwest", "rustls", "derive"] }
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+
+[build-dependencies]
+cxx-qt-build = "0.9.0"

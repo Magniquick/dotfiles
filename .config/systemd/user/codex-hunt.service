@@ -1,0 +1,16 @@
+[Unit]
+Description=Codex auth hunt — scrape GitHub + validate tokens
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/uv run %h/Projects/codex-hunt/hunt.py --dump-valid %h/.local/state/cli-proxy-api/auths --manual-dir %h/Projects/codex-hunt/manual_auth
+ExecStartPre=/usr/bin/nm-online -q -t 120
+WorkingDirectory=%h/Projects/codex-hunt
+Restart=on-failure
+RestartSec=30min
+Environment=HOME=%h
+Nice=10
+IOSchedulingClass=idle

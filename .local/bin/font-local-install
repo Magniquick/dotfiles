@@ -1,0 +1,70 @@
+#!/bin/sh
+set -eu
+
+font_root="${FONT_LOCAL_ROOT:-$HOME/.local/share/fonts}"
+pack=""
+
+usage() {
+  cat >&2 <<'EOF'
+usage: font-local-install [-n name] FILE_OR_DIR...
+
+Installs font files into ~/.local/share/fonts/<name>/ and refreshes fontconfig.
+If -n is omitted, each source basename is used as its destination package name.
+EOF
+  exit 2
+}
+
+while getopts "n:h" opt; do
+  case "$opt" in
+    n) pack=$OPTARG ;;
+    h) usage ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+[ "$#" -gt 0 ] || usage
+mkdir -p "$font_root"
+
+install_one_file() {
+  src=$1
+  dest_dir=$2
+
+  case "$src" in
+    *.ttf|*.TTF|*.otf|*.OTF|*.woff|*.WOFF|*.woff2|*.WOFF2) ;;
+    *) return 0 ;;
+  esac
+
+  if pacman -Qo "$src" >/dev/null 2>&1; then
+    printf 'skip pacman-owned: %s\n' "$src" >&2
+    return 0
+  fi
+
+  mkdir -p "$dest_dir"
+  cp -f "$src" "$dest_dir/"
+  printf 'installed: %s\n' "$dest_dir/$(basename "$src")"
+}
+
+for src in "$@"; do
+  [ -e "$src" ] || {
+    printf 'missing: %s\n' "$src" >&2
+    continue
+  }
+
+  name=$pack
+  if [ -z "$name" ]; then
+    name=$(basename "$src")
+    name=${name%.*}
+  fi
+  dest="$font_root/$name"
+
+  if [ -d "$src" ]; then
+    find "$src" -type f | sort | while IFS= read -r file; do
+      install_one_file "$file" "$dest"
+    done
+  else
+    install_one_file "$src" "$dest"
+  fi
+done
+
+fc-cache -f "$font_root"

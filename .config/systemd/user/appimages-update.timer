@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AppImage update check
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30m
+Unit=appimages-update.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+workspace="${LEFTPANEL_AI_SANDBOX:-$HOME/tmp/ai-sandbox}"
+mkdir -p "$workspace" "$HOME/.cache" "$HOME/.local"
+
+if [[ $# -eq 0 ]]; then
+  set -- /bin/bash
+fi
+
+exec bwrap \
+  --unshare-all \
+  --share-net \
+  --die-with-parent \
+  --new-session \
+  --proc /proc \
+  --dev /dev \
+  --tmpfs /tmp \
+  --dir /run \
+  --ro-bind-try /run/systemd/resolve /run/systemd/resolve \
+  --dir /home \
+  --bind "$workspace" "$HOME" \
+  --dir "$HOME/.cache" \
+  --bind "$HOME/.cache" "$HOME/.cache" \
+  --dir "$HOME/.local" \
+  --bind "$HOME/.local" "$HOME/.local" \
+  --symlink "$HOME" /workspace \
+  --ro-bind /usr /usr \
+  --ro-bind /bin /bin \
+  --ro-bind /lib /lib \
+  --ro-bind-try /lib64 /lib64 \
+  --ro-bind /etc /etc \
+  --setenv HOME "$HOME" \
+  --setenv USER "$USER" \
+  --setenv LOGNAME "$USER" \
+  --setenv XDG_CACHE_HOME "$HOME/.cache" \
+  --setenv PATH "${PATH:-/usr/local/bin:/usr/bin:/bin}" \
+  --setenv SSL_CERT_FILE "${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}" \
+  --chdir "$HOME" \
+  --remount-ro / \
+  -- "$@"

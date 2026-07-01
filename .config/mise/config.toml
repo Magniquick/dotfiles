@@ -1,0 +1,14 @@
+[settings]
+auto_install = true
+
+[tools]
+"aqua:ffuf/ffuf" = "latest"
+"aqua:projectdiscovery/nuclei" = "latest"
+"aqua:projectdiscovery/subfinder" = "latest"
+"aqua:trufflesecurity/trufflehog" = "latest"
+"github:EFForg/apkeep" = "latest"
+"github:LargeModGames/spotatui" = "latest"
+"github:google-antigravity/antigravity-cli" = { version = "latest", exe = "antigravity" }
+"github:psi4j/sunsetr" = "latest"
+"github:router-for-me/CLIProxyAPI" = { version = "latest", exe = "cli-proxy-api" }
+"github:ssut/payload-dumper-go" = "latest"
