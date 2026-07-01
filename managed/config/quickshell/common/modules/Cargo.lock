@@ -2419,6 +2419,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "evdev",
  "futures-util",
  "google-calendar3",
  "google-gmail1",

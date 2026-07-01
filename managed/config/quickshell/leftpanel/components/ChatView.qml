@@ -157,7 +157,7 @@ Item {
             spacing: Common.Config.space.xs
 
             Repeater {
-              model: ["/model", "/providers", "/mood", "/resume"]
+              model: ["/model", "/tools", "/providers", "/mood", "/resume"]
 
               delegate: MK.ClickableSurface {
                 id: commandChip
@@ -249,6 +249,49 @@ Item {
         toolExpansionState = withToolExpansionValue(toolExpansionState, key, expanded)
       }
 
+      function delegateValue(item, key) {
+        return item ? item[key] : undefined
+      }
+
+      function assistantResponseDelegateAfter(startIndex) {
+        for (let i = startIndex + 1; i < messageRepeater.count; ++i) {
+          const item = messageRepeater.itemAt(i)
+          if (!item)
+            continue
+          if (delegateValue(item, "sender") === "user")
+            return null
+          if (delegateValue(item, "kind") === "chat" && delegateValue(item, "sender") === "assistant" && !delegateValue(item, "emptyAssistantPlaceholder"))
+            return item
+        }
+        return null
+      }
+
+      function assistantResponseItemAfter(startIndex) {
+        const delegate = assistantResponseDelegateAfter(startIndex)
+        if (!delegate || !delegate.loadedContentItem)
+          return null
+        return delegate.loadedContentItem
+      }
+
+      function copyAssistantResponseAfter(startIndex) {
+        const delegate = assistantResponseDelegateAfter(startIndex)
+        if (!delegate)
+          return
+        Quickshell.clipboardText = delegate.body
+      }
+
+      function editAssistantResponseAfter(startIndex) {
+        const item = assistantResponseItemAfter(startIndex)
+        if (item && item.startEditing)
+          item.startEditing()
+      }
+
+      function toggleAssistantSourceAfter(startIndex) {
+        const item = assistantResponseItemAfter(startIndex)
+        if (item && item.toggleSourceView)
+          item.toggleSourceView()
+      }
+
       Column {
         id: messageColumn
         width: messageList.width
@@ -274,6 +317,7 @@ Item {
             implicitHeight: contentLoader.loadedItem ? contentLoader.loadedItem.implicitHeight : 0
             property string _messageId: messageId
             property bool emptyAssistantPlaceholder: kind !== "tool" && sender === "assistant" && String(body || "").trim().length === 0 && !(root.busy && index === (messageRepeater.count - 1))
+            readonly property Item loadedContentItem: contentLoader.loadedItem
 
             Loader {
               id: contentLoader
@@ -315,8 +359,14 @@ Item {
                 width: delegateRoot.width
                 tool: delegateRoot.tool
                 expanded: messageList.toolRowExpanded(delegateRoot._messageId, delegateRoot.tool)
+                hasAssistantResponse: messageList.assistantResponseDelegateAfter(delegateRoot.index) !== null
                 moodIcon: root.moodIcon
                 moodName: root.moodName
+                onRegenerateRequested: root.regenerateRequested(delegateRoot._messageId)
+                onCopyResponseRequested: messageList.copyAssistantResponseAfter(delegateRoot.index)
+                onEditResponseRequested: messageList.editAssistantResponseAfter(delegateRoot.index)
+                onSourceResponseRequested: messageList.toggleAssistantSourceAfter(delegateRoot.index)
+                onDeleteRequested: root.deleteRequested(delegateRoot._messageId)
                 onExpandedChangeRequested: expanded => messageList.setToolRowExpanded(delegateRoot._messageId, delegateRoot.tool, expanded)
               }
             }

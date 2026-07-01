@@ -100,6 +100,21 @@ pub async fn set_async(key: &str, value: &str) -> SecretResult<()> {
     Ok(())
 }
 
+pub async fn delete_async(key: &str) -> SecretResult<()> {
+    let key = require_key(key)?;
+    let service = AsyncSecretService::connect(EncryptionType::Dh).await?;
+    let items = service.search_items(secret_attrs(&key)).await?;
+    if !items.locked.is_empty() {
+        service
+            .unlock_all(items.locked.iter().collect::<Vec<_>>().as_slice())
+            .await?;
+    }
+    for item in items.unlocked.iter().chain(items.locked.iter()) {
+        item.delete().await?;
+    }
+    Ok(())
+}
+
 fn require_key(key: &str) -> SecretResult<String> {
     normalize_key(key).ok_or_else(|| "secret key is required".into())
 }

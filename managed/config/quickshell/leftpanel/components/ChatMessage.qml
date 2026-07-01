@@ -113,6 +113,16 @@ Item {
     return []
   }
 
+  function startEditing() {
+    root.editing = true
+    fullEditArea.text = root.content
+    fullEditArea.forceActiveFocus()
+  }
+
+  function toggleSourceView() {
+    root.renderMarkdown = !root.renderMarkdown
+  }
+
   function attachmentSource(attachment) {
     if (!attachment)
       return ""
@@ -315,8 +325,7 @@ Item {
                 root.editSaved(fullEditArea.text)
                 root.editing = false
               } else {
-                root.editing = true
-                fullEditArea.text = root.content
+                root.startEditing()
               }
               root.updateActionTooltip(editButton, root.editing ? qsTr("Save") : qsTr("Edit"))
             }
@@ -328,7 +337,7 @@ Item {
             activated: !root.renderMarkdown
             onHoveredChanged: hovered ? root.showActionTooltip(sourceButton, root.renderMarkdown ? qsTr("Source") : qsTr("Render")) : root.hideActionTooltip(sourceButton)
             onClicked: {
-              root.renderMarkdown = !root.renderMarkdown
+              root.toggleSourceView()
               root.updateActionTooltip(sourceButton, root.renderMarkdown ? qsTr("Source") : qsTr("Render"))
             }
           }

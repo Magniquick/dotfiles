@@ -14,7 +14,7 @@ ShaderEffect {
   property color strokeColorValue: strokeColor
   property int capStyle: 32
   property vector2d itemSize: Qt.vector2d(width, height)
-  property real renderProgress: 0
+  property real renderProgress: clampedProgress
 
   readonly property real clampedProgress: Math.max(0, Math.min(1, Number(progress) || 0))
   readonly property real clampedAnimatedProgressFrom: Math.max(0, Math.min(1, Number(animatedProgressFrom) || 0))
@@ -34,11 +34,18 @@ ShaderEffect {
     running: false
   }
 
+  Binding {
+    target: root
+    property: "renderProgress"
+    value: root.clampedProgress
+    when: !root.animatedProgressEnabled
+    restoreMode: Binding.RestoreNone
+  }
+
   function syncStaticProgress() {
     if (animatedProgressEnabled)
       return
     progressAnimator.stop()
-    renderProgress = clampedProgress
   }
 
   function restartAnimatedProgress() {

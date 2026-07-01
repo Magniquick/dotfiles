@@ -1,4 +1,8 @@
+use std::collections::HashSet;
+use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
+use std::process::Command;
 use std::sync::OnceLock;
 
 use async_trait::async_trait;
@@ -6,8 +10,11 @@ use chrono::{SecondsFormat, Utc};
 use google_calendar3 as calendar3;
 use google_gmail1 as gmail1;
 use google_gmail1::common::GetToken;
+use google_gmail1::yup_oauth2::authenticator_delegate::{
+    DefaultInstalledFlowDelegate, InstalledFlowDelegate,
+};
 use rustls::crypto::aws_lc_rs;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::app_config::EmailAccount;
 use crate::secrets;
@@ -27,9 +34,11 @@ fn ensure_crypto_provider() {
     });
 }
 
-pub const GOOGLE_SCOPES: [&str; 2] = [
+pub const GOOGLE_SCOPES: [&str; 4] = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.events.readonly",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ];
 
 #[derive(Debug, Serialize)]
@@ -80,8 +89,12 @@ pub fn client_key(id: &str) -> String {
     key_prefix(id) + CLIENT_KEY
 }
 
-pub fn provision(account: &EmailAccount, client_json_path: &str) -> Result<(), String> {
-    crate::utils::build_multi_thread_runtime()?.block_on(provision_async(account, client_json_path))
+pub fn provision(account: &EmailAccount, client_json_path: Option<&str>) -> Result<(), String> {
+    let client_json_path = client_json_path
+        .map(|path| path.trim().to_owned())
+        .filter(|path| !path.is_empty());
+    crate::utils::build_multi_thread_runtime()?
+        .block_on(provision_async(account, client_json_path.as_deref()))
 }
 
 pub fn list_calendars(account: &EmailAccount) -> Result<Vec<CalendarSummary>, String> {
@@ -146,16 +159,25 @@ pub fn gmail_get_message(
     .map_err(|_| "gmail get worker panicked".to_owned())?
 }
 
-async fn provision_async(account: &EmailAccount, client_json_path: &str) -> Result<(), String> {
-    let raw = std::fs::read_to_string(Path::new(client_json_path))
-        .map_err(|error| format!("read OAuth client JSON: {error}"))?;
-    parse_secret(&raw)?;
-    let client_key = client_key(&account.id);
-    secrets::set_async(&client_key, &raw)
-        .await
-        .map_err(|error| format!("store Google OAuth client JSON: {error}"))?;
+async fn provision_async(
+    account: &EmailAccount,
+    client_json_path: Option<&str>,
+) -> Result<(), String> {
+    if let Some(client_json_path) = client_json_path {
+        let raw = std::fs::read_to_string(Path::new(client_json_path))
+            .map_err(|error| format!("read OAuth client JSON: {error}"))?;
+        parse_secret(&raw)?;
+        let client_key = client_key(&account.id);
+        secrets::set_async(&client_key, &raw)
+            .await
+            .map_err(|error| format!("store Google OAuth client JSON: {error}"))?;
+    }
     // Request all scopes upfront so gmail_hub and calendar_hub share one stored token.
-    let secret = account_secret_async(&account.id).await?;
+    secrets::delete_async(&token_key(&account.id))
+        .await
+        .map_err(|error| format!("clear existing Google OAuth token: {error}"))?;
+    let mut secret = account_secret_async(&account.id).await?;
+    add_login_hint(&mut secret, &account.address);
     let auth = authenticator(&account.id, secret).await?;
     auth.get_token(GOOGLE_SCOPES.as_slice())
         .await
@@ -300,6 +322,7 @@ async fn authenticator(
     account_id: &str,
     secret: gmail1::yup_oauth2::ApplicationSecret,
 ) -> Result<impl gmail1::common::GetToken, String> {
+    ensure_crypto_provider();
     let connector = build_https_connector()?;
     let client = gmail1::yup_oauth2::CustomHyperClientBuilder::from(
         gmail1::hyper_util::client::legacy::Client::builder(
@@ -312,6 +335,8 @@ async fn authenticator(
         gmail1::yup_oauth2::InstalledFlowReturnMethod::HTTPRedirect,
         client,
     )
+    .flow_delegate(Box::new(OpenBrowserInstalledFlowDelegate))
+    .force_account_selection(true)
     .with_storage(Box::new(SecretTokenStorage {
         account_id: account_id.trim().to_owned(),
     }))
@@ -338,19 +363,120 @@ fn parse_secret(raw: &str) -> Result<gmail1::yup_oauth2::ApplicationSecret, Stri
     gmail1::yup_oauth2::parse_application_secret(raw).map_err(err_string)
 }
 
+fn add_login_hint(secret: &mut gmail1::yup_oauth2::ApplicationSecret, address: &str) {
+    let address = address.trim();
+    if address.is_empty() || secret.auth_uri.contains("login_hint=") {
+        return;
+    }
+    let separator = if secret.auth_uri.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    secret.auth_uri.push(separator);
+    secret.auth_uri.push_str("login_hint=");
+    secret.auth_uri.push_str(&query_encode(address));
+}
+
+fn query_encode(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                encoded.push(byte as char)
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
 #[derive(Clone)]
 struct SecretTokenStorage {
     account_id: String,
+}
+
+#[derive(Clone)]
+struct OpenBrowserInstalledFlowDelegate;
+
+impl InstalledFlowDelegate for OpenBrowserInstalledFlowDelegate {
+    fn present_user_url<'a>(
+        &'a self,
+        url: &'a str,
+        need_code: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
+        Box::pin(async move {
+            match Command::new("xdg-open").arg(url).spawn() {
+                Ok(_) => eprintln!("Opened Google OAuth consent page in your browser."),
+                Err(error) => eprintln!("Failed to open Google OAuth URL with xdg-open: {error}"),
+            }
+            DefaultInstalledFlowDelegate
+                .present_user_url(url, need_code)
+                .await
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StoredToken {
+    scopes: Vec<String>,
+    token: gmail1::yup_oauth2::storage::TokenInfo,
+}
+
+fn normalize_scopes(scopes: &[&str]) -> Vec<String> {
+    let mut scopes = scopes
+        .iter()
+        .map(|scope| scope.trim().to_owned())
+        .filter(|scope| !scope.is_empty())
+        .collect::<Vec<_>>();
+    scopes.sort_unstable();
+    scopes.dedup();
+    scopes
+}
+
+fn scope_key(scopes: &[String]) -> String {
+    scopes.join("\n")
+}
+
+fn find_token_for_scopes(
+    tokens: &[StoredToken],
+    requested_scopes: &[String],
+) -> Option<gmail1::yup_oauth2::storage::TokenInfo> {
+    let requested = requested_scopes.iter().collect::<HashSet<_>>();
+    tokens
+        .iter()
+        .find(|entry| {
+            let available = entry.scopes.iter().collect::<HashSet<_>>();
+            requested.is_subset(&available)
+        })
+        .map(|entry| entry.token.clone())
 }
 
 #[async_trait]
 impl gmail1::yup_oauth2::storage::TokenStorage for SecretTokenStorage {
     async fn set(
         &self,
-        _scopes: &[&str],
+        scopes: &[&str],
         token: gmail1::yup_oauth2::storage::TokenInfo,
     ) -> Result<(), gmail1::yup_oauth2::storage::TokenStorageError> {
-        let raw = serde_json::to_string(&token).map_err(|error| {
+        let requested_scopes = normalize_scopes(scopes);
+        let key = scope_key(&requested_scopes);
+        let mut tokens = secrets::lookup_async(&token_key(&self.account_id))
+            .await
+            .and_then(|raw| serde_json::from_str::<Vec<StoredToken>>(raw.trim()).ok())
+            .unwrap_or_default();
+        if let Some(entry) = tokens
+            .iter_mut()
+            .find(|entry| scope_key(&entry.scopes) == key)
+        {
+            entry.token = token;
+        } else {
+            tokens.push(StoredToken {
+                scopes: requested_scopes,
+                token,
+            });
+        }
+        let raw = serde_json::to_string(&tokens).map_err(|error| {
             gmail1::yup_oauth2::storage::TokenStorageError::Other(error.to_string().into())
         })?;
         secrets::set_async(&token_key(&self.account_id), &raw)
@@ -360,11 +486,14 @@ impl gmail1::yup_oauth2::storage::TokenStorage for SecretTokenStorage {
             })
     }
 
-    async fn get(&self, _scopes: &[&str]) -> Option<gmail1::yup_oauth2::storage::TokenInfo> {
+    async fn get(&self, scopes: &[&str]) -> Option<gmail1::yup_oauth2::storage::TokenInfo> {
+        let requested_scopes = normalize_scopes(scopes);
         secrets::lookup_async(&token_key(&self.account_id))
             .await
             .and_then(|raw| {
-                serde_json::from_str::<gmail1::yup_oauth2::storage::TokenInfo>(raw.trim()).ok()
+                serde_json::from_str::<Vec<StoredToken>>(raw.trim())
+                    .ok()
+                    .and_then(|tokens| find_token_for_scopes(&tokens, &requested_scopes))
             })
     }
 }
@@ -375,7 +504,7 @@ fn err_string(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{client_key, env_id, token_key};
+    use super::{client_key, env_id, normalize_scopes, query_encode, token_key};
 
     #[test]
     fn secret_keys_match_account_id_shape() {
@@ -388,5 +517,18 @@ mod tests {
             client_key(" personal.gmail "),
             "GOOGLE_PERSONAL_GMAIL_CLIENT_JSON"
         );
+    }
+
+    #[test]
+    fn encodes_login_hint_query_value() {
+        assert_eq!(
+            query_encode("24f2003934@ds.study.iitm.ac.in"),
+            "24f2003934%40ds.study.iitm.ac.in"
+        );
+    }
+
+    #[test]
+    fn normalizes_scope_sets() {
+        assert_eq!(normalize_scopes(&[" b ", "a", "a", ""]), ["a", "b"]);
     }
 }

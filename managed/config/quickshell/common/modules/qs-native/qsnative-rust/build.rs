@@ -6,6 +6,7 @@ fn main() {
         .file("src/config_resolver.rs")
         .file("src/ical.rs")
         .file("src/idle.rs")
+        .file("src/keyboard_lock.rs")
         .file("src/pacman.rs")
         .file("src/privacy.rs")
         .file("src/sys_info.rs")

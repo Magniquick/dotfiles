@@ -36,8 +36,8 @@ pub(super) fn run(args: &StreamArgs, req: StreamRequest) -> Result<(), String> {
 }
 
 async fn run_async(args: &StreamArgs, req: StreamRequest) -> Result<(), String> {
-    match req.provider.as_str() {
-        "openai" | "local" => {
+    match effective_provider(&req) {
+        "openai" => {
             let base = if req.provider == "local" {
                 base_url(&req.config.base_url, "http://127.0.0.1:8317/v1")
             } else {
@@ -53,8 +53,9 @@ async fn run_async(args: &StreamArgs, req: StreamRequest) -> Result<(), String> 
         }
         "gemini" => {
             let mut builder = gemini::Client::builder().api_key(req.config.api_key.trim());
-            if !req.config.base_url.trim().is_empty() {
-                builder = builder.base_url(req.config.base_url.trim());
+            let base = gemini_base_url(&req);
+            if !base.is_empty() {
+                builder = builder.base_url(base);
             }
             let client = builder.build().map_err(|error| error.to_string())?;
             let builder = configure_base_agent(client.agent(req.raw_model_id.clone()), &req);
@@ -62,6 +63,34 @@ async fn run_async(args: &StreamArgs, req: StreamRequest) -> Result<(), String> 
         }
         other => Err(format!("unknown provider: {other}")),
     }
+}
+
+fn effective_provider(req: &StreamRequest) -> &'static str {
+    if req.provider == "gemini"
+        || (req.provider == "local" && req.raw_model_id.trim().starts_with("gemini-"))
+    {
+        "gemini"
+    } else {
+        "openai"
+    }
+}
+
+fn gemini_base_url(req: &StreamRequest) -> String {
+    let configured = req.config.base_url.trim();
+    if configured.is_empty() {
+        return String::new();
+    }
+    if req.provider == "local" {
+        return strip_trailing_openai_version(&base_url(configured, "http://127.0.0.1:8317/v1"));
+    }
+    base_url(configured, "")
+}
+
+fn strip_trailing_openai_version(base: &str) -> String {
+    base.trim_end_matches('/')
+        .strip_suffix("/v1")
+        .unwrap_or_else(|| base.trim_end_matches('/'))
+        .to_owned()
 }
 
 async fn build_and_stream<M, R>(
@@ -312,8 +341,11 @@ fn string_input(value: &Value) -> String {
 }
 
 fn provider_additional_params(req: &StreamRequest) -> Value {
-    match req.provider.as_str() {
-        "openai" | "local" => json!({
+    if !req.provider_search_enabled {
+        return Value::Null;
+    }
+    match effective_provider(req) {
+        "openai" => json!({
             "tools": [ProviderToolDefinition::new("web_search")],
         }),
         "gemini" if req.raw_model_id.trim().starts_with("gemini-3") => json!({

@@ -262,6 +262,13 @@ fn check_aur_updates() -> (Vec<UpdateItem>, Option<String>) {
             parse_updates_output(&String::from_utf8_lossy(&output.stdout), "aur"),
             None,
         ),
+        Ok(output)
+            if output.status_code == Some(1)
+                && output.stdout.is_empty()
+                && output.stderr.is_empty() =>
+        {
+            (Vec::new(), None)
+        }
         Ok(output) => (Vec::new(), Some(command_failure(&output))),
         Err(error) => (Vec::new(), Some(error)),
     }

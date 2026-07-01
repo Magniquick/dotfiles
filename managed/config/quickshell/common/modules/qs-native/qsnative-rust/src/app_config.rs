@@ -127,6 +127,29 @@ pub fn load_account(path: &Path, account_id: &str) -> Result<EmailAccount, Strin
         })
 }
 
+/// Loads every configured Gmail account.
+pub fn load_google_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
+    let config = load_config(path)?;
+    config
+        .email
+        .accounts
+        .into_iter()
+        .filter(|a| a.provider.trim() == "gmail")
+        .map(|a| {
+            let id = crate::utils::non_empty_trimmed(&a.id)
+                .ok_or_else(|| "email account has no id".to_owned())?;
+            let address = crate::utils::non_empty_trimmed(&a.address)
+                .ok_or_else(|| format!("email account {id} has no address"))?;
+            Ok(EmailAccount {
+                id,
+                label: a.label.trim().to_owned(),
+                address,
+                provider: a.provider.trim().to_owned(),
+            })
+        })
+        .collect()
+}
+
 /// Returns calendar sources whose `account` field matches a configured email
 /// account. Sources with empty account/calendar_ids are silently dropped.
 pub fn load_calendar_sources(path: &Path) -> Result<Vec<CalendarSource>, String> {

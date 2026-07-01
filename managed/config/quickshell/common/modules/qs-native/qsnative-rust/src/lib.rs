@@ -28,6 +28,7 @@ pub mod gmail;
 pub mod google_auth;
 pub mod ical;
 pub mod idle;
+pub mod keyboard_lock;
 pub mod mcp;
 pub mod net_stats;
 pub mod pacman;

@@ -172,6 +172,7 @@ struct StreamRequest {
     message: String,
     attachments: Vec<Attachment>,
     tools: Vec<ToolDescriptor>,
+    provider_search_enabled: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -196,6 +197,7 @@ pub unsafe extern "C" fn QsNative_AiChat_Stream(
     conversation_id: *const c_char,
     message: *const c_char,
     attachments_json: *const c_char,
+    disabled_tool_servers_json: *const c_char,
     cb: Option<TokenCallback>,
     ctx: *mut c_void,
 ) -> c_int {
@@ -217,6 +219,7 @@ pub unsafe extern "C" fn QsNative_AiChat_Stream(
         conversation_id: c_string(conversation_id),
         message: c_string(message),
         attachments_json: c_string(attachments_json),
+        disabled_tool_servers_json: c_string(disabled_tool_servers_json),
         ctx: ctx as usize,
         cb,
         cancelled,
@@ -261,6 +264,7 @@ struct StreamArgs {
     conversation_id: String,
     message: String,
     attachments_json: String,
+    disabled_tool_servers_json: String,
     ctx: usize,
     cb: TokenCallback,
     cancelled: Arc<AtomicBool>,
@@ -304,10 +308,16 @@ fn run_stream_inner(args: &StreamArgs) -> Result<(), String> {
         message: args.message.clone(),
         attachments,
         tools: Vec::new(),
+        provider_search_enabled: false,
     };
 
+    let disabled_tool_servers = disabled_tool_servers(&args.disabled_tool_servers_json);
+    req.provider_search_enabled = provider_search_enabled(&req)
+        && !disabled_tool_servers
+            .iter()
+            .any(|server| server == "provider_search");
     if supports_tools(&req) {
-        req.tools = mcp_tool_descriptors();
+        req.tools = mcp_tool_descriptors(&disabled_tool_servers);
     }
 
     rig_agent::run(args, req)
@@ -409,8 +419,16 @@ fn enrich_tool_call(call: &mut ToolCall, tools: &[ToolDescriptor]) {
     }
 }
 
-fn mcp_tool_descriptors() -> Vec<ToolDescriptor> {
-    crate::mcp::tool_descriptors().unwrap_or_default()
+fn mcp_tool_descriptors(disabled_servers: &[String]) -> Vec<ToolDescriptor> {
+    crate::mcp::tool_descriptors()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|tool| {
+            !disabled_servers
+                .iter()
+                .any(|server| server == tool.server_id.trim())
+        })
+        .collect()
 }
 
 fn call_mcp_tool(call: &ToolCall) -> ToolResult {
@@ -427,6 +445,22 @@ fn supports_tools(req: &StreamRequest) -> bool {
         "openai" | "local" | "gemini" => model_supports_tools(&req.model_id).unwrap_or(true),
         _ => false,
     }
+}
+
+fn provider_search_enabled(req: &StreamRequest) -> bool {
+    match req.provider.as_str() {
+        "openai" => true,
+        "local" => req.raw_model_id.trim().starts_with("gemini-3"),
+        "gemini" => req.raw_model_id.trim().starts_with("gemini-3"),
+        _ => false,
+    }
+}
+
+fn disabled_tool_servers(raw: &str) -> Vec<String> {
+    parse_json_array::<String>(raw)
+        .into_iter()
+        .filter_map(|value| nonempty(value.trim()))
+        .collect()
 }
 
 fn ensure_attachment_capability(model_id: &str) -> Result<(), String> {

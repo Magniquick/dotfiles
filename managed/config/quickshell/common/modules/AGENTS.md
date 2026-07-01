@@ -100,11 +100,12 @@ QML types (all in `import qsnative`):
   - Notes: central QML-facing bridge combining `internal/appconfig` non-secret TOML with `internal/secrets` provider API keys
 - `AiChatSession`
   - Invokables: `submitInput`, `submitInputWithAttachments`, `cancel`, `pasteImageFromClipboard`, `regenerate`, `deleteMessage`,
-    `editMessage`, `resetForModelSwitch`, `appendInfo`, `copyAllText`, `pasteAttachmentFromClipboard`, `restoreHistory`,
-    `refreshMcp`, `refreshResumeConversations`, `resumeConversation`
-  - Properties: `model_id`, `system_prompt`, `provider_config`, `busy`, `status`, `error`, `commands`,
+    `editMessage`, `resetForModelSwitch`, `appendInfo`, `appendToolStatus`, `copyAllText`, `pasteAttachmentFromClipboard`,
+    `restoreHistory`, `refreshMcp`, `refreshResumeConversations`, `resumeConversation`
+  - Properties: `model_id`, `system_prompt`, `provider_config`, `disabled_tool_servers`, `busy`, `status`, `error`, `commands`,
     `mcp_servers`, `mcp_tools`, `mcp_status`, `mcp_error`, `resume_conversations`
-  - Signals: `streamDone`, `openModelPickerRequested`, `openMoodPickerRequested`, `openResumePickerRequested`, `scrollToEndRequested`, `copyAllRequested(text)`
+  - Signals: `streamDone`, `openModelPickerRequested`, `openProviderPickerRequested`, `openToolPickerRequested`,
+    `openMoodPickerRequested`, `openResumePickerRequested`, `scrollToEndRequested`, `copyAllRequested(text)`
   - Notes:
     - `QAbstractListModel`; roles: `messageId`, `sender`, `body`, `kind`, `metrics`, `attachments`, `tool`, `showHeader`
     - `model_id` is canonical `provider/model` form, for example `openai/gpt-4o`

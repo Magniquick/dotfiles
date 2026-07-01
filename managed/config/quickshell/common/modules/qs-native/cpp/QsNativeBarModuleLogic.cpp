@@ -81,14 +81,3 @@ auto QsNativeBarModuleLogic::parsePortalSessionCount(const QString& output) cons
       objectFromJson(QsNative_BarModuleLogic_ParsePortalSessionCount(output.toUtf8().constData()));
   return result.value(QStringLiteral("count"), 0).toInt();
 }
-
-auto QsNativeBarModuleLogic::parseChargeControlConfig(const QString& output) const -> QVariantMap {
-  return objectFromJson(
-      QsNative_BarModuleLogic_ParseChargeControlConfig(output.toUtf8().constData()));
-}
-
-auto QsNativeBarModuleLogic::chargeControlCommand(const QString& mode) const -> QVariantList {
-  const QVariantMap result =
-      objectFromJson(QsNative_BarModuleLogic_ChargeControlCommand(mode.toUtf8().constData()));
-  return result.value(QStringLiteral("command")).toList();
-}

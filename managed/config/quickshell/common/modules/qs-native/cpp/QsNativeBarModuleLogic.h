@@ -24,7 +24,4 @@ public:
   Q_INVOKABLE [[nodiscard]] auto parseSystemdIdleInhibitors(const QString& output) const
       -> QVariantList;
   Q_INVOKABLE [[nodiscard]] auto parsePortalSessionCount(const QString& output) const -> int;
-  Q_INVOKABLE [[nodiscard]] auto parseChargeControlConfig(const QString& output) const
-      -> QVariantMap;
-  Q_INVOKABLE [[nodiscard]] auto chargeControlCommand(const QString& mode) const -> QVariantList;
 };

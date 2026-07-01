@@ -103,13 +103,13 @@ ModuleContainer {
     root.assignNodeVolume(node, node.audio.volume + delta, max)
   }
   function adjustAppEntryVolumeByStep(entry, directionY) {
-    if (!entry)
+    if (!entry || !entry.node || !entry.node.audio)
       return
     const step = root.maxVolume / 100
     const delta = directionY > 0 ? step : (directionY < 0 ? -step : 0)
     if (delta === 0)
       return
-    const current = Math.max(0, Math.min(root.maxVolume, entry.volume))
+    const current = Math.max(0, Math.min(root.maxVolume, entry.node.audio.volume))
     root.setAppEntryVolume(entry, current + delta)
   }
   function formatVolumePercent(value, muted, maxVolume) {
@@ -131,9 +131,6 @@ ModuleContainer {
         node: item,
         id: root.nodeId(item),
         label: root.nodeLabel(item, "Unknown App"),
-        muted: !!(item.audio && item.audio.muted),
-        volume: item.audio ? item.audio.volume : 0,
-        enabled: !!item.audio,
         pid: rawPid !== undefined ? Number(rawPid) : -1
       })
     }
@@ -661,8 +658,10 @@ ModuleContainer {
               id: appRow
 
               required property var modelData
-              readonly property bool appMuted: !!modelData.muted
-              readonly property bool enabledRow: !!modelData.enabled
+              readonly property var appNode: modelData ? modelData.node : null
+              readonly property bool appMuted: !!(appNode && appNode.audio && appNode.audio.muted)
+              readonly property real appVolume: appNode && appNode.audio ? appNode.audio.volume : 0
+              readonly property bool enabledRow: !!(appNode && appNode.audio)
               readonly property string delegateLabel: root.appEntryLabel(modelData)
 
               width: ListView.view.width
@@ -725,7 +724,7 @@ ModuleContainer {
                     enabled: enabledRow
                     from: 0
                     to: root.maxVolume
-                    value: enabledRow ? modelData.volume : 0
+                    value: enabledRow ? appRow.appVolume : 0
                   }
 
                   Text {
@@ -734,7 +733,7 @@ ModuleContainer {
                     font.family: Config.fontFamily
                     font.pixelSize: Config.type.labelSmall.size
                     font.weight: Font.Bold
-                    text: appMuted ? "M" : Math.round(Math.max(0, Math.min(root.maxVolume, appVolumeCircle.value)) * 100).toString()
+                    text: appRow.appMuted ? "M" : Math.round(Math.max(0, Math.min(root.maxVolume, appVolumeCircle.value)) * 100).toString()
                   }
 
                   MouseArea {

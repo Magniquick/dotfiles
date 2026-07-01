@@ -16,8 +16,9 @@ auto QsNative_AiMcp_Refresh() -> char*;
 /* Starts a streaming session; returns session id. */
 auto QsNative_AiChat_Stream(const char* modelID, const char* providerConfigJSON,
                             const char* systemPrompt, const char* conversationID,
-                            const char* message, const char* attachmentsJSON, QsNative_TokenFn cb,
-                            void* ctx) -> int;
+                            const char* message, const char* attachmentsJSON,
+                            const char* disabledToolServersJSON, QsNative_TokenFn cb, void* ctx)
+    -> int;
 
 void QsNative_AiChat_Cancel(int id);
 auto QsNative_AiChat_LastMetrics() -> char*;
@@ -54,8 +55,6 @@ auto QsNative_BarModuleLogic_IsNoLyricsError(const char* errorText) -> char*;
 auto QsNative_BarModuleLogic_LyricsSourceInfo(const char* source) -> char*;
 auto QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(const char* output) -> char*;
 auto QsNative_BarModuleLogic_ParsePortalSessionCount(const char* output) -> char*;
-auto QsNative_BarModuleLogic_ParseChargeControlConfig(const char* output) -> char*;
-auto QsNative_BarModuleLogic_ChargeControlCommand(const char* mode) -> char*;
 
 /* ---------- Memory ---------- */
 

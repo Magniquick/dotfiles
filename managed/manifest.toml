@@ -37,10 +37,10 @@
 [[entries]]
   group = "config"
   relative_path = "dconf"
-  digest = "df89b33f3e4a0e384c6f632bf769ccc542aaca9a87c8ed26f27840add4405b0a"
+  digest = "9a6d966e87fb50bb78010937ad549fcae570d35cc5af6cc0e5fe709e64b9e8de"
   size = 0
   mode = 448
-  mtime_ns = 1781641843657259579
+  mtime_ns = 1782728238238883563
   type = "directory"
   uid = 1000
   gid = 1000
@@ -97,7 +97,7 @@
 [[entries]]
   group = "config"
   relative_path = "hypr"
-  digest = "c747ffbb607ac965ee574ce505ef6c7d8615ae835f79904a8f51faa01ba9f556"
+  digest = "59e0bbb2a1be9d2aae787205ca2f32d706f2343428ac119996c5c237150d97e1"
   size = 0
   mode = 493
   mtime_ns = 1780900391253800970
@@ -109,10 +109,10 @@
 [[entries]]
   group = "config"
   relative_path = "kitty"
-  digest = "580f381f38a2b7b7d310d0ecb662bb638ba9cfd47c9be9c053134711e9ecdef5"
+  digest = "de15108a5967e9e7224702c6427852958fec91de7f988556316894a03347f808"
   size = 0
   mode = 493
-  mtime_ns = 1781877514175045307
+  mtime_ns = 1782840350753750860
   type = "directory"
   uid = 1000
   gid = 1000
@@ -157,10 +157,10 @@
 [[entries]]
   group = "config"
   relative_path = "mise/config.toml"
-  digest = "ff784b72871ace992d7b2b3071f344095ab623a70258325f4adf35b1b0a652ed"
-  size = 478
+  digest = "1f2537cecaf8371fc5eb3e3da7e9d3cc9ad30dc91ee7719d9989c009db67fab8"
+  size = 527
   mode = 420
-  mtime_ns = 1781876039466037892
+  mtime_ns = 1782847321126440599
   type = "file"
   uid = 1000
   gid = 1000
@@ -181,10 +181,10 @@
 [[entries]]
   group = "config"
   relative_path = "quickshell"
-  digest = "bc60f15a570549edb51cdb08b754c09adbe7d8fe49e517ca0c23080337bdf09c"
+  digest = "33a478083b7f4502a347b1b4cdea760c36f8e49bbbbcfdbc0aab477c91688f66"
   size = 0
   mode = 493
-  mtime_ns = 1781855499493389170
+  mtime_ns = 1782407824807722073
   type = "directory"
   uid = 1000
   gid = 1000
@@ -217,7 +217,7 @@
 [[entries]]
   group = "config"
   relative_path = "sys64"
-  digest = "2c22f2f775a36bb044ca2a7da076e68a46376b063543b50c1ef0d23dd08b2659"
+  digest = "da822208334f82c1aa50de4635bb1941406745511fbeedc2bc6c729d278ebae7"
   size = 0
   mode = 493
   mtime_ns = 1763151283463598577
@@ -229,7 +229,7 @@
 [[entries]]
   group = "config"
   relative_path = "systemd"
-  digest = "89026c8e6e864775b98350f254f8daf2ce4d46c182c9cbb04130ede6ebf37946"
+  digest = "dfb4310a3391e7b774dc92e46caf3ddf03934bf1eee88d32d41b9ce90ed9699d"
   size = 0
   mode = 493
   mtime_ns = 1762773703928963989
@@ -328,7 +328,7 @@
   digest = "332d3d7e2b18a97430e9b9dc8914cd25d7068866206ba2d436e3bb049c4da832"
   size = 11066
   mode = 493
-  mtime_ns = 1781877017707225104
+  mtime_ns = 1781877514181044992
   type = "file"
   uid = 1000
   gid = 1000
@@ -349,10 +349,10 @@
 [[entries]]
   group = "local"
   relative_path = "bin"
-  digest = "f74976c8d7cc2b90476c5ee0dc2aa0ea1ea0d97d2b905ed35a719a9385d6b1db"
+  digest = "5dab1c628f947a17a060813934ea4e9482dcf73330b9ca614826afc16c96f360"
   size = 0
   mode = 493
-  mtime_ns = 1781560078927166257
+  mtime_ns = 1782115419329893644
   type = "directory"
   uid = 1000
   gid = 1000
@@ -361,10 +361,10 @@
 [[entries]]
   group = "local"
   relative_path = "share/applications"
-  digest = "0aec0aab27425fa8bf7b88fd5609749caa24605cb33e827457e0de3200fdf704"
+  digest = "ec95c9ee55fdd0dfbccd208dca9d33e1a6529320e091b91876aaea24185a4d22"
   size = 0
   mode = 448
-  mtime_ns = 1774824642949901717
+  mtime_ns = 1782395722032808826
   type = "directory"
   uid = 1000
   gid = 1000
@@ -400,7 +400,7 @@
   digest = "daf3f247861e1d79c6df30d0508e4ee40d90d36757b0defd0886bc7eee81e517"
   size = 0
   mode = 493
-  mtime_ns = 1711301543000000000
+  mtime_ns = 1781871877302164952
   type = "directory"
   uid = 1000
   gid = 1000

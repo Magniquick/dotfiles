@@ -35,6 +35,7 @@ Item {
 
   readonly property var providerConfig: envLoader.providerConfig
   property var providerOrder: ["local", "openai", "gemini"]
+  property var disabledToolServers: []
   property string modelId: envLoader.modelId
 
   FileView {
@@ -58,9 +59,13 @@ Item {
     return out.length > 0 ? out : ["local", "openai", "gemini"]
   }
 
-  function loadProviderOrder() {
+  function loadPanelConfig() {
     const payload = JsonUtils.parseObject(leftpanelConfigFile.text()) || {}
     root.providerOrder = root.providerOrderFromConfig(payload.provider_order)
+    root.disabledToolServers = root.toolServersFromConfig(payload.disabled_tool_servers)
+    const lastModel = String(payload.last_model_id || "").trim()
+    if (lastModel)
+      root.modelId = root.canonicalModelId(lastModel)
   }
 
   function saveProviderOrder() {
@@ -72,7 +77,39 @@ Item {
     leftpanelConfigFile.reload()
   }
 
-  Component.onCompleted: root.loadProviderOrder()
+  function saveLastModel() {
+    const payload = JsonUtils.parseObject(leftpanelConfigFile.text())
+    if (!payload)
+      return
+    payload.last_model_id = root.modelId
+    leftpanelConfigFile.setText(JSON.stringify(payload, null, "\t") + "\n")
+    leftpanelConfigFile.reload()
+  }
+
+  function toolServersFromConfig(servers) {
+    const out = []
+    const add = value => {
+      const server = String(value || "").trim()
+      if (server && out.indexOf(server) < 0)
+        out.push(server)
+    }
+    if (Array.isArray(servers)) {
+      for (const server of servers)
+        add(server)
+    }
+    return out
+  }
+
+  function saveDisabledToolServers() {
+    const payload = JsonUtils.parseObject(leftpanelConfigFile.text())
+    if (!payload)
+      return
+    payload.disabled_tool_servers = root.disabledToolServers
+    leftpanelConfigFile.setText(JSON.stringify(payload, null, "\t") + "\n")
+    leftpanelConfigFile.reload()
+  }
+
+  Component.onCompleted: root.loadPanelConfig()
 
   readonly property color _linkColor: Common.Config.color.primary
   on_LinkColorChanged: chatSession.setAppLinkColor(_linkColor)
@@ -82,9 +119,7 @@ Item {
     return parts.length > 1 ? parts[0] : ""
   }
   readonly property var activeProviderConfig: providerConfig[currentProvider] || ({})
-  readonly property bool providerOnline: currentProvider === "local"
-    ? String(activeProviderConfig.base_url || "").trim().length > 0
-    : String(activeProviderConfig.api_key || "").trim().length > 0
+  readonly property bool providerOnline: currentProvider === "local" ? String(activeProviderConfig.base_url || "").trim().length > 0 : String(activeProviderConfig.api_key || "").trim().length > 0
 
   property string currentMood: "default"
   property bool showCommandPicker: false
@@ -126,6 +161,7 @@ Item {
   readonly property var moodModels: moodConfig.moodModels
   readonly property var availableModels: modelConfig.availableModels
   readonly property var availableProviders: modelConfig.availableProviders
+  readonly property var availableTools: root.toolOptions()
 
   readonly property string currentMoodIcon: moodConfig.moodIcon(root.currentMood)
   readonly property string currentMoodName: moodConfig.moodName(root.currentMood)
@@ -173,6 +209,64 @@ Item {
     root.showCommandPicker = true
   }
 
+  function openToolPicker() {
+    root.activeCommand = "tools"
+    root.showCommandPicker = true
+  }
+
+  function toolDisabled(serverId) {
+    return root.disabledToolServers.indexOf(String(serverId || "").trim()) >= 0
+  }
+
+  function toolOptions() {
+    const base = [
+      {
+        value: "provider_search",
+        label: "Web grounding",
+        description: root.toolDisabled("provider_search") ? "Disabled - models will not be offered hosted web grounding" : "Enabled - supported providers may search and cite the web",
+        icon: "\uf349",
+        accent: root.toolDisabled("provider_search") ? Common.Config.color.error : Common.Config.color.tertiary,
+        recommended: true
+      },
+      {
+        value: "builtin",
+        label: "Shell",
+        description: root.toolDisabled("builtin") ? "Disabled - shell_command hidden from models" : "Enabled - shell_command available",
+        icon: "\uf120",
+        accent: root.toolDisabled("builtin") ? Common.Config.color.error : Common.Config.color.secondary,
+        recommended: true
+      },
+      {
+        value: "email",
+        label: "Email",
+        description: root.toolDisabled("email") ? "Disabled - email tools hidden from models" : "Enabled - read-only email tools available",
+        icon: "\uf0e0",
+        accent: root.toolDisabled("email") ? Common.Config.color.error : Common.Config.color.primary,
+        recommended: true
+      }
+    ]
+    return base
+  }
+
+  function toggleToolServer(serverId) {
+    const server = String(serverId || "").trim()
+    if (!server)
+      return
+    if (root.toolDisabled(server))
+      root.disabledToolServers = root.disabledToolServers.filter(value => value !== server)
+    else
+      root.disabledToolServers = root.disabledToolServers.concat([server])
+    root.saveDisabledToolServers()
+  }
+
+  function showModelCatalogStatus() {
+    const id = "model_catalog"
+    chatSession.appendToolStatus(id, "model_catalog", "Model catalog", "model_catalog", "Model catalog", "running", "checking model catalog...", "reading configured local, OpenAI, and Gemini models")
+    Qt.callLater(() => {
+      chatSession.appendToolStatus(id, "model_catalog", "Model catalog", "model_catalog", "Model catalog", "success", `found ${root.availableModels.length} models`, `${root.availableProviders.length} providers checked`)
+    })
+  }
+
   function promoteProvider(providerId) {
     const provider = String(providerId || "").trim()
     if (!provider)
@@ -187,7 +281,6 @@ Item {
     const before = String(beforeProviderId || "").trim()
     if (!provider || provider === before)
       return
-
     const ordered = root.providerOrder.filter(p => p !== provider)
     const beforeIndex = before ? ordered.indexOf(before) : -1
     if (beforeIndex >= 0)
@@ -204,8 +297,10 @@ Item {
     model_id: String(root.modelId)
     system_prompt: root.moodPrompts[root.currentMood] || ""
     provider_config: root.providerConfig
+    disabled_tool_servers: root.disabledToolServers
 
     onOpenModelPickerRequested: {
+      root.showModelCatalogStatus()
       root.activeCommand = "model"
       root.showCommandPicker = true
     }
@@ -218,7 +313,9 @@ Item {
       root.showCommandPicker = true
     }
     onOpenProviderPickerRequested: root.openProviderPicker()
+    onOpenToolPickerRequested: root.openToolPicker()
     onScrollToEndRequested: panelView.scrollToEnd()
+    onStreamDone: root.saveLastModel()
     onCopyAllRequested: function (text) {
       root.setClipboardText(text)
     }
@@ -250,6 +347,7 @@ Item {
     activeCommand: root.activeCommand
     availableModels: root.availableModels
     availableProviders: root.availableProviders
+    availableTools: root.availableTools
     availableMoods: root.availableMoods
     resumeConversations: chatSession.resume_conversations
 
@@ -286,6 +384,8 @@ Item {
       root.moveProviderBefore(value, beforeValue)
       chatSession.appendInfo(`Provider priority: ${root.providerOrder.join(" -> ")}`)
     }
+
+    onToolToggled: value => root.toggleToolServer(value)
 
     onMoodSelected: value => {
       root.currentMood = value

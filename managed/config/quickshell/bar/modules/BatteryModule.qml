@@ -17,8 +17,8 @@ import ".."
 import "../components"
 import QtQuick
 import QtQuick.Layouts
+import Quickshell.Io
 import Quickshell.Services.UPower
-import qsnative
 
 ModuleContainer {
   id: root
@@ -27,12 +27,7 @@ ModuleContainer {
   property bool showTime: false
   property bool chargeControlApplying: false
   property bool chargeControlAvailable: false
-  property bool chargeControlWaitingForApplyRefresh: false
   property string chargeControlMode: ""
-
-  BarModuleLogic {
-    id: uiLogic
-  }
 
   function normalizePercent(value) {
     if (!isFinite(value))
@@ -143,27 +138,39 @@ ModuleContainer {
     return root.chargeControlMode === "limit"
   }
   function chargeControlBusy() {
-    return root.chargeControlApplying || chargeControlRunner.running || chargeControlConfigRunner.running
+    return root.chargeControlApplying || chargeControlApplyProcess.running
   }
   function refreshChargeControl() {
-    if (root.chargeControlAvailable)
-      chargeControlConfigRunner.trigger()
+    if (!root.chargeControlAvailable || chargeControlStatusProcess.running)
+      return
+    chargeControlStatusProcess.stdoutText = ""
+    chargeControlStatusProcess.stderrText = ""
+    chargeControlStatusProcess.running = true
+  }
+  function chargeControlCommand(mode) {
+    if (mode === "auto")
+      return ["/usr/local/bin/hp-charge-control", "config", "auto", "--now"]
+    return ["/usr/local/bin/hp-charge-control", "config", "limit", "50", "30", "--now"]
+  }
+  function parseChargeControlMode(output) {
+    const match = String(output || "").match(/MODE=(limit|auto|hold|discharge|disabled)/i)
+    return match ? match[1].toLowerCase() : ""
   }
   function toggleChargeControlLimit() {
     if (!root.chargeControlAvailable || root.chargeControlBusy() || root.chargeControlMode === "")
       return
+    const nextMode = root.chargeControlIsLimit() ? "auto" : "limit"
     root.chargeControlApplying = true
-    root.chargeControlWaitingForApplyRefresh = false
-    root.chargeControlMode = root.chargeControlIsLimit() ? "auto" : "limit"
-    chargeControlRunner.command = uiLogic.chargeControlCommand(root.chargeControlMode)
-    chargeControlRunner.trigger()
+    root.chargeControlMode = nextMode
+    chargeControlApplyProcess.command = root.chargeControlCommand(nextMode)
+    chargeControlApplyProcess.stdoutText = ""
+    chargeControlApplyProcess.stderrText = ""
+    chargeControlApplyProcess.running = true
   }
   function updateChargeControlConfig(output) {
-    root.chargeControlMode = String(uiLogic.parseChargeControlConfig(String(output || "")).mode || "").toLowerCase()
-    if (root.chargeControlWaitingForApplyRefresh) {
-      root.chargeControlWaitingForApplyRefresh = false
-      root.chargeControlApplying = false
-    }
+    const mode = root.parseChargeControlMode(output)
+    if (mode !== "" && !root.chargeControlApplying)
+      root.chargeControlMode = mode
   }
   function percentLabel(device) {
     if (!device || !device.ready)
@@ -393,47 +400,61 @@ ModuleContainer {
     }
   }
 
-  CommandRunner {
-    id: chargeControlConfigRunner
+  Process {
+    id: chargeControlStatusProcess
+
+    property string stderrText: ""
+    property string stdoutText: ""
 
     command: ["/usr/local/bin/hp-charge-control", "config", "show"]
-    enabled: root.chargeControlAvailable
-    intervalMs: 0
-    timeoutMs: 2000
+    running: false
 
-    onError: function (errorOutput, exitCode) {
-      root.chargeControlWaitingForApplyRefresh = false
-      root.chargeControlApplying = false
+    stdout: SplitParser {
+      onRead: data => chargeControlStatusProcess.stdoutText += data
     }
-    onRan: function (output) {
-      root.updateChargeControlConfig(output)
-    }
-    onTimeout: {
-      root.chargeControlWaitingForApplyRefresh = false
-      root.chargeControlApplying = false
+    stderr: SplitParser {
+      onRead: data => chargeControlStatusProcess.stderrText += data
     }
   }
-  CommandRunner {
-    id: chargeControlRunner
+  Process {
+    id: chargeControlApplyProcess
 
-    enabled: root.chargeControlAvailable
-    intervalMs: 0
-    timeoutMs: 5000
+    property string stderrText: ""
+    property string stdoutText: ""
 
-    onError: function (errorOutput, exitCode) {
-      root.chargeControlWaitingForApplyRefresh = false
+    running: false
+
+    stdout: SplitParser {
+      onRead: data => chargeControlApplyProcess.stdoutText += data
+    }
+    stderr: SplitParser {
+      onRead: data => chargeControlApplyProcess.stderrText += data
+    }
+  }
+  Connections {
+    function onExited(code, exitStatus) {
+      const output = String(chargeControlStatusProcess.stdoutText || "").trim()
+      const error = String(chargeControlStatusProcess.stderrText || "").trim()
+      if (code === 0) {
+        root.updateChargeControlConfig(output)
+        return
+      }
+      console.warn(error || ("hp-charge-control config show exited " + code))
+    }
+
+    target: chargeControlStatusProcess
+  }
+  Connections {
+    function onExited(code, exitStatus) {
+      if (code !== 0) {
+        const error = String(chargeControlApplyProcess.stderrText || "").trim()
+        console.warn(error || ("hp-charge-control apply exited " + code))
+      }
       root.chargeControlApplying = false
       root.refreshChargeControl()
     }
-    onRan: function (output) {
-      root.chargeControlWaitingForApplyRefresh = true
-      root.refreshChargeControl()
-    }
-    onTimeout: {
-      root.chargeControlWaitingForApplyRefresh = false
-      root.chargeControlApplying = false
-      root.refreshChargeControl()
-    }
+
+    target: chargeControlApplyProcess
   }
   Component.onCompleted: {
     root.refreshHealth()

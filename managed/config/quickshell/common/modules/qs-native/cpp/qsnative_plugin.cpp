@@ -9,6 +9,7 @@
 #include <qsnative_rust/src/config_resolver.cxxqt.h>
 #include <qsnative_rust/src/ical.cxxqt.h>
 #include <qsnative_rust/src/idle.cxxqt.h>
+#include <qsnative_rust/src/keyboard_lock.cxxqt.h>
 #include <qsnative_rust/src/net_stats.cxxqt.h>
 #include <qsnative_rust/src/pacman.cxxqt.h>
 #include <qsnative_rust/src/privacy.cxxqt.h>
@@ -33,6 +34,7 @@ public:
     qmlRegisterType<PrivacyProvider>(uri, 1, 0, "PrivacyProvider");
     qmlRegisterType<IcalCache>(uri, 1, 0, "IcalCache");
     qmlRegisterType<IdleProvider>(uri, 1, 0, "IdleProvider");
+    qmlRegisterType<KeyboardLockProvider>(uri, 1, 0, "KeyboardLockProvider");
     qmlRegisterType<TodoistClient>(uri, 1, 0, "TodoistClient");
     qmlRegisterType<SystemdFailedProvider>(uri, 1, 0, "SystemdFailedProvider");
     qmlRegisterType<NetStatsProvider>(uri, 1, 0, "NetStatsProvider");

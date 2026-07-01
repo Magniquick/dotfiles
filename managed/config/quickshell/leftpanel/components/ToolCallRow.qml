@@ -10,11 +10,17 @@ Item {
 
   property var tool: ({})
   property bool expanded: false
+  property bool hasAssistantResponse: false
   readonly property bool showAssistantHeader: !!tool.show_header
   property string moodIcon: "\uf4c4"
   property string moodName: "Assistant"
 
   signal expandedChangeRequested(bool expanded)
+  signal regenerateRequested
+  signal copyResponseRequested
+  signal editResponseRequested
+  signal sourceResponseRequested
+  signal deleteRequested
 
   readonly property string status: String(tool.status || "")
   readonly property bool isError: !!tool.is_error || status === "error"
@@ -30,12 +36,14 @@ Item {
   readonly property string subtitle: String(tool.subtitle || "")
   readonly property string iconText: resolvedIconText()
   readonly property var detailSections: tool.detail_sections || []
+  readonly property bool hasDetails: detailSections.length > 0
   readonly property color rowColor: isError ? Common.Config.color.error : Common.Config.color.primary
   readonly property color onRowColor: isError ? Common.Config.color.on_error : Common.Config.color.on_primary
   readonly property color diffAdditionColor: "#3fb950"
   readonly property color diffDeletionColor: Common.Config.color.error
   readonly property int detailPreviewChars: 6000
   readonly property int detailPreviewLines: 80
+  property bool copied: false
 
   implicitWidth: parent ? parent.width : 320
   implicitHeight: wrapper.implicitHeight + 8
@@ -107,6 +115,11 @@ Item {
     const toolName = String(root.tool.tool_name || "")
     const server = root.serverId
 
+    if (server === "provider_search")
+      return "\uf349"
+    if (server === "model_catalog")
+      return "\uf02d"
+
     if (toolName === "shell_command" || toolName === "builtin__shell_command")
       return "$"
 
@@ -133,6 +146,12 @@ Item {
     })
   }
 
+  Timer {
+    id: copyTimer
+    interval: 1500
+    onTriggered: root.copied = false
+  }
+
   ColumnLayout {
     id: wrapper
     anchors {
@@ -145,10 +164,15 @@ Item {
     spacing: 0
 
     RowLayout {
+      id: assistantHeaderRow
       visible: root.showAssistantHeader
       Layout.fillWidth: true
       Layout.bottomMargin: 6
       spacing: 6
+
+      HoverHandler {
+        id: assistantHeaderHover
+      }
 
       Rectangle {
         Layout.alignment: Qt.AlignVCenter
@@ -181,6 +205,52 @@ Item {
       Item {
         Layout.fillWidth: true
       }
+
+      Row {
+        spacing: 2
+        opacity: assistantHeaderHover.hovered ? 1 : 0
+        enabled: assistantHeaderHover.hovered
+
+        Behavior on opacity {
+          NumberAnimation {
+            duration: 150
+          }
+        }
+
+        MessageControlButton {
+          icon: "\uea77"
+          onClicked: root.regenerateRequested()
+        }
+
+        MessageControlButton {
+          visible: root.hasAssistantResponse
+          icon: root.copied ? "\ueab2" : "\uebcc"
+          activated: root.copied
+          onClicked: {
+            root.copyResponseRequested()
+            root.copied = true
+            copyTimer.restart()
+          }
+        }
+
+        MessageControlButton {
+          visible: root.hasAssistantResponse
+          icon: "\uea73"
+          onClicked: root.editResponseRequested()
+        }
+
+        MessageControlButton {
+          visible: root.hasAssistantResponse
+          icon: "\ueac4"
+          activated: root.expanded
+          onClicked: root.sourceResponseRequested()
+        }
+
+        MessageControlButton {
+          icon: "\uea81"
+          onClicked: root.deleteRequested()
+        }
+      }
     }
 
     ColumnLayout {
@@ -189,6 +259,7 @@ Item {
       spacing: 0
 
       Rectangle {
+        id: toolCard
         Layout.fillWidth: true
         implicitHeight: Math.max(46, headerRow.implicitHeight + 16)
         radius: Common.Config.shape.corner.sm
@@ -197,9 +268,14 @@ Item {
         border.color: Qt.alpha(root.rowColor, root.isError ? 0.42 : 0.22)
 
         MouseArea {
+          id: toolCardMouse
           anchors.fill: parent
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.expandedChangeRequested(!root.expanded)
+          cursorShape: root.hasDetails ? Qt.PointingHandCursor : Qt.ArrowCursor
+          hoverEnabled: true
+          onClicked: {
+            if (root.hasDetails)
+              root.expandedChangeRequested(!root.expanded)
+          }
         }
 
         RowLayout {
@@ -257,6 +333,7 @@ Item {
 
           Text {
             Layout.alignment: Qt.AlignVCenter
+            visible: root.hasDetails
             text: "\uf105"
             color: Common.Config.color.on_surface_variant
             opacity: 0.75
@@ -277,7 +354,7 @@ Item {
       Loader {
         id: detailLoader
         Layout.fillWidth: true
-        active: root.expanded
+        active: root.expanded && root.hasDetails
         visible: active
         Layout.preferredHeight: active && item ? item.implicitHeight : 0
         sourceComponent: detailComponent

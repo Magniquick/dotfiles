@@ -12,7 +12,9 @@ address = "you@example.com"
 
 # Gmail accounts use the Gmail API, not IMAP. Store matching refresh-capable
 # OAuth credentials in Secret Service:
-#   common/modules/qs-native/build/qs-google-auth provision --account personal --client-json /path/to/client.json
+#   common/modules/qs-native/build/qs-google-auth provision-all --client-json /path/to/client.json
+# Re-run without --client-json to refresh all configured Google tokens from the
+# stored OAuth client JSON.
 
 [[calendar.accounts]]
 account = "personal"

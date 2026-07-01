@@ -82,16 +82,6 @@ struct LyricsSourceInfo {
     label: &'static str,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct ChargeControlConfig {
-    mode: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ChargeControlCommand {
-    command: Vec<&'static str>,
-}
-
 fn json_c_string(value: Value) -> *mut c_char {
     CString::new(value.to_string())
         .unwrap_or_else(|_| CString::new("{}").expect("static JSON has no NUL"))
@@ -417,36 +407,6 @@ fn parse_portal_session_count(output: &str) -> usize {
         .count()
 }
 
-fn charge_control_config(output: &str) -> ChargeControlConfig {
-    let mode = output
-        .lines()
-        .find_map(|line| line.strip_prefix("MODE="))
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase();
-    ChargeControlConfig { mode }
-}
-
-fn charge_control_command(target_mode: &str) -> ChargeControlCommand {
-    if target_mode == "auto" {
-        ChargeControlCommand {
-            command: vec![
-                "sh",
-                "-c",
-                "/usr/local/bin/hp-charge-control config auto --now",
-            ],
-        }
-    } else {
-        ChargeControlCommand {
-            command: vec![
-                "sh",
-                "-c",
-                "/usr/local/bin/hp-charge-control config limit 50 30 --now",
-            ],
-        }
-    }
-}
-
 /// # Safety
 ///
 /// `devices_json` must be null or point to a valid NUL-terminated UTF-8 C string.
@@ -562,28 +522,6 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_ParsePortalSessionCount(
     json_c_string(json!({ "count": parse_portal_session_count(&cstr_value(output)) }))
 }
 
-/// # Safety
-///
-/// `output` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
-#[no_mangle]
-pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseChargeControlConfig(
-    output: *const c_char,
-) -> *mut c_char {
-    json_c_string(json!(charge_control_config(&cstr_value(output))))
-}
-
-/// # Safety
-///
-/// `mode` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
-#[no_mangle]
-pub unsafe extern "C" fn QsNative_BarModuleLogic_ChargeControlCommand(
-    mode: *const c_char,
-) -> *mut c_char {
-    json_c_string(json!(charge_control_command(&cstr_value(mode))))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -621,14 +559,5 @@ mod tests {
                       firefox        1000 me   1 app  idle  video block\n\
                       powerdevil     1000 me   2 app  sleep lid delay\n";
         assert_eq!(parse_systemd_idle_inhibitors(output), vec!["firefox"]);
-    }
-
-    #[test]
-    fn parses_charge_mode() {
-        assert_eq!(charge_control_config("MODE=limit\n").mode, "limit");
-        assert_eq!(
-            charge_control_command("auto").command[2],
-            "/usr/local/bin/hp-charge-control config auto --now"
-        );
     }
 }

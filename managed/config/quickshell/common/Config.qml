@@ -29,6 +29,16 @@ QtObject {
   readonly property string clipboardPopupLeftCommand: ""
   readonly property string clipboardPopupRightIcon: "󰄘"
   readonly property string clipboardPopupRightCommand: ""
+  readonly property QtObject systemHud: QtObject {
+    readonly property bool enabled: true
+    readonly property int width: 320
+    readonly property int height: 48
+    readonly property int iconSize: 28
+    readonly property int bottomMargin: 28
+    readonly property int timeoutMs: 3000
+    readonly property int transitionMs: 250
+    readonly property string keyboardPath: "/dev/input/by-path/platform-i8042-serio-0-event-kbd"
+  }
   readonly property string loginShell: {
     const shellValue = Quickshell.env("SHELL")
     return shellValue && shellValue !== "" ? shellValue : "sh"

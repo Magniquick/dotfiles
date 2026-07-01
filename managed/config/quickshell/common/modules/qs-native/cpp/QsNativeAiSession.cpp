@@ -125,6 +125,13 @@ void QsNativeAiSession::setProviderConfig(const QVariantMap& v) {
   }
 }
 
+void QsNativeAiSession::setDisabledToolServers(const QVariantList& v) {
+  if (v != m_disabledToolServers) {
+    m_disabledToolServers = v;
+    emit disabledToolServersChanged();
+  }
+}
+
 void QsNativeAiSession::setBusy(bool v) {
   if (v != m_busy) {
     m_busy = v;
@@ -181,6 +188,8 @@ void QsNativeAiSession::startStream(const QString& text, const QVariantList& att
   const QByteArray providerConfigJson = buildProviderConfigJson();
   const QByteArray attachmentsJson =
       QJsonDocument::fromVariant(attachments).toJson(QJsonDocument::Compact);
+  const QByteArray disabledToolServersJson =
+      QJsonDocument::fromVariant(m_disabledToolServers).toJson(QJsonDocument::Compact);
 
   // Append user message.
   const int userRow = rowCountAsInt(m_messages.size());
@@ -207,11 +216,11 @@ void QsNativeAiSession::startStream(const QString& text, const QVariantList& att
   setError(QString());
   setStatus(QStringLiteral("Streaming..."));
 
-  m_sessionId =
-      QsNative_AiChat_Stream(m_modelId.toUtf8().constData(), providerConfigJson.constData(),
-                             m_systemPrompt.toUtf8().constData(),
-                             m_conversationId.toUtf8().constData(), text.toUtf8().constData(),
-                             attachmentsJson.constData(), &QsNativeAiSession::tokenCallback, this);
+  m_sessionId = QsNative_AiChat_Stream(
+      m_modelId.toUtf8().constData(), providerConfigJson.constData(),
+      m_systemPrompt.toUtf8().constData(), m_conversationId.toUtf8().constData(),
+      text.toUtf8().constData(), attachmentsJson.constData(), disabledToolServersJson.constData(),
+      &QsNativeAiSession::tokenCallback, this);
 }
 
 void QsNativeAiSession::cancel() {
@@ -328,6 +337,33 @@ void QsNativeAiSession::appendInfo(const QString& text) {
   emit scrollToEndRequested();
 }
 
+void QsNativeAiSession::appendToolStatus(const QString& toolCallId, const QString& toolName,
+                                         const QString& toolTitle, const QString& serverId,
+                                         const QString& serverLabel, const QString& status,
+                                         const QString& summary, const QString& subtitle) {
+  const bool running = status == QStringLiteral("running");
+  const bool error = status == QStringLiteral("error");
+  const QVariantMap event{
+      {QStringLiteral("kind"), QStringLiteral("tool")},
+      {QStringLiteral("phase"),
+       running ? QStringLiteral("tool_start")
+               : (error ? QStringLiteral("tool_error") : QStringLiteral("tool_done"))},
+      {QStringLiteral("tool_call_id"), toolCallId},
+      {QStringLiteral("tool_name"), toolName},
+      {QStringLiteral("tool_title"), toolTitle},
+      {QStringLiteral("server_id"), serverId},
+      {QStringLiteral("server_label"), serverLabel},
+      {QStringLiteral("status"), running ? QStringLiteral("running") : status},
+      {QStringLiteral("summary"), summary},
+      {QStringLiteral("subtitle"), subtitle},
+      {QStringLiteral("is_error"), error},
+      {QStringLiteral("read_only"), true},
+      {QStringLiteral("risk"), QStringLiteral("read")},
+  };
+  const QByteArray json = QJsonDocument::fromVariant(event).toJson(QJsonDocument::Compact);
+  handleToolEventJson(QString::fromUtf8(json));
+}
+
 auto QsNativeAiSession::copyAllText() const -> QString {
   QStringList parts;
   for (const Message& msg : m_messages) {
@@ -409,6 +445,8 @@ auto QsNativeAiSession::commands() -> QVariantList {
       QVariantMap{
           {QStringLiteral("name"), QStringLiteral("/mcp")},
           {QStringLiteral("description"), QStringLiteral("Show MCP server and tool status")}},
+      QVariantMap{{QStringLiteral("name"), QStringLiteral("/tools")},
+                  {QStringLiteral("description"), QStringLiteral("Enable or disable tools")}},
       QVariantMap{
           {QStringLiteral("name"), QStringLiteral("/debug")},
           {QStringLiteral("description"), QStringLiteral("Show detailed session diagnostics")}},
@@ -431,6 +469,9 @@ void QsNativeAiSession::handleSlashCommand(const QString& cmd) {
     emit openModelPickerRequested();
   } else if (cmd == QStringLiteral("/providers")) {
     emit openProviderPickerRequested();
+  } else if (cmd == QStringLiteral("/tools")) {
+    refreshMcp();
+    emit openToolPickerRequested();
   } else if (cmd == QStringLiteral("/mood")) {
     emit openMoodPickerRequested();
   } else if (cmd == QStringLiteral("/resume")) {
@@ -455,6 +496,7 @@ void QsNativeAiSession::handleSlashCommand(const QString& cmd) {
                               "| `/copy` | Copy all messages to clipboard |\n"
                               "| `/status` | Show model & connection info |\n"
                               "| `/mcp` | Show MCP server and tool status |\n"
+                              "| `/tools` | Enable or disable tools |\n"
                               "| `/debug` | Show detailed session diagnostics |\n"
                               "| `/help` | Show this message |"));
   } else if (cmd == QStringLiteral("/mcp")) {

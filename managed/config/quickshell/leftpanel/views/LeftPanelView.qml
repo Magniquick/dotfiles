@@ -27,6 +27,7 @@ Item {
   property string activeCommand: ""
   property var availableModels: []
   property var availableProviders: []
+  property var availableTools: []
   property var availableMoods: []
   property var resumeConversations: []
 
@@ -48,6 +49,7 @@ Item {
   signal modelSelected(string value)
   signal providerSelected(string value)
   signal providerMoved(string value, string beforeValue)
+  signal toolToggled(string value)
   signal moodSelected(string value)
   signal resumeSelected(string value)
   signal resumeSearchChanged(string query)
@@ -154,6 +156,7 @@ Item {
 
           readonly property bool isModelPicker: root.activeCommand === "model"
           readonly property bool isProviderPicker: root.activeCommand === "providers"
+          readonly property bool isToolPicker: root.activeCommand === "tools"
           readonly property bool isResumePicker: root.activeCommand === "resume"
 
           MouseArea {
@@ -174,8 +177,8 @@ Item {
           Components.CommandPicker {
             id: commandPicker
             anchors.centerIn: parent
-            command: parent.isModelPicker ? "/MODEL" : (parent.isProviderPicker ? "/PROVIDERS" : (parent.isResumePicker ? "/RESUME" : "/MOOD"))
-            options: parent.isModelPicker ? root.availableModels : (parent.isProviderPicker ? root.availableProviders : (parent.isResumePicker ? root.resumeConversations : root.availableMoods))
+            command: parent.isModelPicker ? "/MODEL" : (parent.isProviderPicker ? "/PROVIDERS" : (parent.isToolPicker ? "/TOOLS" : (parent.isResumePicker ? "/RESUME" : "/MOOD")))
+            options: parent.isModelPicker ? root.availableModels : (parent.isProviderPicker ? root.availableProviders : (parent.isToolPicker ? root.availableTools : (parent.isResumePicker ? root.resumeConversations : root.availableMoods)))
             showAllToggle: parent.isModelPicker
             reorderable: parent.isProviderPicker
             visible: root.showCommandPicker
@@ -189,6 +192,8 @@ Item {
                 root.modelSelected(value)
               else if (root.activeCommand === "providers")
                 root.providerSelected(value)
+              else if (root.activeCommand === "tools")
+                root.toolToggled(value)
               else if (root.activeCommand === "resume")
                 root.resumeSelected(value)
               else

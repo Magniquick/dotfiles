@@ -16,6 +16,8 @@ class QsNativeAiSession : public QAbstractListModel {
       QString system_prompt READ systemPrompt WRITE setSystemPrompt NOTIFY systemPromptChanged)
   Q_PROPERTY(QVariantMap provider_config READ providerConfig WRITE setProviderConfig NOTIFY
                  providerConfigChanged)
+  Q_PROPERTY(QVariantList disabled_tool_servers READ disabledToolServers WRITE
+                 setDisabledToolServers NOTIFY disabledToolServersChanged)
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
   Q_PROPERTY(QString status READ status NOTIFY statusChanged)
   Q_PROPERTY(QString error READ error NOTIFY errorChanged)
@@ -70,6 +72,9 @@ public:
   [[nodiscard]] auto providerConfig() const -> QVariantMap {
     return m_providerConfig;
   }
+  [[nodiscard]] auto disabledToolServers() const -> QVariantList {
+    return m_disabledToolServers;
+  }
   [[nodiscard]] auto busy() const -> bool {
     return m_busy;
   }
@@ -98,6 +103,7 @@ public:
   void setModelId(const QString& v);
   void setSystemPrompt(const QString& v);
   void setProviderConfig(const QVariantMap& v);
+  void setDisabledToolServers(const QVariantList& v);
 
   // Invokables (matching Rust interface)
   Q_INVOKABLE static void setAppLinkColor(const QColor& color);
@@ -109,6 +115,10 @@ public:
   Q_INVOKABLE void editMessage(const QString& messageId, const QString& newBody);
   Q_INVOKABLE void resetForModelSwitch(const QString& newModelId);
   Q_INVOKABLE void appendInfo(const QString& text);
+  Q_INVOKABLE void appendToolStatus(const QString& toolCallId, const QString& toolName,
+                                    const QString& toolTitle, const QString& serverId,
+                                    const QString& serverLabel, const QString& status,
+                                    const QString& summary, const QString& subtitle);
   Q_INVOKABLE [[nodiscard]] auto copyAllText() const -> QString;
   Q_INVOKABLE static auto pasteImageFromClipboard() -> QVariantList;
   Q_INVOKABLE static auto pasteAttachmentFromClipboard() -> QVariantList;
@@ -124,6 +134,7 @@ signals:
   void modelIdChanged();
   void systemPromptChanged();
   void providerConfigChanged();
+  void disabledToolServersChanged();
   void busyChanged();
   void statusChanged();
   void errorChanged();
@@ -131,6 +142,7 @@ signals:
 
   void openModelPickerRequested();
   void openProviderPickerRequested();
+  void openToolPickerRequested();
   void openMoodPickerRequested();
   void openResumePickerRequested();
   void scrollToEndRequested();
@@ -184,6 +196,7 @@ private:
   QString m_modelId;
   QString m_systemPrompt;
   QVariantMap m_providerConfig;
+  QVariantList m_disabledToolServers;
   bool m_busy = false;
   QString m_status;
   QString m_error;

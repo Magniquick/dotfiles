@@ -9,6 +9,7 @@ import Quickshell.Wayland
 
 import "bar" as Bar
 import "clipboardpopup" as ClipboardPopup
+import "hud" as Hud
 import "leftpanel" as LeftPanel
 import "lockscreen" as Lockscreen
 import "powermenu" as PowerMenu
@@ -223,6 +224,15 @@ ShellRoot {
     active: Bar.Config.clipboardPopupEnabled
 
     ClipboardPopup.ClipboardPopup {}
+  }
+  LazyLoader {
+    id: systemHudLoader
+
+    active: Bar.Config.systemHud.enabled
+
+    Hud.SystemHud {
+      targetScreen: shellRoot.resolvePowermenuScreen()
+    }
   }
 
   // Track left panel visibility with animation state
