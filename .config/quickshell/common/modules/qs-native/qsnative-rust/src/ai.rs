@@ -1,4 +1,4 @@
-mod rig_agent;
+mod stream;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
@@ -320,7 +320,7 @@ fn run_stream_inner(args: &StreamArgs) -> Result<(), String> {
         req.tools = mcp_tool_descriptors(&disabled_tool_servers);
     }
 
-    rig_agent::run(args, req)
+    stream::run(args, req)
 }
 
 fn tool_start_event_json(call: &ToolCall) -> String {
@@ -385,11 +385,13 @@ fn tool_done_event_json(call: &ToolCall, result: &ToolResult) -> String {
         "subtitle":subtitle,
         "is_error":is_error,
         "detail_sections":sections,
-        "replay_items":[codex_tool_output_item(call, result)],
+        "replay_items":[tool_output_item(call, result)],
     }))
 }
 
-fn codex_tool_output_item(call: &ToolCall, result: &ToolResult) -> Value {
+/// Builds the Responses `function_call_output` (or `custom_tool_call_output`)
+/// item that carries a tool result back to the model and into history.
+fn tool_output_item(call: &ToolCall, result: &ToolResult) -> Value {
     if !result.name.trim().is_empty() && result.name == "apply_patch" {
         json!({"type":"custom_tool_call_output","call_id":first_non_empty([&result.tool_call_id, &call.id]),"name":result.name,"output":tool_result_transcript_output(result)})
     } else {

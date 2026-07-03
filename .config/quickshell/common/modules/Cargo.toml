@@ -6,3 +6,7 @@ members = [
   "qsmath/ratex-helper",
   "unified-lyrics-api/unifiedlyrics-rust",
 ]
+
+[profile.release]
+strip = true
+lto = "thin"

@@ -13,7 +13,7 @@ use google_gmail1::common::GetToken;
 use google_gmail1::yup_oauth2::authenticator_delegate::{
     DefaultInstalledFlowDelegate, InstalledFlowDelegate,
 };
-use rustls::crypto::aws_lc_rs;
+use rustls::crypto::ring;
 use serde::{Deserialize, Serialize};
 
 use crate::app_config::EmailAccount;
@@ -30,7 +30,7 @@ static CRYPTO_PROVIDER_INIT: OnceLock<()> = OnceLock::new();
 
 fn ensure_crypto_provider() {
     CRYPTO_PROVIDER_INIT.get_or_init(|| {
-        let _ = aws_lc_rs::default_provider().install_default();
+        let _ = ring::default_provider().install_default();
     });
 }
 

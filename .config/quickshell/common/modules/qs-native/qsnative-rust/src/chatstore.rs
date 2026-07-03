@@ -1,11 +1,7 @@
 use libc::c_char;
-use rig_core::memory::{ConversationMemory, MemoryError};
-use rig_core::message::{ImageDetail, Message as RigMessage, UserContent};
-use rig_core::wasm_compat::WasmBoxedFuture;
-use rig_core::OneOrMany;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::{CStr, CString};
@@ -228,59 +224,16 @@ struct Store {
     conn: Connection,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct ChatStoreMemory {
-    path: String,
-}
-
-impl ChatStoreMemory {
-    pub(crate) fn default_store() -> Self {
-        Self {
-            path: String::new(),
-        }
-    }
-
-    #[cfg(test)]
-    fn with_path(path: &str) -> Self {
-        Self {
-            path: path.to_string(),
-        }
-    }
-}
-
-impl ConversationMemory for ChatStoreMemory {
-    fn load<'a>(
-        &'a self,
-        conversation_id: &'a str,
-    ) -> WasmBoxedFuture<'a, Result<Vec<RigMessage>, MemoryError>> {
-        Box::pin(async move {
-            let store = Store::open(&self.path).map_err(MemoryError::backend)?;
-            store
-                .rig_history(conversation_id)
-                .map_err(MemoryError::backend)?
-                .map_err(MemoryError::Policy)
-        })
-    }
-
-    fn append<'a>(
-        &'a self,
-        _conversation_id: &'a str,
-        _messages: Vec<RigMessage>,
-    ) -> WasmBoxedFuture<'a, Result<(), MemoryError>> {
-        Box::pin(async { Ok(()) })
-    }
-
-    fn clear<'a>(
-        &'a self,
-        conversation_id: &'a str,
-    ) -> WasmBoxedFuture<'a, Result<(), MemoryError>> {
-        Box::pin(async move {
-            let mut store = Store::open(&self.path).map_err(MemoryError::backend)?;
-            store
-                .delete_from_ordinal(conversation_id, 0)
-                .map_err(MemoryError::backend)
-        })
-    }
+/// Loads a conversation's history as an OpenAI Responses `input` array.
+///
+/// Opens the default on-disk store and shapes the stored messages plus persisted
+/// raw response items into the item sequence expected by the Responses API. The
+/// returned items are also the neutral form the Gemini path converts from.
+pub(crate) fn load_history_items(conversation_id: &str) -> Result<Vec<Value>, String> {
+    let store = Store::open("").map_err(|error| error.to_string())?;
+    store
+        .history_items(conversation_id)
+        .map_err(|error| error.to_string())?
 }
 
 #[no_mangle]
@@ -1066,13 +1019,10 @@ impl Store {
         Ok(messages)
     }
 
-    fn rig_history(
-        &self,
-        conversation_id: &str,
-    ) -> rusqlite::Result<Result<Vec<RigMessage>, String>> {
+    fn history_items(&self, conversation_id: &str) -> rusqlite::Result<Result<Vec<Value>, String>> {
         let messages = self.list_messages(conversation_id)?;
         let replay_items = self.list_response_items(conversation_id)?;
-        Ok(shaped_rig_history(messages, replay_items))
+        Ok(shaped_history(messages, replay_items))
     }
 
     fn close_active_conversations(&self, raw_model_id: &str) -> rusqlite::Result<()> {
@@ -1293,10 +1243,10 @@ fn upsert_response_item(tx: &Transaction<'_>, mut item: ResponseItem) -> rusqlit
     Ok(())
 }
 
-fn shaped_rig_history(
+fn shaped_history(
     messages: Vec<Message>,
     response_items: Vec<ResponseItem>,
-) -> Result<Vec<RigMessage>, String> {
+) -> Result<Vec<Value>, String> {
     let mut replay_by_turn = HashMap::<String, Vec<Value>>::new();
     let mut replay_turn_order = Vec::<String>::new();
     let mut replay_turns_with_message = HashSet::<String>::new();
@@ -1324,12 +1274,12 @@ fn shaped_rig_history(
     for message in messages {
         let replay_items = replay_by_turn.get(&message.id).cloned().unwrap_or_default();
         if message.kind == "chat" && message.sender == "user" {
-            out.push(user_message(
+            out.push(user_input_item(
                 &message.body,
                 &message_attachments(&message)?,
             )?);
             if !replay_items.is_empty() {
-                out.push(raw_items_message(&replay_items));
+                out.extend(replay_items);
                 consumed_replay_turns.insert(message.id.clone());
                 active_turn_has_replay = true;
                 active_turn_has_raw_message = replay_turns_with_message.contains(&message.id);
@@ -1340,7 +1290,7 @@ fn shaped_rig_history(
             continue;
         }
         if !replay_items.is_empty() {
-            out.push(raw_items_message(&replay_items));
+            out.extend(replay_items);
             consumed_replay_turns.insert(message.id.clone());
             active_turn_has_replay = true;
             active_turn_has_raw_message = replay_turns_with_message.contains(&message.id);
@@ -1364,12 +1314,12 @@ fn shaped_rig_history(
             continue;
         }
         if message.sender == "assistant" {
-            out.push(RigMessage::assistant_with_id(
-                responses_message_id(&message.id),
-                message.body,
+            out.push(assistant_text_item(
+                &responses_message_id(&message.id),
+                &message.body,
             ));
         } else {
-            out.push(user_message(
+            out.push(user_input_item(
                 &message.body,
                 &message_attachments(&message)?,
             )?);
@@ -1381,7 +1331,7 @@ fn shaped_rig_history(
         }
         if let Some(replay_items) = replay_by_turn.get(&turn_id) {
             if !replay_items.is_empty() {
-                out.push(raw_items_message(replay_items));
+                out.extend(replay_items.iter().cloned());
                 consumed_replay_turns.insert(turn_id);
             }
         }
@@ -1400,41 +1350,53 @@ fn message_attachments(message: &Message) -> Result<Vec<crate::ai::Attachment>, 
         .map_err(|error| error.to_string())
 }
 
-fn user_message(text: &str, attachments: &[crate::ai::Attachment]) -> Result<RigMessage, String> {
+/// Builds a Responses API `message` input item for a user turn.
+///
+/// Text becomes an `input_text` part; attachments become `input_image` parts
+/// (referencing a URL directly, or an inline `data:` URI for binary payloads).
+/// Only image attachments are supported.
+pub(crate) fn user_input_item(
+    text: &str,
+    attachments: &[crate::ai::Attachment],
+) -> Result<Value, String> {
     let mut content = Vec::new();
     if !text.trim().is_empty() {
-        content.push(UserContent::text(text));
+        content.push(json!({"type": "input_text", "text": text}));
     }
     for attachment in attachments {
         if !attachment.url.trim().is_empty() {
-            content.push(UserContent::image_url(
-                attachment.url.trim(),
-                None,
-                Some(ImageDetail::Auto),
-            ));
+            content.push(json!({
+                "type": "input_image",
+                "image_url": attachment.url.trim(),
+                "detail": "auto",
+            }));
             continue;
         }
         if let Some((mime, b64)) = crate::ai::attachment_binary(attachment)? {
             if !mime.to_ascii_lowercase().starts_with("image/") {
-                return Err("Rig backend currently supports image attachments only".to_owned());
+                return Err("only image attachments are supported".to_owned());
             }
-            content.push(UserContent::image_base64(
-                b64,
-                None,
-                Some(ImageDetail::Auto),
-            ));
+            content.push(json!({
+                "type": "input_image",
+                "image_url": format!("data:{mime};base64,{b64}"),
+                "detail": "auto",
+            }));
         }
     }
     if content.is_empty() {
-        content.push(UserContent::text(""));
+        content.push(json!({"type": "input_text", "text": ""}));
     }
-    Ok(RigMessage::User {
-        content: OneOrMany::many(content).map_err(|error| error.to_string())?,
-    })
+    Ok(json!({"type": "message", "role": "user", "content": content}))
 }
 
-fn raw_items_message(items: &[Value]) -> RigMessage {
-    RigMessage::assistant(serde_json::to_string(items).unwrap_or_default())
+/// Builds a Responses API assistant `message` item carrying plain output text.
+fn assistant_text_item(id: &str, body: &str) -> Value {
+    json!({
+        "type": "message",
+        "role": "assistant",
+        "id": id,
+        "content": [{"type": "output_text", "text": body}],
+    })
 }
 
 fn scan_conversation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Conversation> {
@@ -1809,15 +1771,14 @@ mod tests {
             );
         }
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("runtime");
-        let memory = ChatStoreMemory::with_path(&path_text);
-        let history = runtime
-            .block_on(memory.load(&conversation_id))
-            .expect("memory load");
+        let history = store
+            .history_items(&conversation_id)
+            .expect("history query")
+            .expect("shaped history");
         assert_eq!(history.len(), 3);
+        assert_eq!(history[0]["role"], "user");
+        assert_eq!(history[1]["role"], "assistant");
+        assert_eq!(history[2]["role"], "user");
     }
 
     #[test]
@@ -1860,13 +1821,12 @@ mod tests {
         upsert_chat(&store, &conversation_id, "user-2", 2, "user", "again");
 
         let history = store
-            .rig_history(&conversation_id)
-            .expect("rig history")
+            .history_items(&conversation_id)
+            .expect("history query")
             .expect("shaped history");
-        let RigMessage::Assistant { id, .. } = &history[1] else {
-            panic!("expected assistant history item");
-        };
-        assert_eq!(id.as_deref(), Some("msg_assistant1"));
+        assert_eq!(history[1]["type"], "message");
+        assert_eq!(history[1]["role"], "assistant");
+        assert_eq!(history[1]["id"], "msg_assistant1");
     }
 
     #[test]
