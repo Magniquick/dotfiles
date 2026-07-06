@@ -390,11 +390,8 @@ fn call_shell_command(arguments: &Map<String, Value>) -> ToolResult {
     let bbwrap = PathBuf::from(default_shell_dir())
         .join("tools")
         .join("bbwrap");
-    #[expect(
-        clippy::cast_sign_loss,
-        reason = "number_arg clamps to [1000, 120000], always non-negative"
-    )]
-    let timeout_ms = number_arg(arguments, "timeout_ms", 30_000, 1_000, 120_000) as u64;
+    let timeout_ms = u64::try_from(number_arg(arguments, "timeout_ms", 30_000, 1_000, 120_000))
+        .unwrap_or(u64::MAX);
     let started = Instant::now();
     let shell_command = sandbox_shell_command(&sandbox_cwd, &command);
     let mut child = match Command::new(&bbwrap)
@@ -661,12 +658,7 @@ fn call_email_search(arguments: &Map<String, Value>) -> ToolResult {
             "Rust email MCP currently supports Gmail accounts only",
         );
     }
-    #[expect(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        reason = "number_arg clamps to [1, 50], fits u32"
-    )]
-    let limit = number_arg(arguments, "limit", 10, 1, 50) as u32;
+    let limit = u32::try_from(number_arg(arguments, "limit", 10, 1, 50)).unwrap_or(u32::MAX);
     let query = string_arg(arguments, "query");
     let gmail_account = match GmailAccount::load(&account.id, account.address.trim()) {
         Ok(account) => account,
@@ -754,12 +746,9 @@ fn call_email_read(arguments: &Map<String, Value>) -> ToolResult {
             "id is required for Gmail accounts; pass the id or gmail_id returned by email_search",
         );
     }
-    #[expect(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        reason = "number_arg clamps to [1000, 100000], fits usize"
-    )]
-    let max_body_chars = number_arg(arguments, "max_body_chars", 20_000, 1_000, 100_000) as usize;
+    let max_body_chars =
+        usize::try_from(number_arg(arguments, "max_body_chars", 20_000, 1_000, 100_000))
+            .unwrap_or(usize::MAX);
     let gmail_account = match GmailAccount::load(&account.id, account.address.trim()) {
         Ok(account) => account,
         Err(error) => return tool_error("email_read", &error),
@@ -946,12 +935,8 @@ fn number_arg(arguments: &Map<String, Value>, key: &str, default: i64, min: i64,
         .clamp(min, max)
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "elapsed millis for a bounded shell command fits comfortably in i64"
-)]
 fn elapsed_millis_i64(started: Instant) -> i64 {
-    started.elapsed().as_millis() as i64
+    i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
 #[must_use]

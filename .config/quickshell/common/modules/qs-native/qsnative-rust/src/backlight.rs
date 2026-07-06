@@ -506,15 +506,14 @@ fn raw_to_percent(current: u32, max: u32) -> i32 {
 
 #[expect(
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    reason = "backlight max fits in i32, the clamped raw value is non-negative, and truncating the rounded f64 is intentional"
+    reason = "truncating the rounded f64 to i32 is intentional"
 )]
 fn percent_to_raw(percent: i32, max: u32) -> u32 {
     let clamped = percent.clamp(0, 100);
+    let max_i32 = i32::try_from(max).unwrap_or(i32::MAX);
     let raw = ((f64::from(clamped) / 100.0) * f64::from(max)).round() as i32;
     if clamped > 0 {
-        raw.clamp(1, max as i32) as u32
+        u32::try_from(raw.clamp(1, max_i32)).unwrap_or(0)
     } else {
         0
     }

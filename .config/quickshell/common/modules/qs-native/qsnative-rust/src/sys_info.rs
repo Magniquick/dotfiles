@@ -658,13 +658,11 @@ fn json_number_string(value: Option<&Value>) -> String {
     }
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "SMART attribute ids/values fit i32; wrap on the rare oversized field is acceptable"
-)]
 fn json_int_value(value: Option<&Value>) -> i32 {
     match value {
-        Some(Value::Number(number)) => number.as_i64().unwrap_or(0) as i32,
+        Some(Value::Number(number)) => {
+            i32::try_from(number.as_i64().unwrap_or(0)).unwrap_or(i32::MAX)
+        }
         Some(Value::String(value)) => {
             let trimmed = value.trim();
             if let Some(hex) = trimmed
@@ -839,8 +837,7 @@ fn ioctl_btrfs_space_info(fd: i32, args: &mut BtrfsIoctlSpaceArgs) -> i32 {
 #[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "byte counts widen to f64 for ratio math and narrow back to display percentages; copies is a small non-negative count"
+    reason = "byte counts widen to f64 for ratio math and narrow back to display percentages"
 )]
 fn calculate_btrfs_usage_metrics(
     spaces: &[BtrfsIoctlSpaceInfo],
@@ -864,7 +861,7 @@ fn calculate_btrfs_usage_metrics(
         if copies == 0 {
             return BtrfsUsageMetrics::default();
         }
-        let copies_u64 = copies as u64;
+        let copies_u64 = u64::try_from(copies).unwrap_or(0);
         max_data_ratio = max_data_ratio.max(f64::from(copies));
 
         if flags & BTRFS_SPACE_INFO_GLOBAL_RSV != 0 {

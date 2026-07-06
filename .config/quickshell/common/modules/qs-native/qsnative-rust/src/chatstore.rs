@@ -181,11 +181,8 @@ struct Message {
 struct ToolCall {
     id: String,
     message_id: String,
-    #[expect(
-        clippy::struct_field_names,
-        reason = "maps to the tool_calls.tool_call_id DB column and the tool_call_id serde/JSON key; renaming would break persistence and the QML-facing wire shape"
-    )]
-    tool_call_id: String,
+    #[serde(rename = "tool_call_id")]
+    call_id: String,
     tool_name: String,
     phase: String,
     status: String,
@@ -881,7 +878,7 @@ impl Store {
         if call.message_id.trim().is_empty() {
             return Err("tool call message id is required".to_string());
         }
-        if call.tool_call_id.trim().is_empty() {
+        if call.call_id.trim().is_empty() {
             return Err("tool call id is required".to_string());
         }
         if call.created_at.is_empty() {
@@ -906,7 +903,7 @@ impl Store {
                 params![
                     call.id,
                     call.message_id,
-                    call.tool_call_id,
+                    call.call_id,
                     call.tool_name,
                     call.phase,
                     call.status,
@@ -1060,7 +1057,7 @@ impl Store {
             Ok(ToolCall {
                 id: row.get(0)?,
                 message_id: row.get(1)?,
-                tool_call_id: row.get(2)?,
+                call_id: row.get(2)?,
                 tool_name: row.get(3)?,
                 phase: row.get(4)?,
                 status: row.get(5)?,
@@ -1122,7 +1119,7 @@ fn decode_tool_call(value: Value) -> Result<ToolCall, String> {
     Ok(ToolCall {
         id: value_string(object.get("id")),
         message_id: value_string(object.get("message_id")),
-        tool_call_id: value_string(object.get("tool_call_id")),
+        call_id: value_string(object.get("tool_call_id")),
         tool_name: value_string(object.get("tool_name")),
         phase: value_string(object.get("phase")),
         status: value_string(object.get("status")),
