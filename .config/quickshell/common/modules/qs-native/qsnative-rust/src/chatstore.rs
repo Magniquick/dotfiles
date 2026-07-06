@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::ptr;
@@ -238,257 +238,288 @@ pub(crate) fn load_history_items(conversation_id: &str) -> Result<Vec<Value>, St
 }
 
 #[no_mangle]
-/// Restores the latest active conversation for a model.
+/// Restores the latest active conversation for a model. Returns a
+/// CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
 /// Pointer arguments must be null or valid NUL-terminated strings for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_Restore(
     model_id: *const c_char,
     provider_id: *const c_char,
     system_prompt: *const c_char,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let opts = unsafe { open_options(model_id, provider_id, system_prompt) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         match store.restore_conversation(&opts)? {
             Some(conv) => {
                 let messages = store.list_messages(&conv.id)?;
-                Ok(encode(&ApiResult {
+                Ok(ApiResult {
                     ok: true,
                     conversation: Some(conv),
                     messages,
                     ..Default::default()
-                }))
+                })
             }
-            None => Ok(encode_ok()),
+            None => Ok(ok_result()),
         }
-    }))
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Creates a fresh active conversation.
+/// Creates a fresh active conversation. Returns a CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
 /// Pointer arguments must be null or valid NUL-terminated strings for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_Create(
     model_id: *const c_char,
     provider_id: *const c_char,
     system_prompt: *const c_char,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let opts = unsafe { open_options(model_id, provider_id, system_prompt) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         let conv = store.create_conversation(&opts)?;
-        Ok(encode(&ApiResult {
+        Ok(ApiResult {
             ok: true,
             conversation: Some(conv),
             ..Default::default()
-        }))
-    }))
+        })
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Closes an active conversation.
+/// Closes an active conversation. Returns a CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
 /// `conversation_id` must be null or a valid NUL-terminated string for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
-pub unsafe extern "C" fn QsNative_AiHistory_Close(conversation_id: *const c_char) -> *mut c_char {
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
+pub unsafe extern "C" fn QsNative_AiHistory_Close(
+    conversation_id: *const c_char,
+) -> crate::ffi::QsNativeBytes {
     let conversation_id = unsafe { c_arg(conversation_id) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         store.close_conversation(&conversation_id)?;
-        Ok(encode_ok())
-    }))
+        Ok(ok_result())
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Resumes a closed conversation and returns its messages.
+/// Resumes a closed conversation and returns its messages as a CBOR-encoded
+/// `ApiResult`.
 ///
 /// # Safety
 ///
 /// Pointer arguments must be null or valid NUL-terminated strings for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_Resume(
     model_id: *const c_char,
     provider_id: *const c_char,
     system_prompt: *const c_char,
     current_conversation_id: *const c_char,
     target_conversation_id: *const c_char,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let opts = unsafe { open_options(model_id, provider_id, system_prompt) };
     let current_conversation_id = unsafe { c_arg(current_conversation_id) };
     let target_conversation_id = unsafe { c_arg(target_conversation_id) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         let (conv, messages) =
             store.resume_conversation(&opts, &current_conversation_id, &target_conversation_id)?;
-        Ok(encode(&ApiResult {
+        Ok(ApiResult {
             ok: true,
             conversation: Some(conv),
             messages,
             ..Default::default()
-        }))
-    }))
+        })
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Lists closed conversations available for resume.
+/// Lists closed conversations available for resume. Returns a CBOR-encoded
+/// `ApiResult`.
 ///
 /// # Safety
 ///
 /// Pointer arguments must be null or valid NUL-terminated strings for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_ListResume(
     model_id: *const c_char,
     provider_id: *const c_char,
     current_conversation_id: *const c_char,
     query: *const c_char,
     limit: i32,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let opts = unsafe { open_options(model_id, provider_id, ptr::null()) };
     let current_conversation_id = unsafe { c_arg(current_conversation_id) };
     let query = unsafe { c_arg(query) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         let conversations = store.list_closed_conversations(
             &opts,
             &current_conversation_id,
             &query,
             i64::from(limit),
         )?;
-        Ok(encode(&ApiResult {
+        Ok(ApiResult {
             ok: true,
             conversations,
             ..Default::default()
-        }))
-    }))
+        })
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Inserts or updates a message row from a compact JSON object.
+/// Inserts or updates a message row from a CBOR-encoded object. Returns a
+/// CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
-/// `message_json` must be null or a valid NUL-terminated string for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// `(message_ptr, message_len)` must describe a readable CBOR byte range for
+/// the call, or `message_ptr` may be null. The returned buffer must be
+/// released with `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_UpsertMessage(
-    message_json: *const c_char,
-) -> *mut c_char {
-    let raw = unsafe { c_arg(message_json) };
-    alloc_c_string(&upsert_json(&raw, decode_message, |store, message| {
-        store
-            .upsert_message(message)
-            .map_err(rusqlite::Error::InvalidParameterName)
-    }))
+    message_ptr: *const u8,
+    message_len: usize,
+) -> crate::ffi::QsNativeBytes {
+    let result = match unsafe { crate::ffi::from_cbor::<Value>(message_ptr, message_len) } {
+        Some(value) => upsert_json(value, decode_message, |store, message| {
+            store
+                .upsert_message(message)
+                .map_err(rusqlite::Error::InvalidParameterName)
+        }),
+        None => error_result("invalid cbor payload".to_string()),
+    };
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Deletes one message row and compacts later ordinals.
+/// Deletes one message row and compacts later ordinals. Returns a
+/// CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
 /// `message_id` must be null or a valid NUL-terminated string for the duration
-/// of this call. The returned pointer must be released with `QsNative_Free`.
+/// of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_MarkMessageDeleted(
     message_id: *const c_char,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let message_id = unsafe { c_arg(message_id) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         store.mark_message_deleted(&message_id)?;
-        Ok(encode_ok())
-    }))
+        Ok(ok_result())
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Deletes all rows from an ordinal onward.
+/// Deletes all rows from an ordinal onward. Returns a CBOR-encoded
+/// `ApiResult`.
 ///
 /// # Safety
 ///
 /// `conversation_id` must be null or a valid NUL-terminated string for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// duration of this call. The returned buffer must be released with
+/// `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_DeleteFromOrdinal(
     conversation_id: *const c_char,
     ordinal: i32,
-) -> *mut c_char {
+) -> crate::ffi::QsNativeBytes {
     let conversation_id = unsafe { c_arg(conversation_id) };
-    alloc_c_string(&with_store("", |store| {
+    let result = with_store("", |store| {
         store.delete_from_ordinal(&conversation_id, i64::from(ordinal))?;
-        Ok(encode_ok())
-    }))
+        Ok(ok_result())
+    });
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Inserts or updates a tool-call row from a compact JSON object.
+/// Inserts or updates a tool-call row from a CBOR-encoded object. Returns a
+/// CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
-/// `tool_call_json` must be null or a valid NUL-terminated string for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// `(tool_call_ptr, tool_call_len)` must describe a readable CBOR byte range
+/// for the call, or `tool_call_ptr` may be null. The returned buffer must be
+/// released with `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_UpsertToolCall(
-    tool_call_json: *const c_char,
-) -> *mut c_char {
-    let raw = unsafe { c_arg(tool_call_json) };
-    alloc_c_string(&upsert_json(&raw, decode_tool_call, |store, call| {
-        store
-            .upsert_tool_call(call)
-            .map_err(rusqlite::Error::InvalidParameterName)
-    }))
+    tool_call_ptr: *const u8,
+    tool_call_len: usize,
+) -> crate::ffi::QsNativeBytes {
+    let result = match unsafe { crate::ffi::from_cbor::<Value>(tool_call_ptr, tool_call_len) } {
+        Some(value) => upsert_json(value, decode_tool_call, |store, call| {
+            store
+                .upsert_tool_call(call)
+                .map_err(rusqlite::Error::InvalidParameterName)
+        }),
+        None => error_result("invalid cbor payload".to_string()),
+    };
+    crate::ffi::into_cbor(&result)
 }
 
 #[no_mangle]
-/// Inserts or updates response-item rows from a compact JSON array.
+/// Inserts or updates response-item rows from a CBOR-encoded array. Returns a
+/// CBOR-encoded `ApiResult`.
 ///
 /// # Safety
 ///
-/// Pointer arguments must be null or valid NUL-terminated strings for the
-/// duration of this call. The returned pointer must be released with
-/// `QsNative_Free`.
+/// `conversation_id`/`turn_id` must be null or valid NUL-terminated strings
+/// for the duration of this call. `(response_items_ptr, response_items_len)`
+/// must describe a readable CBOR byte range for the call, or
+/// `response_items_ptr` may be null. The returned buffer must be released
+/// with `QsNative_FreeBytes`.
 pub unsafe extern "C" fn QsNative_AiHistory_UpsertResponseItems(
     conversation_id: *const c_char,
     turn_id: *const c_char,
     turn_ordinal: i32,
-    response_items_json: *const c_char,
-) -> *mut c_char {
+    response_items_ptr: *const u8,
+    response_items_len: usize,
+) -> crate::ffi::QsNativeBytes {
     let conversation_id = unsafe { c_arg(conversation_id) };
     let turn_id = unsafe { c_arg(turn_id) };
-    let raw = unsafe { c_arg(response_items_json) };
-    alloc_c_string(&upsert_json(&raw, decode_response_items, |store, items| {
-        store.upsert_response_items(&conversation_id, &turn_id, i64::from(turn_ordinal), items)
-    }))
+    let result = match unsafe {
+        crate::ffi::from_cbor::<Value>(response_items_ptr, response_items_len)
+    } {
+        Some(value) => upsert_json(value, decode_response_items, |store, items| {
+            store.upsert_response_items(&conversation_id, &turn_id, i64::from(turn_ordinal), items)
+        }),
+        None => error_result("invalid cbor payload".to_string()),
+    };
+    crate::ffi::into_cbor(&result)
 }
 
-fn with_store(path: &str, f: impl FnOnce(&mut Store) -> rusqlite::Result<String>) -> String {
+fn with_store(path: &str, f: impl FnOnce(&mut Store) -> rusqlite::Result<ApiResult>) -> ApiResult {
     match Store::open(path).and_then(|mut store| f(&mut store)) {
         Ok(result) => result,
-        Err(err) => encode_error(err.to_string()),
+        Err(err) => error_result(err.to_string()),
     }
 }
 
-/// Decode `raw` JSON with `decode`, open the store, then call `store_op`.
-/// Returns the encoded result string.
+/// Decode `value` (already parsed from CBOR by the caller) with `decode`, open
+/// the store, then call `store_op`. Returns the result.
 fn upsert_json<T>(
-    raw: &str,
+    value: Value,
     decode: impl FnOnce(Value) -> Result<T, String>,
     store_op: impl FnOnce(&mut Store, T) -> rusqlite::Result<()>,
-) -> String {
-    match serde_json::from_str::<Value>(raw)
-        .map_err(|err| err.to_string())
-        .and_then(decode)
-    {
+) -> ApiResult {
+    match decode(value) {
         Ok(decoded) => match Store::open("").and_then(|mut store| store_op(&mut store, decoded)) {
-            Ok(()) => encode_ok(),
-            Err(err) => encode_error(err.to_string()),
+            Ok(()) => ok_result(),
+            Err(err) => error_result(err.to_string()),
         },
-        Err(err) => encode_error(err),
+        Err(err) => error_result(err),
     }
 }
 
@@ -1596,40 +1627,24 @@ fn io_to_sql(err: std::io::Error) -> rusqlite::Error {
     rusqlite::Error::ToSqlConversionFailure(Box::new(err))
 }
 
-fn encode_ok() -> String {
-    encode(&ApiResult {
+fn ok_result() -> ApiResult {
+    ApiResult {
         ok: true,
         ..Default::default()
-    })
+    }
 }
 
-fn encode_error(error: String) -> String {
-    encode(&ApiResult {
+fn error_result(error: String) -> ApiResult {
+    ApiResult {
         ok: false,
         error,
         ..Default::default()
-    })
-}
-
-fn encode(result: &ApiResult) -> String {
-    serde_json::to_string(result).unwrap_or_else(|_| {
-        r#"{"ok":false,"error":"failed to encode chatstore result"}"#.to_string()
-    })
-}
-
-fn alloc_c_string(s: &str) -> *mut c_char {
-    CString::new(s)
-        .unwrap_or_else(|_| {
-            CString::new(r#"{"ok":false,"error":"nul byte in chatstore result"}"#)
-                .expect("literal has no nul")
-        })
-        .into_raw()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CStr;
 
     #[test]
     fn create_upsert_list_flow() {
@@ -1657,14 +1672,35 @@ mod tests {
     }
 
     #[test]
-    fn c_string_allocation_uses_shared_free_contract() {
-        let ptr = alloc_c_string(r#"{"ok":true}"#);
-        assert!(!ptr.is_null());
-        let value = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
-        assert_eq!(value, r#"{"ok":true}"#);
-        unsafe {
-            crate::mcp::QsNative_Free(ptr);
-        }
+    fn decode_message_accepts_cbor_round_tripped_nested_metrics() {
+        // Mirrors what C++ sends today: `metrics_json` holds a nested
+        // QVariantMap (not a pre-stringified JSON string), which crosses the
+        // FFI as a CBOR-encoded object. `ffi::from_cbor::<Value>` must
+        // deserialize it back into the same shape `serde_json::from_str`
+        // would have produced from the equivalent JSON text.
+        let mut object = serde_json::Map::new();
+        object.insert("id".to_string(), json!("msg-x"));
+        object.insert("conversation_id".to_string(), json!("conv-x"));
+        object.insert("ordinal".to_string(), json!(0));
+        object.insert("sender".to_string(), json!("assistant"));
+        object.insert("kind".to_string(), json!("chat"));
+        object.insert("status".to_string(), json!("complete"));
+        object.insert("body".to_string(), json!("hi"));
+        object.insert(
+            "metrics_json".to_string(),
+            json!({"total_ms": 42, "finished": true}),
+        );
+        let value = Value::Object(object);
+
+        let bytes = crate::ffi::into_cbor(&value);
+        let decoded =
+            unsafe { crate::ffi::from_cbor::<Value>(bytes.ptr, bytes.len) }.expect("decode cbor");
+        unsafe { crate::ffi::QsNative_FreeBytes(bytes) };
+
+        let message = decode_message(decoded).expect("decode message");
+        assert!(message.metrics_json.contains("total_ms"));
+        assert!(message.metrics_json.contains("42"));
+        assert!(message.metrics_json.contains("finished"));
     }
 
     #[cfg(unix)]

@@ -178,7 +178,7 @@ void QsNativeAiSession::startStream(const QString& text, const QVariantList& att
     return;
   }
 
-  const QByteArray providerConfigJson = buildProviderConfigJson();
+  const QByteArray providerConfigCbor = buildProviderConfigCbor();
   const QByteArray attachmentsJson =
       QJsonDocument::fromVariant(attachments).toJson(QJsonDocument::Compact);
   const QByteArray disabledToolServersJson =
@@ -210,9 +210,11 @@ void QsNativeAiSession::startStream(const QString& text, const QVariantList& att
   setStatus(QStringLiteral("Streaming..."));
 
   m_sessionId = QsNative_AiChat_Stream(
-      m_modelId.toUtf8().constData(), providerConfigJson.constData(),
-      m_systemPrompt.toUtf8().constData(), m_conversationId.toUtf8().constData(),
-      text.toUtf8().constData(), attachmentsJson.constData(), disabledToolServersJson.constData(),
+      m_modelId.toUtf8().constData(),
+      reinterpret_cast<const uint8_t*>(providerConfigCbor.constData()),
+      static_cast<size_t>(providerConfigCbor.size()), m_systemPrompt.toUtf8().constData(),
+      m_conversationId.toUtf8().constData(), text.toUtf8().constData(),
+      attachmentsJson.constData(), disabledToolServersJson.constData(),
       &QsNativeAiSession::tokenCallback, this);
 }
 
@@ -275,7 +277,7 @@ void QsNativeAiSession::deleteMessage(const QString& messageId) {
     return;
   }
   const QVariantMap result =
-      qsn::takeObject(QsNative_AiHistory_MarkMessageDeleted(messageId.toUtf8().constData()));
+      qsn::takeCborObject(QsNative_AiHistory_MarkMessageDeleted(messageId.toUtf8().constData()));
   Q_UNUSED(result);
   if (m_currentTurnOrdinal == idx) {
     m_currentTurnId.clear();
@@ -579,17 +581,16 @@ void QsNativeAiSession::handleSlashCommand(const QString& cmd) {
     // Pull last-stream metrics from the native backend.
     QString metricsSection = QStringLiteral("*(no stream yet)*");
     {
-      const QJsonDocument doc = qsn::takeDoc(QsNative_AiChat_LastMetrics());
-      if (doc.isObject()) {
-        const QJsonObject o = doc.object();
-        const double ttf = o["ttf_ms"].toDouble(-1);
-        const double total = o["total_ms"].toDouble(0);
-        const int chunks = o["chunk_count"].toInt(0);
-        const int ptok = o["prompt_tokens"].toInt(0);
-        const int otok = o["output_tokens"].toInt(0);
-        const bool fin = o["finished"].toBool(false);
-        const QString errStr = o["error"].toString();
-        const QString lastModel = o["model"].toString();
+      const QVariantMap o = qsn::takeCborObject(QsNative_AiChat_LastMetrics());
+      if (!o.isEmpty()) {
+        const double ttf = o.value(QStringLiteral("ttf_ms"), -1).toDouble();
+        const double total = o.value(QStringLiteral("total_ms"), 0).toDouble();
+        const int chunks = o.value(QStringLiteral("chunk_count"), 0).toInt();
+        const int ptok = o.value(QStringLiteral("prompt_tokens"), 0).toInt();
+        const int otok = o.value(QStringLiteral("output_tokens"), 0).toInt();
+        const bool fin = o.value(QStringLiteral("finished"), false).toBool();
+        const QString errStr = o.value(QStringLiteral("error")).toString();
+        const QString lastModel = o.value(QStringLiteral("model")).toString();
 
         const QString ttfStr = ttf < 0 ? QStringLiteral("—")
                                        : QStringLiteral("%1 ms").arg(QString::number(ttf, 'f', 0));
@@ -659,7 +660,7 @@ auto QsNativeAiSession::restoreHistory() -> bool {
     return true;
   }
 
-  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Restore(
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_Restore(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData()));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -687,7 +688,7 @@ auto QsNativeAiSession::ensureHistoryConversation() -> bool {
 }
 
 auto QsNativeAiSession::createHistoryConversation() -> bool {
-  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Create(
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_Create(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData()));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -703,7 +704,7 @@ auto QsNativeAiSession::createHistoryConversation() -> bool {
 }
 
 auto QsNativeAiSession::refreshResumeConversations(const QString& query) -> bool {
-  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_ListResume(
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_ListResume(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_conversationId.toUtf8().constData(), query.toUtf8().constData(), 50));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -731,7 +732,7 @@ auto QsNativeAiSession::resumeConversation(const QString& conversationId) -> boo
 }
 
 auto QsNativeAiSession::resumeHistoryConversation(const QString& conversationId) -> bool {
-  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Resume(
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_Resume(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData(), m_conversationId.toUtf8().constData(),
       conversationId.toUtf8().constData()));
@@ -757,7 +758,7 @@ auto QsNativeAiSession::closeHistoryConversation() -> bool {
     return true;
   }
   const QVariantMap result =
-      qsn::takeObject(QsNative_AiHistory_Close(m_conversationId.toUtf8().constData()));
+      qsn::takeCborObject(QsNative_AiHistory_Close(m_conversationId.toUtf8().constData()));
   m_conversationId.clear();
   m_currentTurnId.clear();
   m_currentTurnOrdinal = -1;
@@ -805,11 +806,11 @@ void QsNativeAiSession::persistMessageAt(int row, const QString& statusOverride,
     return;
   }
   const Message& msg = m_messages.at(row);
-  const QByteArray messageJson =
-      QJsonDocument::fromVariant(messageToHistoryMap(msg, row, statusOverride, completedAt))
-          .toJson(QJsonDocument::Compact);
-  const QVariantMap result =
-      qsn::takeObject(QsNative_AiHistory_UpsertMessage(messageJson.constData()));
+  const QByteArray messageCbor =
+      qsn::toCbor(messageToHistoryMap(msg, row, statusOverride, completedAt));
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_UpsertMessage(
+      reinterpret_cast<const uint8_t*>(messageCbor.constData()),
+      static_cast<size_t>(messageCbor.size())));
   Q_UNUSED(result);
 }
 
@@ -842,10 +843,10 @@ void QsNativeAiSession::persistToolCallAt(int row) {
       {QStringLiteral("payload_json"), payload},
       {QStringLiteral("updated_at"), utcNow()},
   };
-  const QByteArray toolCallJson =
-      QJsonDocument::fromVariant(toolCall).toJson(QJsonDocument::Compact);
-  const QVariantMap result =
-      qsn::takeObject(QsNative_AiHistory_UpsertToolCall(toolCallJson.constData()));
+  const QByteArray toolCallCbor = qsn::toCbor(toolCall);
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_UpsertToolCall(
+      reinterpret_cast<const uint8_t*>(toolCallCbor.constData()),
+      static_cast<size_t>(toolCallCbor.size())));
   Q_UNUSED(result);
 }
 
@@ -877,11 +878,11 @@ void QsNativeAiSession::persistResponseItems(const QJsonArray& items, const QStr
     return;
   }
 
-  const QByteArray responseItemsJson =
-      QJsonDocument::fromVariant(apiItems).toJson(QJsonDocument::Compact);
-  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_UpsertResponseItems(
+  const QByteArray responseItemsCbor = qsn::toCbor(apiItems);
+  const QVariantMap result = qsn::takeCborObject(QsNative_AiHistory_UpsertResponseItems(
       m_conversationId.toUtf8().constData(), m_currentTurnId.toUtf8().constData(),
-      m_currentTurnOrdinal, responseItemsJson.constData()));
+      m_currentTurnOrdinal, reinterpret_cast<const uint8_t*>(responseItemsCbor.constData()),
+      static_cast<size_t>(responseItemsCbor.size())));
   if (!result.value(QStringLiteral("ok")).toBool()) {
     setError(result.value(QStringLiteral("error")).toString());
   }
@@ -891,7 +892,7 @@ void QsNativeAiSession::persistDeletedFromOrdinal(int ordinal) {
   if (m_conversationId.isEmpty()) {
     return;
   }
-  const QVariantMap result = qsn::takeObject(
+  const QVariantMap result = qsn::takeCborObject(
       QsNative_AiHistory_DeleteFromOrdinal(m_conversationId.toUtf8().constData(), ordinal));
   Q_UNUSED(result);
   if (m_currentTurnOrdinal >= ordinal) {
@@ -987,20 +988,22 @@ void QsNativeAiSession::restoreMessages(const QVariantList& messages) {
   emit scrollToEndRequested();
 }
 
-auto QsNativeAiSession::buildProviderConfigJson() const -> QByteArray {
-  return QJsonDocument::fromVariant(m_providerConfig).toJson(QJsonDocument::Compact);
+auto QsNativeAiSession::buildProviderConfigCbor() const -> QByteArray {
+  return qsn::toCbor(m_providerConfig);
 }
 
 auto QsNativeAiSession::modelCatalog(const QVariantList& configuredModels,
                                      const QVariantList& providerOrder) const -> QVariantMap {
-  const QByteArray providerConfigJson = buildProviderConfigJson();
-  const QByteArray providerOrderJson =
-      QJsonDocument::fromVariant(providerOrder).toJson(QJsonDocument::Compact);
-  const QByteArray configuredModelsJson =
-      QJsonDocument::fromVariant(configuredModels).toJson(QJsonDocument::Compact);
-  return qsn::takeObject(QsNative_AiModels_Catalog(providerConfigJson.constData(),
-                                                   providerOrderJson.constData(),
-                                                   configuredModelsJson.constData()));
+  const QByteArray providerConfigCbor = buildProviderConfigCbor();
+  const QByteArray providerOrderCbor = qsn::toCbor(providerOrder);
+  const QByteArray configuredModelsCbor = qsn::toCbor(configuredModels);
+  return qsn::takeCborObject(QsNative_AiModels_Catalog(
+      reinterpret_cast<const uint8_t*>(providerConfigCbor.constData()),
+      static_cast<size_t>(providerConfigCbor.size()),
+      reinterpret_cast<const uint8_t*>(providerOrderCbor.constData()),
+      static_cast<size_t>(providerOrderCbor.size()),
+      reinterpret_cast<const uint8_t*>(configuredModelsCbor.constData()),
+      static_cast<size_t>(configuredModelsCbor.size())));
 }
 
 auto QsNativeAiSession::refreshMcp() -> bool {
@@ -1010,20 +1013,19 @@ auto QsNativeAiSession::refreshMcp() -> bool {
 
 void QsNativeAiSession::refreshMcpStateAsync() {
   QThreadPool::globalInstance()->start([this]() -> void {
-    const QJsonDocument doc = qsn::takeDoc(QsNative_AiMcp_Refresh());
+    const QVariantMap obj = qsn::takeCborObject(QsNative_AiMcp_Refresh());
 
-    qsn::postToObject(this, [this, doc]() -> void {
-      if (!doc.isObject()) {
+    qsn::postToObject(this, [this, obj]() -> void {
+      if (obj.isEmpty()) {
         m_mcpStatus = QStringLiteral("error");
         m_mcpError = QStringLiteral("Invalid MCP response");
         emit mcpStateChanged();
         return;
       }
-      const QJsonObject obj = doc.object();
-      m_mcpServers = obj.value(QLatin1String("servers")).toArray().toVariantList();
-      m_mcpTools = obj.value(QLatin1String("tools")).toArray().toVariantList();
-      m_mcpStatus = obj.value(QLatin1String("status")).toString();
-      m_mcpError = obj.value(QLatin1String("error")).toString();
+      m_mcpServers = obj.value(QStringLiteral("servers")).toList();
+      m_mcpTools = obj.value(QStringLiteral("tools")).toList();
+      m_mcpStatus = obj.value(QStringLiteral("status")).toString();
+      m_mcpError = obj.value(QStringLiteral("error")).toString();
       emit mcpStateChanged();
     });
   });
@@ -1212,15 +1214,9 @@ void QsNativeAiSession::tokenCallback(void* ctx, const char* token, int done) {
       // Capture per-message metrics onto the last assistant message.
       const int metricsRow = self->lastAssistantChatIndex();
       if (metricsRow >= 0) {
-        char* raw = QsNative_AiChat_LastMetrics();
-        if (raw) {
-          const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
-          self->m_messages[metricsRow].metrics =
-              doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
-          QsNative_Free(raw);
-          const QModelIndex idx = self->index(metricsRow, 0);
-          emit self->dataChanged(idx, idx, {MetricsRole});
-        }
+        self->m_messages[metricsRow].metrics = qsn::takeCborObject(QsNative_AiChat_LastMetrics());
+        const QModelIndex idx = self->index(metricsRow, 0);
+        emit self->dataChanged(idx, idx, {MetricsRole});
         self->persistMessageAt(metricsRow, QStringLiteral("complete"), QsNativeAiSession::utcNow());
       }
 

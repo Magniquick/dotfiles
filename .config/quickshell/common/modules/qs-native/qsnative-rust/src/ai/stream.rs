@@ -767,7 +767,7 @@ mod tests {
         let mut events: Vec<(String, i32)> = Vec::new();
         let args = crate::ai::StreamArgs {
             model_id: "local/gemini-pro-latest".to_owned(),
-            provider_config_json: String::new(),
+            provider_config: std::collections::HashMap::new(),
             system_prompt: String::new(),
             conversation_id: String::new(),
             message: prompt.to_owned(),

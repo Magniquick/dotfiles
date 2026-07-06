@@ -12,11 +12,13 @@
 #include "qsnative_api.h"
 
 #include <QByteArray>
+#include <QCborValue>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
 #include <QString>
+#include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -56,6 +58,43 @@ namespace qsn {
   const QString out = QString::fromUtf8(raw);
   QsNative_Free(raw);
   return out;
+}
+
+// ---- Rust-owned CBOR bytes -> Qt (frees the buffer with QsNative_FreeBytes) --
+//
+// CBOR replaces the JSON char* hop where Rust would otherwise serialize a struct
+// only for the FFI. Qt parses it natively (QCborValue), so there is no new C++
+// dependency. QCborValue::fromCbor copies the range; the buffer is freed here.
+
+/// Parses a Rust-owned CBOR buffer into a QVariant and frees it. Null-safe.
+[[nodiscard]] inline auto takeCbor(QsNativeBytes bytes) -> QVariant {
+  if (bytes.ptr == nullptr) {
+    return {};
+  }
+  const QByteArray buf(reinterpret_cast<const char*>(bytes.ptr),
+                       static_cast<qsizetype>(bytes.len));
+  const QVariant out = QCborValue::fromCbor(buf).toVariant();
+  QsNative_FreeBytes(bytes);
+  return out;
+}
+
+/// Parses a Rust-owned CBOR object into a QVariantMap (empty on non-object).
+[[nodiscard]] inline auto takeCborObject(QsNativeBytes bytes) -> QVariantMap {
+  return takeCbor(bytes).toMap();
+}
+
+/// Parses a Rust-owned CBOR array into a QVariantList (empty on non-array).
+[[nodiscard]] inline auto takeCborList(QsNativeBytes bytes) -> QVariantList {
+  return takeCbor(bytes).toList();
+}
+
+// ---- Qt -> CBOR bytes for passing into Rust ---------------------------------
+
+/// Encodes a Qt value to CBOR bytes. The returned QByteArray owns the buffer;
+/// pass `.constData()` + `.size()` to the Rust fn and keep it alive across the
+/// call.
+[[nodiscard]] inline auto toCbor(const QVariant& value) -> QByteArray {
+  return QCborValue::fromVariant(value).toCbor();
 }
 
 // ---- Worker thread -> QObject thread ----------------------------------------

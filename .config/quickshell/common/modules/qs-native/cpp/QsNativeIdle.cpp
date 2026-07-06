@@ -1,5 +1,10 @@
 #include "QsNativeIdle.h"
+#include "QsNativeGlue.h"
 #include "qsnative_api.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QVariant>
 
 QsNativeIdle::QsNativeIdle(QObject* parent)
     : QObject(parent), m_handle(QsNative_Idle_New()) {}
@@ -30,13 +35,9 @@ auto QsNativeIdle::clampTimeout(int seconds) const -> int {
 
 auto QsNativeIdle::statusJson(bool dpmsOff, double nextSuspendAtMs, bool sleepInhibited,
                               double nowMs) const -> QString {
-  char* raw = QsNative_Idle_StatusJson(m_handle, dpmsOff, nextSuspendAtMs, sleepInhibited, nowMs);
-  if (raw == nullptr) {
-    return {};
-  }
-  const QString result = QString::fromUtf8(raw);
-  QsNative_Free(raw);
-  return result;
+  const QVariantMap status = qsn::takeCborObject(
+      QsNative_Idle_StatusCbor(m_handle, dpmsOff, nextSuspendAtMs, sleepInhibited, nowMs));
+  return QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(status)).toJson(QJsonDocument::Compact));
 }
 
 auto QsNativeIdle::syncLidInhibitProcess(bool inhibited) -> bool {

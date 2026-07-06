@@ -170,7 +170,7 @@ private:
   [[nodiscard]] static auto metricsForMessage(const Message& msg) -> QVariantMap;
   [[nodiscard]] static auto utcNow() -> QString;
   void restoreMessages(const QVariantList& messages);
-  [[nodiscard]] auto buildProviderConfigJson() const -> QByteArray;
+  [[nodiscard]] auto buildProviderConfigCbor() const -> QByteArray;
   void refreshMcpStateAsync();
   [[nodiscard]] auto activeProviderId() const -> QString;
   [[nodiscard]] auto activeProviderConfig() const -> QVariantMap;

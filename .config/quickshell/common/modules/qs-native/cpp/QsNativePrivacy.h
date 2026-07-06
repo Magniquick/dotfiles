@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QVariant>
 
 struct PrivacyHandle;
 
@@ -67,7 +68,7 @@ public:
 
   Q_INVOKABLE void start();
   Q_INVOKABLE auto refreshCamera() -> bool;
-  Q_INVOKABLE auto updatePipewireSnapshot(const QString& snapshotJson) -> bool;
+  Q_INVOKABLE auto updatePipewireSnapshot(const QVariant& snapshot) -> bool;
 
 signals:
   void changed();

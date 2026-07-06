@@ -18,7 +18,8 @@ void QsNativeNetStats::setDevice(const QString& device) {
 }
 
 auto QsNativeNetStats::refresh() -> bool {
-  const QVariantMap o = qsn::takeObject(QsNative_NetStats_Refresh(m_device.toUtf8().constData()));
+  const QVariantMap o =
+      qsn::takeCborObject(QsNative_NetStats_Refresh(m_device.toUtf8().constData()));
   const bool ok = o.value(QStringLiteral("ok")).toBool();
   setError(o.value(QStringLiteral("error")).toString());
   if (ok) {
@@ -32,17 +33,20 @@ auto QsNativeNetStats::refresh() -> bool {
 }
 
 void QsNativeNetStats::updateTrafficRates(double rx_bytes, double tx_bytes, double now_ms) {
-  applyTrafficSnapshot(
-      qsn::takeObject(QsNative_NetStats_UpdateTrafficRates(m_handle, rx_bytes, tx_bytes, now_ms)));
+  applyTrafficSnapshot(qsn::takeCborObject(
+      QsNative_NetStats_UpdateTrafficRates(m_handle, rx_bytes, tx_bytes, now_ms)));
 }
 
 void QsNativeNetStats::resetTraffic() {
-  applyTrafficSnapshot(qsn::takeObject(QsNative_NetStats_ResetTraffic(m_handle)));
+  applyTrafficSnapshot(qsn::takeCborObject(QsNative_NetStats_ResetTraffic(m_handle)));
 }
 
 auto QsNativeNetStats::setSourceEntries(const QString& entries_json) -> bool {
-  const QVariantMap o = qsn::takeObject(
-      QsNative_NetStats_SetSourceEntries(m_handle, entries_json.toUtf8().constData()));
+  const QVariant entries = QJsonDocument::fromJson(entries_json.toUtf8()).toVariant();
+  const QByteArray cb = qsn::toCbor(entries);
+  const QVariantMap o = qsn::takeObject(QsNative_NetStats_SetSourceEntries(
+      m_handle, reinterpret_cast<const uint8_t*>(cb.constData()),
+      static_cast<size_t>(cb.size())));
   const bool ok = o.value(QStringLiteral("ok")).toBool();
   applySourceSnapshot(o);
   if (!ok) {
@@ -80,7 +84,10 @@ auto QsNativeNetStats::normalizeEthernetLabel(const QString& text) const -> QStr
 }
 
 auto QsNativeNetStats::ethernetMetadataJson(const QString& device_name) const -> QString {
-  return qsn::takeString(QsNative_NetStats_EthernetMetadataJson(device_name.toUtf8().constData()));
+  const QVariantMap o =
+      qsn::takeCborObject(QsNative_NetStats_EthernetMetadataJson(device_name.toUtf8().constData()));
+  return QString::fromUtf8(
+      QJsonDocument(QJsonObject::fromVariantMap(o)).toJson(QJsonDocument::Compact));
 }
 
 void QsNativeNetStats::applyTrafficSnapshot(const QVariantMap& o) {

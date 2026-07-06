@@ -1,14 +1,140 @@
 use std::collections::HashSet;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CStr};
 
+use crate::ffi::{from_cbor, into_cbor, QsNativeBytes};
 use crate::utils::first_non_empty;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
+
+/// Visits any CBOR numeric encoding and yields it as `f64`.
+///
+/// Numeric fields crossing the QML->Rust CBOR boundary (`qsn::toCbor` over a
+/// `QVariantList`/`QVariantMap`) may arrive as either a CBOR integer or a CBOR
+/// float: Qt's QML/JS engine represents most non-literal whole numbers
+/// (anything reached through a variable, function parameter, or property
+/// access, e.g. `.map((player, index) => ...)`) as a JS double rather than an
+/// integer `QVariant`. The previous JSON `char*` path tolerated this
+/// automatically (`serde_json` freely converts any JSON number into the
+/// target Rust type); CBOR's integer and float major types are distinct, so
+/// `usize`/`i64`/`f64` fields must opt into this lenient handling to match
+/// the old behavior instead of hard-erroring (and dropping the whole
+/// payload) whenever a value happens to cross as a float.
+struct LenientNumberVisitor;
+
+impl serde::de::Visitor<'_> for LenientNumberVisitor {
+    type Value = f64;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a number")
+    }
+
+    fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<f64, E> {
+        Ok(value)
+    }
+
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "device/player indices and playback states are small enough that this cast is always exact"
+    )]
+    fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<f64, E> {
+        Ok(value as f64)
+    }
+
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "device/player indices and playback states are small enough that this cast is always exact"
+    )]
+    fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<f64, E> {
+        Ok(value as f64)
+    }
+}
+
+fn deserialize_lenient_number<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserializer.deserialize_any(LenientNumberVisitor)
+}
+
+/// Like [`deserialize_lenient_number`], but for an optional field (absent or
+/// CBOR null both map to `None`).
+fn deserialize_lenient_number_opt<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct OptVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for OptVisitor {
+        type Value = Option<f64>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("an optional number")
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_some<D2: serde::Deserializer<'de>>(
+            self,
+            deserializer: D2,
+        ) -> Result<Self::Value, D2::Error> {
+            deserialize_lenient_number(deserializer).map(Some)
+        }
+    }
+
+    deserializer.deserialize_option(OptVisitor)
+}
+
+/// Deserializes a required `usize` field that may cross as a CBOR integer or
+/// float (see [`LenientNumberVisitor`]).
+fn deserialize_lenient_usize<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = deserialize_lenient_number(deserializer)?;
+    #[expect(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "value is clamped to 0.0.. before the cast, and indices never exceed usize range"
+    )]
+    Ok(value.max(0.0) as usize)
+}
+
+/// Deserializes a required `i64` field that may cross as a CBOR integer or
+/// float (see [`LenientNumberVisitor`]).
+fn deserialize_lenient_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "playback state values are a small enum (0-2), so this cast is always exact"
+    )]
+    Ok(deserialize_lenient_number(deserializer)? as i64)
+}
+
+/// Deserializes an optional `i64` field that may be absent, null, or cross as
+/// a CBOR integer or float (see [`LenientNumberVisitor`]).
+fn deserialize_lenient_i64_opt<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "playback state rank values are a small enum (0-2), so this cast is always exact"
+    )]
+    Ok(deserialize_lenient_number_opt(deserializer)?.map(|value| value as i64))
+}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct BluetoothDeviceInput {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_usize")]
     index: usize,
     #[serde(default)]
     alias: String,
@@ -24,9 +150,13 @@ struct BluetoothDeviceInput {
     connected: bool,
     #[serde(default)]
     paired: bool,
-    #[serde(default, rename = "batteryPercentage")]
+    #[serde(
+        default,
+        rename = "batteryPercentage",
+        deserialize_with = "deserialize_lenient_number_opt"
+    )]
     battery_percentage: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_number_opt")]
     battery: Option<f64>,
 }
 
@@ -53,11 +183,19 @@ struct LibrepodsBattery {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct MprisPlayerInput {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_usize")]
     index: usize,
-    #[serde(default, rename = "playbackState")]
+    #[serde(
+        default,
+        rename = "playbackState",
+        deserialize_with = "deserialize_lenient_i64"
+    )]
     playback_state: i64,
-    #[serde(default, rename = "stateRank")]
+    #[serde(
+        default,
+        rename = "stateRank",
+        deserialize_with = "deserialize_lenient_i64_opt"
+    )]
     state_rank: Option<i64>,
     #[serde(default, rename = "dbusName")]
     dbus_name: String,
@@ -72,20 +210,9 @@ struct MprisPlayerInput {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct MprisSelection {
-    index: i64,
-}
-
-#[derive(Debug, Clone, Serialize)]
 struct LyricsSourceInfo {
     icon: &'static str,
     label: &'static str,
-}
-
-fn json_c_string(value: &Value) -> *mut c_char {
-    CString::new(value.to_string())
-        .unwrap_or_else(|_| CString::new("{}").expect("static JSON has no NUL"))
-        .into_raw()
 }
 
 unsafe fn cstr_value(ptr: *const c_char) -> String {
@@ -176,9 +303,8 @@ fn bluetooth_device_key(device: &BluetoothDeviceInput, label: &str) -> String {
     first_non_empty([device.dbus_path.trim(), device.address.trim(), label])
 }
 
-fn bluetooth_device_infos(input: &str) -> Vec<BluetoothDeviceInfo> {
-    let mut infos: Vec<_> = serde_json::from_str::<Vec<BluetoothDeviceInput>>(input)
-        .unwrap_or_default()
+fn bluetooth_device_infos(devices: Vec<BluetoothDeviceInput>) -> Vec<BluetoothDeviceInfo> {
+    let mut infos: Vec<_> = devices
         .into_iter()
         .filter_map(|device| {
             let label = bluetooth_device_label(&device);
@@ -264,12 +390,8 @@ fn is_playerctld(player: &MprisPlayerInput) -> bool {
         || player.desktop_entry.eq_ignore_ascii_case("playerctld")
 }
 
-fn active_mpris_player_index(input: &str) -> i64 {
-    let players = serde_json::from_str::<Vec<MprisPlayerInput>>(input).unwrap_or_default();
-    let candidates: Vec<_> = players
-        .iter()
-        .filter(|player| !is_playerctld(player))
-        .collect();
+fn active_mpris_player_index(players: &[MprisPlayerInput]) -> i64 {
+    let candidates: Vec<_> = players.iter().filter(|player| !is_playerctld(player)).collect();
     for rank in [0_i64, 1_i64, 2_i64] {
         if let Some(player) = candidates.iter().find(|player| {
             player.state_rank == Some(rank)
@@ -298,8 +420,7 @@ fn metadata_string(metadata: &Map<String, Value>, key: &str) -> String {
     }
 }
 
-fn spotify_track_ref(input: &str) -> String {
-    let player = serde_json::from_str::<MprisPlayerInput>(input).unwrap_or_default();
+fn spotify_track_ref(player: &MprisPlayerInput) -> String {
     let desktop_entry = player.desktop_entry.to_lowercase();
     let identity = player.identity.to_lowercase();
     if !desktop_entry.contains("spotify") && !identity.contains("spotify") {
@@ -321,7 +442,7 @@ fn spotify_track_ref(input: &str) -> String {
     }
 
     if player.unique_id.len() == 22 && player.unique_id.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return player.unique_id;
+        return player.unique_id.clone();
     }
 
     String::new()
@@ -349,7 +470,7 @@ fn lyrics_source_info(source: &str) -> LyricsSourceInfo {
     let value = source.to_lowercase();
     if value.starts_with("spotify") {
         LyricsSourceInfo {
-            icon: "",
+            icon: "",
             label: "Spotify",
         }
     } else if value.starts_with("netease") {
@@ -359,7 +480,7 @@ fn lyrics_source_info(source: &str) -> LyricsSourceInfo {
         }
     } else if value.starts_with("lrclib") {
         LyricsSourceInfo {
-            icon: "",
+            icon: "",
             label: "LRCLIB",
         }
     } else {
@@ -419,117 +540,117 @@ fn parse_portal_session_count(output: &str) -> usize {
 
 /// # Safety
 ///
-/// `devices_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// `(devices_ptr, devices_len)` must describe a readable CBOR byte range for the call, or
+/// `devices_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_BluetoothDevices(
-    devices_json: *const c_char,
-) -> *mut c_char {
-    let input = cstr_value(devices_json);
-    json_c_string(&json!(bluetooth_device_infos(&input)))
+    devices_ptr: *const u8,
+    devices_len: usize,
+) -> QsNativeBytes {
+    let devices: Vec<BluetoothDeviceInput> =
+        from_cbor(devices_ptr, devices_len).unwrap_or_default();
+    into_cbor(&bluetooth_device_infos(devices))
 }
 
 /// # Safety
 ///
 /// `text` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseLibrepodsTooltip(
     text: *const c_char,
-) -> *mut c_char {
+) -> QsNativeBytes {
     let input = cstr_value(text);
-    json_c_string(&json!(parse_librepods_tooltip(&input)))
+    into_cbor(&parse_librepods_tooltip(&input))
 }
 
 /// # Safety
 ///
-/// `players_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// `(players_ptr, players_len)` must describe a readable CBOR byte range for the call, or
+/// `players_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ActiveMprisPlayer(
-    players_json: *const c_char,
-) -> *mut c_char {
-    let input = cstr_value(players_json);
-    json_c_string(&json!(MprisSelection {
-        index: active_mpris_player_index(&input),
-    }))
+    players_ptr: *const u8,
+    players_len: usize,
+) -> QsNativeBytes {
+    let players: Vec<MprisPlayerInput> = from_cbor(players_ptr, players_len).unwrap_or_default();
+    into_cbor(&active_mpris_player_index(&players))
 }
 
 /// # Safety
 ///
-/// `player_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// `(player_ptr, player_len)` must describe a readable CBOR byte range for the call, or
+/// `player_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_SpotifyTrackRef(
-    player_json: *const c_char,
-) -> *mut c_char {
-    let input = cstr_value(player_json);
-    json_c_string(&json!({ "ref": spotify_track_ref(&input) }))
+    player_ptr: *const u8,
+    player_len: usize,
+) -> QsNativeBytes {
+    let player: MprisPlayerInput = from_cbor(player_ptr, player_len).unwrap_or_default();
+    into_cbor(&spotify_track_ref(&player))
 }
 
 /// # Safety
 ///
 /// Arguments must be null or point to valid NUL-terminated UTF-8 C strings.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsLookupKey(
     track: *const c_char,
     artist: *const c_char,
     album: *const c_char,
     length_micros: *const c_char,
-) -> *mut c_char {
-    json_c_string(&json!({
-        "key": lyrics_lookup_key(
-            &cstr_value(track),
-            &cstr_value(artist),
-            &cstr_value(album),
-            &cstr_value(length_micros),
-        )
-    }))
+) -> QsNativeBytes {
+    into_cbor(&lyrics_lookup_key(
+        &cstr_value(track),
+        &cstr_value(artist),
+        &cstr_value(album),
+        &cstr_value(length_micros),
+    ))
 }
 
 /// # Safety
 ///
 /// `error_text` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_IsNoLyricsError(
     error_text: *const c_char,
-) -> *mut c_char {
-    json_c_string(&json!({ "value": is_no_lyrics_error(&cstr_value(error_text)) }))
+) -> QsNativeBytes {
+    into_cbor(&is_no_lyrics_error(&cstr_value(error_text)))
 }
 
 /// # Safety
 ///
 /// `source` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsSourceInfo(
     source: *const c_char,
-) -> *mut c_char {
-    json_c_string(&json!(lyrics_source_info(&cstr_value(source))))
+) -> QsNativeBytes {
+    into_cbor(&lyrics_source_info(&cstr_value(source)))
 }
 
 /// # Safety
 ///
 /// `output` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(
     output: *const c_char,
-) -> *mut c_char {
-    json_c_string(&json!(parse_systemd_idle_inhibitors(&cstr_value(output))))
+) -> QsNativeBytes {
+    into_cbor(&parse_systemd_idle_inhibitors(&cstr_value(output)))
 }
 
 /// # Safety
 ///
 /// `output` must be null or point to a valid NUL-terminated UTF-8 C string.
-/// The returned pointer must be released with `QsNative_Free`.
+/// The returned buffer must be released with `QsNative_FreeBytes`.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ParsePortalSessionCount(
     output: *const c_char,
-) -> *mut c_char {
-    json_c_string(&json!({ "count": parse_portal_session_count(&cstr_value(output)) }))
+) -> QsNativeBytes {
+    into_cbor(&parse_portal_session_count(&cstr_value(output)))
 }
 
 #[cfg(test)]
@@ -552,7 +673,8 @@ mod tests {
             {"index":1,"alias":"Headset","connected":true,"paired":true},
             {"index":2,"alias":"Keyboard","connected":false,"paired":true}
         ]"#;
-        let sorted = bluetooth_device_infos(devices);
+        let parsed: Vec<BluetoothDeviceInput> = serde_json::from_str(devices).unwrap();
+        let sorted = bluetooth_device_infos(parsed);
         let indexes: Vec<_> = sorted.into_iter().map(|device| device.index).collect();
         assert_eq!(indexes, vec![1, 2, 0]);
     }
@@ -569,5 +691,131 @@ mod tests {
                       firefox        1000 me   1 app  idle  video block\n\
                       powerdevil     1000 me   2 app  sleep lid delay\n";
         assert_eq!(parse_systemd_idle_inhibitors(output), vec!["firefox"]);
+    }
+
+    #[test]
+    fn bluetooth_device_input_accepts_float_or_int_numbers() {
+        // Simulates the real QML crossing: index/battery arrive as CBOR
+        // doubles (computed JS numbers), batteryPercentage arrives as null.
+        let val = ciborium::value::Value::Array(vec![ciborium::value::Value::Map(vec![
+            (
+                ciborium::value::Value::Text("index".into()),
+                ciborium::value::Value::Float(0.0),
+            ),
+            (
+                ciborium::value::Value::Text("alias".into()),
+                ciborium::value::Value::Text("Headset".into()),
+            ),
+            (
+                ciborium::value::Value::Text("battery".into()),
+                ciborium::value::Value::Float(87.0),
+            ),
+            (
+                ciborium::value::Value::Text("batteryPercentage".into()),
+                ciborium::value::Value::Null,
+            ),
+        ])]);
+        let mut buf = Vec::new();
+        ciborium::ser::into_writer(&val, &mut buf).unwrap();
+        let parsed: Vec<BluetoothDeviceInput> = ciborium::de::from_reader(&buf[..]).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].index, 0);
+        assert_eq!(parsed[0].battery, Some(87.0));
+        assert_eq!(parsed[0].battery_percentage, None);
+
+        // Also still accepts plain CBOR integers (literal-encoded values).
+        let val2 = ciborium::value::Value::Array(vec![ciborium::value::Value::Map(vec![
+            (
+                ciborium::value::Value::Text("index".into()),
+                ciborium::value::Value::Integer(2.into()),
+            ),
+            (
+                ciborium::value::Value::Text("battery".into()),
+                ciborium::value::Value::Integer(55.into()),
+            ),
+        ])]);
+        let mut buf2 = Vec::new();
+        ciborium::ser::into_writer(&val2, &mut buf2).unwrap();
+        let parsed2: Vec<BluetoothDeviceInput> = ciborium::de::from_reader(&buf2[..]).unwrap();
+        assert_eq!(parsed2[0].index, 2);
+        assert_eq!(parsed2[0].battery, Some(55.0));
+    }
+
+    #[test]
+    fn mpris_player_input_accepts_float_or_int_numbers() {
+        let val = ciborium::value::Value::Map(vec![
+            (
+                ciborium::value::Value::Text("index".into()),
+                ciborium::value::Value::Float(1.0),
+            ),
+            (
+                ciborium::value::Value::Text("playbackState".into()),
+                ciborium::value::Value::Float(2.0),
+            ),
+            (
+                ciborium::value::Value::Text("stateRank".into()),
+                ciborium::value::Value::Null,
+            ),
+        ]);
+        let mut buf = Vec::new();
+        ciborium::ser::into_writer(&val, &mut buf).unwrap();
+        let parsed: MprisPlayerInput = ciborium::de::from_reader(&buf[..]).unwrap();
+        assert_eq!(parsed.index, 1);
+        assert_eq!(parsed.playback_state, 2);
+        assert_eq!(parsed.state_rank, None);
+    }
+
+    #[test]
+    fn spotify_track_ref_via_cbor_metadata() {
+        use ciborium::value::Value as CborValue;
+
+        let metadata = CborValue::Map(vec![(
+            CborValue::Text("xesam:url".into()),
+            CborValue::Text("https://open.spotify.com/track/abc123".into()),
+        )]);
+        let player = CborValue::Map(vec![
+            (
+                CborValue::Text("desktopEntry".into()),
+                CborValue::Text("spotify".into()),
+            ),
+            (CborValue::Text("metadata".into()), metadata),
+        ]);
+        let mut buf = Vec::new();
+        ciborium::ser::into_writer(&player, &mut buf).unwrap();
+        let parsed: MprisPlayerInput = ciborium::de::from_reader(&buf[..]).unwrap();
+        assert_eq!(
+            spotify_track_ref(&parsed),
+            "https://open.spotify.com/track/abc123"
+        );
+    }
+
+    #[test]
+    fn spotify_track_ref_via_cbor_metadata_numeric_trackid_length() {
+        // mpris:length is commonly an int64 in real players; make sure a
+        // Number-typed metadata value round-trips fine even though it isn't
+        // the field under test here.
+        use ciborium::value::Value as CborValue;
+
+        let metadata = CborValue::Map(vec![
+            (
+                CborValue::Text("mpris:trackid".into()),
+                CborValue::Text("/org/mpris/MediaPlayer2/Track/1234567890123456789012".into()),
+            ),
+            (
+                CborValue::Text("mpris:length".into()),
+                CborValue::Integer(123_456_789.into()),
+            ),
+        ]);
+        let player = CborValue::Map(vec![
+            (
+                CborValue::Text("identity".into()),
+                CborValue::Text("Spotify".into()),
+            ),
+            (CborValue::Text("metadata".into()), metadata),
+        ]);
+        let mut buf = Vec::new();
+        ciborium::ser::into_writer(&player, &mut buf).unwrap();
+        let parsed: MprisPlayerInput = ciborium::de::from_reader(&buf[..]).unwrap();
+        assert_eq!(spotify_track_ref(&parsed), "1234567890123456789012");
     }
 }

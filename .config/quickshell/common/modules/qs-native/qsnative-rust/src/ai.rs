@@ -191,16 +191,19 @@ struct StreamResult {
 /// # Safety
 ///
 /// All pointer arguments must be either null or point to valid NUL-terminated
-/// strings for the duration of this call. `cb` must remain valid until the
-/// stream sends a terminal callback, and `ctx` must remain valid for each
-/// callback invocation.
+/// strings for the duration of this call, except `(provider_config_ptr,
+/// provider_config_len)` which must describe a readable CBOR byte range for
+/// the call (or `provider_config_ptr` may be null). `cb` must remain valid
+/// until the stream sends a terminal callback, and `ctx` must remain valid
+/// for each callback invocation.
 ///
 /// # Panics
 ///
 /// Panics if the internal session registry mutex is poisoned.
 pub unsafe extern "C" fn QsNative_AiChat_Stream(
     model_id: *const c_char,
-    provider_config_json: *const c_char,
+    provider_config_ptr: *const u8,
+    provider_config_len: usize,
     system_prompt: *const c_char,
     conversation_id: *const c_char,
     message: *const c_char,
@@ -219,9 +222,20 @@ pub unsafe extern "C" fn QsNative_AiChat_Stream(
         .expect("session mutex")
         .insert(id, cancelled.clone());
 
+    // Parsed synchronously here (rather than stored as raw bytes) because the
+    // CBOR buffer is only guaranteed to outlive this call, not the background
+    // thread spawned below.
+    let provider_config = unsafe {
+        crate::ffi::from_cbor::<HashMap<String, ProviderConfig>>(
+            provider_config_ptr,
+            provider_config_len,
+        )
+    }
+    .unwrap_or_default();
+
     let args = StreamArgs {
         model_id: c_string(model_id),
-        provider_config_json: c_string(provider_config_json),
+        provider_config,
         system_prompt: c_string(system_prompt),
         conversation_id: c_string(conversation_id),
         message: c_string(message),
@@ -250,33 +264,56 @@ pub extern "C" fn QsNative_AiChat_Cancel(id: c_int) {
 }
 
 #[no_mangle]
-/// Returns the JSON-encoded metrics for the most recently completed turn.
+/// Returns the CBOR-encoded metrics for the most recently completed turn.
 ///
 /// # Panics
 ///
 /// Panics if the internal metrics mutex is poisoned.
-pub extern "C" fn QsNative_AiChat_LastMetrics() -> *mut c_char {
+pub extern "C" fn QsNative_AiChat_LastMetrics() -> crate::ffi::QsNativeBytes {
     let metrics = last_metrics().lock().expect("metrics mutex").clone();
-    into_c_string(serde_json::to_string(&metrics).unwrap_or_else(|_| "{}".to_owned()))
+    crate::ffi::into_cbor(&metrics)
 }
 
 #[no_mangle]
-pub extern "C" fn QsNative_AiModels_Catalog(
-    provider_config_json: *const c_char,
-    provider_order_json: *const c_char,
-    configured_models_json: *const c_char,
-) -> *mut c_char {
-    let catalog = model_catalog_json(
-        &c_string(provider_config_json),
-        &c_string(provider_order_json),
-        &c_string(configured_models_json),
-    );
-    into_c_string(catalog)
+/// Builds the model/provider catalog from CBOR-encoded provider config, provider
+/// order, and configured-model inputs. Returns a CBOR-encoded catalog object.
+///
+/// # Safety
+///
+/// `(*_ptr, *_len)` pairs must each describe a readable CBOR byte range for the
+/// call, or the pointer may be null.
+pub unsafe extern "C" fn QsNative_AiModels_Catalog(
+    provider_config_ptr: *const u8,
+    provider_config_len: usize,
+    provider_order_ptr: *const u8,
+    provider_order_len: usize,
+    configured_models_ptr: *const u8,
+    configured_models_len: usize,
+) -> crate::ffi::QsNativeBytes {
+    let provider_config = unsafe {
+        crate::ffi::from_cbor::<HashMap<String, ProviderConfig>>(
+            provider_config_ptr,
+            provider_config_len,
+        )
+    }
+    .unwrap_or_default();
+    let provider_order =
+        unsafe { crate::ffi::from_cbor::<Vec<String>>(provider_order_ptr, provider_order_len) }
+            .unwrap_or_default();
+    let configured_models = unsafe {
+        crate::ffi::from_cbor::<Vec<ConfiguredModel>>(
+            configured_models_ptr,
+            configured_models_len,
+        )
+    }
+    .unwrap_or_default();
+    let catalog = model_catalog_value(&provider_config, provider_order, configured_models);
+    crate::ffi::into_cbor(&catalog)
 }
 
 struct StreamArgs {
     model_id: String,
-    provider_config_json: String,
+    provider_config: HashMap<String, ProviderConfig>,
     system_prompt: String,
     conversation_id: String,
     message: String,
@@ -309,7 +346,7 @@ fn run_stream_inner(args: &StreamArgs) -> Result<(), String> {
         return Err(message);
     }
 
-    let config = provider_config(&args.provider_config_json, &provider);
+    let config = args.provider_config.get(&provider).cloned().unwrap_or_default();
     let attachments = parse_json_array::<Attachment>(&args.attachments_json);
     if !attachments.is_empty() {
         ensure_attachment_capability(&args.model_id)?;
@@ -525,22 +562,12 @@ fn split_model_id(model_id: &str) -> Result<(String, String), String> {
     Ok((provider.trim().to_owned(), model.trim().to_owned()))
 }
 
-fn provider_config(raw: &str, provider: &str) -> ProviderConfig {
-    serde_json::from_str::<HashMap<String, ProviderConfig>>(raw.trim())
-        .ok()
-        .and_then(|mut values| values.remove(provider))
-        .unwrap_or_default()
-}
-
-fn model_catalog_json(
-    provider_config_json: &str,
-    provider_order_json: &str,
-    configured_models_json: &str,
-) -> String {
-    let provider_config =
-        serde_json::from_str::<HashMap<String, ProviderConfig>>(provider_config_json.trim())
-            .unwrap_or_default();
-    let provider_order = parse_json_array::<String>(provider_order_json)
+fn model_catalog_value(
+    provider_config: &HashMap<String, ProviderConfig>,
+    provider_order: Vec<String>,
+    configured_models: Vec<ConfiguredModel>,
+) -> Value {
+    let provider_order = provider_order
         .into_iter()
         .filter_map(|provider| nonempty(provider.trim()))
         .fold(Vec::<String>::new(), |mut out, provider| {
@@ -560,11 +587,11 @@ fn model_catalog_json(
         }
     }
 
-    let recommended = recommended_models(configured_models_json);
-    let mut providers = providers_from_config(&provider_config, &recommended);
+    let recommended = recommended_models(configured_models);
+    let mut providers = providers_from_config(provider_config, &recommended);
     if let Some(local) = providers.iter_mut().find(|provider| provider.id == "local") {
         local.model_ids =
-            live_local_model_ids(&provider_config).unwrap_or_else(|| local.model_ids.clone());
+            live_local_model_ids(provider_config).unwrap_or_else(|| local.model_ids.clone());
     }
 
     let provider_values = provider_values(&providers, &provider_order);
@@ -574,13 +601,11 @@ fn model_catalog_json(
         "models": models,
         "providers": provider_values,
     })
-    .to_string()
 }
 
-fn recommended_models(configured_models_json: &str) -> Vec<RecommendedModel> {
-    let configured = parse_json_array::<ConfiguredModel>(configured_models_json);
+fn recommended_models(configured_models: Vec<ConfiguredModel>) -> Vec<RecommendedModel> {
     let mut by_raw = BTreeMap::<String, RecommendedModel>::new();
-    for model in configured {
+    for model in configured_models {
         let Some(raw_id) = nonempty(model.raw_id.trim()) else {
             continue;
         };
@@ -1048,12 +1073,6 @@ fn callback(cb: TokenCallback, ctx: usize, token: &str, done: i32) {
     }
 }
 
-fn into_c_string(value: String) -> *mut c_char {
-    CString::new(value)
-        .unwrap_or_else(|_| CString::new("{}").expect("literal cstring"))
-        .into_raw()
-}
-
 fn must_json<T: Serialize>(value: &T) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "{}".to_owned())
 }
@@ -1111,18 +1130,22 @@ mod tests {
 
     #[test]
     fn catalog_uses_model_family_icon_when_local_routes_gemini() {
-        let models = r#"[{
+        let provider_config: HashMap<String, ProviderConfig> =
+            serde_json::from_str(r#"{"local":{"base_url":"http://127.0.0.1:1/v1"}}"#)
+                .expect("provider config");
+        let provider_order: Vec<String> =
+            serde_json::from_str(r#"["local","gemini"]"#).expect("provider order");
+        let configured_models: Vec<ConfiguredModel> = serde_json::from_str(
+            r#"[{
             "raw_id": "gemini-3.5-flash",
             "label": "Gemini 3.5 Flash",
             "description": "Fast",
             "recommended": true
-        }]"#;
-        let catalog = model_catalog_json(
-            r#"{"local":{"base_url":"http://127.0.0.1:1/v1"}}"#,
-            r#"["local","gemini"]"#,
-            models,
-        );
-        let payload: Value = serde_json::from_str(&catalog).expect("catalog json");
+        }]"#,
+        )
+        .expect("configured models");
+
+        let payload = model_catalog_value(&provider_config, provider_order, configured_models);
         let model = payload["models"][0].as_object().expect("model object");
 
         assert_eq!(model["provider"], "local");

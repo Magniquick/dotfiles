@@ -61,6 +61,17 @@ struct TodoistHandle;
 
 using TokenCallback = void(*)(void*, const char*, int);
 
+// A heap byte buffer (a CBOR payload) handed to C++. Free with `QsNative_FreeBytes`.
+//
+// CBOR is length-delimited binary (embedded NULs), so structured data crosses
+// as `(ptr, len)` rather than a NUL-terminated `char*`. This replaces the
+// JSON `char*` hop for crossings where Rust would otherwise serialize a struct
+// only for the FFI (a wasteful serialize+parse round-trip).
+struct QsNativeBytes {
+  uint8_t *ptr;
+  uintptr_t len;
+};
+
 // Zero-copy scalar-state snapshot handed to the C++ side. The `*const c_char`
 // fields borrow `CString`s that live on the worker/caller stack **only for the
 // duration of the callback**; C++ must copy them (`QString::fromUtf8`)
@@ -221,15 +232,18 @@ void QsNative_InstallPanicHook();
 // # Safety
 //
 // All pointer arguments must be either null or point to valid NUL-terminated
-// strings for the duration of this call. `cb` must remain valid until the
-// stream sends a terminal callback, and `ctx` must remain valid for each
-// callback invocation.
+// strings for the duration of this call, except `(provider_config_ptr,
+// provider_config_len)` which must describe a readable CBOR byte range for
+// the call (or `provider_config_ptr` may be null). `cb` must remain valid
+// until the stream sends a terminal callback, and `ctx` must remain valid
+// for each callback invocation.
 //
 // # Panics
 //
 // Panics if the internal session registry mutex is poisoned.
 int QsNative_AiChat_Stream(const char *model_id,
-                           const char *provider_config_json,
+                           const uint8_t *provider_config_ptr,
+                           uintptr_t provider_config_len,
                            const char *system_prompt,
                            const char *conversation_id,
                            const char *message,
@@ -245,16 +259,26 @@ int QsNative_AiChat_Stream(const char *model_id,
 // Panics if the internal session registry mutex is poisoned.
 void QsNative_AiChat_Cancel(int id);
 
-// Returns the JSON-encoded metrics for the most recently completed turn.
+// Returns the CBOR-encoded metrics for the most recently completed turn.
 //
 // # Panics
 //
 // Panics if the internal metrics mutex is poisoned.
-char *QsNative_AiChat_LastMetrics();
+QsNativeBytes QsNative_AiChat_LastMetrics();
 
-char *QsNative_AiModels_Catalog(const char *provider_config_json,
-                                const char *provider_order_json,
-                                const char *configured_models_json);
+// Builds the model/provider catalog from CBOR-encoded provider config, provider
+// order, and configured-model inputs. Returns a CBOR-encoded catalog object.
+//
+// # Safety
+//
+// `(*_ptr, *_len)` pairs must each describe a readable CBOR byte range for the
+// call, or the pointer may be null.
+QsNativeBytes QsNative_AiModels_Catalog(const uint8_t *provider_config_ptr,
+                                        uintptr_t provider_config_len,
+                                        const uint8_t *provider_order_ptr,
+                                        uintptr_t provider_order_len,
+                                        const uint8_t *configured_models_ptr,
+                                        uintptr_t configured_models_len);
 
 BacklightHandle *QsNative_Backlight_New();
 
@@ -379,60 +403,63 @@ bool QsNative_Backlight_SetDdcBrightness(BacklightHandle *handle,
 
 // # Safety
 //
-// `devices_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_BluetoothDevices(const char *devices_json);
+// `(devices_ptr, devices_len)` must describe a readable CBOR byte range for the call, or
+// `devices_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_BluetoothDevices(const uint8_t *devices_ptr,
+                                                       uintptr_t devices_len);
 
 // # Safety
 //
 // `text` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_ParseLibrepodsTooltip(const char *text);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_ParseLibrepodsTooltip(const char *text);
 
 // # Safety
 //
-// `players_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_ActiveMprisPlayer(const char *players_json);
+// `(players_ptr, players_len)` must describe a readable CBOR byte range for the call, or
+// `players_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_ActiveMprisPlayer(const uint8_t *players_ptr,
+                                                        uintptr_t players_len);
 
 // # Safety
 //
-// `player_json` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_SpotifyTrackRef(const char *player_json);
+// `(player_ptr, player_len)` must describe a readable CBOR byte range for the call, or
+// `player_ptr` may be null. The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_SpotifyTrackRef(const uint8_t *player_ptr,
+                                                      uintptr_t player_len);
 
 // # Safety
 //
 // Arguments must be null or point to valid NUL-terminated UTF-8 C strings.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_LyricsLookupKey(const char *track,
-                                              const char *artist,
-                                              const char *album,
-                                              const char *length_micros);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_LyricsLookupKey(const char *track,
+                                                      const char *artist,
+                                                      const char *album,
+                                                      const char *length_micros);
 
 // # Safety
 //
 // `error_text` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_IsNoLyricsError(const char *error_text);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_IsNoLyricsError(const char *error_text);
 
 // # Safety
 //
 // `source` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_LyricsSourceInfo(const char *source);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_LyricsSourceInfo(const char *source);
 
 // # Safety
 //
 // `output` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(const char *output);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(const char *output);
 
 // # Safety
 //
 // `output` must be null or point to a valid NUL-terminated UTF-8 C string.
-// The returned pointer must be released with `QsNative_Free`.
-char *QsNative_BarModuleLogic_ParsePortalSessionCount(const char *output);
+// The returned buffer must be released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_BarModuleLogic_ParsePortalSessionCount(const char *output);
 
 BluetoothHandle *QsNative_Bluetooth_New();
 
@@ -481,109 +508,122 @@ char *QsNative_Bluetooth_ScanHolders();
 // `ctx`/`cb` must remain valid until the worker fires.
 void QsNative_Bluetooth_ProbeLibrepodsTooltip(void *ctx, QsNativeUpdateFn cb);
 
-// Restores the latest active conversation for a model.
+// Restores the latest active conversation for a model. Returns a
+// CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
 // Pointer arguments must be null or valid NUL-terminated strings for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_Restore(const char *model_id,
-                                 const char *provider_id,
-                                 const char *system_prompt);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_Restore(const char *model_id,
+                                         const char *provider_id,
+                                         const char *system_prompt);
 
-// Creates a fresh active conversation.
+// Creates a fresh active conversation. Returns a CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
 // Pointer arguments must be null or valid NUL-terminated strings for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_Create(const char *model_id,
-                                const char *provider_id,
-                                const char *system_prompt);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_Create(const char *model_id,
+                                        const char *provider_id,
+                                        const char *system_prompt);
 
-// Closes an active conversation.
+// Closes an active conversation. Returns a CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
 // `conversation_id` must be null or a valid NUL-terminated string for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_Close(const char *conversation_id);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_Close(const char *conversation_id);
 
-// Resumes a closed conversation and returns its messages.
+// Resumes a closed conversation and returns its messages as a CBOR-encoded
+// `ApiResult`.
 //
 // # Safety
 //
 // Pointer arguments must be null or valid NUL-terminated strings for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_Resume(const char *model_id,
-                                const char *provider_id,
-                                const char *system_prompt,
-                                const char *current_conversation_id,
-                                const char *target_conversation_id);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_Resume(const char *model_id,
+                                        const char *provider_id,
+                                        const char *system_prompt,
+                                        const char *current_conversation_id,
+                                        const char *target_conversation_id);
 
-// Lists closed conversations available for resume.
+// Lists closed conversations available for resume. Returns a CBOR-encoded
+// `ApiResult`.
 //
 // # Safety
 //
 // Pointer arguments must be null or valid NUL-terminated strings for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_ListResume(const char *model_id,
-                                    const char *provider_id,
-                                    const char *current_conversation_id,
-                                    const char *query,
-                                    int32_t limit);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_ListResume(const char *model_id,
+                                            const char *provider_id,
+                                            const char *current_conversation_id,
+                                            const char *query,
+                                            int32_t limit);
 
-// Inserts or updates a message row from a compact JSON object.
+// Inserts or updates a message row from a CBOR-encoded object. Returns a
+// CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
-// `message_json` must be null or a valid NUL-terminated string for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_UpsertMessage(const char *message_json);
+// `(message_ptr, message_len)` must describe a readable CBOR byte range for
+// the call, or `message_ptr` may be null. The returned buffer must be
+// released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_UpsertMessage(const uint8_t *message_ptr, uintptr_t message_len);
 
-// Deletes one message row and compacts later ordinals.
+// Deletes one message row and compacts later ordinals. Returns a
+// CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
 // `message_id` must be null or a valid NUL-terminated string for the duration
-// of this call. The returned pointer must be released with `QsNative_Free`.
-char *QsNative_AiHistory_MarkMessageDeleted(const char *message_id);
+// of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_MarkMessageDeleted(const char *message_id);
 
-// Deletes all rows from an ordinal onward.
+// Deletes all rows from an ordinal onward. Returns a CBOR-encoded
+// `ApiResult`.
 //
 // # Safety
 //
 // `conversation_id` must be null or a valid NUL-terminated string for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_DeleteFromOrdinal(const char *conversation_id, int32_t ordinal);
+// duration of this call. The returned buffer must be released with
+// `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_DeleteFromOrdinal(const char *conversation_id, int32_t ordinal);
 
-// Inserts or updates a tool-call row from a compact JSON object.
+// Inserts or updates a tool-call row from a CBOR-encoded object. Returns a
+// CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
-// `tool_call_json` must be null or a valid NUL-terminated string for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_UpsertToolCall(const char *tool_call_json);
+// `(tool_call_ptr, tool_call_len)` must describe a readable CBOR byte range
+// for the call, or `tool_call_ptr` may be null. The returned buffer must be
+// released with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_UpsertToolCall(const uint8_t *tool_call_ptr,
+                                                uintptr_t tool_call_len);
 
-// Inserts or updates response-item rows from a compact JSON array.
+// Inserts or updates response-item rows from a CBOR-encoded array. Returns a
+// CBOR-encoded `ApiResult`.
 //
 // # Safety
 //
-// Pointer arguments must be null or valid NUL-terminated strings for the
-// duration of this call. The returned pointer must be released with
-// `QsNative_Free`.
-char *QsNative_AiHistory_UpsertResponseItems(const char *conversation_id,
-                                             const char *turn_id,
-                                             int32_t turn_ordinal,
-                                             const char *response_items_json);
+// `conversation_id`/`turn_id` must be null or valid NUL-terminated strings
+// for the duration of this call. `(response_items_ptr, response_items_len)`
+// must describe a readable CBOR byte range for the call, or
+// `response_items_ptr` may be null. The returned buffer must be released
+// with `QsNative_FreeBytes`.
+QsNativeBytes QsNative_AiHistory_UpsertResponseItems(const char *conversation_id,
+                                                     const char *turn_id,
+                                                     int32_t turn_ordinal,
+                                                     const uint8_t *response_items_ptr,
+                                                     uintptr_t response_items_len);
 
 // Resolves config on a background thread (Secret Service lookups block on
 // D-Bus, so they must stay off the Qt thread) and delivers the entries via
@@ -592,6 +632,12 @@ char *QsNative_AiHistory_UpsertResponseItems(const char *conversation_id,
 // # Safety
 // `ctx`/`cb` must remain valid until `cb` fires.
 void QsNative_ConfigResolver_Refresh(void *ctx, ConfigEntriesFn cb);
+
+// Frees a `QsNativeBytes` buffer returned by a `QsNative_*` CBOR function.
+//
+// # Safety
+// `bytes` must be a value returned by this library and freed exactly once.
+void QsNative_FreeBytes(QsNativeBytes bytes);
 
 // Fetches the configured Google Calendars on a background thread and delivers
 // the full JSON payload (`{generatedAt, status, error?, eventsByDay}`) to C++
@@ -636,16 +682,16 @@ bool QsNative_Idle_SaveSettings(IdleHandle *handle,
 // Pure `max(0)` clamp of a timeout value; no handle state involved.
 int32_t QsNative_Idle_ClampTimeout(int32_t seconds);
 
-// Builds the `idle` IPC status payload as an owned JSON `char*`
-// (release with `QsNative_Free`).
+// Builds the `idle` IPC status payload as a CBOR byte buffer
+// (release with `QsNative_FreeBytes`).
 //
 // # Safety
 // `handle` must be valid.
-char *QsNative_Idle_StatusJson(IdleHandle *handle,
-                               bool dpms_off,
-                               double next_suspend_at_ms,
-                               bool sleep_inhibited,
-                               double now_ms);
+QsNativeBytes QsNative_Idle_StatusCbor(IdleHandle *handle,
+                                       bool dpms_off,
+                                       double next_suspend_at_ms,
+                                       bool sleep_inhibited,
+                                       double now_ms);
 
 // Spawns or kills the `systemd-inhibit` lid-switch blocker and updates the
 // `lidInhibited`/`error` state.
@@ -683,7 +729,8 @@ void QsNative_KeyboardLock_Start(KeyboardLockHandle *handle,
 // `handle` must be null or a valid handle pointer.
 void QsNative_KeyboardLock_Stop(KeyboardLockHandle *handle);
 
-char *QsNative_AiMcp_Refresh();
+// Refreshes the MCP server/tool snapshot. Returns a CBOR-encoded `Snapshot`.
+QsNativeBytes QsNative_AiMcp_Refresh();
 
 // Frees a string returned by a `QsNative_*` C ABI function.
 //
@@ -699,37 +746,41 @@ NetStatsHandle *QsNative_NetStats_New();
 // `handle` must be null or a pointer from `QsNative_NetStats_New` not yet freed.
 void QsNative_NetStats_Delete(NetStatsHandle *handle);
 
-// Reads `/proc/net/dev` for `device` (borrowed C string). Returns an owned JSON
-// object string `{ok, error, rx_bytes?, tx_bytes?}`; `rx_bytes`/`tx_bytes` are
-// only present when `ok` is true. Stateless: does not touch the handle.
+// Reads `/proc/net/dev` for `device` (borrowed C string). Returns a CBOR
+// object `{ok, error, rx_bytes?, tx_bytes?}`; `rx_bytes`/`tx_bytes` are only
+// present when `ok` is true. Stateless: does not touch the handle.
 //
 // # Safety
 // `device` must be null or a valid NUL-terminated string for the call.
-char *QsNative_NetStats_Refresh(const char *device);
+QsNativeBytes QsNative_NetStats_Refresh(const char *device);
 
 // Folds a fresh cumulative sample into the EMA rates + history, returning the
 // traffic snapshot (rates, scale, history JSON).
 //
 // # Safety
 // `handle` must be a valid pointer from `QsNative_NetStats_New`.
-char *QsNative_NetStats_UpdateTrafficRates(NetStatsHandle *handle,
-                                           double rx_bytes,
-                                           double tx_bytes,
-                                           double now_ms);
+QsNativeBytes QsNative_NetStats_UpdateTrafficRates(NetStatsHandle *handle,
+                                                   double rx_bytes,
+                                                   double tx_bytes,
+                                                   double now_ms);
 
 // Clears the traffic history and zeroes the rates, returning the reset snapshot.
 //
 // # Safety
 // `handle` must be a valid pointer from `QsNative_NetStats_New`.
-char *QsNative_NetStats_ResetTraffic(NetStatsHandle *handle);
+QsNativeBytes QsNative_NetStats_ResetTraffic(NetStatsHandle *handle);
 
-// Normalizes + sorts the source entries JSON. On success rewrites the stored
-// entries and auto-clears the switch state if the switching source is now
-// active. Returns `{ok, error, <source snapshot>}`.
+// Normalizes + sorts the CBOR-encoded source entries. On success rewrites the
+// stored entries and auto-clears the switch state if the switching source is
+// now active. Returns `{ok, error, <source snapshot>}` as JSON (unchanged;
+// only the input crossing moved to CBOR).
 //
 // # Safety
-// `handle` valid; `entries_json` null or valid NUL-terminated string.
-char *QsNative_NetStats_SetSourceEntries(NetStatsHandle *handle, const char *entries_json);
+// `handle` valid; `(entries_ptr, entries_len)` must describe a readable CBOR
+// byte range for the call, or `entries_ptr` null.
+char *QsNative_NetStats_SetSourceEntries(NetStatsHandle *handle,
+                                         const uint8_t *entries_ptr,
+                                         uintptr_t entries_len);
 
 // Marks a source switch as in flight. Returns `{ok, <source snapshot>}`; `ok`
 // is false if `name` is blank or a switch is already running.
@@ -751,15 +802,17 @@ char *QsNative_NetStats_FailSourceSwitch(NetStatsHandle *handle, const char *mes
 // `handle` must be a valid pointer from `QsNative_NetStats_New`.
 char *QsNative_NetStats_ClearSourceSwitch(NetStatsHandle *handle);
 
-// Parses `ip -j -4 addr show` JSON; returns the first `local/prefixlen` (or
-// `local`) inet address, or an empty string.
+// Parses `ip -j -4 addr show` JSON (raw external text, passed through as-is);
+// returns the first `local/prefixlen` (or `local`) inet address as plain
+// text, or an empty string. Not JSON: crosses as a `char*`, not CBOR.
 //
 // # Safety
 // `text` must be null or a valid NUL-terminated string for the call.
 char *QsNative_NetStats_ParseIpAddressJson(const char *text);
 
-// Parses `ip -j route show default` JSON; returns the first non-empty gateway,
-// or an empty string.
+// Parses `ip -j route show default` JSON (raw external text, passed through
+// as-is); returns the first non-empty gateway as plain text, or an empty
+// string. Not JSON: crosses as a `char*`, not CBOR.
 //
 // # Safety
 // `text` must be null or a valid NUL-terminated string for the call.
@@ -771,12 +824,12 @@ char *QsNative_NetStats_ParseGatewayJson(const char *text);
 // `text` must be null or a valid NUL-terminated string for the call.
 char *QsNative_NetStats_NormalizeEthernetLabel(const char *text);
 
-// Resolves ethernet/USB NIC metadata via sysfs + `udevadm`, returning a JSON
-// object string `{subsystem,label}` (`{}` on failure). Shells out synchronously.
+// Resolves ethernet/USB NIC metadata via sysfs + `udevadm`, returning a CBOR
+// object `{subsystem,label}` (empty fields on failure). Shells out synchronously.
 //
 // # Safety
 // `device_name` must be null or a valid NUL-terminated string for the call.
-char *QsNative_NetStats_EthernetMetadataJson(const char *device_name);
+QsNativeBytes QsNative_NetStats_EthernetMetadataJson(const char *device_name);
 
 PacmanHandle *QsNative_Pacman_New();
 
@@ -827,13 +880,14 @@ void QsNative_Privacy_Probe(PrivacyHandle *handle,
                             bool from_open,
                             bool debug);
 
-// Classifies a JSON array of `PipeWire` nodes. Returns an owned JSON object:
-// `{"ok":true,"microphone_active":bool,"screensharing_active":bool}` on success
-// or `{"ok":false,"error":"..."}` on parse failure. Free with `QsNative_Free`.
+// Classifies a CBOR array of `PipeWire` nodes. Returns an owned CBOR object:
+// `{ok: true, microphone_active, screensharing_active}` on success or
+// `{ok: false, error}` on parse failure. Free with `QsNative_FreeBytes`.
 //
 // # Safety
-// `json` must be null or a valid NUL-terminated string.
-char *QsNative_Privacy_ClassifyPipewire(const char *json);
+// `(ptr, len)` must describe a readable CBOR byte range for the call, or `ptr`
+// null.
+QsNativeBytes QsNative_Privacy_ClassifyPipewire(const uint8_t *ptr, uintptr_t len);
 
 SysInfoHandle *QsNative_SysInfo_New();
 

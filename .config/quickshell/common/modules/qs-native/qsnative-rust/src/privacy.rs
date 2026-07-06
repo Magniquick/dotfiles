@@ -14,9 +14,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::ffi::{c_string, emit_snapshot, into_c_string, QsNativeUpdateFn};
+use crate::ffi::{self, c_string, emit_snapshot, QsNativeBytes, QsNativeUpdateFn};
 
 const CAMERA_RETRY_ATTEMPTS: i32 = 3;
 const CAMERA_RETRY_INTERVAL: Duration = Duration::from_millis(150);
@@ -54,6 +54,21 @@ struct PipewirePrivacyState {
 struct CameraHolderSnapshot {
     hits: Vec<String>,
     apps: Vec<String>,
+}
+
+/// CBOR outbound result of [`QsNative_Privacy_ClassifyPipewire`], shaped to match
+/// the previous JSON object exactly: success carries `microphone_active` /
+/// `screensharing_active` and omits `error`; failure carries `error` and omits
+/// the two booleans.
+#[derive(Debug, Clone, Serialize)]
+struct PipewireClassifyResult {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    microphone_active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    screensharing_active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 /// Opaque per-instance handle owned by the C++ `QsNativePrivacy` `QObject`.
@@ -141,30 +156,36 @@ pub unsafe extern "C" fn QsNative_Privacy_Probe(
     });
 }
 
-/// Classifies a JSON array of `PipeWire` nodes. Returns an owned JSON object:
-/// `{"ok":true,"microphone_active":bool,"screensharing_active":bool}` on success
-/// or `{"ok":false,"error":"..."}` on parse failure. Free with `QsNative_Free`.
+/// Classifies a CBOR array of `PipeWire` nodes. Returns an owned CBOR object:
+/// `{ok: true, microphone_active, screensharing_active}` on success or
+/// `{ok: false, error}` on parse failure. Free with `QsNative_FreeBytes`.
 ///
 /// # Safety
-/// `json` must be null or a valid NUL-terminated string.
+/// `(ptr, len)` must describe a readable CBOR byte range for the call, or `ptr`
+/// null.
 #[no_mangle]
-pub unsafe extern "C" fn QsNative_Privacy_ClassifyPipewire(json: *const c_char) -> *mut c_char {
-    let input = c_string(json);
-    let result = match serde_json::from_str::<Vec<PipewireNodeSnapshot>>(&input) {
-        Ok(nodes) => {
+pub unsafe extern "C" fn QsNative_Privacy_ClassifyPipewire(
+    ptr: *const u8,
+    len: usize,
+) -> QsNativeBytes {
+    let result = match ffi::from_cbor::<Vec<PipewireNodeSnapshot>>(ptr, len) {
+        Some(nodes) => {
             let state = classify_pipewire_nodes(&nodes);
-            serde_json::json!({
-                "ok": true,
-                "microphone_active": state.microphone_active,
-                "screensharing_active": state.screensharing_active,
-            })
+            PipewireClassifyResult {
+                ok: true,
+                microphone_active: Some(state.microphone_active),
+                screensharing_active: Some(state.screensharing_active),
+                error: None,
+            }
         }
-        Err(error) => serde_json::json!({
-            "ok": false,
-            "error": format!("pipewire snapshot: {error}"),
-        }),
+        None => PipewireClassifyResult {
+            ok: false,
+            microphone_active: None,
+            screensharing_active: None,
+            error: Some("pipewire snapshot: invalid cbor".to_owned()),
+        },
     };
-    into_c_string(result.to_string())
+    ffi::into_cbor(&result)
 }
 
 fn emit_event(alive: &Arc<AtomicBool>, ctx: usize, cb: QsNativeUpdateFn, json: String) {

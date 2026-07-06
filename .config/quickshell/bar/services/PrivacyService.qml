@@ -75,7 +75,7 @@ Singleton {
 
   function updatePipewireSnapshot() {
     if (!Pipewire.ready || !Pipewire.nodes?.values) {
-      privacyProvider.updatePipewireSnapshot("[]")
+      privacyProvider.updatePipewireSnapshot([])
       if (root.debugPrivacy) {
         console.log("[PrivacyService] Pipewire not ready")
       }
@@ -103,7 +103,7 @@ Singleton {
       })
     }
 
-    privacyProvider.updatePipewireSnapshot(JSON.stringify(nodes))
+    privacyProvider.updatePipewireSnapshot(nodes)
   }
 
   function queueCameraProbe() {

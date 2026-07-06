@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QTextStream>
 
+#include <cstdint>
 #include <cstdio>
 
 namespace {
@@ -93,10 +94,10 @@ auto QsNativePrivacy::refreshCamera() -> bool {
   return true;
 }
 
-auto QsNativePrivacy::updatePipewireSnapshot(const QString& snapshotJson) -> bool {
-  const QJsonDocument doc =
-      qsn::takeDoc(QsNative_Privacy_ClassifyPipewire(snapshotJson.toUtf8().constData()));
-  const QJsonObject object = doc.object();
+auto QsNativePrivacy::updatePipewireSnapshot(const QVariant& snapshot) -> bool {
+  const QByteArray cbor = qsn::toCbor(snapshot);
+  const QVariantMap object = qsn::takeCborObject(QsNative_Privacy_ClassifyPipewire(
+      reinterpret_cast<const uint8_t*>(cbor.constData()), static_cast<size_t>(cbor.size())));
   if (!object.value(QStringLiteral("ok")).toBool()) {
     m_error = object.value(QStringLiteral("error")).toString();
     emit changed();

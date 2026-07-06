@@ -17,7 +17,7 @@ use procfs::net::DeviceStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ffi::{c_string, into_c_string};
+use crate::ffi::{c_string, from_cbor, into_c_string, into_cbor, QsNativeBytes};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NetDevSample {
@@ -40,6 +40,36 @@ struct SourceEntry {
 struct EthernetMetadata {
     subsystem: String,
     label: String,
+}
+
+/// CBOR payload for [`QsNative_NetStats_Refresh`]; `rx_bytes`/`tx_bytes` are
+/// omitted (not `null`) when `ok` is false, matching the prior JSON shape.
+#[derive(Debug, Serialize)]
+struct RefreshResult {
+    ok: bool,
+    error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rx_bytes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tx_bytes: Option<f64>,
+}
+
+/// CBOR payload for the traffic-rate snapshot returned by
+/// [`QsNative_NetStats_UpdateTrafficRates`] / [`QsNative_NetStats_ResetTraffic`].
+/// The history fields stay pre-serialized JSON-array strings (unchanged shape);
+/// only the FFI envelope moves from JSON text to CBOR.
+#[derive(Debug, Serialize)]
+struct TrafficSnapshot {
+    #[serde(rename = "rxBytesPerSec")]
+    rx_bytes_per_sec: f64,
+    #[serde(rename = "txBytesPerSec")]
+    tx_bytes_per_sec: f64,
+    #[serde(rename = "trafficScaleMax")]
+    traffic_scale_max: f64,
+    #[serde(rename = "rxHistoryJson")]
+    rx_history_json: String,
+    #[serde(rename = "txHistoryJson")]
+    tx_history_json: String,
 }
 
 #[derive(Debug, Default)]
@@ -103,35 +133,43 @@ pub unsafe extern "C" fn QsNative_NetStats_Delete(handle: *mut NetStatsHandle) {
     }
 }
 
-/// Reads `/proc/net/dev` for `device` (borrowed C string). Returns an owned JSON
-/// object string `{ok, error, rx_bytes?, tx_bytes?}`; `rx_bytes`/`tx_bytes` are
-/// only present when `ok` is true. Stateless: does not touch the handle.
+/// Reads `/proc/net/dev` for `device` (borrowed C string). Returns a CBOR
+/// object `{ok, error, rx_bytes?, tx_bytes?}`; `rx_bytes`/`tx_bytes` are only
+/// present when `ok` is true. Stateless: does not touch the handle.
 ///
 /// # Safety
 /// `device` must be null or a valid NUL-terminated string for the call.
 #[no_mangle]
-pub unsafe extern "C" fn QsNative_NetStats_Refresh(device: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn QsNative_NetStats_Refresh(device: *const c_char) -> QsNativeBytes {
     let device = c_string(device);
     let device = device.trim();
     if device.is_empty() {
-        return into_c_string(
-            serde_json::json!({ "ok": false, "error": "interface is empty" }).to_string(),
-        );
+        return into_cbor(&RefreshResult {
+            ok: false,
+            error: "interface is empty".to_owned(),
+            rx_bytes: None,
+            tx_bytes: None,
+        });
     }
-    let payload = match read_net_dev(device) {
+    let result = match read_net_dev(device) {
         #[expect(
             clippy::cast_precision_loss,
             reason = "byte counters are surfaced to QML as f64; precision loss only past 4 PB and QML numbers are f64 anyway"
         )]
-        Ok(sample) => serde_json::json!({
-            "ok": true,
-            "error": "",
-            "rx_bytes": sample.rx_bytes as f64,
-            "tx_bytes": sample.tx_bytes as f64,
-        }),
-        Err(error) => serde_json::json!({ "ok": false, "error": error }),
+        Ok(sample) => RefreshResult {
+            ok: true,
+            error: String::new(),
+            rx_bytes: Some(sample.rx_bytes as f64),
+            tx_bytes: Some(sample.tx_bytes as f64),
+        },
+        Err(error) => RefreshResult {
+            ok: false,
+            error,
+            rx_bytes: None,
+            tx_bytes: None,
+        },
     };
-    into_c_string(payload.to_string())
+    into_cbor(&result)
 }
 
 /// Folds a fresh cumulative sample into the EMA rates + history, returning the
@@ -145,13 +183,13 @@ pub unsafe extern "C" fn QsNative_NetStats_UpdateTrafficRates(
     rx_bytes: f64,
     tx_bytes: f64,
     now_ms: f64,
-) -> *mut c_char {
+) -> QsNativeBytes {
     if handle.is_null() {
-        return into_c_string("{}".to_owned());
+        return QsNativeBytes { ptr: core::ptr::null_mut(), len: 0 };
     }
     let handle = &mut *handle;
     let rates = handle.traffic.update(rx_bytes, tx_bytes, now_ms);
-    into_c_string(traffic_snapshot_json(handle, rates))
+    traffic_snapshot_cbor(handle, rates)
 }
 
 /// Clears the traffic history and zeroes the rates, returning the reset snapshot.
@@ -159,9 +197,9 @@ pub unsafe extern "C" fn QsNative_NetStats_UpdateTrafficRates(
 /// # Safety
 /// `handle` must be a valid pointer from `QsNative_NetStats_New`.
 #[no_mangle]
-pub unsafe extern "C" fn QsNative_NetStats_ResetTraffic(handle: *mut NetStatsHandle) -> *mut c_char {
+pub unsafe extern "C" fn QsNative_NetStats_ResetTraffic(handle: *mut NetStatsHandle) -> QsNativeBytes {
     if handle.is_null() {
-        return into_c_string("{}".to_owned());
+        return QsNativeBytes { ptr: core::ptr::null_mut(), len: 0 };
     }
     let handle = &mut *handle;
     handle.traffic = TrafficState::default();
@@ -170,27 +208,30 @@ pub unsafe extern "C" fn QsNative_NetStats_ResetTraffic(handle: *mut NetStatsHan
         tx_bytes_per_sec: 0.0,
         traffic_scale_max: TRAFFIC_SCALE_FLOOR,
     };
-    into_c_string(traffic_snapshot_json(handle, rates))
+    traffic_snapshot_cbor(handle, rates)
 }
 
-/// Normalizes + sorts the source entries JSON. On success rewrites the stored
-/// entries and auto-clears the switch state if the switching source is now
-/// active. Returns `{ok, error, <source snapshot>}`.
+/// Normalizes + sorts the CBOR-encoded source entries. On success rewrites the
+/// stored entries and auto-clears the switch state if the switching source is
+/// now active. Returns `{ok, error, <source snapshot>}` as JSON (unchanged;
+/// only the input crossing moved to CBOR).
 ///
 /// # Safety
-/// `handle` valid; `entries_json` null or valid NUL-terminated string.
+/// `handle` valid; `(entries_ptr, entries_len)` must describe a readable CBOR
+/// byte range for the call, or `entries_ptr` null.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_NetStats_SetSourceEntries(
     handle: *mut NetStatsHandle,
-    entries_json: *const c_char,
+    entries_ptr: *const u8,
+    entries_len: usize,
 ) -> *mut c_char {
     if handle.is_null() {
         return into_c_string("{}".to_owned());
     }
     let handle = &mut *handle;
-    let raw = c_string(entries_json);
-    match normalize_source_entries(&raw) {
-        Ok(entries) => {
+    match from_cbor::<Vec<SourceEntry>>(entries_ptr, entries_len) {
+        Some(entries) => {
+            let entries = sort_source_entries(entries);
             let switch_complete = handle.source_switching
                 && !handle.source_switching_name.is_empty()
                 && entries
@@ -205,7 +246,11 @@ pub unsafe extern "C" fn QsNative_NetStats_SetSourceEntries(
             }
             into_c_string(source_snapshot_json(handle, true, ""))
         }
-        Err(error) => into_c_string(source_snapshot_json(handle, false, &error)),
+        None => into_c_string(source_snapshot_json(
+            handle,
+            false,
+            "source entries: invalid payload",
+        )),
     }
 }
 
@@ -271,8 +316,9 @@ pub unsafe extern "C" fn QsNative_NetStats_ClearSourceSwitch(
     into_c_string(source_snapshot_json(handle, true, ""))
 }
 
-/// Parses `ip -j -4 addr show` JSON; returns the first `local/prefixlen` (or
-/// `local`) inet address, or an empty string.
+/// Parses `ip -j -4 addr show` JSON (raw external text, passed through as-is);
+/// returns the first `local/prefixlen` (or `local`) inet address as plain
+/// text, or an empty string. Not JSON: crosses as a `char*`, not CBOR.
 ///
 /// # Safety
 /// `text` must be null or a valid NUL-terminated string for the call.
@@ -281,8 +327,9 @@ pub unsafe extern "C" fn QsNative_NetStats_ParseIpAddressJson(text: *const c_cha
     into_c_string(parse_ip_address_json(&c_string(text)))
 }
 
-/// Parses `ip -j route show default` JSON; returns the first non-empty gateway,
-/// or an empty string.
+/// Parses `ip -j route show default` JSON (raw external text, passed through
+/// as-is); returns the first non-empty gateway as plain text, or an empty
+/// string. Not JSON: crosses as a `char*`, not CBOR.
 ///
 /// # Safety
 /// `text` must be null or a valid NUL-terminated string for the call.
@@ -302,32 +349,31 @@ pub unsafe extern "C" fn QsNative_NetStats_NormalizeEthernetLabel(
     into_c_string(normalize_ethernet_label_text(&c_string(text)))
 }
 
-/// Resolves ethernet/USB NIC metadata via sysfs + `udevadm`, returning a JSON
-/// object string `{subsystem,label}` (`{}` on failure). Shells out synchronously.
+/// Resolves ethernet/USB NIC metadata via sysfs + `udevadm`, returning a CBOR
+/// object `{subsystem,label}` (empty fields on failure). Shells out synchronously.
 ///
 /// # Safety
 /// `device_name` must be null or a valid NUL-terminated string for the call.
 #[no_mangle]
 pub unsafe extern "C" fn QsNative_NetStats_EthernetMetadataJson(
     device_name: *const c_char,
-) -> *mut c_char {
+) -> QsNativeBytes {
     let metadata = ethernet_metadata_for_device(&c_string(device_name)).unwrap_or_default();
-    into_c_string(serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_owned()))
+    into_cbor(&metadata)
 }
 
-fn traffic_snapshot_json(handle: &NetStatsHandle, rates: TrafficRates) -> String {
+fn traffic_snapshot_cbor(handle: &NetStatsHandle, rates: TrafficRates) -> QsNativeBytes {
     let rx_history_json =
         serde_json::to_string(&handle.traffic.rx_history).unwrap_or_else(|_| "[]".to_owned());
     let tx_history_json =
         serde_json::to_string(&handle.traffic.tx_history).unwrap_or_else(|_| "[]".to_owned());
-    serde_json::json!({
-        "rxBytesPerSec": rates.rx_bytes_per_sec,
-        "txBytesPerSec": rates.tx_bytes_per_sec,
-        "trafficScaleMax": rates.traffic_scale_max,
-        "rxHistoryJson": rx_history_json,
-        "txHistoryJson": tx_history_json,
+    into_cbor(&TrafficSnapshot {
+        rx_bytes_per_sec: rates.rx_bytes_per_sec,
+        tx_bytes_per_sec: rates.tx_bytes_per_sec,
+        traffic_scale_max: rates.traffic_scale_max,
+        rx_history_json,
+        tx_history_json,
     })
-    .to_string()
 }
 
 fn source_snapshot_json(handle: &NetStatsHandle, ok: bool, error: &str) -> String {
@@ -361,9 +407,7 @@ fn sample_for_interface(
     })
 }
 
-fn normalize_source_entries(raw_json: &str) -> Result<Vec<SourceEntry>, String> {
-    let mut entries: Vec<SourceEntry> =
-        serde_json::from_str(raw_json).map_err(|error| format!("source entries: {error}"))?;
+fn sort_source_entries(mut entries: Vec<SourceEntry>) -> Vec<SourceEntry> {
     entries.sort_by(|a, b| {
         b.active
             .cmp(&a.active)
@@ -371,7 +415,7 @@ fn normalize_source_entries(raw_json: &str) -> Result<Vec<SourceEntry>, String> 
             .then_with(|| a.device.to_lowercase().cmp(&b.device.to_lowercase()))
             .then_with(|| a.id.cmp(&b.id))
     });
-    Ok(entries)
+    entries
 }
 
 fn parse_ip_address_json(text: &str) -> String {
@@ -588,8 +632,8 @@ fn sane_rate(rate: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_source_entries, parse_gateway_json, parse_ip_address_json, parse_udev_label,
-        sample_for_interface, sysfs_net_path, DeviceStatus, HashMap, TrafficState,
+        parse_gateway_json, parse_ip_address_json, parse_udev_label, sample_for_interface,
+        sort_source_entries, sysfs_net_path, DeviceStatus, HashMap, SourceEntry, TrafficState,
     };
 
     #[test]
@@ -630,7 +674,8 @@ mod tests {
             {"id":"wifi:wlan0:z","type":"wifi","name":"z","device":"wlan0","active":false,"connectable":true},
             {"id":"wifi:wlan0:a","type":"wifi","name":"a","device":"wlan0","active":true,"connectable":true}
         ]"#;
-        let entries = normalize_source_entries(raw).expect("entries");
+        let entries: Vec<SourceEntry> = serde_json::from_str(raw).expect("parses");
+        let entries = sort_source_entries(entries);
         assert_eq!(entries[0].name, "a");
         assert!(entries[0].active);
     }

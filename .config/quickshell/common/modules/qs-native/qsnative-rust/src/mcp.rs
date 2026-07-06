@@ -955,12 +955,6 @@ fn to_json_string<T: Serialize>(value: &T) -> String {
     })
 }
 
-fn alloc_c_string(value: String) -> *mut c_char {
-    CString::new(value)
-        .unwrap_or_else(|_| CString::new(r#"{"error":"nul byte in MCP result"}"#).expect("literal"))
-        .into_raw()
-}
-
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "serde skip_serializing_if requires an fn(&T) -> bool signature"
@@ -970,8 +964,9 @@ fn is_zero_i64(value: &i64) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn QsNative_AiMcp_Refresh() -> *mut c_char {
-    alloc_c_string(refresh())
+/// Refreshes the MCP server/tool snapshot. Returns a CBOR-encoded `Snapshot`.
+pub extern "C" fn QsNative_AiMcp_Refresh() -> crate::ffi::QsNativeBytes {
+    crate::ffi::into_cbor(&snapshot())
 }
 
 #[no_mangle]

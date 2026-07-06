@@ -11,9 +11,8 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use crate::ffi::{c_string, into_c_string};
+use crate::ffi::{self, c_string, QsNativeBytes};
 
 const DEFAULT_DISPLAY_OFF_TIMEOUT_SEC: i32 = 10;
 const DEFAULT_SUSPEND_TIMEOUT_SEC: i32 = 1800;
@@ -209,24 +208,30 @@ pub extern "C" fn QsNative_Idle_ClampTimeout(seconds: i32) -> i32 {
     clamp_timeout(seconds)
 }
 
-/// Builds the `idle` IPC status payload as an owned JSON `char*`
-/// (release with `QsNative_Free`).
+/// Builds the `idle` IPC status payload as a CBOR byte buffer
+/// (release with `QsNative_FreeBytes`).
 ///
 /// # Safety
 /// `handle` must be valid.
 #[no_mangle]
-pub unsafe extern "C" fn QsNative_Idle_StatusJson(
+pub unsafe extern "C" fn QsNative_Idle_StatusCbor(
     handle: *mut IdleHandle,
     dpms_off: bool,
     next_suspend_at_ms: f64,
     sleep_inhibited: bool,
     now_ms: f64,
-) -> *mut c_char {
+) -> QsNativeBytes {
     if handle.is_null() {
-        return into_c_string("{}".to_owned());
+        #[expect(
+            clippy::zero_sized_map_values,
+            reason = "an empty map with a unit value type is only used to serialize an \
+                      empty CBOR object for the null-handle fallback; no values are ever inserted"
+        )]
+        let empty = std::collections::BTreeMap::<String, ()>::new();
+        return ffi::into_cbor(&empty);
     }
     let settings = (*handle).settings;
-    into_c_string(build_status_json(StatusInput {
+    ffi::into_cbor(&build_status(StatusInput {
         dpms_off,
         display_off_timeout_sec: settings.display_off_timeout_sec,
         suspend_enabled: settings.suspend_enabled,
@@ -319,20 +324,39 @@ fn save_settings(path: &Path, settings: IdleSettings) -> Result<(), String> {
         .map_err(|error| format!("write settings: {error}"))
 }
 
-fn build_status_json(input: StatusInput) -> String {
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "flat status payload mirroring the independent idle/DPMS/suspend fields \
+              serialized to the IPC status output; each bool is a distinct status flag, \
+              not a state machine"
+)]
+struct StatusOutput {
+    managed_by: &'static str,
+    dpms_off: bool,
+    display_off_timeout_sec: i32,
+    display_off_seconds_left: Option<i32>,
+    suspend_enabled: bool,
+    suspend_timeout_sec: i32,
+    suspend_seconds_left: i32,
+    sleep_inhibited: bool,
+    ignore_lid_events: bool,
+}
+
+fn build_status(input: StatusInput) -> StatusOutput {
     let suspend_seconds_left = seconds_left(input.next_suspend_at_ms, input.now_ms);
-    serde_json::to_string(&json!({
-        "managedBy": "quickshell",
-        "dpmsOff": input.dpms_off,
-        "displayOffTimeoutSec": clamp_timeout(input.display_off_timeout_sec),
-        "displayOffSecondsLeft": if input.dpms_off { Some(0) } else { None },
-        "suspendEnabled": input.suspend_enabled,
-        "suspendTimeoutSec": clamp_timeout(input.suspend_timeout_sec),
-        "suspendSecondsLeft": suspend_seconds_left,
-        "sleepInhibited": input.sleep_inhibited,
-        "ignoreLidEvents": input.ignore_lid_events,
-    }))
-    .unwrap_or_else(|_| "{}".to_owned())
+    StatusOutput {
+        managed_by: "quickshell",
+        dpms_off: input.dpms_off,
+        display_off_timeout_sec: clamp_timeout(input.display_off_timeout_sec),
+        display_off_seconds_left: if input.dpms_off { Some(0) } else { None },
+        suspend_enabled: input.suspend_enabled,
+        suspend_timeout_sec: clamp_timeout(input.suspend_timeout_sec),
+        suspend_seconds_left,
+        sleep_inhibited: input.sleep_inhibited,
+        ignore_lid_events: input.ignore_lid_events,
+    }
 }
 
 #[expect(
@@ -393,7 +417,7 @@ mod tests {
 
     #[test]
     fn builds_status_json_with_clamped_values_and_seconds_left() {
-        let raw = build_status_json(StatusInput {
+        let status = build_status(StatusInput {
             dpms_off: false,
             display_off_timeout_sec: -1,
             suspend_enabled: true,
@@ -403,16 +427,15 @@ mod tests {
             ignore_lid_events: false,
             now_ms: 10_000.0,
         });
-        let status: serde_json::Value = serde_json::from_str(&raw).expect("status json");
 
-        assert_eq!(status["managedBy"], "quickshell");
-        assert_eq!(status["dpmsOff"], false);
-        assert_eq!(status["displayOffTimeoutSec"], 0);
-        assert!(status["displayOffSecondsLeft"].is_null());
-        assert_eq!(status["suspendEnabled"], true);
-        assert_eq!(status["suspendTimeoutSec"], 0);
-        assert_eq!(status["suspendSecondsLeft"], 3);
-        assert_eq!(status["sleepInhibited"], true);
-        assert_eq!(status["ignoreLidEvents"], false);
+        assert_eq!(status.managed_by, "quickshell");
+        assert!(!status.dpms_off);
+        assert_eq!(status.display_off_timeout_sec, 0);
+        assert!(status.display_off_seconds_left.is_none());
+        assert!(status.suspend_enabled);
+        assert_eq!(status.suspend_timeout_sec, 0);
+        assert_eq!(status.suspend_seconds_left, 3);
+        assert!(status.sleep_inhibited);
+        assert!(!status.ignore_lid_events);
     }
 }
