@@ -9,9 +9,23 @@
 #include <new>
 
 // Opaque per-instance handle owned by the C++ `QsNativeMarkdownStream` `QObject`.
-//
-// TODO(stage2): hold the real `MdStream` / `DocumentState` and the parsed rows.
 struct MarkdownStreamHandle;
+
+// A single resolved markdown row, borrowed for the duration of the callback.
+struct MarkdownRowC {
+  uint64_t block_id;
+  const char *kind;
+  const char *block_type;
+  const char *content;
+  const char *raw;
+  const char *display;
+  bool completed;
+  const char *language;
+};
+
+// Delivers the current full row snapshot (borrowed for the call only) to the
+// C++ side. Called synchronously, on the caller's thread.
+using MarkdownRowsFn = void(*)(void*, const MarkdownRowC*, uintptr_t);
 
 extern "C" {
 
@@ -21,28 +35,36 @@ MarkdownStreamHandle *QsNative_MarkdownStream_New();
 // `handle` must be null or a pointer from `QsNative_MarkdownStream_New` not yet freed.
 void QsNative_MarkdownStream_Delete(MarkdownStreamHandle *handle);
 
-// Feeds the full content text and returns the resulting block count.
-//
-// TODO(stage2): re-parse (delta append or reset) and return the real count.
+// Feeds the full content text (delta-appended when it extends the previous
+// content, otherwise a hard reset) and delivers the resulting row snapshot
+// via `cb`, called synchronously before this function returns.
 //
 // # Safety
-// `handle` must be valid; `content` must be null or a valid C string.
-int32_t QsNative_MarkdownStream_SetContent(MarkdownStreamHandle *handle, const char *content);
+// `handle` must be valid; `content` must be null or a valid C string;
+// `ctx`/`cb` must remain valid for the duration of this call.
+void QsNative_MarkdownStream_SetContent(MarkdownStreamHandle *handle,
+                                        const char *content,
+                                        void *ctx,
+                                        MarkdownRowsFn cb);
 
-// Sets streaming mode and returns the resulting block count.
-//
-// TODO(stage2): finalize the pending block when `streaming` becomes false.
+// Sets streaming mode (finalizing the pending block when turned off) and
+// delivers the resulting row snapshot via `cb`, called synchronously before
+// this function returns.
 //
 // # Safety
-// `handle` must be valid.
-int32_t QsNative_MarkdownStream_SetStreaming(MarkdownStreamHandle *handle, bool streaming);
+// `handle` must be valid; `ctx`/`cb` must remain valid for the duration of
+// this call.
+void QsNative_MarkdownStream_SetStreaming(MarkdownStreamHandle *handle,
+                                          bool streaming,
+                                          void *ctx,
+                                          MarkdownRowsFn cb);
 
-// Commits the pending block and returns the resulting block count.
-//
-// TODO(stage2): call `stream.finalize()` + refresh.
+// Commits the pending block and delivers the resulting row snapshot via
+// `cb`, called synchronously before this function returns.
 //
 // # Safety
-// `handle` must be valid.
-int32_t QsNative_MarkdownStream_Finalize(MarkdownStreamHandle *handle);
+// `handle` must be valid; `ctx`/`cb` must remain valid for the duration of
+// this call.
+void QsNative_MarkdownStream_Finalize(MarkdownStreamHandle *handle, void *ctx, MarkdownRowsFn cb);
 
 }  // extern "C"

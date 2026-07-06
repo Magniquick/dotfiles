@@ -18,9 +18,6 @@ struct BacklightHandle;
 // during an in-flight monitor is safe.
 struct BluetoothHandle;
 
-// Opaque per-instance handle owned by the C++ `QsNativeConfigResolver` `QObject`.
-struct ConfigResolverHandle;
-
 // Opaque per-instance handle owned by the C++ `QsNativeIdle` `QObject`.
 struct IdleHandle;
 
@@ -46,8 +43,11 @@ struct PrivacyHandle;
 // Opaque per-instance handle owned by the C++ `QsNativeSysInfo` `QObject`.
 struct SysInfoHandle;
 
-// Opaque per-instance handle owned by the C++ `QsNativeSystemdFailedProvider`.
+// Opaque per-instance handle owned by the C++ `QsNativeSystemdFailedProvider`
+// `QObject`.
 //
+// `alive` is shared with every worker and one-shot refresh thread so none of
+// them deliver a callback once the `QObject` has started tearing down.
 struct SystemdFailedHandle;
 
 // Opaque per-instance handle owned by the C++ `QsNativeTodoist` `QObject`.
@@ -82,6 +82,15 @@ using BacklightSnapshotFn = void(*)(void*, const BacklightSnapshotC*);
 // side must copy it (`QString::fromUtf8`) and must **not** free it.
 using QsNativeUpdateFn = void(*)(void *ctx, const char *json);
 
+// A single resolved config entry, borrowed for the duration of the callback.
+struct ConfigEntryC {
+  const char *key;
+  const char *value;
+};
+
+// Delivers the resolved entries (borrowed for the call only) to the C++ side.
+using ConfigEntriesFn = void(*)(void*, const ConfigEntryC*, uintptr_t);
+
 // Zero-copy snapshot of the QML-facing properties. The `error` `*const c_char`
 // borrows a `CString` that lives on the caller's stack **only for the duration
 // of the callback**; C++ must copy it (`QString::fromUtf8`) synchronously and
@@ -114,6 +123,33 @@ struct KeyboardLockSnapshotC {
 // Delivers a `KeyboardLockSnapshotC` (borrowed for the call only) to C++.
 using KeyboardLockSnapshotFn = void(*)(void*, const KeyboardLockSnapshotC*);
 
+// A single resolved update row, borrowed for the duration of the callback.
+struct UpdateItemC {
+  const char *name;
+  const char *old_version;
+  const char *new_version;
+  const char *source;
+};
+
+// Zero-copy snapshot handed to the C++ side. `items`/`items_len` describe a
+// borrowed `UpdateItemC` array; the `*const c_char` fields (including the ones
+// nested in each row) borrow `CString`s that live on the worker stack **only
+// for the duration of the callback**. C++ must copy everything
+// (`QString::fromUtf8`) synchronously and must not retain any pointers.
+struct PacmanSnapshotC {
+  const UpdateItemC *items;
+  uintptr_t items_len;
+  int32_t updates_count;
+  int32_t aur_updates_count;
+  const char *updates_text;
+  const char *aur_updates_text;
+  const char *last_checked;
+  const char *error;
+};
+
+// Delivers a `PacmanSnapshotC` (borrowed for the call only) to the C++ side.
+using PacmanSnapshotFn = void(*)(void*, const PacmanSnapshotC*);
+
 // Zero-copy snapshot handed to the C++ side. The `*const c_char` fields borrow
 // `CString`s that live on the worker stack **only for the duration of the
 // callback**; C++ must copy them (`QString::fromUtf8`) synchronously and must
@@ -144,6 +180,35 @@ struct SysInfoSnapshotC {
 
 // Delivers a `SysInfoSnapshotC` (borrowed for the call only) to the C++ side.
 using SysInfoSnapshotFn = void(*)(void*, const SysInfoSnapshotC*);
+
+// A single failed unit row, borrowed for the duration of the callback.
+struct FailedUnitC {
+  const char *unit;
+  const char *load;
+  const char *active;
+  const char *sub;
+  const char *description;
+};
+
+// Zero-copy snapshot handed to the C++ side. The `*const c_char`/row-array
+// fields borrow `CString`s/`Vec`s that live on the worker stack **only for the
+// duration of the callback**; C++ must copy them synchronously and must not
+// retain the pointers. Fields map 1:1 to `SystemdFailedProvider` QML
+// properties (`refreshing` is owned/toggled by C++ around the call instead).
+struct SystemdFailedSnapshotC {
+  int32_t system_failed_count;
+  int32_t user_failed_count;
+  int32_t failed_count;
+  const FailedUnitC *system_units;
+  uintptr_t system_units_len;
+  const FailedUnitC *user_units;
+  uintptr_t user_units_len;
+  const char *last_checked;
+  const char *error;
+};
+
+// Delivers a `SystemdFailedSnapshotC` (borrowed for the call only) to C++.
+using SystemdFailedSnapshotFn = void(*)(void*, const SystemdFailedSnapshotC*);
 
 extern "C" {
 
@@ -520,21 +585,13 @@ char *QsNative_AiHistory_UpsertResponseItems(const char *conversation_id,
                                              int32_t turn_ordinal,
                                              const char *response_items_json);
 
-ConfigResolverHandle *QsNative_ConfigResolver_New();
-
-// # Safety
-// `handle` must be null or a pointer from `QsNative_ConfigResolver_New` not yet freed.
-void QsNative_ConfigResolver_Delete(ConfigResolverHandle *handle);
-
-// Resolves the current config/secret values as a JSON object (string -> string).
-//
-// TODO(stage2): reload `config.toml` and overlay Secret Service keys. For now
-// this returns an empty object; the returned pointer must be freed with
-// `QsNative_Free`.
+// Resolves config on a background thread (Secret Service lookups block on
+// D-Bus, so they must stay off the Qt thread) and delivers the entries via
+// `cb`. `values` updates reactively through the C++ `valuesChanged` signal.
 //
 // # Safety
-// `handle` must be valid; the returned pointer must be released with `QsNative_Free`.
-char *QsNative_ConfigResolver_Refresh(ConfigResolverHandle *handle);
+// `ctx`/`cb` must remain valid until `cb` fires.
+void QsNative_ConfigResolver_Refresh(void *ctx, ConfigEntriesFn cb);
 
 // Fetches the configured Google Calendars on a background thread and delivers
 // the full JSON payload (`{generatedAt, status, error?, eventsByDay}`) to C++
@@ -727,18 +784,14 @@ PacmanHandle *QsNative_Pacman_New();
 // `handle` must be null or a pointer from `QsNative_Pacman_New` not yet freed.
 void QsNative_Pacman_Delete(PacmanHandle *handle);
 
-// Kicks off a background refresh and delivers a JSON snapshot via `cb`.
-//
-// TODO(stage2): run `checkupdates` + `yay -Qua` here. The stub delivers an
-// empty snapshot so the QML "refresh completed" signals still fire.
+// Kicks off a background refresh (`checkupdates` + optionally `yay -Qua`) and
+// delivers a `PacmanSnapshotC` via `cb`.
 //
 // # Safety
 // `handle` must be valid; `ctx`/`cb` must remain valid until `cb` fires.
-void QsNative_Pacman_Refresh(PacmanHandle *handle, bool _no_aur, void *ctx, QsNativeUpdateFn cb);
+void QsNative_Pacman_Refresh(PacmanHandle *handle, bool no_aur, void *ctx, PacmanSnapshotFn cb);
 
-// Kicks off a detached database sync.
-//
-// TODO(stage2): spawn `sudo -n pacman -Sy --noconfirm`. The stub is a no-op.
+// Kicks off a detached database sync (`sudo -n pacman -Sy --noconfirm`).
 //
 // # Safety
 // `handle` must be valid.
@@ -802,19 +855,48 @@ void QsNative_SysInfo_Refresh(SysInfoHandle *handle, void *ctx, SysInfoSnapshotF
 
 SystemdFailedHandle *QsNative_SystemdFailedProvider_New();
 
+// # Panics
+// Panics if any of the handle's mutexes have been poisoned (a worker thread
+// panicked while holding the lock).
+//
 // # Safety
 // `handle` must be null or a pointer from `QsNative_SystemdFailedProvider_New`
 // that has not yet been freed.
 void QsNative_SystemdFailedProvider_Delete(SystemdFailedHandle *handle);
 
-// Delivers a failed-unit snapshot to C++ via `cb`.
+// Starts the provider: on the first call, spawns the debounce worker plus the
+// system + session `systemd1` D-Bus signal listeners that feed it, then (every
+// call) performs an immediate refresh.
 //
+// # Panics
+// Panics if any of the handle's mutexes have been poisoned.
 //
 // # Safety
-// `handle` must be valid; `ctx`/`cb` must remain valid until `cb` returns.
-void QsNative_SystemdFailedProvider_Refresh(SystemdFailedHandle *handle,
+// `handle` must be valid; `ctx`/`cb` must remain valid until `_Delete` returns
+// (every worker that can call `cb` is stopped and joined there first).
+void QsNative_SystemdFailedProvider_Start(SystemdFailedHandle *handle,
+                                          void *ctx,
+                                          SystemdFailedSnapshotFn cb);
+
+// Performs an immediate (non-debounced) refresh on a worker thread and
+// delivers the snapshot via `cb`. Always returns `true` (fire-and-forget).
+//
+// # Safety
+// `handle` must be valid; `ctx`/`cb` must remain valid until `cb` fires.
+bool QsNative_SystemdFailedProvider_Refresh(SystemdFailedHandle *handle,
                                             void *ctx,
-                                            QsNativeUpdateFn cb);
+                                            SystemdFailedSnapshotFn cb);
+
+// Sends a debounce tick; the running debounce worker (started via `_Start`)
+// coalesces bursts and performs a single refresh `REFRESH_DEBOUNCE` after the
+// last tick. No-op before `_Start` has run.
+//
+// # Panics
+// Panics if the handle's `refresh_tx` mutex has been poisoned.
+//
+// # Safety
+// `handle` must be valid.
+void QsNative_SystemdFailedProvider_ScheduleRefresh(SystemdFailedHandle *handle);
 
 TodoistHandle *QsNative_Todoist_New();
 

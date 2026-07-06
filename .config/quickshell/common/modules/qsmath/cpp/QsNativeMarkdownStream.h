@@ -5,15 +5,21 @@
 #include <QHash>
 #include <QString>
 #include <QVariant>
+#include <QVector>
 
 struct MarkdownStreamHandle;
+struct MarkdownRowC;
 
 // Streaming markdown block model, registered in QML as `MarkdownStreamModel`.
 //
-// STAGE-1 STUB: preserves the full QML-facing surface (writable `content` /
-// `streaming`, read-only `blockCount`, the three QAbstractListModel overrides,
-// and `finalize()`) but the Rust core is a no-op, so the model always reports
-// zero rows. TODO(stage2): the Rust side will re-parse content into blocks.
+// The Rust `mdstream`-backed core re-parses `content` on every call and
+// delivers the *current full row snapshot* synchronously (no worker thread;
+// parsing is pure CPU work). This QObject diffs that snapshot against its own
+// cached rows: if committed block ids still form a stable prefix, it grows
+// the model incrementally (`beginInsertRows` for newly-committed rows,
+// `dataChanged` for the last row if its content changed) instead of a full
+// reset, so QML delegates for already-committed blocks are never recreated.
+// A prefix mismatch (non-append edit) falls back to `beginResetModel`.
 class QsNativeMarkdownStream : public QAbstractListModel {
   Q_OBJECT
 
@@ -58,11 +64,27 @@ signals:
   void blockCountChanged();
 
 private:
-  void syncBlockCount(int blockCount);
+  struct Row {
+    quint64 blockId = 0;
+    QString kind;
+    QString type;
+    QString content;
+    QString raw;
+    QString display;
+    bool completed = false;
+    QString language;
+
+    auto operator==(const Row& other) const -> bool = default;
+  };
+
+  static void rowsCallback(void* ctx, const MarkdownRowC* rows, size_t len);
+  void applyRows(const QVector<Row>& newRows);
+  void syncBlockCount();
 
   MarkdownStreamHandle* m_handle;
 
   QString m_content;
   bool m_streaming = true;
   int m_blockCount = 0;
+  QVector<Row> m_rows;
 };

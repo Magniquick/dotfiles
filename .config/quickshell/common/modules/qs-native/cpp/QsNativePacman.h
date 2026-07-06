@@ -8,14 +8,13 @@
 #include <QVariant>
 
 struct PacmanHandle;
+struct PacmanSnapshotC;
 
-// TODO(stage2): pacman/AUR update provider (STUB).
-//
-// Rust runs `checkupdates` + `yay -Qua` on a worker thread and delivers a JSON
-// snapshot; this QObject applies it on the Qt thread (beginResetModel + property
-// setters). The stub keeps the full QML-facing surface but returns empty/default
-// values: rowCount() == 0 with the same role names, all counts 0, texts empty,
-// has_updates false. `refresh`/`sync` return true immediately and do no real work.
+// Pacman/AUR update provider. Rust runs `checkupdates` + `yay -Qua` on a worker
+// thread and delivers a zero-copy `PacmanSnapshotC` (a #[repr(C)] struct wrapping
+// a borrowed row array plus the aggregate counts/text fields); this QObject
+// deep-copies it on the Qt thread and rebuilds the list model (beginResetModel +
+// property setters). `sync()` fires a detached `sudo -n pacman -Sy` refresh.
 class QsNativePacman : public QAbstractListModel {
   Q_OBJECT
 
@@ -75,8 +74,10 @@ signals:
   void errorChanged();
 
 private:
-  static void snapshotCallback(void* ctx, const char* json);
-  void applySnapshot(const QString& json);
+  static void snapshotCallback(void* ctx, const PacmanSnapshotC* snap);
+  void applySnapshot(const QList<UpdateItem>& items, int updatesCount, int aurUpdatesCount,
+                      const QString& updatesText, const QString& aurUpdatesText,
+                      const QString& lastChecked, const QString& error);
 
   PacmanHandle* m_handle;
 

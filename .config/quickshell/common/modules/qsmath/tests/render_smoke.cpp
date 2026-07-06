@@ -1,4 +1,5 @@
 #include "MathRenderer.h"
+#include "QsNativeMarkdownStream.h"
 
 #include <QDir>
 #include <QFile>
@@ -20,8 +21,10 @@ private slots:
   static void reportsRatexParseFailures();
   static void readsSingleQuotedSvgSizeInAnyAttributeOrder();
   static void readsSvgSizeFromViewBoxFallback();
-  // TODO(stage2): reinstate MarkdownStreamModel tests once the real streaming
-  // model replaces the stub.
+  static void markdownStreamModelRoleNamesMatchQmlUsage();
+  static void markdownStreamModelAppendKeepsCommittedBlockIds();
+  static void markdownStreamModelNonAppendResetsRows();
+  static void markdownStreamModelStreamingFalseFinalizesPending();
 };
 
 static auto waitForRender(QSignalSpy& finished, QSignalSpy& failed, QList<QVariant>* result,
@@ -396,6 +399,58 @@ void MathRendererSmokeTest::readsSvgSizeFromViewBoxFallback() {
   QVERIFY2(readSingleSvgSize(cacheDir.path(), &width, &height, &error), qPrintable(error));
   QCOMPARE(width, 120.5);
   QCOMPARE(height, 64.25);
+}
+
+void MathRendererSmokeTest::markdownStreamModelRoleNamesMatchQmlUsage() {
+  QsNativeMarkdownStream const model;
+  const QHash<int, QByteArray> roles = model.roleNames();
+
+  QCOMPARE(roles.value(Qt::UserRole), QByteArray("blockId"));
+  QVERIFY(roles.values().contains(QByteArray("kind")));
+  QVERIFY(roles.values().contains(QByteArray("type")));
+  QVERIFY(roles.values().contains(QByteArray("content")));
+  QVERIFY(roles.values().contains(QByteArray("raw")));
+  QVERIFY(roles.values().contains(QByteArray("display")));
+  QVERIFY(roles.values().contains(QByteArray("completed")));
+  QVERIFY(roles.values().contains(QByteArray("language")));
+}
+
+void MathRendererSmokeTest::markdownStreamModelAppendKeepsCommittedBlockIds() {
+  QsNativeMarkdownStream model;
+  model.setContent(QStringLiteral("Intro\n\n```rust\nfn main() {}"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+  const QModelIndex first = model.index(0, 0);
+  const int firstId = model.data(first, Qt::UserRole).toInt();
+
+  model.setContent(QStringLiteral("Intro\n\n```rust\nfn main() {}\nprintln!();"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole).toInt(), firstId);
+  QCOMPARE(model.data(model.index(1, 0), Qt::UserRole + 7).toString(), QStringLiteral("rust"));
+}
+
+void MathRendererSmokeTest::markdownStreamModelNonAppendResetsRows() {
+  QsNativeMarkdownStream model;
+  model.setContent(QStringLiteral("First\n\nSecond"));
+  QCOMPARE(model.rowCount(QModelIndex()), 2);
+
+  model.setContent(QStringLiteral("Replacement"));
+
+  QCOMPARE(model.rowCount(QModelIndex()), 1);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 4).toString(),
+           QStringLiteral("Replacement"));
+}
+
+void MathRendererSmokeTest::markdownStreamModelStreamingFalseFinalizesPending() {
+  QsNativeMarkdownStream model;
+  model.setContent(QStringLiteral("Hello **world"));
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 6).toBool(), false);
+
+  model.setStreaming(false);
+
+  QCOMPARE(model.rowCount(QModelIndex()), 1);
+  QCOMPARE(model.data(model.index(0, 0), Qt::UserRole + 6).toBool(), true);
 }
 
 QTEST_MAIN(MathRendererSmokeTest)

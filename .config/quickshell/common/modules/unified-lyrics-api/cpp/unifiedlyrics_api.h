@@ -9,7 +9,33 @@
 #include <new>
 
 // Opaque per-instance handle owned by the C++ `QsNativeUnifiedLyrics` `QObject`.
+//
+// Coalesces overlapping `refresh()` calls: each call claims a new monotonic
+// request id and publishes it as `current_request`. The 30s watchdog thread
+// and the fetch thread spawned by the same call each try to atomically CAS
+// `current_request` from `request_id` to `request_id + 1` before delivering;
+// only one of the two can ever win, so a fetch that completes before the
+// watchdog fires can never be clobbered by a spurious timeout, and a
+// superseded/late-arriving outcome from an old refresh is silently dropped
+// instead of clobbering a newer one.
 struct UnifiedLyricsHandle;
+
+// Terminal outcome of a `refresh()` call (success, provider failure, or a 30s
+// timeout), borrowed for the duration of the callback only. `provider` feeds
+// the `metadata` map's sole `"provider"` key; `lines_json` is a JSON-encoded
+// `Vec<Line>` (see module docs for why lines travel as JSON).
+struct UnifiedLyricsResultC {
+  bool loaded;
+  const char *status;
+  const char *error;
+  const char *source;
+  const char *sync_type;
+  const char *provider;
+  const char *lines_json;
+};
+
+// Delivers a `UnifiedLyricsResultC` (borrowed for the call only) to the C++ side.
+using UnifiedLyricsResultFn = void(*)(void*, const UnifiedLyricsResultC*);
 
 extern "C" {
 
@@ -19,14 +45,19 @@ UnifiedLyricsHandle *QsNative_UnifiedLyrics_New();
 // `handle` must be null or a pointer from `QsNative_UnifiedLyrics_New` not yet freed.
 void QsNative_UnifiedLyrics_Delete(UnifiedLyricsHandle *handle);
 
-// STUB refresh: validates that a track and artist are present but performs no
-// network fetch. Returns `false` when `track_name` or `artist_name` is empty
-// after trim, `true` otherwise. No properties change.
+// Validates the request and, if valid, kicks off the background fetch (plus a
+// 30s watchdog) and returns `true` immediately; `cb` fires exactly once, later,
+// with the outcome. Returns `false` without touching any state or spawning
+// anything when `track_name`/`artist_name` is empty after trimming (mirrors
+// the original early-return validation).
 //
 // # Safety
 // `handle` must be valid; the string args must be null or valid NUL-terminated
-// strings for the duration of the call.
+// strings for the duration of the call; `ctx`/`cb` must remain valid until `cb`
+// fires (or forever, if it never does).
 bool QsNative_UnifiedLyrics_Refresh(UnifiedLyricsHandle *handle,
+                                    void *ctx,
+                                    UnifiedLyricsResultFn cb,
                                     const char *spotify_track_ref,
                                     const char *track_name,
                                     const char *artist_name,

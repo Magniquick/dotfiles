@@ -6,11 +6,16 @@
 #include <QVariantMap>
 
 struct UnifiedLyricsHandle;
+struct UnifiedLyricsResultC;
 
-// STUB lyrics client. Preserves the UnifiedLyricsClient QML surface (8 read-only
-// NOTIFY properties + refresh()) but performs no network fetch: every property
-// stays at its default and refresh() only validates its inputs.
-// TODO(stage2): restore threaded fetch + queued result delivery.
+// Unified lyrics client (Spotify/NetEase/LRCLIB). `refresh()` validates its
+// inputs synchronously (setting `error`/`status` and returning false if
+// track/artist is missing, mirroring the Rust-side early return) and otherwise
+// puts the object into the "fetching" state immediately, then lets Rust run the
+// provider pipeline (+ 30s watchdog) on background threads. Exactly one
+// `resultCallback` fires per accepted refresh, carrying the terminal outcome
+// (success/error/timeout) as a borrowed `UnifiedLyricsResultC`; this QObject
+// deep-copies it and applies it on the Qt thread.
 class QsNativeUnifiedLyrics : public QObject {
   Q_OBJECT
 
@@ -51,6 +56,30 @@ signals:
   void linesChanged();
 
 private:
+  // Qt-owned copy of a terminal refresh outcome (deep-copied off the borrowed
+  // UnifiedLyricsResultC during the callback).
+  struct Result {
+    bool loaded = false;
+    QString status;
+    QString error;
+    QString source;
+    QString syncType;
+    QVariantMap metadata;
+    QVariantList lines;
+  };
+
+  static void resultCallback(void* ctx, const UnifiedLyricsResultC* result);
+  void applyResult(const Result& result);
+
+  void setBusy(bool value);
+  void setLoaded(bool value);
+  void setStatus(const QString& value);
+  void setError(const QString& value);
+  void setSource(const QString& value);
+  void setSyncType(const QString& value);
+  void setMetadata(const QVariantMap& value);
+  void setLines(const QVariantList& value);
+
   UnifiedLyricsHandle* m_handle;
 
   bool m_busy = false;

@@ -5,14 +5,16 @@
 #include <QVariantList>
 
 struct SystemdFailedHandle;
+struct SystemdFailedSnapshotC;
 
-// STUB: failed-systemd-unit provider. Rust currently delivers an empty snapshot
-// per refresh; this QObject applies it on the Qt thread. All properties update
-// together, so a single `changed()` signal drives every binding (QML's
-// per-property handlers — onFailed_countChanged, onErrorChanged — fire off it).
-//
-// TODO(stage2): restore the debounce worker + systemd D-Bus listeners in Rust so
-// refreshes carry real failed-unit data.
+// Failed-systemd-unit provider (system + user scopes). Rust snapshots
+// `systemctl [--user] list-units --failed --output=json` on a worker thread
+// (`start()`/`refresh()`), then keeps refreshing on a 250ms-debounced timer
+// driven by `systemd1` D-Bus manager signals (`scheduleRefresh()` is the
+// manual/QML-facing debounce tick). This QObject deep-copies each delivered
+// `SystemdFailedSnapshotC` on the Qt thread. All properties update together,
+// so a single `changed()` signal drives every binding (QML's per-property
+// handlers — onFailed_countChanged, onErrorChanged — fire off it).
 class QsNativeSystemdFailedProvider : public QObject {
   Q_OBJECT
 
@@ -46,8 +48,10 @@ signals:
   void changed();
 
 private:
-  static void snapshotCallback(void* ctx, const char* json);
-  void applySnapshot(const QString& json);
+  static void snapshotCallback(void* ctx, const SystemdFailedSnapshotC* snap);
+  void applySnapshot(int systemFailedCount, int userFailedCount, int failedCount,
+                     const QVariantList& systemFailedUnits, const QVariantList& userFailedUnits,
+                     const QString& lastChecked, const QString& error);
 
   SystemdFailedHandle* m_handle;
 

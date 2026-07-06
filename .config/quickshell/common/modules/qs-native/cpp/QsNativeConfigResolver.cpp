@@ -2,22 +2,26 @@
 #include "QsNativeGlue.h"
 #include "qsnative_api.h"
 
-QsNativeConfigResolver::QsNativeConfigResolver(QObject* parent)
-    : QObject(parent), m_handle(QsNative_ConfigResolver_New()) {}
+#include <QString>
 
-QsNativeConfigResolver::~QsNativeConfigResolver() {
-  QsNative_ConfigResolver_Delete(m_handle);
+auto QsNativeConfigResolver::refresh() -> bool {
+  QsNative_ConfigResolver_Refresh(this, &QsNativeConfigResolver::entriesCallback);
+  return true;
 }
 
-// Synchronous: Rust resolves config + secrets and returns an owned JSON object
-// (string -> string) that we own and must free.
-// TODO(stage2): backend is a stub, so this currently yields an empty map.
-auto QsNativeConfigResolver::refresh() -> bool {
-  QVariantMap next = qsn::takeObject(QsNative_ConfigResolver_Refresh(m_handle));
+void QsNativeConfigResolver::entriesCallback(void* ctx, const ConfigEntryC* entries, size_t len) {
+  auto* self = static_cast<QsNativeConfigResolver*>(ctx);
 
-  if (next != m_values) {
-    m_values = next;
-    emit valuesChanged();
+  // Deep-copy synchronously: the char* fields are only valid for this call.
+  QVariantMap values;
+  for (size_t i = 0; i < len; ++i) {
+    values.insert(QString::fromUtf8(entries[i].key), QString::fromUtf8(entries[i].value));
   }
-  return true;
+
+  qsn::postToObject(self, [self, values]() { self->applyValues(values); });
+}
+
+void QsNativeConfigResolver::applyValues(const QVariantMap& values) {
+  m_values = values;
+  emit valuesChanged();
 }

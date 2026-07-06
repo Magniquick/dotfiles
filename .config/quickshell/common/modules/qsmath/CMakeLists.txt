@@ -79,6 +79,7 @@ if(BUILD_TESTING)
     add_executable(qsmath_render_smoke
         tests/render_smoke.cpp
         cpp/MathRenderer.cpp
+        cpp/QsNativeMarkdownStream.cpp
     )
     target_include_directories(qsmath_render_smoke PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cpp"

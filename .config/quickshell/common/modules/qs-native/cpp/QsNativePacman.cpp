@@ -2,10 +2,6 @@
 #include "QsNativeGlue.h"
 #include "qsnative_api.h"
 
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-
 QsNativePacman::QsNativePacman(QObject* parent)
     : QAbstractListModel(parent), m_handle(QsNative_Pacman_New()) {}
 
@@ -58,44 +54,50 @@ auto QsNativePacman::sync() -> bool {
   return true;
 }
 
-void QsNativePacman::snapshotCallback(void* ctx, const char* json) {
+void QsNativePacman::snapshotCallback(void* ctx, const PacmanSnapshotC* snap) {
   auto* self = static_cast<QsNativePacman*>(ctx);
-  const QString payload = (json != nullptr) ? QString::fromUtf8(json) : QString();
-  qsn::postToObject(self, [self, payload]() { self->applySnapshot(payload); });
-}
-
-void QsNativePacman::applySnapshot(const QString& json) {
-  const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-  if (!doc.isObject()) {
+  if (snap == nullptr) {
     return;
   }
-  const QJsonObject o = doc.object();
 
+  // Deep-copy synchronously: the char* fields (row-level and aggregate) are
+  // only valid for the duration of this call.
   QList<UpdateItem> items;
-  const QJsonArray rawItems = o.value(QStringLiteral("items")).toArray();
-  items.reserve(static_cast<qsizetype>(rawItems.size()));
-  for (const QJsonValue& value : rawItems) {
-    const QJsonObject row = value.toObject();
+  items.reserve(static_cast<qsizetype>(snap->items_len));
+  for (size_t i = 0; i < snap->items_len; ++i) {
+    const UpdateItemC& row = snap->items[i];
     items.append(UpdateItem{
-        row.value(QStringLiteral("name")).toString(),
-        row.value(QStringLiteral("old_version")).toString(),
-        row.value(QStringLiteral("new_version")).toString(),
-        row.value(QStringLiteral("source")).toString(),
+        QString::fromUtf8(row.name),
+        QString::fromUtf8(row.old_version),
+        QString::fromUtf8(row.new_version),
+        QString::fromUtf8(row.source),
     });
   }
 
+  const int updatesCount = snap->updates_count;
+  const int aurUpdatesCount = snap->aur_updates_count;
+  const QString updatesText = QString::fromUtf8(snap->updates_text);
+  const QString aurUpdatesText = QString::fromUtf8(snap->aur_updates_text);
+  const QString lastChecked = QString::fromUtf8(snap->last_checked);
+  const QString error = QString::fromUtf8(snap->error);
+
+  qsn::postToObject(self, [self, items, updatesCount, aurUpdatesCount, updatesText,
+                            aurUpdatesText, lastChecked, error]() {
+    self->applySnapshot(items, updatesCount, aurUpdatesCount, updatesText, aurUpdatesText,
+                        lastChecked, error);
+  });
+}
+
+void QsNativePacman::applySnapshot(const QList<UpdateItem>& items, int updatesCount,
+                                    int aurUpdatesCount, const QString& updatesText,
+                                    const QString& aurUpdatesText, const QString& lastChecked,
+                                    const QString& error) {
   beginResetModel();
-  m_items = std::move(items);
+  m_items = items;
   endResetModel();
 
-  const int updatesCount = o.value(QStringLiteral("updates_count")).toInt();
-  const int aurUpdatesCount = o.value(QStringLiteral("aur_updates_count")).toInt();
   const int itemsCount = static_cast<int>(m_items.size());
-  const QString updatesText = o.value(QStringLiteral("updates_text")).toString();
-  const QString aurUpdatesText = o.value(QStringLiteral("aur_updates_text")).toString();
-  const QString lastChecked = o.value(QStringLiteral("last_checked")).toString();
   const bool hasUpdates = itemsCount > 0;
-  const QString error = o.value(QStringLiteral("error")).toString();
 
   if (updatesCount != m_updatesCount) {
     m_updatesCount = updatesCount;
