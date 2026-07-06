@@ -5,6 +5,9 @@ pub struct GmailAccount {
 }
 
 impl GmailAccount {
+    /// # Errors
+    ///
+    /// Returns an error string if the id or address is empty after trimming.
     pub fn load(id: &str, address: &str) -> Result<Self, String> {
         let id = id.trim();
         if id.is_empty() {

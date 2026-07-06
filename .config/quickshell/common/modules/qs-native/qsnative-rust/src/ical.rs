@@ -1,23 +1,14 @@
-use core::pin::Pin;
 use std::collections::HashMap;
+use std::os::raw::c_void;
 use std::thread;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, TimeZone, Utc};
-use cxx_qt::Threading;
-use cxx_qt_lib::QString;
 use google_calendar3 as calendar3;
 use serde::Serialize;
 
 use crate::app_config::{self, CalendarSource};
+use crate::ffi::{emit_snapshot, QsNativeUpdateFn};
 use crate::google_auth;
-
-#[derive(Default)]
-pub struct IcalCacheRust {
-    events_json: QString,
-    generated_at: QString,
-    status: QString,
-    error: QString,
-}
 
 #[derive(Debug, Serialize, Clone)]
 struct EventOut {
@@ -45,85 +36,28 @@ struct ParsedEvent {
     end_date_exclusive: DateTime<Local>,
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    impl cxx_qt::Threading for IcalCache {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(QString, events_json, cxx_name = "events_json")]
-        #[qproperty(QString, generated_at, cxx_name = "generated_at")]
-        #[qproperty(QString, status)]
-        #[qproperty(QString, error)]
-        type IcalCache = super::IcalCacheRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn refresh(self: Pin<&mut IcalCache>, days: i32) -> bool;
-    }
-
-    impl cxx_qt::Initialize for IcalCache {}
+/// Fetches the configured Google Calendars on a background thread and delivers
+/// the full JSON payload (`{generatedAt, status, error?, eventsByDay}`) to C++
+/// via `cb`. The C++ `QsNativeIcal` copies the borrowed string, marshals it onto
+/// the Qt thread, and parses `generatedAt`/`status`/`error` out of it before
+/// applying `events_json` as the change trigger.
+///
+/// # Safety
+/// `ctx`/`cb` must remain valid until `cb` fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Ical_Refresh(
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+    days: i32,
+) {
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let payload = run_refresh(days);
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, payload) };
+    });
 }
 
-impl cxx_qt::Initialize for ffi::IcalCache {
-    fn initialize(self: Pin<&mut Self>) {
-        crate::install_panic_hook();
-    }
-}
-
-impl ffi::IcalCache {
-    pub fn refresh(self: Pin<&mut Self>, days: i32) -> bool {
-        let qt_thread = self.as_ref().qt_thread();
-        thread::spawn(move || {
-            let result = refresh(days);
-            let _ = qt_thread.queue(move |mut cache| {
-                cache.as_mut().apply_refresh_json(result);
-            });
-        });
-        true
-    }
-
-    fn apply_refresh_json(mut self: Pin<&mut Self>, payload_json: String) {
-        let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload_json) else {
-            self.as_mut().set_error(QString::from("Invalid response"));
-            return;
-        };
-        let Some(payload) = payload.as_object() else {
-            self.as_mut().set_error(QString::from("Invalid response"));
-            return;
-        };
-
-        self.as_mut().set_generated_at(QString::from(
-            payload
-                .get("generatedAt")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default(),
-        ));
-        self.as_mut().set_status(QString::from(
-            payload
-                .get("status")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default(),
-        ));
-        self.as_mut().set_error(QString::from(
-            payload
-                .get("error")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default(),
-        ));
-        self.set_events_json(QString::from(payload_json));
-    }
-}
-
-fn refresh(days: i32) -> String {
+fn run_refresh(days: i32) -> String {
     let days = if days <= 0 { 180 } else { days };
     let sources = match app_config::load_calendar_sources(&app_config::default_path()) {
         Ok(sources) => sources,
@@ -149,7 +83,7 @@ fn refresh(days: i32) -> String {
             if !errors.is_empty() {
                 eprintln!("[IcalCache] {status}: {}", errors.join("; "));
             }
-            marshal_output(Output {
+            marshal_output(&Output {
                 generated_at: Local::now().to_rfc3339(),
                 status: status.to_owned(),
                 error: (!errors.is_empty()).then(|| errors.join("; ")),
@@ -368,7 +302,7 @@ fn event_range(days: i32) -> (DateTime<Local>, DateTime<Local>) {
         NaiveDate::from_ymd_opt(now.year(), now.month(), 1).expect("current month is valid"),
     )
     .expect("local month start exists");
-    (start, start + Duration::days(days as i64))
+    (start, start + Duration::days(i64::from(days)))
 }
 
 fn organize_events(
@@ -424,7 +358,7 @@ fn eq_ignore_ascii_case(value: Option<&str>, expected: &str) -> bool {
 
 fn output_error(message: String) -> String {
     eprintln!("[IcalCache] error: {message}");
-    marshal_output(Output {
+    marshal_output(&Output {
         generated_at: Local::now().to_rfc3339(),
         status: "error".to_owned(),
         error: Some(message),
@@ -432,8 +366,8 @@ fn output_error(message: String) -> String {
     })
 }
 
-fn marshal_output(output: Output) -> String {
-    serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_owned())
+fn marshal_output(output: &Output) -> String {
+    serde_json::to_string(output).unwrap_or_else(|_| "{}".to_owned())
 }
 
 #[cfg(test)]

@@ -45,6 +45,10 @@ pub struct ServerSnapshot {
     pub capabilities: BTreeMap<String, Value>,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "bools mirror the distinct MCP tool annotation flags (readOnly/destructive/openWorld/idempotent) and are serialized individually"
+)]
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ToolSnapshot {
     pub server_id: String,
@@ -82,6 +86,10 @@ pub struct Snapshot {
     pub error: String,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "bools mirror the distinct MCP tool annotation flags (readOnly/destructive/openWorld/idempotent) and are serialized individually"
+)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct ToolDescriptor {
     pub name: String,
@@ -139,10 +147,17 @@ pub struct ToolResult {
     pub duration_ms: i64,
 }
 
+#[must_use]
 pub fn refresh() -> String {
     to_json_string(&snapshot())
 }
 
+/// Builds the flattened list of tool descriptors from the current snapshot.
+///
+/// # Errors
+///
+/// Returns the snapshot error string when no tools are available and the
+/// snapshot reported a non-empty error.
 pub fn tool_descriptors() -> Result<Vec<ToolDescriptor>, String> {
     let snapshot = snapshot();
     let server_instructions = snapshot
@@ -155,7 +170,7 @@ pub fn tool_descriptors() -> Result<Vec<ToolDescriptor>, String> {
     for tool in snapshot.tools {
         let mut name = tool.qualified_name.clone();
         if is_local_tool_server(&tool.server_id) {
-            name = tool.name.clone();
+            name.clone_from(&tool.name);
         }
         let descriptor = ToolDescriptor {
             name,
@@ -187,7 +202,8 @@ pub fn tool_descriptors() -> Result<Vec<ToolDescriptor>, String> {
     Ok(out)
 }
 
-pub fn call_tool(server_id: &str, tool_name: &str, arguments: Map<String, Value>) -> ToolResult {
+#[must_use]
+pub fn call_tool(server_id: &str, tool_name: &str, arguments: &Map<String, Value>) -> ToolResult {
     let (server_id, tool_name) = split_qualified_tool_name(server_id, tool_name);
     if server_id == BUILTIN_SERVER_ID || (server_id.is_empty() && is_builtin_tool(&tool_name)) {
         return call_builtin_tool(&tool_name, arguments);
@@ -234,6 +250,7 @@ pub fn tool_result_transcript_payload(result: &ToolResult) -> Map<String, Value>
     payload
 }
 
+#[must_use]
 pub fn tool_result_transcript_output(result: &ToolResult) -> String {
     let payload = tool_result_transcript_payload(result);
     if payload.is_empty() {
@@ -324,7 +341,7 @@ fn builtin_tool_snapshots() -> Vec<ToolSnapshot> {
         description: "Run a local shell command and return stdout, stderr, and exit status."
             .to_owned(),
         input_schema: object_schema(
-            BTreeMap::from([
+            &BTreeMap::from([
                 (
                     "command".to_owned(),
                     string_prop("Command to execute inside the leftpanel bubblewrap sandbox."),
@@ -342,7 +359,7 @@ fn builtin_tool_snapshots() -> Vec<ToolSnapshot> {
                     ),
                 ),
             ]),
-            vec!["command"],
+            &["command"],
         ),
         read_only: false,
         destructive: true,
@@ -353,9 +370,9 @@ fn builtin_tool_snapshots() -> Vec<ToolSnapshot> {
     }]
 }
 
-fn call_builtin_tool(tool_name: &str, arguments: Map<String, Value>) -> ToolResult {
+fn call_builtin_tool(tool_name: &str, arguments: &Map<String, Value>) -> ToolResult {
     match tool_name.trim() {
-        "shell_command" => call_shell_command(&arguments),
+        "shell_command" => call_shell_command(arguments),
         _ => tool_error(tool_name, &format!("Unknown built-in tool: {tool_name}")),
     }
 }
@@ -373,6 +390,10 @@ fn call_shell_command(arguments: &Map<String, Value>) -> ToolResult {
     let bbwrap = PathBuf::from(default_shell_dir())
         .join("tools")
         .join("bbwrap");
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "number_arg clamps to [1000, 120000], always non-negative"
+    )]
     let timeout_ms = number_arg(arguments, "timeout_ms", 30_000, 1_000, 120_000) as u64;
     let started = Instant::now();
     let shell_command = sandbox_shell_command(&sandbox_cwd, &command);
@@ -415,7 +436,7 @@ fn call_shell_command(arguments: &Map<String, Value>) -> ToolResult {
                         "timeout_ms": timeout_ms,
                     })),
                     is_error: true,
-                    duration_ms: started.elapsed().as_millis() as i64,
+                    duration_ms: elapsed_millis_i64(started),
                     ..ToolResult::default()
                 };
             }
@@ -450,10 +471,10 @@ fn call_shell_command(arguments: &Map<String, Value>) -> ToolResult {
             "success": output.status.success(),
             "stdout": stdout,
             "stderr": stderr,
-            "duration_ms": started.elapsed().as_millis() as i64,
+            "duration_ms": elapsed_millis_i64(started),
         })),
         is_error: !output.status.success(),
-        duration_ms: started.elapsed().as_millis() as i64,
+        duration_ms: elapsed_millis_i64(started),
         ..ToolResult::default()
     }
 }
@@ -467,7 +488,7 @@ fn email_tool_snapshots() -> Vec<ToolSnapshot> {
             qualified_name: "email__email_accounts".to_owned(),
             title: "Email accounts".to_owned(),
             description: "List configured email accounts from leftpanel/config.toml without exposing credentials.".to_owned(),
-            input_schema: object_schema(BTreeMap::new(), Vec::new()),
+            input_schema: object_schema(&BTreeMap::new(), &[]),
             read_only: true,
             risk: "read".to_owned(),
             ..ToolSnapshot::default()
@@ -480,13 +501,13 @@ fn email_tool_snapshots() -> Vec<ToolSnapshot> {
             title: "Search email".to_owned(),
             description: "Search a Gmail account for messages by Gmail-style query operators.".to_owned(),
             input_schema: object_schema(
-                BTreeMap::from([
+                &BTreeMap::from([
                     ("account".to_owned(), email_account_prop()),
                     ("query".to_owned(), string_prop("Gmail-style search query.")),
                     ("mailbox".to_owned(), string_prop("Mailbox label. Defaults to gmail.")),
                     ("limit".to_owned(), number_prop("Maximum messages to return, capped at 50. Defaults to 10.")),
                 ]),
-                Vec::new(),
+                &[],
             ),
             read_only: true,
             risk: "read".to_owned(),
@@ -500,13 +521,13 @@ fn email_tool_snapshots() -> Vec<ToolSnapshot> {
             title: "Read email".to_owned(),
             description: "Read one Gmail API message id and return headers plus a bounded text/html body excerpt.".to_owned(),
             input_schema: object_schema(
-                BTreeMap::from([
+                &BTreeMap::from([
                     ("account".to_owned(), email_account_prop()),
                     ("id".to_owned(), string_prop("Gmail API message id from email_search.")),
                     ("gmail_id".to_owned(), string_prop("Alias for id.")),
                     ("max_body_chars".to_owned(), number_prop("Maximum body characters, capped at 100000. Defaults to 20000.")),
                 ]),
-                Vec::new(),
+                &[],
             ),
             read_only: true,
             risk: "read".to_owned(),
@@ -532,11 +553,13 @@ fn sandbox_dir() -> PathBuf {
     std::env::var("LEFTPANEL_AI_SANDBOX")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_owned());
-            PathBuf::from(home).join("tmp").join("ai-sandbox")
-        })
+        .map_or_else(
+            || {
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_owned());
+                PathBuf::from(home).join("tmp").join("ai-sandbox")
+            },
+            PathBuf::from,
+        )
 }
 
 fn sandbox_relative_cwd(raw: &str) -> Result<String, String> {
@@ -579,11 +602,11 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn call_email_tool(tool_name: &str, arguments: Map<String, Value>) -> ToolResult {
+fn call_email_tool(tool_name: &str, arguments: &Map<String, Value>) -> ToolResult {
     match tool_name.trim() {
         "email_accounts" => call_email_accounts(),
-        "email_search" => call_email_search(&arguments),
-        "email_read" => call_email_read(&arguments),
+        "email_search" => call_email_search(arguments),
+        "email_read" => call_email_read(arguments),
         "email_send" => tool_error(
             "email_send",
             "email_send is disabled by default; leftpanel email MCP is read-only.",
@@ -638,6 +661,11 @@ fn call_email_search(arguments: &Map<String, Value>) -> ToolResult {
             "Rust email MCP currently supports Gmail accounts only",
         );
     }
+    #[expect(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "number_arg clamps to [1, 50], fits u32"
+    )]
     let limit = number_arg(arguments, "limit", 10, 1, 50) as u32;
     let query = string_arg(arguments, "query");
     let gmail_account = match GmailAccount::load(&account.id, account.address.trim()) {
@@ -673,10 +701,10 @@ fn call_email_search(arguments: &Map<String, Value>) -> ToolResult {
             Err(error) => return tool_error("email_search", &error),
         };
         if message.id.trim().is_empty() {
-            message.id = listed.id.clone();
+            message.id.clone_from(&listed.id);
         }
         if message.thread_id.trim().is_empty() {
-            message.thread_id = listed.thread_id.clone();
+            message.thread_id.clone_from(&listed.thread_id);
         }
         lines.push(format!(
             "- Gmail {}: {}",
@@ -686,7 +714,7 @@ fn call_email_search(arguments: &Map<String, Value>) -> ToolResult {
         messages.push(gmail_message_summary(&message, false));
     }
     let matched_count = if list.estimate == 0 {
-        list.messages.len() as i64
+        i64::try_from(list.messages.len()).unwrap_or(i64::MAX)
     } else {
         list.estimate
     };
@@ -726,6 +754,11 @@ fn call_email_read(arguments: &Map<String, Value>) -> ToolResult {
             "id is required for Gmail accounts; pass the id or gmail_id returned by email_search",
         );
     }
+    #[expect(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "number_arg clamps to [1000, 100000], fits usize"
+    )]
     let max_body_chars = number_arg(arguments, "max_body_chars", 20_000, 1_000, 100_000) as usize;
     let gmail_account = match GmailAccount::load(&account.id, account.address.trim()) {
         Ok(account) => account,
@@ -737,7 +770,7 @@ fn call_email_read(arguments: &Map<String, Value>) -> ToolResult {
         Err(error) => return tool_error("email_read", &error),
     };
     if message.id.trim().is_empty() {
-        message.id = id.clone();
+        message.id.clone_from(&id);
     }
     ToolResult {
         name: "email_read".to_owned(),
@@ -832,7 +865,7 @@ fn split_qualified_tool_name(server_id: &str, tool_name: &str) -> (String, Strin
     let mut tool_name = tool_name.trim().to_owned();
     if server_id.is_empty() {
         if let Some((prefix, suffix)) = tool_name.split_once("__") {
-            server_id = prefix.to_owned();
+            prefix.clone_into(&mut server_id);
             tool_name = suffix.to_owned();
         }
     } else {
@@ -860,8 +893,8 @@ fn risk_for_tool(read_only: bool, destructive: bool) -> &'static str {
 }
 
 fn object_schema(
-    properties: BTreeMap<String, Value>,
-    required: Vec<&str>,
+    properties: &BTreeMap<String, Value>,
+    required: &[&str],
 ) -> BTreeMap<String, Value> {
     let mut schema = BTreeMap::from([
         ("type".to_owned(), Value::String("object".to_owned())),
@@ -886,7 +919,10 @@ fn number_prop(description: &str) -> Value {
 }
 
 fn map_from_value(value: Value) -> Map<String, Value> {
-    value.as_object().cloned().unwrap_or_default()
+    match value {
+        Value::Object(map) => map,
+        _ => Map::new(),
+    }
 }
 
 fn string_arg(arguments: &Map<String, Value>, key: &str) -> String {
@@ -898,6 +934,10 @@ fn string_arg(arguments: &Map<String, Value>, key: &str) -> String {
         .to_owned()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "JSON float args are coerced to a whole-number fallback and clamped to [min, max]"
+)]
 fn number_arg(arguments: &Map<String, Value>, key: &str, default: i64, min: i64, max: i64) -> i64 {
     arguments
         .get(key)
@@ -906,6 +946,15 @@ fn number_arg(arguments: &Map<String, Value>, key: &str, default: i64, min: i64,
         .clamp(min, max)
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "elapsed millis for a bounded shell command fits comfortably in i64"
+)]
+fn elapsed_millis_i64(started: Instant) -> i64 {
+    started.elapsed().as_millis() as i64
+}
+
+#[must_use]
 pub fn tool_error(name: &str, text: &str) -> ToolResult {
     ToolResult {
         name: name.trim().to_owned(),
@@ -927,6 +976,10 @@ fn alloc_c_string(value: String) -> *mut c_char {
         .into_raw()
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires an fn(&T) -> bool signature"
+)]
 fn is_zero_i64(value: &i64) -> bool {
     *value == 0
 }

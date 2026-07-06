@@ -59,6 +59,7 @@ struct RawCalendarAccount {
 
 /// Returns the path to `leftpanel/config.toml`, searching from environment
 /// variables and the current directory upwards.
+#[must_use]
 pub fn default_path() -> PathBuf {
     for key in ["QS_SHELL_DIR", "QUICKSHELL_SHELL_DIR"] {
         if let Some(path) = config_path_in_dir(std::env::var(key).unwrap_or_default()) {
@@ -99,6 +100,11 @@ fn load_config(path: &Path) -> Result<Config, String> {
     toml::from_str::<Config>(&raw).map_err(|e| e.to_string())
 }
 
+/// Loads and validates a single Gmail account by id.
+///
+/// # Errors
+/// Returns `Err` if the config cannot be read/parsed, the account is unknown,
+/// or the account is missing its address/provider or is not a Gmail account.
 pub fn load_account(path: &Path, account_id: &str) -> Result<EmailAccount, String> {
     let config = load_config(path)?;
     let wanted = account_id.trim();
@@ -128,6 +134,10 @@ pub fn load_account(path: &Path, account_id: &str) -> Result<EmailAccount, Strin
 }
 
 /// Loads every configured Gmail account.
+///
+/// # Errors
+/// Returns `Err` if the config cannot be read/parsed, or any Gmail account is
+/// missing its id or address.
 pub fn load_google_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
     let config = load_config(path)?;
     config
@@ -151,7 +161,10 @@ pub fn load_google_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
 }
 
 /// Returns calendar sources whose `account` field matches a configured email
-/// account. Sources with empty account/calendar_ids are silently dropped.
+/// account. Sources with empty `account`/`calendar_ids` are silently dropped.
+///
+/// # Errors
+/// Returns `Err` if the config cannot be read or parsed.
 pub fn load_calendar_sources(path: &Path) -> Result<Vec<CalendarSource>, String> {
     let config = load_config(path)?;
 
@@ -193,6 +206,10 @@ pub fn load_calendar_sources(path: &Path) -> Result<Vec<CalendarSource>, String>
 /// Loads, validates, and returns all configured email accounts.
 /// Accounts without an id are silently skipped. Accounts that fail
 /// validation (missing address, missing or non-gmail provider) return an Err.
+///
+/// # Errors
+/// Returns `Err` if the config cannot be read/parsed, or an account is missing
+/// its address/provider or has a non-Gmail provider.
 pub fn load_all_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
     let config = load_config(path)?;
     config
@@ -223,6 +240,9 @@ pub fn load_all_accounts(path: &Path) -> Result<Vec<EmailAccount>, String> {
 /// Returns the account whose `id` or `address` case-insensitively matches
 /// `selector`. If `selector` is empty the first account is returned.
 /// Returns `Err` if no accounts are configured or the selector does not match.
+///
+/// # Errors
+/// Returns `Err` if `accounts` is empty or no account matches `selector`.
 pub fn select_account_by_id_or_address<'a>(
     accounts: &'a [EmailAccount],
     selector: &str,

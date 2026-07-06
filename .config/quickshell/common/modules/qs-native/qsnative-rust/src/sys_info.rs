@@ -1,15 +1,14 @@
-use core::pin::Pin;
 use std::ffi::CString;
 use std::fs::{read_dir, read_to_string, File};
 use std::mem::size_of;
 use std::os::fd::AsRawFd;
+use std::os::raw::{c_char, c_void};
 use std::path::Path;
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
 use procfs::process::Process;
 use procfs::{
     CpuPressure, Current, CurrentSI, IoPressure, KernelStats, Meminfo, MemoryPressure, Uptime,
@@ -34,42 +33,6 @@ const BTRFS_BLOCK_GROUP_RAID1C3: u64 = 1 << 9;
 const BTRFS_BLOCK_GROUP_RAID1C4: u64 = 1 << 10;
 const BTRFS_BLOCK_GROUP_RAID56_MASK: u64 = BTRFS_BLOCK_GROUP_RAID5 | BTRFS_BLOCK_GROUP_RAID6;
 const BTRFS_SPACE_INFO_GLOBAL_RSV: u64 = 1 << 49;
-
-#[derive(Default)]
-pub struct SysInfoProviderRust {
-    cpu: f64,
-    mem: i32,
-    mem_used: QString,
-    mem_total: QString,
-    disk: i32,
-    disk_worst_case: i32,
-    disk_btrfs_available: bool,
-    disk_btrfs_free_est_gib: f64,
-    disk_btrfs_free_min_gib: f64,
-    disk_health: QString,
-    disk_wear: QString,
-    disk_device: QString,
-    temp: f64,
-    uptime: QString,
-    psi_cpu_some: f64,
-    psi_cpu_full: f64,
-    psi_mem_some: f64,
-    psi_mem_full: f64,
-    psi_io_some: f64,
-    psi_io_full: f64,
-    error: QString,
-    last_cpu_total: f64,
-    last_cpu_idle: f64,
-    last_disk_health_ms: i64,
-    disk_health_cache: String,
-    disk_wear_cache: String,
-    last_btrfs_ms: i64,
-    btrfs_available_cache: bool,
-    btrfs_disk_cache: i32,
-    btrfs_free_est_cache: f64,
-    btrfs_free_min_cache: f64,
-    btrfs_worst_case_cache: i32,
-}
 
 #[derive(Debug, Clone)]
 struct SysInfoSnapshot {
@@ -208,145 +171,173 @@ impl Default for BtrfsIoctlFsInfoArgs {
     }
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    impl cxx_qt::Threading for SysInfoProvider {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(f64, cpu)]
-        #[qproperty(i32, mem)]
-        #[qproperty(QString, mem_used, cxx_name = "mem_used")]
-        #[qproperty(QString, mem_total, cxx_name = "mem_total")]
-        #[qproperty(i32, disk)]
-        #[qproperty(i32, disk_worst_case, cxx_name = "disk_worst_case")]
-        #[qproperty(bool, disk_btrfs_available, cxx_name = "disk_btrfs_available")]
-        #[qproperty(f64, disk_btrfs_free_est_gib, cxx_name = "disk_btrfs_free_est_gib")]
-        #[qproperty(f64, disk_btrfs_free_min_gib, cxx_name = "disk_btrfs_free_min_gib")]
-        #[qproperty(QString, disk_health, cxx_name = "disk_health")]
-        #[qproperty(QString, disk_wear, cxx_name = "disk_wear")]
-        #[qproperty(QString, disk_device, cxx_name = "disk_device")]
-        #[qproperty(f64, temp)]
-        #[qproperty(QString, uptime)]
-        #[qproperty(f64, psi_cpu_some, cxx_name = "psi_cpu_some")]
-        #[qproperty(f64, psi_cpu_full, cxx_name = "psi_cpu_full")]
-        #[qproperty(f64, psi_mem_some, cxx_name = "psi_mem_some")]
-        #[qproperty(f64, psi_mem_full, cxx_name = "psi_mem_full")]
-        #[qproperty(f64, psi_io_some, cxx_name = "psi_io_some")]
-        #[qproperty(f64, psi_io_full, cxx_name = "psi_io_full")]
-        #[qproperty(QString, error)]
-        type SysInfoProvider = super::SysInfoProviderRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn refresh(self: Pin<&mut SysInfoProvider>) -> bool;
-    }
-
-    impl cxx_qt::Initialize for SysInfoProvider {}
-}
-
-impl cxx_qt::Initialize for ffi::SysInfoProvider {
-    fn initialize(mut self: Pin<&mut Self>) {
-        if self.disk_device().to_string().is_empty() {
-            self.as_mut()
-                .set_disk_device(QString::from(default_disk_device()));
-        }
-    }
-}
-
-impl ffi::SysInfoProvider {
-    pub fn refresh(self: Pin<&mut Self>) -> bool {
-        let state = self.as_ref().snapshot_state();
-        let qt_thread = self.as_ref().qt_thread();
-
-        thread::spawn(move || {
-            let snapshot = read_snapshot(state);
-            let _ = qt_thread.queue(move |mut provider| {
-                provider.as_mut().apply_snapshot(snapshot);
-            });
-        });
-
-        true
-    }
-
-    fn snapshot_state(self: Pin<&Self>) -> SysInfoState {
-        let rust = self.rust();
-        let disk_device = self.disk_device().to_string();
+impl SysInfoState {
+    fn initial() -> Self {
         SysInfoState {
-            disk_device: if disk_device.is_empty() {
-                default_disk_device()
-            } else {
-                disk_device
-            },
-            previous_cpu: rust.cpu,
-            last_cpu_total: rust.last_cpu_total,
-            last_cpu_idle: rust.last_cpu_idle,
-            last_disk_health_ms: rust.last_disk_health_ms,
-            disk_health_cache: rust.disk_health_cache.clone(),
-            disk_wear_cache: rust.disk_wear_cache.clone(),
-            last_btrfs_ms: rust.last_btrfs_ms,
-            btrfs_available_cache: rust.btrfs_available_cache,
-            btrfs_disk_cache: rust.btrfs_disk_cache,
-            btrfs_free_est_cache: rust.btrfs_free_est_cache,
-            btrfs_free_min_cache: rust.btrfs_free_min_cache,
-            btrfs_worst_case_cache: rust.btrfs_worst_case_cache,
+            disk_device: default_disk_device(),
+            previous_cpu: 0.0,
+            last_cpu_total: 0.0,
+            last_cpu_idle: 0.0,
+            last_disk_health_ms: 0,
+            disk_health_cache: String::new(),
+            disk_wear_cache: String::new(),
+            last_btrfs_ms: 0,
+            btrfs_available_cache: false,
+            btrfs_disk_cache: 0,
+            btrfs_free_est_cache: 0.0,
+            btrfs_free_min_cache: 0.0,
+            btrfs_worst_case_cache: 0,
         }
     }
 
-    fn apply_snapshot(mut self: Pin<&mut Self>, snapshot: SysInfoSnapshot) {
-        self.as_mut().set_cpu(snapshot.cpu);
-        self.as_mut().set_mem(snapshot.mem);
-        self.as_mut().set_mem_used(QString::from(snapshot.mem_used));
-        self.as_mut()
-            .set_mem_total(QString::from(snapshot.mem_total));
-        self.as_mut().set_disk(snapshot.disk);
-        self.as_mut().set_disk_worst_case(snapshot.disk_worst_case);
-        self.as_mut()
-            .set_disk_btrfs_available(snapshot.disk_btrfs_available);
-        self.as_mut()
-            .set_disk_btrfs_free_est_gib(snapshot.disk_btrfs_free_est_gib);
-        self.as_mut()
-            .set_disk_btrfs_free_min_gib(snapshot.disk_btrfs_free_min_gib);
-        self.as_mut()
-            .set_disk_health(QString::from(snapshot.disk_health_cache.clone()));
-        self.as_mut()
-            .set_disk_wear(QString::from(snapshot.disk_wear_cache.clone()));
-        self.as_mut()
-            .set_disk_device(QString::from(snapshot.disk_device));
-        self.as_mut().set_temp(snapshot.temp);
-        self.as_mut().set_uptime(QString::from(snapshot.uptime));
-        self.as_mut().set_psi_cpu_some(snapshot.psi_cpu_some);
-        self.as_mut().set_psi_cpu_full(snapshot.psi_cpu_full);
-        self.as_mut().set_psi_mem_some(snapshot.psi_mem_some);
-        self.as_mut().set_psi_mem_full(snapshot.psi_mem_full);
-        self.as_mut().set_psi_io_some(snapshot.psi_io_some);
-        self.as_mut().set_psi_io_full(snapshot.psi_io_full);
-        self.as_mut().set_error(QString::from(snapshot.error));
-
-        let mut rust = self.rust_mut();
-        let rust = rust.as_mut().get_mut();
-        rust.last_cpu_total = snapshot.cpu_total;
-        rust.last_cpu_idle = snapshot.cpu_idle;
-        rust.last_disk_health_ms = snapshot.last_disk_health_ms;
-        rust.disk_health_cache = snapshot.disk_health_cache;
-        rust.disk_wear_cache = snapshot.disk_wear_cache;
-        rust.last_btrfs_ms = snapshot.last_btrfs_ms;
-        rust.btrfs_available_cache = snapshot.btrfs_available_cache;
-        rust.btrfs_disk_cache = snapshot.btrfs_disk_cache;
-        rust.btrfs_free_est_cache = snapshot.btrfs_free_est_cache;
-        rust.btrfs_free_min_cache = snapshot.btrfs_free_min_cache;
-        rust.btrfs_worst_case_cache = snapshot.btrfs_worst_case_cache;
+    /// Folds the freshly-read caches back into the persistent state so the next
+    /// refresh sees the previous CPU sample and the throttled disk/btrfs caches.
+    fn absorb(&mut self, snapshot: &SysInfoSnapshot) {
+        self.disk_device.clone_from(&snapshot.disk_device);
+        self.previous_cpu = snapshot.cpu;
+        self.last_cpu_total = snapshot.cpu_total;
+        self.last_cpu_idle = snapshot.cpu_idle;
+        self.last_disk_health_ms = snapshot.last_disk_health_ms;
+        self.disk_health_cache.clone_from(&snapshot.disk_health_cache);
+        self.disk_wear_cache.clone_from(&snapshot.disk_wear_cache);
+        self.last_btrfs_ms = snapshot.last_btrfs_ms;
+        self.btrfs_available_cache = snapshot.btrfs_available_cache;
+        self.btrfs_disk_cache = snapshot.btrfs_disk_cache;
+        self.btrfs_free_est_cache = snapshot.btrfs_free_est_cache;
+        self.btrfs_free_min_cache = snapshot.btrfs_free_min_cache;
+        self.btrfs_worst_case_cache = snapshot.btrfs_worst_case_cache;
     }
 }
 
+/// Zero-copy snapshot handed to the C++ side. The `*const c_char` fields borrow
+/// `CString`s that live on the worker stack **only for the duration of the
+/// callback**; C++ must copy them (`QString::fromUtf8`) synchronously and must
+/// not retain the pointers. Fields map 1:1 to `SysInfoProvider` QML properties.
+#[repr(C)]
+pub struct SysInfoSnapshotC {
+    pub cpu: f64,
+    pub mem: i32,
+    pub mem_used: *const c_char,
+    pub mem_total: *const c_char,
+    pub disk: i32,
+    pub disk_worst_case: i32,
+    pub disk_btrfs_available: bool,
+    pub disk_btrfs_free_est_gib: f64,
+    pub disk_btrfs_free_min_gib: f64,
+    pub disk_health: *const c_char,
+    pub disk_wear: *const c_char,
+    pub disk_device: *const c_char,
+    pub temp: f64,
+    pub uptime: *const c_char,
+    pub psi_cpu_some: f64,
+    pub psi_cpu_full: f64,
+    pub psi_mem_some: f64,
+    pub psi_mem_full: f64,
+    pub psi_io_some: f64,
+    pub psi_io_full: f64,
+    pub error: *const c_char,
+}
+
+/// Delivers a `SysInfoSnapshotC` (borrowed for the call only) to the C++ side.
+pub type SysInfoSnapshotFn = unsafe extern "C" fn(*mut c_void, *const SysInfoSnapshotC);
+
+/// Builds a `CString`, falling back to empty on an interior NUL.
+fn cstr(value: &str) -> CString {
+    CString::new(value).unwrap_or_default()
+}
+
+/// Opaque per-instance handle owned by the C++ `QsNativeSysInfo` `QObject`.
+pub struct SysInfoHandle {
+    state: Arc<Mutex<SysInfoState>>,
+}
+
+#[no_mangle]
+pub extern "C" fn QsNative_SysInfo_New() -> *mut SysInfoHandle {
+    Box::into_raw(Box::new(SysInfoHandle {
+        state: Arc::new(Mutex::new(SysInfoState::initial())),
+    }))
+}
+
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_SysInfo_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_SysInfo_Delete(handle: *mut SysInfoHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
+    }
+}
+
+/// Reads system metrics on a background thread and delivers a `SysInfoSnapshotC`
+/// via `cb`. State (previous CPU sample, throttled disk/btrfs caches) lives in
+/// the handle behind a mutex, so overlapping refreshes serialize safely.
+///
+/// # Safety
+/// `handle` must be valid; `ctx`/`cb` must remain valid until `cb` fires.
+///
+/// # Panics
+/// The worker thread panics if the shared state mutex has been poisoned by a
+/// prior panic while holding the lock.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_SysInfo_Refresh(
+    handle: *mut SysInfoHandle,
+    ctx: *mut c_void,
+    cb: SysInfoSnapshotFn,
+) {
+    if handle.is_null() {
+        return;
+    }
+    let state = (*handle).state.clone();
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let input = state.lock().expect("sysinfo state poisoned").clone();
+        let snapshot = read_snapshot(input);
+        state
+            .lock()
+            .expect("sysinfo state poisoned")
+            .absorb(&snapshot);
+
+        // CStrings must outlive the callback; keep them bound in this scope.
+        let mem_used = cstr(&snapshot.mem_used);
+        let mem_total = cstr(&snapshot.mem_total);
+        let disk_health = cstr(&snapshot.disk_health_cache);
+        let disk_wear = cstr(&snapshot.disk_wear_cache);
+        let disk_device = cstr(&snapshot.disk_device);
+        let uptime = cstr(&snapshot.uptime);
+        let error = cstr(&snapshot.error);
+        let c = SysInfoSnapshotC {
+            cpu: snapshot.cpu,
+            mem: snapshot.mem,
+            mem_used: mem_used.as_ptr(),
+            mem_total: mem_total.as_ptr(),
+            disk: snapshot.disk,
+            disk_worst_case: snapshot.disk_worst_case,
+            disk_btrfs_available: snapshot.disk_btrfs_available,
+            disk_btrfs_free_est_gib: snapshot.disk_btrfs_free_est_gib,
+            disk_btrfs_free_min_gib: snapshot.disk_btrfs_free_min_gib,
+            disk_health: disk_health.as_ptr(),
+            disk_wear: disk_wear.as_ptr(),
+            disk_device: disk_device.as_ptr(),
+            temp: snapshot.temp,
+            uptime: uptime.as_ptr(),
+            psi_cpu_some: snapshot.psi_cpu_some,
+            psi_cpu_full: snapshot.psi_cpu_full,
+            psi_mem_some: snapshot.psi_mem_some,
+            psi_mem_full: snapshot.psi_mem_full,
+            psi_io_some: snapshot.psi_io_some,
+            psi_io_full: snapshot.psi_io_full,
+            error: error.as_ptr(),
+        };
+        cb(ctx as *mut c_void, &raw const c);
+    });
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    reason = "percentage/size math over kernel counters deliberately narrows to display ints/floats; body is a linear metric gather"
+)]
 fn read_snapshot(mut state: SysInfoState) -> SysInfoSnapshot {
     let mut errors = Vec::new();
     let mut cpu_total = 0.0;
@@ -354,9 +345,9 @@ fn read_snapshot(mut state: SysInfoState) -> SysInfoSnapshot {
     let mut cpu = state.previous_cpu;
 
     match KernelStats::current() {
-        Ok(stats) => {
-            cpu_total = cpu_total_ticks(&stats.total);
-            cpu_idle = (stats.total.idle + stats.total.iowait.unwrap_or(0)) as f64;
+        Ok(kernel_stats) => {
+            cpu_total = cpu_total_ticks(&kernel_stats.total);
+            cpu_idle = (kernel_stats.total.idle + kernel_stats.total.iowait.unwrap_or(0)) as f64;
             if state.last_cpu_total != 0.0 && cpu_total > state.last_cpu_total {
                 let dt = cpu_total - state.last_cpu_total;
                 let di = (cpu_idle - state.last_cpu_idle).clamp(0.0, dt);
@@ -427,38 +418,35 @@ fn read_snapshot(mut state: SysInfoState) -> SysInfoSnapshot {
     };
 
     let (psi_cpu_some, psi_cpu_full) = match CpuPressure::current() {
-        Ok(pressure) => (pressure.some.avg10 as f64, pressure.full.avg10 as f64),
+        Ok(pressure) => (f64::from(pressure.some.avg10), f64::from(pressure.full.avg10)),
         Err(error) => {
-            push_missing_tolerant_error(&mut errors, "psi cpu", error);
+            push_missing_tolerant_error(&mut errors, "psi cpu", &error);
             (0.0, 0.0)
         }
     };
     let (psi_mem_some, psi_mem_full) = match MemoryPressure::current() {
-        Ok(pressure) => (pressure.some.avg10 as f64, pressure.full.avg10 as f64),
+        Ok(pressure) => (f64::from(pressure.some.avg10), f64::from(pressure.full.avg10)),
         Err(error) => {
-            push_missing_tolerant_error(&mut errors, "psi memory", error);
+            push_missing_tolerant_error(&mut errors, "psi memory", &error);
             (0.0, 0.0)
         }
     };
     let (psi_io_some, psi_io_full) = match IoPressure::current() {
-        Ok(pressure) => (pressure.some.avg10 as f64, pressure.full.avg10 as f64),
+        Ok(pressure) => (f64::from(pressure.some.avg10), f64::from(pressure.full.avg10)),
         Err(error) => {
-            push_missing_tolerant_error(&mut errors, "psi io", error);
+            push_missing_tolerant_error(&mut errors, "psi io", &error);
             (0.0, 0.0)
         }
     };
 
     let now = now_ms();
     if state.disk_health_cache.is_empty() || now - state.last_disk_health_ms > 6 * 60 * 60 * 1000 {
-        match run_smartctl_json(&state.disk_device) {
-            Some(smart) => {
-                state.disk_health_cache = smart_health_label(&smart);
-                state.disk_wear_cache = smart_wear_label(&smart);
-            }
-            None => {
-                state.disk_health_cache = "Unknown (smartctl missing)".to_owned();
-                state.disk_wear_cache = "Unknown".to_owned();
-            }
+        if let Some(smart) = run_smartctl_json(&state.disk_device) {
+            state.disk_health_cache = smart_health_label(&smart);
+            state.disk_wear_cache = smart_wear_label(&smart);
+        } else {
+            "Unknown (smartctl missing)".clone_into(&mut state.disk_health_cache);
+            "Unknown".clone_into(&mut state.disk_wear_cache);
         }
         state.last_disk_health_ms = now;
     }
@@ -497,6 +485,10 @@ fn read_snapshot(mut state: SysInfoState) -> SysInfoSnapshot {
     }
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "summed jiffy counters are far below f64's exact-integer range in practice"
+)]
 fn cpu_total_ticks(cpu: &procfs::CpuTime) -> f64 {
     (cpu.user
         + cpu.nice
@@ -524,6 +516,11 @@ fn root_fs_type(errors: &mut Vec<String>) -> String {
     }
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "byte counts widen to f64 for a percentage that intentionally narrows back to i32"
+)]
 fn read_disk_percent(errors: &mut Vec<String>) -> i32 {
     let path = CString::new("/").expect("literal path has no nul");
     let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
@@ -577,8 +574,7 @@ fn read_temperature() -> f64 {
 fn read_zone_temp(zone: &Path) -> f64 {
     read_trimmed(zone.join("temp"))
         .and_then(|raw| raw.parse::<f64>().ok())
-        .map(|raw| raw / 1000.0)
-        .unwrap_or(0.0)
+        .map_or(0.0, |raw| raw / 1000.0)
 }
 
 fn read_trimmed(path: impl AsRef<Path>) -> Option<String> {
@@ -625,7 +621,7 @@ fn format_uptime(total: u64) -> String {
     parts.join(", ")
 }
 
-fn push_missing_tolerant_error(errors: &mut Vec<String>, prefix: &str, error: procfs::ProcError) {
+fn push_missing_tolerant_error(errors: &mut Vec<String>, prefix: &str, error: &procfs::ProcError) {
     if !matches!(error, procfs::ProcError::NotFound(_)) {
         errors.push(format!("{prefix}: {error}"));
     }
@@ -656,13 +652,16 @@ fn json_number_string(value: Option<&Value>) -> String {
     match value {
         Some(Value::Number(number)) => number
             .as_i64()
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| number.to_string()),
+            .map_or_else(|| number.to_string(), |value| value.to_string()),
         Some(Value::String(value)) => value.trim().to_owned(),
         _ => String::new(),
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "SMART attribute ids/values fit i32; wrap on the rare oversized field is acceptable"
+)]
 fn json_int_value(value: Option<&Value>) -> i32 {
     match value {
         Some(Value::Number(number)) => number.as_i64().unwrap_or(0) as i32,
@@ -746,23 +745,20 @@ fn btrfs_copies_for_flags(flags: u64) -> i32 {
         || flags & BTRFS_BLOCK_GROUP_DUP != 0
     {
         2
-    } else if flags & BTRFS_BLOCK_GROUP_RAID56_MASK != 0 {
-        0
     } else {
-        1
+        // RAID5/6 report 0 copies (unsupported here); everything else is single-copy.
+        i32::from(flags & BTRFS_BLOCK_GROUP_RAID56_MASK == 0)
     }
 }
 
 fn read_btrfs_usage_metrics() -> BtrfsUsageMetrics {
-    let file = match File::open("/") {
-        Ok(file) => file,
-        Err(_) => return BtrfsUsageMetrics::default(),
+    let Ok(file) = File::open("/") else {
+        return BtrfsUsageMetrics::default();
     };
     let fd = file.as_raw_fd();
 
-    let spaces = match load_btrfs_space_info(fd) {
-        Some(spaces) => spaces,
-        None => return BtrfsUsageMetrics::default(),
+    let Some(spaces) = load_btrfs_space_info(fd) else {
+        return BtrfsUsageMetrics::default();
     };
     let total_size = load_btrfs_device_size(fd);
     if total_size == 0 {
@@ -772,6 +768,10 @@ fn read_btrfs_usage_metrics() -> BtrfsUsageMetrics {
     calculate_btrfs_usage_metrics(&spaces, total_size)
 }
 
+#[expect(
+    clippy::cast_ptr_alignment,
+    reason = "the u8 buffer is a heap Vec allocation (>=8-aligned) sized as a btrfs space-info ioctl arg"
+)]
 fn load_btrfs_space_info(fd: i32) -> Option<Vec<BtrfsIoctlSpaceInfo>> {
     let mut header = BtrfsIoctlSpaceArgs::default();
     if ioctl_btrfs_space_info(fd, &mut header) < 0 || header.total_spaces == 0 {
@@ -836,6 +836,12 @@ fn ioctl_btrfs_space_info(fd: i32, args: &mut BtrfsIoctlSpaceArgs) -> i32 {
     }
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "byte counts widen to f64 for ratio math and narrow back to display percentages; copies is a small non-negative count"
+)]
 fn calculate_btrfs_usage_metrics(
     spaces: &[BtrfsIoctlSpaceInfo],
     total_size: u64,
@@ -859,7 +865,7 @@ fn calculate_btrfs_usage_metrics(
             return BtrfsUsageMetrics::default();
         }
         let copies_u64 = copies as u64;
-        max_data_ratio = max_data_ratio.max(copies as f64);
+        max_data_ratio = max_data_ratio.max(f64::from(copies));
 
         if flags & BTRFS_SPACE_INFO_GLOBAL_RSV != 0 {
             global_reserve = space.total_bytes;
@@ -922,8 +928,7 @@ fn calculate_btrfs_usage_metrics(
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis().try_into().unwrap_or(i64::MAX))
-        .unwrap_or(0)
+        .map_or(0, |duration| duration.as_millis().try_into().unwrap_or(i64::MAX))
 }
 
 #[cfg(test)]

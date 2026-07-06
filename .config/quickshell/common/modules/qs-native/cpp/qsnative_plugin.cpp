@@ -1,21 +1,22 @@
 #include <QtQml/qqml.h>
 #include <QtQml/qqmlextensionplugin.h>
 
-#include "QsNativeAiSession.h"
-#include "QsNativeBarModuleLogic.h"
+#include "qsnative_api.h"
 
-#include <qsnative_rust/src/backlight.cxxqt.h>
-#include <qsnative_rust/src/bluetooth.cxxqt.h>
-#include <qsnative_rust/src/config_resolver.cxxqt.h>
-#include <qsnative_rust/src/ical.cxxqt.h>
-#include <qsnative_rust/src/idle.cxxqt.h>
-#include <qsnative_rust/src/keyboard_lock.cxxqt.h>
-#include <qsnative_rust/src/net_stats.cxxqt.h>
-#include <qsnative_rust/src/pacman.cxxqt.h>
-#include <qsnative_rust/src/privacy.cxxqt.h>
-#include <qsnative_rust/src/sys_info.cxxqt.h>
-#include <qsnative_rust/src/systemd_failed.cxxqt.h>
-#include <qsnative_rust/src/todoist.cxxqt.h>
+#include "QsNativeAiSession.h"
+#include "QsNativeBacklight.h"
+#include "QsNativeBarModuleLogic.h"
+#include "QsNativeBluetooth.h"
+#include "QsNativeConfigResolver.h"
+#include "QsNativeIcal.h"
+#include "QsNativeIdle.h"
+#include "QsNativeKeyboardLock.h"
+#include "QsNativeNetStats.h"
+#include "QsNativePacman.h"
+#include "QsNativePrivacy.h"
+#include "QsNativeSysInfo.h"
+#include "QsNativeSystemdFailedProvider.h"
+#include "QsNativeTodoist.h"
 
 class qsnative_plugin : public QQmlExtensionPlugin {
   Q_OBJECT
@@ -24,20 +25,24 @@ class qsnative_plugin : public QQmlExtensionPlugin {
 public:
   void registerTypes(const char* uri) override {
     // uri is expected to be "qsnative" from qmldir.
-    qmlRegisterType<SysInfoProvider>(uri, 1, 0, "SysInfoProvider");
-    qmlRegisterType<BacklightProvider>(uri, 1, 0, "BacklightProvider");
-    qmlRegisterType<BluetoothDiagnosticsProvider>(uri, 1, 0, "BluetoothDiagnosticsProvider");
-    qmlRegisterType<ConfigResolver>(uri, 1, 0, "ConfigResolver");
+    // Install the fatal-abort panic hook once, up front (previously coupled to
+    // IcalCache::initialize under cxx-qt).
+    QsNative_InstallPanicHook();
+
+    qmlRegisterType<QsNativeSysInfo>(uri, 1, 0, "SysInfoProvider");
+    qmlRegisterType<QsNativeBacklight>(uri, 1, 0, "BacklightProvider");
+    qmlRegisterType<QsNativeBluetooth>(uri, 1, 0, "BluetoothDiagnosticsProvider");
+    qmlRegisterType<QsNativeConfigResolver>(uri, 1, 0, "ConfigResolver");
     qmlRegisterType<QsNativeAiSession>(uri, 1, 0, "AiChatSession");
     qmlRegisterType<QsNativeBarModuleLogic>(uri, 1, 0, "BarModuleLogic");
-    qmlRegisterType<PacmanUpdatesProvider>(uri, 1, 0, "PacmanUpdatesProvider");
-    qmlRegisterType<PrivacyProvider>(uri, 1, 0, "PrivacyProvider");
-    qmlRegisterType<IcalCache>(uri, 1, 0, "IcalCache");
-    qmlRegisterType<IdleProvider>(uri, 1, 0, "IdleProvider");
-    qmlRegisterType<KeyboardLockProvider>(uri, 1, 0, "KeyboardLockProvider");
-    qmlRegisterType<TodoistClient>(uri, 1, 0, "TodoistClient");
-    qmlRegisterType<SystemdFailedProvider>(uri, 1, 0, "SystemdFailedProvider");
-    qmlRegisterType<NetStatsProvider>(uri, 1, 0, "NetStatsProvider");
+    qmlRegisterType<QsNativePacman>(uri, 1, 0, "PacmanUpdatesProvider");
+    qmlRegisterType<QsNativePrivacy>(uri, 1, 0, "PrivacyProvider");
+    qmlRegisterType<QsNativeIcal>(uri, 1, 0, "IcalCache");
+    qmlRegisterType<QsNativeIdle>(uri, 1, 0, "IdleProvider");
+    qmlRegisterType<QsNativeKeyboardLock>(uri, 1, 0, "KeyboardLockProvider");
+    qmlRegisterType<QsNativeTodoist>(uri, 1, 0, "TodoistClient");
+    qmlRegisterType<QsNativeSystemdFailedProvider>(uri, 1, 0, "SystemdFailedProvider");
+    qmlRegisterType<QsNativeNetStats>(uri, 1, 0, "NetStatsProvider");
   }
 };
 

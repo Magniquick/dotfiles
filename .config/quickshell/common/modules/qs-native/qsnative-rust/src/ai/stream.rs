@@ -1,8 +1,8 @@
 //! Streaming chat backend.
 //!
-//! Talks to the OpenAI Responses API (`/v1/responses`) and Google Gemini
+//! Talks to the `OpenAI` Responses API (`/v1/responses`) and Google Gemini
 //! (`streamGenerateContent`) directly over `ureq`, parsing server-sent events on
-//! the calling worker thread. Conversation history is carried in the OpenAI
+//! the calling worker thread. Conversation history is carried in the `OpenAI`
 //! Responses "input item" shape as the neutral representation; the Gemini path
 //! converts it to `contents` on the fly. The multi-turn tool loop, model-output
 //! persistence, and tool dispatch are provider-agnostic.
@@ -23,7 +23,7 @@ use crate::mcp::ToolDescriptor;
 const MAX_TOOL_TURNS: usize = 8;
 const BODY_SNIPPET: usize = 800;
 
-pub(super) fn run(args: &StreamArgs, req: StreamRequest) -> Result<(), String> {
+pub(super) fn run(args: &StreamArgs, req: &StreamRequest) -> Result<(), String> {
     let input = if req.conversation_id.trim().is_empty() {
         vec![crate::chatstore::user_input_item(
             &req.message,
@@ -33,8 +33,8 @@ pub(super) fn run(args: &StreamArgs, req: StreamRequest) -> Result<(), String> {
         crate::chatstore::load_history_items(req.conversation_id.trim())?
     };
 
-    let gemini = effective_provider(&req) == Provider::Gemini;
-    drive(args, &req, input, gemini)
+    let gemini = effective_provider(req) == Provider::Gemini;
+    drive(args, req, input, gemini)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,7 @@ fn effective_provider(req: &StreamRequest) -> Provider {
 /// One provider round's distilled result, all in the neutral Responses shape.
 #[derive(Default)]
 struct RoundOutcome {
-    /// Raw model-output items (message, function_call, reasoning, ...), in order.
+    /// Raw model-output items (message, `function_call`, reasoning, ...), in order.
     model_items: Vec<Value>,
     /// Tool calls the model requested this round.
     tool_calls: Vec<ToolCall>,
@@ -125,7 +125,7 @@ fn drive(
     Ok(())
 }
 
-/// Emits tool_start, dispatches to the local MCP catalog, emits tool_done.
+/// Emits `tool_start`, dispatches to the local MCP catalog, emits `tool_done`.
 fn run_tool(args: &StreamArgs, call: &ToolCall) -> crate::mcp::ToolResult {
     callback(args.cb, args.ctx, &tool_start_event_json(call), 2);
     let started = Instant::now();
@@ -134,17 +134,17 @@ fn run_tool(args: &StreamArgs, call: &ToolCall) -> crate::mcp::ToolResult {
         result.duration_ms = started.elapsed().as_millis().try_into().unwrap_or(i64::MAX);
     }
     if result.tool_call_id.trim().is_empty() {
-        result.tool_call_id = call.id.clone();
+        result.tool_call_id.clone_from(&call.id);
     }
     if result.name.trim().is_empty() {
-        result.name = call.name.clone();
+        result.name.clone_from(&call.name);
     }
     callback(args.cb, args.ctx, &tool_done_event_json(call, &result), 2);
     result
 }
 
 /// Publishes model-output items so the UI layer can persist them as
-/// `model_output` response items (function_call, message, reasoning, ...).
+/// `model_output` response items (`function_call`, message, reasoning, ...).
 fn emit_model_items(args: &StreamArgs, items: &[Value]) {
     if items.is_empty() {
         return;
@@ -201,7 +201,7 @@ fn openai_round(
 
     let mut outcome = RoundOutcome::default();
     read_sse(response.body_mut().as_reader(), &args.cancelled, |event| {
-        openai_event(&event, args, req, metrics, &mut outcome)
+        openai_event(&event, args, req, metrics, &mut outcome);
     })?;
     Ok(outcome)
 }
@@ -236,6 +236,11 @@ fn openai_event(
                 outcome.output_tokens = usage_i32(usage, "output_tokens");
             }
         }
+        #[expect(
+            clippy::match_same_arms,
+            reason = "explicit arm documents that response.failed is a known event deliberately \
+                      handled by the empty-stream + non-finished-metrics path, not an oversight"
+        )]
         "response.failed" => {
             // Surfaced by the empty stream + non-finished metrics; nothing to emit here.
         }
@@ -346,7 +351,7 @@ fn gemini_round(
     let mut text = String::new();
     let mut calls: Vec<(String, Value)> = Vec::new();
     read_sse(response.body_mut().as_reader(), &args.cancelled, |event| {
-        gemini_event(&event, args, metrics, &mut text, &mut calls, &mut outcome)
+        gemini_event(&event, args, metrics, &mut text, &mut calls, &mut outcome);
     })?;
 
     // Reassemble the round into neutral Responses items.
@@ -552,7 +557,7 @@ fn gemini_tools(req: &StreamRequest) -> Vec<Value> {
     tools
 }
 
-/// Maps each `call_id` to the tool name from the function_call that produced it.
+/// Maps each `call_id` to the tool name from the `function_call` that produced it.
 fn call_id_names(input: &[Value]) -> Map<String, Value> {
     let mut names = Map::new();
     for item in input {
@@ -627,8 +632,7 @@ fn tool_kind<'a>(tools: &'a [ToolDescriptor], name: &str) -> &'a str {
     tools
         .iter()
         .find(|tool| tool.name.trim() == name.trim())
-        .map(|tool| tool.kind.as_str())
-        .unwrap_or("")
+        .map_or("", |tool| tool.kind.as_str())
 }
 
 fn tool_parameters(descriptor: &ToolDescriptor) -> Value {
@@ -658,8 +662,7 @@ fn value_to_arguments(value: &Value, kind: &str) -> Map<String, Value> {
 fn string_input(value: &Value) -> String {
     value
         .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| value.to_string())
+        .map_or_else(|| value.to_string(), str::to_owned)
 }
 
 fn first_id<const N: usize>(candidates: [&str; N]) -> String {
@@ -681,8 +684,7 @@ fn usage_i32(usage: &Value, key: &str) -> i32 {
     usage
         .get(key)
         .and_then(Value::as_u64)
-        .map(|value| value.try_into().unwrap_or(i32::MAX))
-        .unwrap_or(0)
+        .map_or(0, |value| value.try_into().unwrap_or(i32::MAX))
 }
 
 fn data_uri_parts(url: &str) -> Option<(String, String)> {
@@ -750,7 +752,7 @@ mod tests {
         use std::sync::Arc;
 
         unsafe extern "C" fn collect(ctx: *mut c_void, token: *const c_char, done: c_int) {
-            let events = unsafe { &mut *(ctx as *mut Vec<(String, i32)>) };
+            let events = unsafe { &mut *ctx.cast::<Vec<(String, i32)>>() };
             let text = if token.is_null() {
                 String::new()
             } else {
@@ -771,7 +773,7 @@ mod tests {
             message: prompt.to_owned(),
             attachments_json: String::new(),
             disabled_tool_servers_json: String::new(),
-            ctx: &mut events as *mut _ as usize,
+            ctx: &raw mut events as usize,
             cb: collect,
             cancelled: Arc::new(AtomicBool::new(false)),
             id: 0,
@@ -788,7 +790,7 @@ mod tests {
             ..Default::default()
         };
 
-        run(&args, req).expect("stream run");
+        run(&args, &req).expect("stream run");
 
         let text: String = events
             .iter()

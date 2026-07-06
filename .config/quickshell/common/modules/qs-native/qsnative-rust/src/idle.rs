@@ -1,45 +1,22 @@
-use core::pin::Pin;
-use std::fs;
+//! Idle/DPMS/suspend settings provider (`IdleProvider`).
+//!
+//! Plain synchronous provider over an opaque handle: settings persist to a
+//! JSON file, `statusJson` renders an IPC status payload, and a fire-and-forget
+//! `systemd-inhibit` child blocks the lid switch while lid events are ignored.
+//! No worker threads or cross-thread callbacks are involved.
+
+use std::ffi::CString;
+use std::os::raw::{c_char, c_void};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
-use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::ffi::{c_string, into_c_string};
+
 const DEFAULT_DISPLAY_OFF_TIMEOUT_SEC: i32 = 10;
 const DEFAULT_SUSPEND_TIMEOUT_SEC: i32 = 1800;
-
-pub struct IdleProviderRust {
-    display_off_timeout_sec: i32,
-    suspend_timeout_sec: i32,
-    suspend_enabled: bool,
-    ignore_lid_events: bool,
-    lid_inhibited: bool,
-    error: QString,
-    lid_inhibit_child: Option<Child>,
-}
-
-impl Default for IdleProviderRust {
-    fn default() -> Self {
-        Self {
-            display_off_timeout_sec: DEFAULT_DISPLAY_OFF_TIMEOUT_SEC,
-            suspend_timeout_sec: DEFAULT_SUSPEND_TIMEOUT_SEC,
-            suspend_enabled: false,
-            ignore_lid_events: false,
-            lid_inhibited: false,
-            error: QString::default(),
-            lid_inhibit_child: None,
-        }
-    }
-}
-
-impl Drop for IdleProviderRust {
-    fn drop(&mut self) {
-        stop_lid_inhibit_child(&mut self.lid_inhibit_child);
-    }
-}
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,198 +49,243 @@ impl IdleSettings {
     }
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(i32, display_off_timeout_sec, cxx_name = "displayOffTimeoutSec")]
-        #[qproperty(i32, suspend_timeout_sec, cxx_name = "suspendTimeoutSec")]
-        #[qproperty(bool, suspend_enabled, cxx_name = "suspendEnabled")]
-        #[qproperty(bool, ignore_lid_events, cxx_name = "ignoreLidEvents")]
-        #[qproperty(bool, lid_inhibited, cxx_name = "lidInhibited")]
-        #[qproperty(QString, error)]
-        type IdleProvider = super::IdleProviderRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        #[cxx_name = "loadSettings"]
-        fn load_settings(self: Pin<&mut IdleProvider>, path: &QString) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "saveSettings"]
-        fn save_settings(
-            self: Pin<&mut IdleProvider>,
-            path: &QString,
-            display_off_timeout_sec: i32,
-            suspend_timeout_sec: i32,
-            suspend_enabled: bool,
-            ignore_lid_events: bool,
-        ) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "clampTimeout"]
-        fn clamp_timeout_qml(self: &IdleProvider, seconds: i32) -> i32;
-
-        #[qinvokable]
-        #[cxx_name = "statusJson"]
-        fn status_json(
-            self: &IdleProvider,
-            dpms_off: bool,
-            next_suspend_at_ms: f64,
-            sleep_inhibited: bool,
-            now_ms: f64,
-        ) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "syncLidInhibitProcess"]
-        fn set_lid_inhibited_process(self: Pin<&mut IdleProvider>, inhibited: bool) -> bool;
-    }
-
-    impl cxx_qt::Initialize for IdleProvider {}
+/// Opaque per-instance handle owned by the C++ `QsNativeIdle` `QObject`.
+pub struct IdleHandle {
+    settings: IdleSettings,
+    lid_inhibited: bool,
+    error: String,
+    lid_inhibit_child: Option<Child>,
 }
 
-impl cxx_qt::Initialize for ffi::IdleProvider {
-    fn initialize(self: Pin<&mut Self>) {}
+impl IdleHandle {
+    fn new() -> Self {
+        Self {
+            settings: IdleSettings::default(),
+            lid_inhibited: false,
+            error: String::new(),
+            lid_inhibit_child: None,
+        }
+    }
 }
 
-impl ffi::IdleProvider {
-    pub fn load_settings(mut self: Pin<&mut Self>, path: &QString) -> bool {
-        match load_settings(Path::new(&path.to_string())) {
-            Ok(settings) => {
-                self.as_mut().apply_settings(settings);
-                self.as_mut().set_error(QString::default());
-                true
-            }
-            Err(error) => {
-                self.as_mut().apply_settings(IdleSettings::default());
-                self.as_mut().set_error(QString::from(error.as_str()));
-                false
-            }
+/// Zero-copy snapshot of the QML-facing properties. The `error` `*const c_char`
+/// borrows a `CString` that lives on the caller's stack **only for the duration
+/// of the callback**; C++ must copy it (`QString::fromUtf8`) synchronously and
+/// must not retain the pointer. Fields map 1:1 to `IdleProvider` QML properties.
+#[repr(C)]
+pub struct IdleSnapshotC {
+    pub display_off_timeout_sec: i32,
+    pub suspend_timeout_sec: i32,
+    pub suspend_enabled: bool,
+    pub ignore_lid_events: bool,
+    pub lid_inhibited: bool,
+    pub error: *const c_char,
+}
+
+/// Delivers an `IdleSnapshotC` (borrowed for the call only) to the C++ side.
+pub type IdleSnapshotFn = unsafe extern "C" fn(*mut c_void, *const IdleSnapshotC);
+
+/// Builds a `CString`, falling back to empty on an interior NUL.
+fn cstr(value: &str) -> CString {
+    CString::new(value).unwrap_or_default()
+}
+
+impl Drop for IdleHandle {
+    fn drop(&mut self) {
+        stop_lid_inhibit_child(&mut self.lid_inhibit_child);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn QsNative_Idle_New() -> *mut IdleHandle {
+    Box::into_raw(Box::new(IdleHandle::new()))
+}
+
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_Idle_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_Delete(handle: *mut IdleHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
+    }
+}
+
+/// Delivers the current property snapshot as a zero-copy `IdleSnapshotC` via
+/// `cb`. Synchronous: `cb` fires on the caller's thread before this returns.
+///
+/// # Safety
+/// `handle` must be valid; `ctx`/`cb` must remain valid until `cb` fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_Snapshot(
+    handle: *mut IdleHandle,
+    ctx: *mut c_void,
+    cb: IdleSnapshotFn,
+) {
+    if handle.is_null() {
+        return;
+    }
+    let handle = &*handle;
+    // The CString must outlive the callback; keep it bound in this scope.
+    let error = cstr(&handle.error);
+    let c = IdleSnapshotC {
+        display_off_timeout_sec: handle.settings.display_off_timeout_sec,
+        suspend_timeout_sec: handle.settings.suspend_timeout_sec,
+        suspend_enabled: handle.settings.suspend_enabled,
+        ignore_lid_events: handle.settings.ignore_lid_events,
+        lid_inhibited: handle.lid_inhibited,
+        error: error.as_ptr(),
+    };
+    cb(ctx, &raw const c);
+}
+
+/// Loads settings from `path`; on failure applies defaults and records an error.
+///
+/// # Safety
+/// `handle` must be valid; `path` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_LoadSettings(
+    handle: *mut IdleHandle,
+    path: *const c_char,
+) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    let handle = &mut *handle;
+    match load_settings(Path::new(&c_string(path))) {
+        Ok(settings) => {
+            handle.settings = settings;
+            handle.error.clear();
+            true
+        }
+        Err(error) => {
+            handle.settings = IdleSettings::default();
+            handle.error = error;
+            false
         }
     }
+}
 
-    pub fn save_settings(
-        mut self: Pin<&mut Self>,
-        path: &QString,
-        display_off_timeout_sec: i32,
-        suspend_timeout_sec: i32,
-        suspend_enabled: bool,
-        ignore_lid_events: bool,
-    ) -> bool {
-        let settings = IdleSettings {
-            display_off_timeout_sec,
-            suspend_timeout_sec,
-            suspend_enabled,
-            ignore_lid_events,
+/// Clamps then applies the given settings and writes them atomically to `path`.
+///
+/// # Safety
+/// `handle` must be valid; `path` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_SaveSettings(
+    handle: *mut IdleHandle,
+    path: *const c_char,
+    display_off_timeout_sec: i32,
+    suspend_timeout_sec: i32,
+    suspend_enabled: bool,
+    ignore_lid_events: bool,
+) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    let handle = &mut *handle;
+    let settings = IdleSettings {
+        display_off_timeout_sec,
+        suspend_timeout_sec,
+        suspend_enabled,
+        ignore_lid_events,
+    }
+    .clamped();
+
+    handle.settings = settings;
+    match save_settings(Path::new(&c_string(path)), settings) {
+        Ok(()) => {
+            handle.error.clear();
+            true
         }
-        .clamped();
-
-        self.as_mut().apply_settings(settings);
-        match save_settings(Path::new(&path.to_string()), settings) {
-            Ok(()) => {
-                self.as_mut().set_error(QString::default());
-                true
-            }
-            Err(error) => {
-                self.as_mut().set_error(QString::from(error.as_str()));
-                false
-            }
+        Err(error) => {
+            handle.error = error;
+            false
         }
     }
+}
 
-    pub fn clamp_timeout_qml(&self, seconds: i32) -> i32 {
-        clamp_timeout(seconds)
+/// Pure `max(0)` clamp of a timeout value; no handle state involved.
+#[no_mangle]
+pub extern "C" fn QsNative_Idle_ClampTimeout(seconds: i32) -> i32 {
+    clamp_timeout(seconds)
+}
+
+/// Builds the `idle` IPC status payload as an owned JSON `char*`
+/// (release with `QsNative_Free`).
+///
+/// # Safety
+/// `handle` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_StatusJson(
+    handle: *mut IdleHandle,
+    dpms_off: bool,
+    next_suspend_at_ms: f64,
+    sleep_inhibited: bool,
+    now_ms: f64,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
     }
+    let settings = (*handle).settings;
+    into_c_string(build_status_json(StatusInput {
+        dpms_off,
+        display_off_timeout_sec: settings.display_off_timeout_sec,
+        suspend_enabled: settings.suspend_enabled,
+        suspend_timeout_sec: settings.suspend_timeout_sec,
+        next_suspend_at_ms,
+        sleep_inhibited,
+        ignore_lid_events: settings.ignore_lid_events,
+        now_ms,
+    }))
+}
 
-    pub fn status_json(
-        &self,
-        dpms_off: bool,
-        next_suspend_at_ms: f64,
-        sleep_inhibited: bool,
-        now_ms: f64,
-    ) -> QString {
-        QString::from(
-            build_status_json(StatusInput {
-                dpms_off,
-                display_off_timeout_sec: *self.display_off_timeout_sec(),
-                suspend_enabled: *self.suspend_enabled(),
-                suspend_timeout_sec: *self.suspend_timeout_sec(),
-                next_suspend_at_ms,
-                sleep_inhibited,
-                ignore_lid_events: *self.ignore_lid_events(),
-                now_ms,
-            })
-            .as_str(),
-        )
+/// Spawns or kills the `systemd-inhibit` lid-switch blocker and updates the
+/// `lidInhibited`/`error` state.
+///
+/// # Safety
+/// `handle` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Idle_SyncLidInhibitProcess(
+    handle: *mut IdleHandle,
+    inhibited: bool,
+) -> bool {
+    if handle.is_null() {
+        return false;
     }
+    let handle = &mut *handle;
 
-    pub fn set_lid_inhibited_process(mut self: Pin<&mut Self>, inhibited: bool) -> bool {
-        if inhibited {
-            let should_spawn = match self
-                .as_mut()
-                .rust_mut()
-                .as_mut()
-                .get_mut()
-                .lid_inhibit_child
-            {
-                Some(ref mut child) => !matches!(child.try_wait(), Ok(None)),
-                None => true,
-            };
+    if inhibited {
+        let should_spawn = match handle.lid_inhibit_child {
+            Some(ref mut child) => !matches!(child.try_wait(), Ok(None)),
+            None => true,
+        };
 
-            if should_spawn {
-                match spawn_lid_inhibit_child() {
-                    Ok(child) => {
-                        self.as_mut()
-                            .rust_mut()
-                            .as_mut()
-                            .get_mut()
-                            .lid_inhibit_child = Some(child);
-                    }
-                    Err(error) => {
-                        self.as_mut().set_lid_inhibited(false);
-                        self.as_mut().set_error(QString::from(error.as_str()));
-                        return false;
-                    }
+        if should_spawn {
+            match spawn_lid_inhibit_child() {
+                Ok(child) => handle.lid_inhibit_child = Some(child),
+                Err(error) => {
+                    handle.lid_inhibited = false;
+                    handle.error = error;
+                    return false;
                 }
             }
-            self.as_mut().set_lid_inhibited(true);
-            self.as_mut().set_error(QString::default());
-            return true;
         }
-
-        stop_lid_inhibit_child(
-            &mut self
-                .as_mut()
-                .rust_mut()
-                .as_mut()
-                .get_mut()
-                .lid_inhibit_child,
-        );
-        self.as_mut().set_lid_inhibited(false);
-        self.as_mut().set_error(QString::default());
-        true
+        handle.lid_inhibited = true;
+        handle.error.clear();
+        return true;
     }
 
-    fn apply_settings(mut self: Pin<&mut Self>, settings: IdleSettings) {
-        self.as_mut()
-            .set_display_off_timeout_sec(settings.display_off_timeout_sec);
-        self.as_mut()
-            .set_suspend_timeout_sec(settings.suspend_timeout_sec);
-        self.as_mut().set_suspend_enabled(settings.suspend_enabled);
-        self.as_mut()
-            .set_ignore_lid_events(settings.ignore_lid_events);
-    }
+    stop_lid_inhibit_child(&mut handle.lid_inhibit_child);
+    handle.lid_inhibited = false;
+    handle.error.clear();
+    true
 }
 
 #[derive(Debug, Clone, Copy)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "flat parameter bag mirroring the independent idle/DPMS/suspend inputs \
+              passed from FFI; each bool is a distinct status flag, not a state machine"
+)]
 struct StatusInput {
     dpms_off: bool,
     display_off_timeout_sec: i32,
@@ -284,7 +306,7 @@ fn load_settings(path: &Path) -> Result<IdleSettings, String> {
         return Ok(IdleSettings::default());
     }
 
-    let raw = fs::read_to_string(path).map_err(|error| format!("read settings: {error}"))?;
+    let raw = std::fs::read_to_string(path).map_err(|error| format!("read settings: {error}"))?;
     serde_json::from_str::<IdleSettings>(&raw)
         .map(IdleSettings::clamped)
         .map_err(|error| format!("parse settings: {error}"))
@@ -313,6 +335,11 @@ fn build_status_json(input: StatusInput) -> String {
     .unwrap_or_else(|_| "{}".to_owned())
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "seconds-left countdown; value is ceil()+max(0.0) clamped and always \
+              a small non-negative second count that fits in i32"
+)]
 fn seconds_left(target_ms: f64, now_ms: f64) -> i32 {
     if !target_ms.is_finite() || target_ms <= 0.0 {
         return 0;

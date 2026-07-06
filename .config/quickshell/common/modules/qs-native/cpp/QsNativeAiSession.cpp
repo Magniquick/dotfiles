@@ -1,4 +1,5 @@
 #include "QsNativeAiSession.h"
+#include "QsNativeGlue.h"
 #include "qsnative_api.h"
 
 #include <QBuffer>
@@ -10,7 +11,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMetaObject>
 #include <QMimeData>
 #include <QPalette>
 #include <QThreadPool>
@@ -31,13 +31,6 @@ auto jsonStringValue(const QJsonObject& object, const QString& key) -> QString {
     return value.toBool() ? QStringLiteral("true") : QStringLiteral("false");
   }
   return {};
-}
-
-auto rustJsonResult(char* raw) -> QVariantMap {
-  const QByteArray json(raw);
-  QsNative_Free(raw);
-  const QJsonDocument doc = QJsonDocument::fromJson(json);
-  return doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
 }
 
 } // namespace
@@ -282,7 +275,7 @@ void QsNativeAiSession::deleteMessage(const QString& messageId) {
     return;
   }
   const QVariantMap result =
-      rustJsonResult(QsNative_AiHistory_MarkMessageDeleted(messageId.toUtf8().constData()));
+      qsn::takeObject(QsNative_AiHistory_MarkMessageDeleted(messageId.toUtf8().constData()));
   Q_UNUSED(result);
   if (m_currentTurnOrdinal == idx) {
     m_currentTurnId.clear();
@@ -586,10 +579,7 @@ void QsNativeAiSession::handleSlashCommand(const QString& cmd) {
     // Pull last-stream metrics from the native backend.
     QString metricsSection = QStringLiteral("*(no stream yet)*");
     {
-      char* raw = QsNative_AiChat_LastMetrics();
-      const QByteArray json(raw);
-      QsNative_Free(raw);
-      const auto doc = QJsonDocument::fromJson(json);
+      const QJsonDocument doc = qsn::takeDoc(QsNative_AiChat_LastMetrics());
       if (doc.isObject()) {
         const QJsonObject o = doc.object();
         const double ttf = o["ttf_ms"].toDouble(-1);
@@ -669,7 +659,7 @@ auto QsNativeAiSession::restoreHistory() -> bool {
     return true;
   }
 
-  const QVariantMap result = rustJsonResult(QsNative_AiHistory_Restore(
+  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Restore(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData()));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -697,7 +687,7 @@ auto QsNativeAiSession::ensureHistoryConversation() -> bool {
 }
 
 auto QsNativeAiSession::createHistoryConversation() -> bool {
-  const QVariantMap result = rustJsonResult(QsNative_AiHistory_Create(
+  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Create(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData()));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -713,7 +703,7 @@ auto QsNativeAiSession::createHistoryConversation() -> bool {
 }
 
 auto QsNativeAiSession::refreshResumeConversations(const QString& query) -> bool {
-  const QVariantMap result = rustJsonResult(QsNative_AiHistory_ListResume(
+  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_ListResume(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_conversationId.toUtf8().constData(), query.toUtf8().constData(), 50));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -741,7 +731,7 @@ auto QsNativeAiSession::resumeConversation(const QString& conversationId) -> boo
 }
 
 auto QsNativeAiSession::resumeHistoryConversation(const QString& conversationId) -> bool {
-  const QVariantMap result = rustJsonResult(QsNative_AiHistory_Resume(
+  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_Resume(
       m_modelId.toUtf8().constData(), activeProviderId().toUtf8().constData(),
       m_systemPrompt.toUtf8().constData(), m_conversationId.toUtf8().constData(),
       conversationId.toUtf8().constData()));
@@ -767,7 +757,7 @@ auto QsNativeAiSession::closeHistoryConversation() -> bool {
     return true;
   }
   const QVariantMap result =
-      rustJsonResult(QsNative_AiHistory_Close(m_conversationId.toUtf8().constData()));
+      qsn::takeObject(QsNative_AiHistory_Close(m_conversationId.toUtf8().constData()));
   m_conversationId.clear();
   m_currentTurnId.clear();
   m_currentTurnOrdinal = -1;
@@ -819,7 +809,7 @@ void QsNativeAiSession::persistMessageAt(int row, const QString& statusOverride,
       QJsonDocument::fromVariant(messageToHistoryMap(msg, row, statusOverride, completedAt))
           .toJson(QJsonDocument::Compact);
   const QVariantMap result =
-      rustJsonResult(QsNative_AiHistory_UpsertMessage(messageJson.constData()));
+      qsn::takeObject(QsNative_AiHistory_UpsertMessage(messageJson.constData()));
   Q_UNUSED(result);
 }
 
@@ -855,7 +845,7 @@ void QsNativeAiSession::persistToolCallAt(int row) {
   const QByteArray toolCallJson =
       QJsonDocument::fromVariant(toolCall).toJson(QJsonDocument::Compact);
   const QVariantMap result =
-      rustJsonResult(QsNative_AiHistory_UpsertToolCall(toolCallJson.constData()));
+      qsn::takeObject(QsNative_AiHistory_UpsertToolCall(toolCallJson.constData()));
   Q_UNUSED(result);
 }
 
@@ -889,7 +879,7 @@ void QsNativeAiSession::persistResponseItems(const QJsonArray& items, const QStr
 
   const QByteArray responseItemsJson =
       QJsonDocument::fromVariant(apiItems).toJson(QJsonDocument::Compact);
-  const QVariantMap result = rustJsonResult(QsNative_AiHistory_UpsertResponseItems(
+  const QVariantMap result = qsn::takeObject(QsNative_AiHistory_UpsertResponseItems(
       m_conversationId.toUtf8().constData(), m_currentTurnId.toUtf8().constData(),
       m_currentTurnOrdinal, responseItemsJson.constData()));
   if (!result.value(QStringLiteral("ok")).toBool()) {
@@ -901,7 +891,7 @@ void QsNativeAiSession::persistDeletedFromOrdinal(int ordinal) {
   if (m_conversationId.isEmpty()) {
     return;
   }
-  const QVariantMap result = rustJsonResult(
+  const QVariantMap result = qsn::takeObject(
       QsNative_AiHistory_DeleteFromOrdinal(m_conversationId.toUtf8().constData(), ordinal));
   Q_UNUSED(result);
   if (m_currentTurnOrdinal >= ordinal) {
@@ -1008,9 +998,9 @@ auto QsNativeAiSession::modelCatalog(const QVariantList& configuredModels,
       QJsonDocument::fromVariant(providerOrder).toJson(QJsonDocument::Compact);
   const QByteArray configuredModelsJson =
       QJsonDocument::fromVariant(configuredModels).toJson(QJsonDocument::Compact);
-  return rustJsonResult(QsNative_AiModels_Catalog(providerConfigJson.constData(),
-                                                  providerOrderJson.constData(),
-                                                  configuredModelsJson.constData()));
+  return qsn::takeObject(QsNative_AiModels_Catalog(providerConfigJson.constData(),
+                                                   providerOrderJson.constData(),
+                                                   configuredModelsJson.constData()));
 }
 
 auto QsNativeAiSession::refreshMcp() -> bool {
@@ -1020,28 +1010,22 @@ auto QsNativeAiSession::refreshMcp() -> bool {
 
 void QsNativeAiSession::refreshMcpStateAsync() {
   QThreadPool::globalInstance()->start([this]() -> void {
-    char* raw = QsNative_AiMcp_Refresh();
-    QByteArray const json(raw);
-    QsNative_Free(raw);
+    const QJsonDocument doc = qsn::takeDoc(QsNative_AiMcp_Refresh());
 
-    QMetaObject::invokeMethod(
-        this,
-        [this, json]() -> void {
-          const QJsonDocument doc = QJsonDocument::fromJson(json);
-          if (!doc.isObject()) {
-            m_mcpStatus = QStringLiteral("error");
-            m_mcpError = QStringLiteral("Invalid MCP response");
-            emit mcpStateChanged();
-            return;
-          }
-          const QJsonObject obj = doc.object();
-          m_mcpServers = obj.value(QLatin1String("servers")).toArray().toVariantList();
-          m_mcpTools = obj.value(QLatin1String("tools")).toArray().toVariantList();
-          m_mcpStatus = obj.value(QLatin1String("status")).toString();
-          m_mcpError = obj.value(QLatin1String("error")).toString();
-          emit mcpStateChanged();
-        },
-        Qt::QueuedConnection);
+    qsn::postToObject(this, [this, doc]() -> void {
+      if (!doc.isObject()) {
+        m_mcpStatus = QStringLiteral("error");
+        m_mcpError = QStringLiteral("Invalid MCP response");
+        emit mcpStateChanged();
+        return;
+      }
+      const QJsonObject obj = doc.object();
+      m_mcpServers = obj.value(QLatin1String("servers")).toArray().toVariantList();
+      m_mcpTools = obj.value(QLatin1String("tools")).toArray().toVariantList();
+      m_mcpStatus = obj.value(QLatin1String("status")).toString();
+      m_mcpError = obj.value(QLatin1String("error")).toString();
+      emit mcpStateChanged();
+    });
   });
 }
 
@@ -1215,76 +1199,71 @@ void QsNativeAiSession::tokenCallback(void* ctx, const char* token, int done) {
   auto* self = static_cast<QsNativeAiSession*>(ctx);
   QString const tok = (token != nullptr) ? QString::fromUtf8(token) : QString();
 
-  QMetaObject::invokeMethod(
-      self,
-      [self, tok, done]() -> void {
-        if (done == 1) {
-          // Stream finished successfully.
-          self->m_sessionId = -1;
-          self->m_currentTurnId.clear();
-          self->m_currentTurnOrdinal = -1;
-          self->m_nextReplayItemOrdinal = 0;
-          self->setBusy(false);
-          self->setStatus(QStringLiteral("Ready"));
+  qsn::postToObject(self, [self, tok, done]() -> void {
+    if (done == 1) {
+      // Stream finished successfully.
+      self->m_sessionId = -1;
+      self->m_currentTurnId.clear();
+      self->m_currentTurnOrdinal = -1;
+      self->m_nextReplayItemOrdinal = 0;
+      self->setBusy(false);
+      self->setStatus(QStringLiteral("Ready"));
 
-          // Capture per-message metrics onto the last assistant message.
-          const int metricsRow = self->lastAssistantChatIndex();
-          if (metricsRow >= 0) {
-            char* raw = QsNative_AiChat_LastMetrics();
-            if (raw) {
-              const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
-              self->m_messages[metricsRow].metrics =
-                  doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
-              QsNative_Free(raw);
-              const QModelIndex idx = self->index(metricsRow, 0);
-              emit self->dataChanged(idx, idx, {MetricsRole});
-            }
-            self->persistMessageAt(metricsRow, QStringLiteral("complete"),
-                                   QsNativeAiSession::utcNow());
-          }
-
-          emit self->streamDone();
-        } else if (done == 2) {
-          self->handleToolEventJson(tok);
-        } else if (done == -1) {
-          // Error.
-          self->m_sessionId = -1;
-          self->m_currentTurnId.clear();
-          self->m_currentTurnOrdinal = -1;
-          self->m_nextReplayItemOrdinal = 0;
-          self->setBusy(false);
-          self->setStatus(QStringLiteral("Error"));
-          self->setError(tok);
-          // Mark the last assistant message as an error indicator.
-          const int row = self->lastAssistantChatIndex();
-          if (row >= 0) {
-            if (self->m_messages[row].body.isEmpty()) {
-              self->m_messages[row].body = QStringLiteral("⚠ ") + tok;
-            }
-            const QModelIndex idx = self->index(row, 0);
-            emit self->dataChanged(idx, idx, {BodyRole});
-            self->persistMessageAt(row, QStringLiteral("error"), QsNativeAiSession::utcNow());
-          }
-        } else {
-          // Normal token: append to last assistant message.
-          int row = rowCountAsInt(self->m_messages.size()) - 1;
-          if (row < 0 || self->m_messages.at(row).sender != QStringLiteral("assistant") ||
-              self->m_messages.at(row).kind != QStringLiteral("chat")) {
-            const bool showHeader =
-                row < 0 || self->m_messages.at(row).kind != QStringLiteral("tool");
-            row = rowCountAsInt(self->m_messages.size());
-            self->beginInsertRows({}, row, row);
-            self->m_messages.append({QUuid::createUuid().toString(QUuid::WithoutBraces),
-                                     QStringLiteral("assistant"), QString(), QStringLiteral("chat"),
-                                     QVariantMap{}, QVariantList{}, QVariantMap{}, showHeader});
-            self->endInsertRows();
-            self->persistMessageAt(row, QStringLiteral("streaming"));
-          }
-          self->m_messages[row].body += tok;
-          const QModelIndex idx = self->index(row, 0);
-          emit self->dataChanged(idx, idx, {BodyRole});
-          emit self->scrollToEndRequested();
+      // Capture per-message metrics onto the last assistant message.
+      const int metricsRow = self->lastAssistantChatIndex();
+      if (metricsRow >= 0) {
+        char* raw = QsNative_AiChat_LastMetrics();
+        if (raw) {
+          const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(raw));
+          self->m_messages[metricsRow].metrics =
+              doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
+          QsNative_Free(raw);
+          const QModelIndex idx = self->index(metricsRow, 0);
+          emit self->dataChanged(idx, idx, {MetricsRole});
         }
-      },
-      Qt::QueuedConnection);
+        self->persistMessageAt(metricsRow, QStringLiteral("complete"), QsNativeAiSession::utcNow());
+      }
+
+      emit self->streamDone();
+    } else if (done == 2) {
+      self->handleToolEventJson(tok);
+    } else if (done == -1) {
+      // Error.
+      self->m_sessionId = -1;
+      self->m_currentTurnId.clear();
+      self->m_currentTurnOrdinal = -1;
+      self->m_nextReplayItemOrdinal = 0;
+      self->setBusy(false);
+      self->setStatus(QStringLiteral("Error"));
+      self->setError(tok);
+      // Mark the last assistant message as an error indicator.
+      const int row = self->lastAssistantChatIndex();
+      if (row >= 0) {
+        if (self->m_messages[row].body.isEmpty()) {
+          self->m_messages[row].body = QStringLiteral("⚠ ") + tok;
+        }
+        const QModelIndex idx = self->index(row, 0);
+        emit self->dataChanged(idx, idx, {BodyRole});
+        self->persistMessageAt(row, QStringLiteral("error"), QsNativeAiSession::utcNow());
+      }
+    } else {
+      // Normal token: append to last assistant message.
+      int row = rowCountAsInt(self->m_messages.size()) - 1;
+      if (row < 0 || self->m_messages.at(row).sender != QStringLiteral("assistant") ||
+          self->m_messages.at(row).kind != QStringLiteral("chat")) {
+        const bool showHeader = row < 0 || self->m_messages.at(row).kind != QStringLiteral("tool");
+        row = rowCountAsInt(self->m_messages.size());
+        self->beginInsertRows({}, row, row);
+        self->m_messages.append({QUuid::createUuid().toString(QUuid::WithoutBraces),
+                                 QStringLiteral("assistant"), QString(), QStringLiteral("chat"),
+                                 QVariantMap{}, QVariantList{}, QVariantMap{}, showHeader});
+        self->endInsertRows();
+        self->persistMessageAt(row, QStringLiteral("streaming"));
+      }
+      self->m_messages[row].body += tok;
+      const QModelIndex idx = self->index(row, 0);
+      emit self->dataChanged(idx, idx, {BodyRole});
+      emit self->scrollToEndRequested();
+    }
+  });
 }

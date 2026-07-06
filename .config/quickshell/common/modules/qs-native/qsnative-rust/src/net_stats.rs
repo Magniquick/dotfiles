@@ -1,32 +1,23 @@
-use core::pin::Pin;
+//! `NetStatsProvider` backend: traffic-rate smoothing/history, network source
+//! sort/switch state, and pure `ip`/udev parsing helpers.
+//!
+//! The C++ `QsNativeNetStats` `QObject` owns one opaque [`NetStatsHandle`] and
+//! calls the `extern "C"` surface synchronously on the Qt/main thread; there are
+//! no worker threads. Stateful calls return a JSON snapshot the `QObject` mirrors
+//! into its properties; pure transforms return owned strings freed with
+//! `QsNative_Free`.
+
 use std::collections::HashMap;
 use std::fs;
+use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
 use procfs::net::DeviceStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Default)]
-pub struct NetStatsProviderRust {
-    device: QString,
-    rx_bytes: f64,
-    tx_bytes: f64,
-    rx_bytes_per_sec: f64,
-    tx_bytes_per_sec: f64,
-    rx_history_json: QString,
-    tx_history_json: QString,
-    traffic_scale_max: f64,
-    source_entries_json: QString,
-    source_switching: bool,
-    source_switching_name: QString,
-    source_error: QString,
-    error: QString,
-    traffic: TrafficState,
-}
+use crate::ffi::{c_string, into_c_string};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NetDevSample {
@@ -73,228 +64,282 @@ const TRAFFIC_SCALE_FLOOR: f64 = 1024.0;
 const MIN_TRAFFIC_SAMPLE_DELTA_MS: f64 = 600.0;
 const TRAFFIC_EMA_ALPHA: f64 = 0.5;
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
+/// Opaque per-instance state owned by the C++ `QsNativeNetStats` `QObject`.
+///
+/// Holds the cross-call traffic history/smoothing state plus the source-switch
+/// bookkeeping; the scalar properties (device, rx/tx counters, per-sec rates,
+/// error) are mirrored on the C++ side from the JSON snapshots returned here.
+pub struct NetStatsHandle {
+    traffic: TrafficState,
+    source_entries_json: String,
+    source_switching: bool,
+    source_switching_name: String,
+    source_error: String,
+}
+
+impl NetStatsHandle {
+    fn new() -> Self {
+        NetStatsHandle {
+            traffic: TrafficState::default(),
+            source_entries_json: "[]".to_owned(),
+            source_switching: false,
+            source_switching_name: String::new(),
+            source_error: String::new(),
+        }
     }
+}
 
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(QString, device)]
-        #[qproperty(f64, rx_bytes, cxx_name = "rx_bytes")]
-        #[qproperty(f64, tx_bytes, cxx_name = "tx_bytes")]
-        #[qproperty(f64, rx_bytes_per_sec, cxx_name = "rxBytesPerSec")]
-        #[qproperty(f64, tx_bytes_per_sec, cxx_name = "txBytesPerSec")]
-        #[qproperty(QString, rx_history_json, cxx_name = "rxHistoryJson")]
-        #[qproperty(QString, tx_history_json, cxx_name = "txHistoryJson")]
-        #[qproperty(f64, traffic_scale_max, cxx_name = "trafficScaleMax")]
-        #[qproperty(QString, source_entries_json, cxx_name = "sourceEntriesJson")]
-        #[qproperty(bool, source_switching, cxx_name = "sourceSwitching")]
-        #[qproperty(QString, source_switching_name, cxx_name = "sourceSwitchingName")]
-        #[qproperty(QString, source_error, cxx_name = "sourceError")]
-        #[qproperty(QString, error)]
-        type NetStatsProvider = super::NetStatsProviderRust;
+#[no_mangle]
+pub extern "C" fn QsNative_NetStats_New() -> *mut NetStatsHandle {
+    Box::into_raw(Box::new(NetStatsHandle::new()))
+}
 
-        #[qsignal]
-        #[cxx_name = "sampleReady"]
-        fn sample_ready(self: Pin<&mut Self>, rx_bytes: f64, tx_bytes: f64);
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_NetStats_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_Delete(handle: *mut NetStatsHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
     }
+}
 
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn refresh(self: Pin<&mut NetStatsProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "updateTrafficRates"]
-        fn update_traffic_rates(
-            self: Pin<&mut NetStatsProvider>,
-            rx_bytes: f64,
-            tx_bytes: f64,
-            now_ms: f64,
+/// Reads `/proc/net/dev` for `device` (borrowed C string). Returns an owned JSON
+/// object string `{ok, error, rx_bytes?, tx_bytes?}`; `rx_bytes`/`tx_bytes` are
+/// only present when `ok` is true. Stateless: does not touch the handle.
+///
+/// # Safety
+/// `device` must be null or a valid NUL-terminated string for the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_Refresh(device: *const c_char) -> *mut c_char {
+    let device = c_string(device);
+    let device = device.trim();
+    if device.is_empty() {
+        return into_c_string(
+            serde_json::json!({ "ok": false, "error": "interface is empty" }).to_string(),
         );
-
-        #[qinvokable]
-        #[cxx_name = "resetTraffic"]
-        fn reset_traffic(self: Pin<&mut NetStatsProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "setSourceEntries"]
-        fn set_source_entries(self: Pin<&mut NetStatsProvider>, entries_json: &QString) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "beginSourceSwitch"]
-        fn begin_source_switch(self: Pin<&mut NetStatsProvider>, name: &QString) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "failSourceSwitch"]
-        fn fail_source_switch(self: Pin<&mut NetStatsProvider>, message: &QString);
-
-        #[qinvokable]
-        #[cxx_name = "clearSourceSwitch"]
-        fn clear_source_switch(self: Pin<&mut NetStatsProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "parseIpAddressJson"]
-        fn parse_ip_address_json(self: &NetStatsProvider, text: &QString) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "parseGatewayJson"]
-        fn parse_gateway_json(self: &NetStatsProvider, text: &QString) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "normalizeEthernetLabel"]
-        fn normalize_ethernet_label(self: &NetStatsProvider, text: &QString) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "ethernetMetadataJson"]
-        fn ethernet_metadata_json(self: &NetStatsProvider, device_name: &QString) -> QString;
     }
-
-    impl cxx_qt::Initialize for NetStatsProvider {}
+    let payload = match read_net_dev(device) {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "byte counters are surfaced to QML as f64; precision loss only past 4 PB and QML numbers are f64 anyway"
+        )]
+        Ok(sample) => serde_json::json!({
+            "ok": true,
+            "error": "",
+            "rx_bytes": sample.rx_bytes as f64,
+            "tx_bytes": sample.tx_bytes as f64,
+        }),
+        Err(error) => serde_json::json!({ "ok": false, "error": error }),
+    };
+    into_c_string(payload.to_string())
 }
 
-impl cxx_qt::Initialize for ffi::NetStatsProvider {
-    fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut().reset_traffic();
-        self.as_mut().set_source_entries_json(QString::from("[]"));
+/// Folds a fresh cumulative sample into the EMA rates + history, returning the
+/// traffic snapshot (rates, scale, history JSON).
+///
+/// # Safety
+/// `handle` must be a valid pointer from `QsNative_NetStats_New`.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_UpdateTrafficRates(
+    handle: *mut NetStatsHandle,
+    rx_bytes: f64,
+    tx_bytes: f64,
+    now_ms: f64,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
+    }
+    let handle = &mut *handle;
+    let rates = handle.traffic.update(rx_bytes, tx_bytes, now_ms);
+    into_c_string(traffic_snapshot_json(handle, rates))
+}
+
+/// Clears the traffic history and zeroes the rates, returning the reset snapshot.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `QsNative_NetStats_New`.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_ResetTraffic(handle: *mut NetStatsHandle) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
+    }
+    let handle = &mut *handle;
+    handle.traffic = TrafficState::default();
+    let rates = TrafficRates {
+        rx_bytes_per_sec: 0.0,
+        tx_bytes_per_sec: 0.0,
+        traffic_scale_max: TRAFFIC_SCALE_FLOOR,
+    };
+    into_c_string(traffic_snapshot_json(handle, rates))
+}
+
+/// Normalizes + sorts the source entries JSON. On success rewrites the stored
+/// entries and auto-clears the switch state if the switching source is now
+/// active. Returns `{ok, error, <source snapshot>}`.
+///
+/// # Safety
+/// `handle` valid; `entries_json` null or valid NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_SetSourceEntries(
+    handle: *mut NetStatsHandle,
+    entries_json: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
+    }
+    let handle = &mut *handle;
+    let raw = c_string(entries_json);
+    match normalize_source_entries(&raw) {
+        Ok(entries) => {
+            let switch_complete = handle.source_switching
+                && !handle.source_switching_name.is_empty()
+                && entries
+                    .iter()
+                    .any(|entry| entry.active && entry.name == handle.source_switching_name);
+            handle.source_entries_json =
+                serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_owned());
+            if switch_complete {
+                handle.source_switching = false;
+                handle.source_switching_name = String::new();
+                handle.source_error = String::new();
+            }
+            into_c_string(source_snapshot_json(handle, true, ""))
+        }
+        Err(error) => into_c_string(source_snapshot_json(handle, false, &error)),
     }
 }
 
-impl ffi::NetStatsProvider {
-    pub fn refresh(mut self: Pin<&mut Self>) -> bool {
-        let device = self.device().to_string();
-        let device = device.trim();
-        if device.is_empty() {
-            self.as_mut().set_error(QString::from("interface is empty"));
-            return false;
-        }
-
-        match read_net_dev(device) {
-            Ok(sample) => {
-                let rx_bytes = sample.rx_bytes as f64;
-                let tx_bytes = sample.tx_bytes as f64;
-                self.as_mut().set_error(QString::default());
-                self.as_mut().set_rx_bytes(rx_bytes);
-                self.as_mut().set_tx_bytes(tx_bytes);
-                self.as_mut().sample_ready(rx_bytes, tx_bytes);
-                true
-            }
-            Err(error) => {
-                self.as_mut().set_error(QString::from(error.as_str()));
-                false
-            }
-        }
+/// Marks a source switch as in flight. Returns `{ok, <source snapshot>}`; `ok`
+/// is false if `name` is blank or a switch is already running.
+///
+/// # Safety
+/// `handle` valid; `name` null or valid NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_BeginSourceSwitch(
+    handle: *mut NetStatsHandle,
+    name: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
     }
-
-    pub fn update_traffic_rates(
-        mut self: Pin<&mut Self>,
-        rx_bytes: f64,
-        tx_bytes: f64,
-        now_ms: f64,
-    ) {
-        let rates = self
-            .as_mut()
-            .rust_mut()
-            .as_mut()
-            .get_mut()
-            .traffic
-            .update(rx_bytes, tx_bytes, now_ms);
-        self.as_mut().set_rx_bytes_per_sec(rates.rx_bytes_per_sec);
-        self.as_mut().set_tx_bytes_per_sec(rates.tx_bytes_per_sec);
-        self.as_mut().set_traffic_scale_max(rates.traffic_scale_max);
-        self.as_mut().sync_history_json();
+    let handle = &mut *handle;
+    let name = c_string(name).trim().to_owned();
+    if name.is_empty() || handle.source_switching {
+        return into_c_string(source_snapshot_json(handle, false, ""));
     }
+    handle.source_switching = true;
+    handle.source_switching_name = name;
+    handle.source_error = String::new();
+    into_c_string(source_snapshot_json(handle, true, ""))
+}
 
-    pub fn reset_traffic(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().as_mut().get_mut().traffic = TrafficState::default();
-        self.as_mut().set_rx_bytes_per_sec(0.0);
-        self.as_mut().set_tx_bytes_per_sec(0.0);
-        self.as_mut().set_traffic_scale_max(TRAFFIC_SCALE_FLOOR);
-        self.as_mut().sync_history_json();
+/// Records a switch failure message and clears the in-flight state. Returns the
+/// source snapshot.
+///
+/// # Safety
+/// `handle` valid; `message` null or valid NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_FailSourceSwitch(
+    handle: *mut NetStatsHandle,
+    message: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
     }
+    let handle = &mut *handle;
+    c_string(message).trim().clone_into(&mut handle.source_error);
+    handle.source_switching = false;
+    handle.source_switching_name = String::new();
+    into_c_string(source_snapshot_json(handle, true, ""))
+}
 
-    pub fn set_source_entries(mut self: Pin<&mut Self>, entries_json: &QString) -> bool {
-        match normalize_source_entries(&entries_json.to_string()) {
-            Ok(entries) => {
-                let switching_name = self.source_switching_name().to_string();
-                let switch_complete = *self.source_switching()
-                    && !switching_name.is_empty()
-                    && entries
-                        .iter()
-                        .any(|entry| entry.active && entry.name == switching_name);
-                let json = serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_owned());
-                self.as_mut().set_source_entries_json(QString::from(json));
-                if switch_complete {
-                    self.as_mut().clear_source_switch();
-                }
-                true
-            }
-            Err(error) => {
-                self.as_mut().set_error(QString::from(error));
-                false
-            }
-        }
+/// Clears the switch flag, name, and error. Returns the source snapshot.
+///
+/// # Safety
+/// `handle` must be a valid pointer from `QsNative_NetStats_New`.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_ClearSourceSwitch(
+    handle: *mut NetStatsHandle,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string("{}".to_owned());
     }
+    let handle = &mut *handle;
+    handle.source_switching = false;
+    handle.source_switching_name = String::new();
+    handle.source_error = String::new();
+    into_c_string(source_snapshot_json(handle, true, ""))
+}
 
-    pub fn begin_source_switch(mut self: Pin<&mut Self>, name: &QString) -> bool {
-        let name = name.to_string().trim().to_owned();
-        if name.is_empty() || *self.source_switching() {
-            return false;
-        }
-        self.as_mut().set_source_switching(true);
-        self.as_mut().set_source_switching_name(QString::from(name));
-        self.as_mut().set_source_error(QString::default());
-        true
-    }
+/// Parses `ip -j -4 addr show` JSON; returns the first `local/prefixlen` (or
+/// `local`) inet address, or an empty string.
+///
+/// # Safety
+/// `text` must be null or a valid NUL-terminated string for the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_ParseIpAddressJson(text: *const c_char) -> *mut c_char {
+    into_c_string(parse_ip_address_json(&c_string(text)))
+}
 
-    pub fn fail_source_switch(mut self: Pin<&mut Self>, message: &QString) {
-        self.as_mut()
-            .set_source_error(QString::from(message.to_string().trim()));
-        self.as_mut().set_source_switching(false);
-        self.as_mut().set_source_switching_name(QString::default());
-    }
+/// Parses `ip -j route show default` JSON; returns the first non-empty gateway,
+/// or an empty string.
+///
+/// # Safety
+/// `text` must be null or a valid NUL-terminated string for the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_ParseGatewayJson(text: *const c_char) -> *mut c_char {
+    into_c_string(parse_gateway_json(&c_string(text)))
+}
 
-    pub fn clear_source_switch(mut self: Pin<&mut Self>) {
-        self.as_mut().set_source_switching(false);
-        self.as_mut().set_source_switching_name(QString::default());
-        self.as_mut().set_source_error(QString::default());
-    }
+/// Trims and replaces `_` with spaces in a udev-derived label.
+///
+/// # Safety
+/// `text` must be null or a valid NUL-terminated string for the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_NormalizeEthernetLabel(
+    text: *const c_char,
+) -> *mut c_char {
+    into_c_string(normalize_ethernet_label_text(&c_string(text)))
+}
 
-    pub fn parse_ip_address_json(&self, text: &QString) -> QString {
-        QString::from(parse_ip_address_json(&text.to_string()))
-    }
+/// Resolves ethernet/USB NIC metadata via sysfs + `udevadm`, returning a JSON
+/// object string `{subsystem,label}` (`{}` on failure). Shells out synchronously.
+///
+/// # Safety
+/// `device_name` must be null or a valid NUL-terminated string for the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_NetStats_EthernetMetadataJson(
+    device_name: *const c_char,
+) -> *mut c_char {
+    let metadata = ethernet_metadata_for_device(&c_string(device_name)).unwrap_or_default();
+    into_c_string(serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_owned()))
+}
 
-    pub fn parse_gateway_json(&self, text: &QString) -> QString {
-        QString::from(parse_gateway_json(&text.to_string()))
-    }
+fn traffic_snapshot_json(handle: &NetStatsHandle, rates: TrafficRates) -> String {
+    let rx_history_json =
+        serde_json::to_string(&handle.traffic.rx_history).unwrap_or_else(|_| "[]".to_owned());
+    let tx_history_json =
+        serde_json::to_string(&handle.traffic.tx_history).unwrap_or_else(|_| "[]".to_owned());
+    serde_json::json!({
+        "rxBytesPerSec": rates.rx_bytes_per_sec,
+        "txBytesPerSec": rates.tx_bytes_per_sec,
+        "trafficScaleMax": rates.traffic_scale_max,
+        "rxHistoryJson": rx_history_json,
+        "txHistoryJson": tx_history_json,
+    })
+    .to_string()
+}
 
-    pub fn normalize_ethernet_label(&self, text: &QString) -> QString {
-        QString::from(normalize_ethernet_label_text(&text.to_string()))
-    }
-
-    pub fn ethernet_metadata_json(&self, device_name: &QString) -> QString {
-        let metadata = ethernet_metadata_for_device(&device_name.to_string()).unwrap_or_default();
-        QString::from(serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_owned()))
-    }
-
-    fn sync_history_json(mut self: Pin<&mut Self>) {
-        let (rx_history_json, tx_history_json) = {
-            let provider = self.as_ref();
-            let rust = provider.rust();
-            (
-                serde_json::to_string(&rust.traffic.rx_history).unwrap_or_else(|_| "[]".to_owned()),
-                serde_json::to_string(&rust.traffic.tx_history).unwrap_or_else(|_| "[]".to_owned()),
-            )
-        };
-        self.as_mut()
-            .set_rx_history_json(QString::from(rx_history_json));
-        self.as_mut()
-            .set_tx_history_json(QString::from(tx_history_json));
-    }
+fn source_snapshot_json(handle: &NetStatsHandle, ok: bool, error: &str) -> String {
+    serde_json::json!({
+        "ok": ok,
+        "error": error,
+        "sourceEntriesJson": handle.source_entries_json,
+        "sourceSwitching": handle.source_switching,
+        "sourceSwitchingName": handle.source_switching_name,
+        "sourceError": handle.source_error,
+    })
+    .to_string()
 }
 
 fn read_net_dev(iface: &str) -> Result<NetDevSample, String> {
@@ -551,12 +596,12 @@ mod tests {
     fn selects_interface_counters_from_procfs_status() {
         let devices = HashMap::from([(
             "enp0s20f0u2i1".to_owned(),
-            device_status("enp0s20f0u2i1", 123456, 654321),
+            device_status("enp0s20f0u2i1", 123_456, 654_321),
         )]);
         let sample = sample_for_interface(&devices, "enp0s20f0u2i1").expect("sample");
 
-        assert_eq!(sample.rx_bytes, 123456);
-        assert_eq!(sample.tx_bytes, 654321);
+        assert_eq!(sample.rx_bytes, 123_456);
+        assert_eq!(sample.tx_bytes, 654_321);
     }
 
     #[test]
@@ -609,6 +654,10 @@ ID_VENDOR=Raw_Vendor
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "these EMA inputs yield exact f64 results (0.0 and 1024.0), so exact equality is the intended assertion"
+    )]
     fn computes_traffic_rates_with_ema_history() {
         let mut state = TrafficState::default();
         let first = state.update(100.0, 50.0, 1000.0);

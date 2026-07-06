@@ -20,9 +20,6 @@ path = "src/bin/qs-google-auth.rs"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 blight = { version = "0.8.0", default-features = false }
-cxx = "1.0.194"
-cxx-qt = "0.9.0"
-cxx-qt-lib = "0.9.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 evdev = "0.13.2"
 futures-util = "0.3.32"
@@ -46,4 +43,7 @@ zbus = { version = "5.16.0", default-features = false, features = ["tokio"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 
 [build-dependencies]
-cxx-qt-build = "0.9.0"
+cbindgen = "0.29"
+
+[lints]
+workspace = true

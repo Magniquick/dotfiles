@@ -32,22 +32,9 @@ if(NOT EXISTS "${UNIFIEDLYRICS_RUST_DIR}/Cargo.toml")
     )
 endif()
 
-set(UNIFIEDLYRICS_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
-add_custom_command(
-    OUTPUT "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src/lib.cxxqt.h"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src"
-    COMMAND /bin/sh -c
-        "cp -R ${QS_CXXQT_CRATES_DIR}/unifiedlyrics_rust/include/. '${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/'"
-    DEPENDS qs_rust_workspace_build
-    VERBATIM
-)
-add_custom_target(unifiedlyrics_rust_headers
-    DEPENDS "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}/unifiedlyrics_rust/src/lib.cxxqt.h"
-)
-
 add_library(unifiedlyrics_plugin SHARED
     cpp/unifiedlyrics_plugin.cpp
+    cpp/QsNativeUnifiedLyrics.cpp
 )
 
 set_target_properties(unifiedlyrics_plugin
@@ -57,7 +44,6 @@ set_target_properties(unifiedlyrics_plugin
 )
 
 target_include_directories(unifiedlyrics_plugin PRIVATE
-    "${UNIFIEDLYRICS_CXXQT_INCLUDE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
 )
 
@@ -68,7 +54,6 @@ target_link_libraries(unifiedlyrics_plugin PRIVATE
     Qt6::Qml
 )
 qs_link_rust_static(unifiedlyrics_plugin ${UNIFIEDLYRICS_RUST_CRATE})
-add_dependencies(unifiedlyrics_plugin unifiedlyrics_rust_headers)
 
 set_target_properties(unifiedlyrics_plugin PROPERTIES
     BUILD_RPATH "$ORIGIN"

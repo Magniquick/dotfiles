@@ -82,7 +82,7 @@ struct LyricsSourceInfo {
     label: &'static str,
 }
 
-fn json_c_string(value: Value) -> *mut c_char {
+fn json_c_string(value: &Value) -> *mut c_char {
     CString::new(value.to_string())
         .unwrap_or_else(|_| CString::new("{}").expect("static JSON has no NUL"))
         .into_raw()
@@ -98,7 +98,7 @@ unsafe fn cstr_value(ptr: *const c_char) -> String {
 fn normalize_bluetooth_id(text: &str) -> String {
     text.trim()
         .chars()
-        .filter(|c| c.is_ascii_hexdigit())
+        .filter(char::is_ascii_hexdigit)
         .flat_map(char::to_uppercase)
         .collect()
 }
@@ -163,6 +163,10 @@ fn bluetooth_device_icon(icon_name: &str) -> &'static str {
 fn bluetooth_battery_value(device: &BluetoothDeviceInput) -> i32 {
     let value = device.battery_percentage.or(device.battery);
     match value {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "value is clamped to 0.0..=100.0 before the cast, so it always fits in i32"
+        )]
         Some(value) if value.is_finite() => value.round().clamp(0.0, 100.0) as i32,
         _ => -1,
     }
@@ -240,7 +244,11 @@ fn parse_librepods_tooltip(text: &str) -> LibrepodsBattery {
     let average = if values.is_empty() {
         -1
     } else {
-        ((values.iter().sum::<i32>() as f64) / (values.len() as f64)).round() as i32
+        let sum: i32 = values.iter().sum();
+        let count = i32::try_from(values.len()).unwrap_or(1).max(1);
+        // Integer round-half-up: equivalent to `(sum as f64 / count as f64).round()`
+        // because every value is a positive integer in 1..=100.
+        (sum + count / 2) / count
     };
     LibrepodsBattery {
         left,
@@ -268,10 +276,12 @@ fn active_mpris_player_index(input: &str) -> i64 {
                 || (player.state_rank.is_none() && rank == 0 && player.playback_state == 1)
                 || (player.state_rank.is_none() && rank == 1 && player.playback_state == 2)
         }) {
-            return player.index as i64;
+            return i64::try_from(player.index).unwrap_or(-1);
         }
     }
-    candidates.first().map_or(-1, |player| player.index as i64)
+    candidates
+        .first()
+        .map_or(-1, |player| i64::try_from(player.index).unwrap_or(-1))
 }
 
 fn metadata_string(metadata: &Map<String, Value>, key: &str) -> String {
@@ -416,7 +426,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_BluetoothDevices(
     devices_json: *const c_char,
 ) -> *mut c_char {
     let input = cstr_value(devices_json);
-    json_c_string(json!(bluetooth_device_infos(&input)))
+    json_c_string(&json!(bluetooth_device_infos(&input)))
 }
 
 /// # Safety
@@ -428,7 +438,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseLibrepodsTooltip(
     text: *const c_char,
 ) -> *mut c_char {
     let input = cstr_value(text);
-    json_c_string(json!(parse_librepods_tooltip(&input)))
+    json_c_string(&json!(parse_librepods_tooltip(&input)))
 }
 
 /// # Safety
@@ -440,7 +450,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_ActiveMprisPlayer(
     players_json: *const c_char,
 ) -> *mut c_char {
     let input = cstr_value(players_json);
-    json_c_string(json!(MprisSelection {
+    json_c_string(&json!(MprisSelection {
         index: active_mpris_player_index(&input),
     }))
 }
@@ -454,7 +464,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_SpotifyTrackRef(
     player_json: *const c_char,
 ) -> *mut c_char {
     let input = cstr_value(player_json);
-    json_c_string(json!({ "ref": spotify_track_ref(&input) }))
+    json_c_string(&json!({ "ref": spotify_track_ref(&input) }))
 }
 
 /// # Safety
@@ -468,7 +478,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsLookupKey(
     album: *const c_char,
     length_micros: *const c_char,
 ) -> *mut c_char {
-    json_c_string(json!({
+    json_c_string(&json!({
         "key": lyrics_lookup_key(
             &cstr_value(track),
             &cstr_value(artist),
@@ -486,7 +496,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsLookupKey(
 pub unsafe extern "C" fn QsNative_BarModuleLogic_IsNoLyricsError(
     error_text: *const c_char,
 ) -> *mut c_char {
-    json_c_string(json!({ "value": is_no_lyrics_error(&cstr_value(error_text)) }))
+    json_c_string(&json!({ "value": is_no_lyrics_error(&cstr_value(error_text)) }))
 }
 
 /// # Safety
@@ -497,7 +507,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_IsNoLyricsError(
 pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsSourceInfo(
     source: *const c_char,
 ) -> *mut c_char {
-    json_c_string(json!(lyrics_source_info(&cstr_value(source))))
+    json_c_string(&json!(lyrics_source_info(&cstr_value(source))))
 }
 
 /// # Safety
@@ -508,7 +518,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_LyricsSourceInfo(
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(
     output: *const c_char,
 ) -> *mut c_char {
-    json_c_string(json!(parse_systemd_idle_inhibitors(&cstr_value(output))))
+    json_c_string(&json!(parse_systemd_idle_inhibitors(&cstr_value(output))))
 }
 
 /// # Safety
@@ -519,7 +529,7 @@ pub unsafe extern "C" fn QsNative_BarModuleLogic_ParseSystemdIdleInhibitors(
 pub unsafe extern "C" fn QsNative_BarModuleLogic_ParsePortalSessionCount(
     output: *const c_char,
 ) -> *mut c_char {
-    json_c_string(json!({ "count": parse_portal_session_count(&cstr_value(output)) }))
+    json_c_string(&json!({ "count": parse_portal_session_count(&cstr_value(output)) }))
 }
 
 #[cfg(test)]

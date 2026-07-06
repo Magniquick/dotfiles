@@ -11,7 +11,7 @@ use std::ptr;
 use uuid::Uuid;
 
 use crate::config_resolver::DEFAULT_MODEL as DEFAULT_MODEL_ID;
-const SCHEMA_SQL: &str = r#"
+const SCHEMA_SQL: &str = r"
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL DEFAULT '',
@@ -97,7 +97,7 @@ ON response_items(conversation_id, turn_ordinal, item_ordinal);
 
 CREATE INDEX IF NOT EXISTS idx_response_items_call
 ON response_items(conversation_id, call_id);
-"#;
+";
 
 #[derive(Default)]
 struct OpenConversationOptions {
@@ -181,6 +181,10 @@ struct Message {
 struct ToolCall {
     id: String,
     message_id: String,
+    #[expect(
+        clippy::struct_field_names,
+        reason = "maps to the tool_calls.tool_call_id DB column and the tool_call_id serde/JSON key; renaming would break persistence and the QML-facing wire shape"
+    )]
     tool_call_id: String,
     tool_name: String,
     phase: String,
@@ -224,7 +228,7 @@ struct Store {
     conn: Connection,
 }
 
-/// Loads a conversation's history as an OpenAI Responses `input` array.
+/// Loads a conversation's history as an `OpenAI` Responses `input` array.
 ///
 /// Opens the default on-disk store and shapes the stored messages plus persisted
 /// raw response items into the item sequence expected by the Responses API. The
@@ -254,7 +258,7 @@ pub unsafe extern "C" fn QsNative_AiHistory_Restore(
         match store.restore_conversation(&opts)? {
             Some(conv) => {
                 let messages = store.list_messages(&conv.id)?;
-                Ok(encode(ApiResult {
+                Ok(encode(&ApiResult {
                     ok: true,
                     conversation: Some(conv),
                     messages,
@@ -282,7 +286,7 @@ pub unsafe extern "C" fn QsNative_AiHistory_Create(
     let opts = unsafe { open_options(model_id, provider_id, system_prompt) };
     alloc_c_string(&with_store("", |store| {
         let conv = store.create_conversation(&opts)?;
-        Ok(encode(ApiResult {
+        Ok(encode(&ApiResult {
             ok: true,
             conversation: Some(conv),
             ..Default::default()
@@ -327,7 +331,7 @@ pub unsafe extern "C" fn QsNative_AiHistory_Resume(
     alloc_c_string(&with_store("", |store| {
         let (conv, messages) =
             store.resume_conversation(&opts, &current_conversation_id, &target_conversation_id)?;
-        Ok(encode(ApiResult {
+        Ok(encode(&ApiResult {
             ok: true,
             conversation: Some(conv),
             messages,
@@ -361,7 +365,7 @@ pub unsafe extern "C" fn QsNative_AiHistory_ListResume(
             &query,
             i64::from(limit),
         )?;
-        Ok(encode(ApiResult {
+        Ok(encode(&ApiResult {
             ok: true,
             conversations,
             ..Default::default()
@@ -679,7 +683,7 @@ impl Store {
         let current_id = current_id.trim();
         let query = query.trim();
         let limit = if limit <= 0 || limit > 100 { 50 } else { limit };
-        let like = format!("%{}%", query);
+        let like = format!("%{query}%");
         let mut stmt = self.conn.prepare(
             "SELECT
                 c.id,
@@ -906,7 +910,7 @@ impl Store {
                     call.tool_name,
                     call.phase,
                     call.status,
-                    if call.is_error { 1 } else { 0 },
+                    i32::from(call.is_error),
                     call.summary,
                     call.subtitle,
                     payload,
@@ -947,7 +951,13 @@ impl Store {
             item.turn_id = turn_id.to_string();
             item.turn_ordinal = turn_ordinal;
             if !explicit_ordinal {
-                item.item_ordinal = i as i64;
+                #[expect(
+                    clippy::cast_possible_wrap,
+                    reason = "i is a response-item index within a single turn; the count never approaches i64::MAX so the cast cannot wrap"
+                )]
+                {
+                    item.item_ordinal = i as i64;
+                }
             }
             upsert_response_item(&tx, item)?;
         }
@@ -1078,9 +1088,9 @@ impl Store {
 }
 
 fn decode_message(value: Value) -> Result<Message, String> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| "invalid type: expected map".to_string())?;
+    let Value::Object(object) = value else {
+        return Err("invalid type: expected map".to_string());
+    };
     Ok(Message {
         id: value_string(object.get("id")),
         conversation_id: value_string(object.get("conversation_id")),
@@ -1106,9 +1116,9 @@ fn decode_message(value: Value) -> Result<Message, String> {
 }
 
 fn decode_tool_call(value: Value) -> Result<ToolCall, String> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| "invalid type: expected map".to_string())?;
+    let Value::Object(object) = value else {
+        return Err("invalid type: expected map".to_string());
+    };
     Ok(ToolCall {
         id: value_string(object.get("id")),
         message_id: value_string(object.get("message_id")),
@@ -1129,9 +1139,9 @@ fn decode_tool_call(value: Value) -> Result<ToolCall, String> {
 }
 
 fn decode_response_items(value: Value) -> Result<Vec<ResponseItem>, String> {
-    let values = value
-        .as_array()
-        .ok_or_else(|| "invalid type: expected array".to_string())?;
+    let Value::Array(values) = value else {
+        return Err("invalid type: expected array".to_string());
+    };
     let mut items = Vec::with_capacity(values.len());
     for value in values {
         let object = value
@@ -1278,14 +1288,14 @@ fn shaped_history(
                 &message.body,
                 &message_attachments(&message)?,
             )?);
-            if !replay_items.is_empty() {
+            if replay_items.is_empty() {
+                active_turn_has_replay = false;
+                active_turn_has_raw_message = false;
+            } else {
                 out.extend(replay_items);
                 consumed_replay_turns.insert(message.id.clone());
                 active_turn_has_replay = true;
                 active_turn_has_raw_message = replay_turns_with_message.contains(&message.id);
-            } else {
-                active_turn_has_replay = false;
-                active_turn_has_raw_message = false;
             }
             continue;
         }
@@ -1590,22 +1600,22 @@ fn io_to_sql(err: std::io::Error) -> rusqlite::Error {
 }
 
 fn encode_ok() -> String {
-    encode(ApiResult {
+    encode(&ApiResult {
         ok: true,
         ..Default::default()
     })
 }
 
 fn encode_error(error: String) -> String {
-    encode(ApiResult {
+    encode(&ApiResult {
         ok: false,
         error,
         ..Default::default()
     })
 }
 
-fn encode(result: ApiResult) -> String {
-    serde_json::to_string(&result).unwrap_or_else(|_| {
+fn encode(result: &ApiResult) -> String {
+    serde_json::to_string(result).unwrap_or_else(|_| {
         r#"{"ok":false,"error":"failed to encode chatstore result"}"#.to_string()
     })
 }

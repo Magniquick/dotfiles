@@ -61,6 +61,7 @@ pub struct EventSummary {
     pub status: String,
 }
 
+#[must_use]
 pub fn env_id(id: &str) -> String {
     id.trim()
         .to_ascii_uppercase()
@@ -77,18 +78,24 @@ pub fn env_id(id: &str) -> String {
         .to_owned()
 }
 
+#[must_use]
 pub fn key_prefix(id: &str) -> String {
     format!("GOOGLE_{}_", env_id(id))
 }
 
+#[must_use]
 pub fn token_key(id: &str) -> String {
     key_prefix(id) + TOKEN_KEY
 }
 
+#[must_use]
 pub fn client_key(id: &str) -> String {
     key_prefix(id) + CLIENT_KEY
 }
 
+/// # Errors
+///
+/// Returns an error if the runtime cannot be built or the async provisioning flow fails.
 pub fn provision(account: &EmailAccount, client_json_path: Option<&str>) -> Result<(), String> {
     let client_json_path = client_json_path
         .map(|path| path.trim().to_owned())
@@ -97,10 +104,16 @@ pub fn provision(account: &EmailAccount, client_json_path: Option<&str>) -> Resu
         .block_on(provision_async(account, client_json_path.as_deref()))
 }
 
+/// # Errors
+///
+/// Returns an error if the runtime cannot be built or the calendar list request fails.
 pub fn list_calendars(account: &EmailAccount) -> Result<Vec<CalendarSummary>, String> {
     crate::utils::build_multi_thread_runtime()?.block_on(list_calendars_async(&account.id))
 }
 
+/// # Errors
+///
+/// Returns an error if the worker panics, the runtime cannot be built, or the Gmail request fails.
 pub fn gmail_list_messages(
     account_id: &str,
     query: &str,
@@ -128,6 +141,9 @@ pub fn gmail_list_messages(
     .map_err(|_| "gmail list worker panicked".to_owned())?
 }
 
+/// # Errors
+///
+/// Returns an error if the worker panics, the runtime cannot be built, or the Gmail request fails.
 pub fn gmail_get_message(
     account_id: &str,
     id: &str,
@@ -136,7 +152,8 @@ pub fn gmail_get_message(
 ) -> Result<gmail1::api::Message, String> {
     let account_id = account_id.to_owned();
     let id = id.to_owned();
-    let metadata_headers: Vec<String> = metadata_headers.iter().map(|s| s.to_string()).collect();
+    let metadata_headers: Vec<String> =
+        metadata_headers.iter().map(ToString::to_string).collect();
     std::thread::spawn(move || {
         crate::utils::build_multi_thread_runtime()?.block_on(async {
             let hub = gmail_hub(&account_id).await?;
@@ -285,6 +302,9 @@ fn event_time(value: &calendar3::api::EventDateTime) -> String {
         .unwrap_or_default()
 }
 
+/// # Errors
+///
+/// Returns an error if the stored secret is missing or the authenticator/client cannot be built.
 pub async fn gmail_hub(account_id: &str) -> Result<gmail1::Gmail<HttpsConnector>, String> {
     ensure_crypto_provider();
     let auth = authenticator(
@@ -297,18 +317,27 @@ pub async fn gmail_hub(account_id: &str) -> Result<gmail1::Gmail<HttpsConnector>
     Ok(gmail1::Gmail::new(client, auth))
 }
 
+/// # Errors
+///
+/// Returns an error if the stored secret is missing or the authenticator/client cannot be built.
 pub async fn calendar_hub(
     account_id: &str,
 ) -> Result<calendar3::CalendarHub<HttpsConnector>, String> {
     calendar_hub_with_prompt(account_id, AuthPrompt::Interactive).await
 }
 
+/// # Errors
+///
+/// Returns an error if the stored secret is missing or the authenticator/client cannot be built.
 pub async fn calendar_hub_silent(
     account_id: &str,
 ) -> Result<calendar3::CalendarHub<HttpsConnector>, String> {
     calendar_hub_with_prompt(account_id, AuthPrompt::Silent).await
 }
 
+/// # Errors
+///
+/// Returns an error if clearing the stored token fails or the calendar hub cannot be built.
 pub async fn reauthorize_calendar_hub(
     account_id: &str,
 ) -> Result<calendar3::CalendarHub<HttpsConnector>, String> {
@@ -416,13 +445,16 @@ fn add_login_hint(secret: &mut gmail1::yup_oauth2::ApplicationSecret, address: &
 }
 
 fn query_encode(value: &str) -> String {
+    use std::fmt::Write as _;
     let mut encoded = String::new();
     for byte in value.bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                encoded.push(byte as char)
+                encoded.push(byte as char);
             }
-            _ => encoded.push_str(&format!("%{byte:02X}")),
+            _ => {
+                let _ = write!(encoded, "%{byte:02X}");
+            }
         }
     }
     encoded

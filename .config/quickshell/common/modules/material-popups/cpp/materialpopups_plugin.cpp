@@ -1,7 +1,7 @@
 #include <QtQml/qqml.h>
 #include <QtQml/qqmlextensionplugin.h>
 
-#include <material_popups_backend/src/backend.cxxqt.h>
+#include "QsNativeMaterialPopup.h"
 
 class materialpopups_plugin : public QQmlExtensionPlugin {
   Q_OBJECT
@@ -9,7 +9,7 @@ class materialpopups_plugin : public QQmlExtensionPlugin {
 
 public:
   void registerTypes(const char* uri) override {
-    qmlRegisterType<MaterialPopupBackend>(uri, 1, 0, "MaterialPopupBackend");
+    qmlRegisterType<QsNativeMaterialPopup>(uri, 1, 0, "MaterialPopupBackend");
   }
 };
 

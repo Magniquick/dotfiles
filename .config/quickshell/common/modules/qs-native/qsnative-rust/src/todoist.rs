@@ -1,30 +1,20 @@
-use core::pin::Pin;
 use std::collections::BTreeMap;
 use std::fs;
+use std::os::raw::{c_char, c_void};
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, Local, Timelike, Utc};
-use cxx_qt::Threading;
-use cxx_qt_lib::QString;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::ffi::{c_string, emit_snapshot, QsNativeUpdateFn};
+
 const TODOIST_SYNC_URL: &str = "https://api.todoist.com/api/v1/sync";
 const TODOIST_CACHE_VERSION: i32 = 1;
 const TODOIST_SYNC_TOKEN_FULL: &str = "*";
-
-#[derive(Default)]
-pub struct TodoistClientRust {
-    data: QString,
-    loading: bool,
-    error: QString,
-    last_updated: QString,
-    cache_path: QString,
-    prefer_cache: bool,
-}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct CacheState {
@@ -131,104 +121,93 @@ struct RefreshResult {
     last_updated: String,
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
+/// Opaque per-instance handle owned by the C++ `QsNativeTodoist` `QObject`.
+///
+/// The Todoist client keeps no cross-refresh state in Rust (the sync cache lives
+/// on disk, and `cache_path`/`prefer_cache` are QML-side inputs passed into each
+/// call), so the handle is empty. It exists only to mirror the New/Delete
+/// lifecycle of the other providers; the worker never dereferences it, so a
+/// `_Delete` racing an in-flight refresh is safe.
+pub struct TodoistHandle;
 
-    impl cxx_qt::Threading for TodoistClient {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(QString, data)]
-        #[qproperty(bool, loading)]
-        #[qproperty(QString, error)]
-        #[qproperty(QString, last_updated, cxx_name = "last_updated")]
-        #[qproperty(QString, cache_path, cxx_name = "cache_path")]
-        #[qproperty(bool, prefer_cache, cxx_name = "prefer_cache")]
-        type TodoistClient = super::TodoistClientRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn refresh(self: Pin<&mut TodoistClient>) -> bool;
-
-        #[qinvokable]
-        fn action(self: Pin<&mut TodoistClient>, verb: &QString, args_json: &QString) -> bool;
-    }
-
-    impl cxx_qt::Initialize for TodoistClient {}
+#[no_mangle]
+pub extern "C" fn QsNative_Todoist_New() -> *mut TodoistHandle {
+    Box::into_raw(Box::new(TodoistHandle))
 }
 
-impl cxx_qt::Initialize for ffi::TodoistClient {
-    fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut().set_prefer_cache(true);
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_Todoist_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Todoist_Delete(handle: *mut TodoistHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
     }
 }
 
-impl ffi::TodoistClient {
-    pub fn refresh(mut self: Pin<&mut Self>) -> bool {
-        if *self.as_ref().loading() {
-            return false;
-        }
+/// Runs a blocking Todoist sync on a worker thread and delivers a JSON snapshot
+/// (`{data, error, last_updated}`) via `cb`. `data` is itself the serialized
+/// `ListOutput` JSON string.
+///
+/// # Safety
+/// `cache_path` must be null or valid for the call; `ctx`/`cb` must remain valid
+/// until `cb` fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Todoist_Refresh(
+    _handle: *mut TodoistHandle,
+    cache_path: *const c_char,
+    prefer_cache: bool,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) {
+    let cache_path = c_string(cache_path);
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let result = refresh_todoist(&cache_path, prefer_cache);
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, result_to_json(&result)) };
+    });
+}
 
-        self.as_mut().set_loading(true);
-        self.as_mut().set_error(QString::default());
-
-        let cache_path = self.cache_path().to_string();
-        let prefer_cache = *self.prefer_cache();
-        let qt_thread = self.as_ref().qt_thread();
-
-        thread::spawn(move || {
-            let result = refresh_todoist(&cache_path, prefer_cache);
-            let _ = qt_thread.queue(move |mut client| {
-                client.as_mut().apply_refresh_result(result);
-                client.as_mut().set_loading(false);
+/// Applies a mutating Todoist command (close/delete/add/update), then re-syncs
+/// and delivers the refreshed snapshot via `cb`. On failure it logs and falls
+/// back to a cache-preferring refresh carrying the error message.
+///
+/// # Safety
+/// `verb`/`args_json`/`cache_path` must be null or valid for the call;
+/// `ctx`/`cb` must remain valid until `cb` fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Todoist_Action(
+    _handle: *mut TodoistHandle,
+    verb: *const c_char,
+    args_json: *const c_char,
+    cache_path: *const c_char,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) {
+    let verb = c_string(verb);
+    let args_json = c_string(args_json);
+    let cache_path = c_string(cache_path);
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let result = action_todoist(&verb, &args_json)
+            .and_then(|()| refresh_todoist_result(&cache_path, false))
+            .unwrap_or_else(|error| {
+                log_todoist_error("action", &error);
+                refresh_todoist(&cache_path, true).with_error(error)
             });
-        });
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, result_to_json(&result)) };
+    });
+}
 
-        true
-    }
-
-    pub fn action(mut self: Pin<&mut Self>, verb: &QString, args_json: &QString) -> bool {
-        if *self.as_ref().loading() {
-            return false;
-        }
-
-        self.as_mut().set_loading(true);
-        self.as_mut().set_error(QString::default());
-
-        let verb = verb.to_string();
-        let args_json = args_json.to_string();
-        let cache_path = self.cache_path().to_string();
-        let qt_thread = self.as_ref().qt_thread();
-
-        thread::spawn(move || {
-            let result = action_todoist(&verb, &args_json)
-                .and_then(|()| refresh_todoist_result(&cache_path, false))
-                .unwrap_or_else(|error| {
-                    log_todoist_error("action", &error);
-                    refresh_todoist(&cache_path, true).with_error(error)
-                });
-            let _ = qt_thread.queue(move |mut client| {
-                client.as_mut().apply_refresh_result(result);
-                client.as_mut().set_loading(false);
-            });
-        });
-
-        true
-    }
-
-    fn apply_refresh_result(mut self: Pin<&mut Self>, result: RefreshResult) {
-        self.as_mut().set_error(QString::from(result.error));
-        self.as_mut()
-            .set_last_updated(QString::from(result.last_updated));
-        self.set_data(QString::from(result.data));
-    }
+/// JSON snapshot delivered to the C++ side; `data` holds the serialized
+/// `ListOutput` JSON as a string value that QML re-parses with
+/// `JsonUtils.parseObject`.
+fn result_to_json(result: &RefreshResult) -> String {
+    json!({
+        "data": result.data,
+        "error": result.error,
+        "last_updated": result.last_updated,
+    })
+    .to_string()
 }
 
 impl RefreshResult {
@@ -506,7 +485,7 @@ fn apply_sync_response(cached_state: Option<CacheState>, response: SyncResponse)
         .map(str::trim)
         .filter(|t| !t.is_empty())
     {
-        state.sync_token = t.to_owned();
+        t.clone_into(&mut state.sync_token);
     }
 
     state
@@ -658,7 +637,7 @@ fn string_or_default<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    Option::<String>::deserialize(deserializer).map(|value| value.unwrap_or_default())
+    Option::<String>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 fn read_cache_state(cache_path: &str) -> Result<CacheState, String> {
@@ -696,7 +675,7 @@ fn write_file_atomic(path: &Path, data: &[u8]) -> Result<(), String> {
 fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
+        .map(|duration| duration.as_secs().cast_signed())
         .unwrap_or_default()
 }
 

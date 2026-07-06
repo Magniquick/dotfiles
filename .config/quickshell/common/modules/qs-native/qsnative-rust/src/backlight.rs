@@ -1,27 +1,28 @@
-use core::pin::Pin;
-use std::{collections::HashMap, path::PathBuf, process::Command};
+//! `BacklightProvider` backend as a plain `extern "C"` surface over an opaque
+//! handle. The C++ Qt glue (`cpp/QsNativeBacklight.{h,cpp}`) owns the `QObject` and
+//! marshals worker-thread updates back onto the Qt thread.
+//!
+//! Two threaded paths feed the UI:
+//! * a `notify` file watcher on the sysfs `.../brightness` file auto-refreshes the
+//!   internal-backlight scalar state (delivered as a zero-copy `BacklightSnapshotC`
+//!   `#[repr(C)]` struct; the synchronous `refresh`/`setBrightness` invokables
+//!   push the same struct through the same callback);
+//! * `ddcutil` subprocess calls (detect / getvcp / setvcp) run on short-lived
+//!   worker threads, mutate the per-connector DDC map behind an `Arc<Mutex<…>>`,
+//!   then fire a version-bump callback so QML re-queries the `ddc*` invokables.
+
+use std::collections::HashMap;
+use std::ffi::CString;
+use std::os::raw::{c_char, c_void};
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use blight::{Device, ErrorKind, Light};
-use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-#[derive(Default)]
-pub struct BacklightProviderRust {
-    available: bool,
-    brightness_percent: i32,
-    device: QString,
-    error: QString,
-    monitor: Option<BacklightMonitor>,
-    ddcutil_available: bool,
-    ddc_version: i32,
-    ddc_displays: HashMap<String, DdcDisplay>,
-}
-
-struct BacklightMonitor {
-    _watcher: RecommendedWatcher,
-    path: PathBuf,
-}
+use crate::ffi::{c_string, emit_snapshot, into_c_string, QsNativeUpdateFn};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BacklightState {
@@ -29,6 +30,44 @@ struct BacklightState {
     brightness_percent: i32,
     device: String,
     error: String,
+}
+
+/// Zero-copy scalar-state snapshot handed to the C++ side. The `*const c_char`
+/// fields borrow `CString`s that live on the worker/caller stack **only for the
+/// duration of the callback**; C++ must copy them (`QString::fromUtf8`)
+/// synchronously and must not retain the pointers. Fields map 1:1 to the
+/// `BacklightProvider` scalar QML properties.
+#[repr(C)]
+pub struct BacklightSnapshotC {
+    pub available: bool,
+    pub brightness_percent: i32,
+    pub device: *const c_char,
+    pub error: *const c_char,
+}
+
+/// Delivers a `BacklightSnapshotC` (borrowed for the call only) to the C++ side.
+pub type BacklightSnapshotFn = unsafe extern "C" fn(*mut c_void, *const BacklightSnapshotC);
+
+/// Builds a `CString`, falling back to empty on an interior NUL.
+fn cstr(value: &str) -> CString {
+    CString::new(value).unwrap_or_default()
+}
+
+/// Binds `state`'s strings as `CString`s in this scope so the borrowed
+/// `BacklightSnapshotC` pointers stay valid for the whole `cb` call.
+///
+/// # Safety
+/// `cb`/`ctx` must be valid for the duration of the call.
+unsafe fn emit_backlight_state(cb: BacklightSnapshotFn, ctx: *mut c_void, state: &BacklightState) {
+    let device = cstr(&state.device);
+    let error = cstr(&state.error);
+    let c = BacklightSnapshotC {
+        available: state.available,
+        brightness_percent: state.brightness_percent,
+        device: device.as_ptr(),
+        error: error.as_ptr(),
+    };
+    cb(ctx, &raw const c);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,333 +78,390 @@ struct DdcDisplay {
     error: String,
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    impl cxx_qt::Threading for BacklightProvider {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(bool, available)]
-        #[qproperty(i32, brightness_percent, cxx_name = "brightness_percent")]
-        #[qproperty(QString, device)]
-        #[qproperty(QString, error)]
-        #[qproperty(bool, ddcutil_available, cxx_name = "ddcutil_available")]
-        #[qproperty(i32, ddc_version, cxx_name = "ddc_version")]
-        type BacklightProvider = super::BacklightProviderRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn start(self: Pin<&mut BacklightProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "startMonitor"]
-        fn start_monitor(self: Pin<&mut BacklightProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "stopMonitor"]
-        fn stop_monitor(self: Pin<&mut BacklightProvider>);
-
-        #[qinvokable]
-        fn refresh(self: Pin<&mut BacklightProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "setBrightness"]
-        fn set_brightness(self: Pin<&mut BacklightProvider>, percent: i32) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "refreshDdc"]
-        fn refresh_ddc(self: Pin<&mut BacklightProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "ddcBusForConnector"]
-        fn ddc_bus_for_connector(self: Pin<&mut BacklightProvider>, connector: &QString)
-            -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "ddcBrightnessPercent"]
-        fn ddc_brightness_percent(self: Pin<&mut BacklightProvider>, connector: &QString) -> i32;
-
-        #[qinvokable]
-        #[cxx_name = "ddcMaxBrightness"]
-        fn ddc_max_brightness(self: Pin<&mut BacklightProvider>, connector: &QString) -> i32;
-
-        #[qinvokable]
-        #[cxx_name = "ddcError"]
-        fn ddc_error(self: Pin<&mut BacklightProvider>, connector: &QString) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "refreshDdcBrightness"]
-        fn refresh_ddc_brightness(self: Pin<&mut BacklightProvider>, connector: &QString) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "setDdcBrightness"]
-        fn set_ddc_brightness(
-            self: Pin<&mut BacklightProvider>,
-            connector: &QString,
-            percent: i32,
-        ) -> bool;
-    }
-
-    impl cxx_qt::Initialize for BacklightProvider {}
+/// Per-instance DDC state; shared with worker threads via `Arc<Mutex<…>>`.
+struct BacklightInner {
+    ddc_displays: HashMap<String, DdcDisplay>,
 }
 
-impl cxx_qt::Initialize for ffi::BacklightProvider {
-    fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut().set_ddcutil_available(ddcutil_available());
+/// Live sysfs brightness watcher; dropping it stops/joins the watch thread.
+struct BacklightMonitor {
+    _watcher: RecommendedWatcher,
+    path: PathBuf,
+}
+
+/// Opaque per-instance handle owned by the C++ `QsNativeBacklight` `QObject`.
+pub struct BacklightHandle {
+    inner: Arc<Mutex<BacklightInner>>,
+    monitor: Option<BacklightMonitor>,
+}
+
+#[no_mangle]
+pub extern "C" fn QsNative_Backlight_New() -> *mut BacklightHandle {
+    Box::into_raw(Box::new(BacklightHandle {
+        inner: Arc::new(Mutex::new(BacklightInner {
+            ddc_displays: HashMap::new(),
+        })),
+        monitor: None,
+    }))
+}
+
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_Backlight_New` not yet freed.
+/// Dropping the handle drops the watcher, which stops the watch thread cleanly.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_Delete(handle: *mut BacklightHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
     }
 }
 
-impl ffi::BacklightProvider {
-    pub fn start(self: Pin<&mut Self>) {
-        let mut this = self;
-        this.as_mut().start_monitor();
-        this.refresh_ddc();
+/// True when the `ddcutil` binary is on `PATH` and executable. Pure PATH scan;
+/// used to prime `ddcutil_available` during C++ construction (before `start()`).
+#[no_mangle]
+pub extern "C" fn QsNative_Backlight_DdcutilAvailable() -> bool {
+    ddcutil_available()
+}
+
+/// Reads the internal backlight synchronously and delivers its state
+/// (`available`, `brightness_percent`, `device`, `error`) through `cb` as a
+/// borrowed `BacklightSnapshotC`. `cb` fires once, synchronously, before return.
+///
+/// # Safety
+/// `ctx`/`cb` must be valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_Refresh(ctx: *mut c_void, cb: BacklightSnapshotFn) {
+    emit_backlight_state(cb, ctx, &read_backlight_state());
+}
+
+/// Writes `percent` to the internal backlight, then delivers the resulting state
+/// (or the failure state on error) through `cb` as a borrowed `BacklightSnapshotC`.
+/// `cb` fires once, synchronously, before return.
+///
+/// # Safety
+/// `ctx`/`cb` must be valid for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_SetBrightness(
+    percent: i32,
+    ctx: *mut c_void,
+    cb: BacklightSnapshotFn,
+) {
+    let state = match set_backlight_percent(percent) {
+        Ok(()) => read_backlight_state(),
+        Err(state) => state,
+    };
+    emit_backlight_state(cb, ctx, &state);
+}
+
+/// Installs (or reuses) a `notify` watcher on the sysfs `.../brightness` file.
+/// On Modify/Create the watcher reads fresh state and delivers it through `cb`
+/// as a borrowed `BacklightSnapshotC` (the C++ side copies it but must not retain
+/// the pointers). Returns an error string as owned `char*` ("" on success); freed
+/// with `QsNative_Free`.
+///
+/// # Safety
+/// `handle` must be valid; `ctx`/`cb` must stay valid until the watcher is
+/// dropped (via `stopMonitor` or `Delete`).
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_StartMonitor(
+    handle: *mut BacklightHandle,
+    ctx: *mut c_void,
+    cb: BacklightSnapshotFn,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string(String::new());
+    }
+    let Some(path) = brightness_path() else {
+        return into_c_string(String::new());
+    };
+    if (*handle)
+        .monitor
+        .as_ref()
+        .is_some_and(|monitor| monitor.path == path)
+    {
+        return into_c_string(String::new());
     }
 
-    pub fn start_monitor(mut self: Pin<&mut Self>) {
-        let _ = self.as_mut().refresh();
-        self.as_mut().start_watcher();
-    }
-
-    pub fn stop_monitor(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().as_mut().get_mut().monitor = None;
-    }
-
-    pub fn refresh(mut self: Pin<&mut Self>) -> bool {
-        let state = read_backlight_state();
-        self.as_mut().apply_state(state);
-        true
-    }
-
-    pub fn set_brightness(mut self: Pin<&mut Self>, percent: i32) -> bool {
-        match set_backlight_percent(percent) {
-            Ok(()) => {
-                self.as_mut().refresh();
+    let ctx = ctx as usize;
+    let mut watcher = match RecommendedWatcher::new(
+        move |result: notify::Result<Event>| {
+            if result.as_ref().is_ok_and(|event| {
+                matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
+            }) {
+                let state = read_backlight_state();
+                unsafe { emit_backlight_state(cb, ctx as *mut c_void, &state) };
             }
-            Err(state) => {
-                self.as_mut().apply_state(state);
-            }
-        }
-        true
+        },
+        Config::default(),
+    ) {
+        Ok(watcher) => watcher,
+        Err(error) => return into_c_string(format!("watch brightness: {error}")),
+    };
+
+    if let Err(error) = watcher.watch(&path, RecursiveMode::NonRecursive) {
+        return into_c_string(format!("watch brightness: {error}"));
     }
 
-    pub fn refresh_ddc(mut self: Pin<&mut Self>) -> bool {
-        let available = ddcutil_available();
-        self.as_mut().set_ddcutil_available(available);
-        if !available {
-            self.as_mut()
-                .rust_mut()
-                .as_mut()
-                .get_mut()
-                .ddc_displays
-                .clear();
-            self.as_mut().bump_ddc_version();
-            return true;
-        }
+    (*handle).monitor = Some(BacklightMonitor {
+        _watcher: watcher,
+        path,
+    });
+    into_c_string(String::new())
+}
 
-        let qt_thread = self.as_ref().qt_thread();
-        std::thread::spawn(move || {
-            let displays = detect_ddc_displays().unwrap_or_default();
-            let _ = qt_thread.queue(move |mut provider| {
-                provider.as_mut().rust_mut().as_mut().get_mut().ddc_displays = displays;
-                provider.as_mut().bump_ddc_version();
-            });
-        });
-        true
+/// Drops the sysfs watcher, stopping the watch thread.
+///
+/// # Safety
+/// `handle` must be null or a valid handle.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_StopMonitor(handle: *mut BacklightHandle) {
+    if !handle.is_null() {
+        (*handle).monitor = None;
     }
+}
 
-    pub fn ddc_bus_for_connector(self: Pin<&mut Self>, connector: &QString) -> QString {
-        let connector = connector.to_string();
-        QString::from(
-            self.as_ref()
-                .rust()
-                .ddc_displays
-                .get(&connector)
-                .map(|display| display.bus.as_str())
-                .unwrap_or_default(),
-        )
+/// Re-checks `ddcutil` availability and returns it. When unavailable the DDC map
+/// is cleared synchronously (C++ then bumps the version). When available a worker
+/// thread runs `ddcutil detect`, stores the connector→bus map, and fires `cb` to
+/// bump the change-notification version.
+///
+/// # Safety
+/// `handle` must be valid; `ctx`/`cb` must remain valid until `cb` fires.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_RefreshDdc(
+    handle: *mut BacklightHandle,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) -> bool {
+    if handle.is_null() {
+        return false;
     }
-
-    pub fn ddc_brightness_percent(self: Pin<&mut Self>, connector: &QString) -> i32 {
-        let connector = connector.to_string();
-        self.as_ref()
-            .rust()
+    let available = ddcutil_available();
+    if !available {
+        (*handle)
+            .inner
+            .lock()
+            .expect("backlight state poisoned")
             .ddc_displays
-            .get(&connector)
-            .and_then(|display| {
-                display
-                    .current
-                    .zip(display.max)
-                    .map(|(c, m)| normalized_percent(c, m))
-            })
-            .unwrap_or(0)
+            .clear();
+        return false;
     }
 
-    pub fn ddc_max_brightness(self: Pin<&mut Self>, connector: &QString) -> i32 {
-        let connector = connector.to_string();
-        self.as_ref()
-            .rust()
-            .ddc_displays
-            .get(&connector)
-            .and_then(|display| display.max)
-            .unwrap_or(100)
-    }
+    let inner = (*handle).inner.clone();
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let displays = detect_ddc_displays().unwrap_or_default();
+        inner
+            .lock()
+            .expect("backlight state poisoned")
+            .ddc_displays = displays;
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, "{}".to_owned()) };
+    });
+    true
+}
 
-    pub fn ddc_error(self: Pin<&mut Self>, connector: &QString) -> QString {
-        let connector = connector.to_string();
-        QString::from(
-            self.as_ref()
-                .rust()
-                .ddc_displays
-                .get(&connector)
-                .map(|display| display.error.as_str())
-                .unwrap_or_default(),
-        )
+/// I2C bus string for a connector ("" when unmapped). Freed with `QsNative_Free`.
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_DdcBusForConnector(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string(String::new());
     }
-
-    pub fn refresh_ddc_brightness(self: Pin<&mut Self>, connector: &QString) -> bool {
-        let connector = connector.to_string();
-        let Some(bus) = self
-            .as_ref()
-            .rust()
+    let connector = c_string(connector);
+    let guard = (*handle).inner.lock().expect("backlight state poisoned");
+    into_c_string(
+        guard
             .ddc_displays
             .get(&connector)
             .map(|display| display.bus.clone())
-        else {
-            return false;
-        };
+            .unwrap_or_default(),
+    )
+}
 
-        let qt_thread = self.as_ref().qt_thread();
-        std::thread::spawn(move || {
-            let result = read_ddc_brightness(&bus);
-            let _ = qt_thread.queue(move |mut provider| {
-                provider
-                    .as_mut()
-                    .apply_ddc_brightness_result(connector, result);
-            });
-        });
-        true
+/// Current DDC brightness as a 0-100 percent (0 when missing/unknown).
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_DdcBrightnessPercent(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+) -> i32 {
+    if handle.is_null() {
+        return 0;
     }
+    let connector = c_string(connector);
+    let guard = (*handle).inner.lock().expect("backlight state poisoned");
+    guard
+        .ddc_displays
+        .get(&connector)
+        .and_then(|display| {
+            display
+                .current
+                .zip(display.max)
+                .map(|(current, max)| normalized_percent(current, max))
+        })
+        .unwrap_or(0)
+}
 
-    pub fn set_ddc_brightness(self: Pin<&mut Self>, connector: &QString, percent: i32) -> bool {
-        let connector = connector.to_string();
-        let Some((bus, max)) = self
-            .as_ref()
-            .rust()
+/// Max DDC brightness for a connector (100 fallback).
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_DdcMaxBrightness(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+) -> i32 {
+    if handle.is_null() {
+        return 100;
+    }
+    let connector = c_string(connector);
+    let guard = (*handle).inner.lock().expect("backlight state poisoned");
+    guard
+        .ddc_displays
+        .get(&connector)
+        .and_then(|display| display.max)
+        .unwrap_or(100)
+}
+
+/// Last DDC error string for a connector ("" when ok). Freed with `QsNative_Free`.
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_DdcError(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+) -> *mut c_char {
+    if handle.is_null() {
+        return into_c_string(String::new());
+    }
+    let connector = c_string(connector);
+    let guard = (*handle).inner.lock().expect("backlight state poisoned");
+    into_c_string(
+        guard
             .ddc_displays
             .get(&connector)
-            .map(|display| (display.bus.clone(), display.max.unwrap_or(100)))
-        else {
-            return false;
-        };
+            .map(|display| display.error.clone())
+            .unwrap_or_default(),
+    )
+}
 
-        let raw = percent_to_ddc_raw(percent, max);
-        let qt_thread = self.as_ref().qt_thread();
-        std::thread::spawn(move || {
-            let result = set_ddc_brightness_raw(&bus, raw).and_then(|()| read_ddc_brightness(&bus));
-            let _ = qt_thread.queue(move |mut provider| {
-                provider
-                    .as_mut()
-                    .apply_ddc_brightness_result(connector, result);
-            });
-        });
-        true
+/// Reads a single connector's DDC brightness off-thread and bumps the version.
+/// Returns false (no work started) when the connector is unmapped.
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string; `ctx`/`cb` valid until
+/// `cb` fires.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_RefreshDdcBrightness(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) -> bool {
+    if handle.is_null() {
+        return false;
     }
-
-    fn start_watcher(mut self: Pin<&mut Self>) {
-        let Some(path) = brightness_path() else {
-            return;
-        };
-
-        if self
-            .as_ref()
-            .rust()
-            .monitor
-            .as_ref()
-            .is_some_and(|monitor| monitor.path == path)
-        {
-            return;
+    let connector = c_string(connector);
+    let inner = (*handle).inner.clone();
+    let bus = {
+        let guard = inner.lock().expect("backlight state poisoned");
+        match guard.ddc_displays.get(&connector) {
+            Some(display) => display.bus.clone(),
+            None => return false,
         }
+    };
 
-        let qt_thread = self.as_ref().qt_thread();
-        let mut watcher = match RecommendedWatcher::new(
-            move |result: notify::Result<Event>| {
-                if result.as_ref().is_ok_and(|event| {
-                    matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
-                }) {
-                    let _ = qt_thread.queue(|mut provider| {
-                        provider.as_mut().refresh();
-                    });
-                }
-            },
-            Config::default(),
-        ) {
-            Ok(watcher) => watcher,
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let result = read_ddc_brightness(&bus);
+        apply_ddc_brightness_result(&inner, &connector, result);
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, "{}".to_owned()) };
+    });
+    true
+}
+
+/// Sets a connector's DDC brightness off-thread (setvcp then getvcp) and bumps
+/// the version. Returns false (no work started) when the connector is unmapped.
+///
+/// # Safety
+/// `handle` must be valid; `connector` a valid C string; `ctx`/`cb` valid until
+/// `cb` fires.
+///
+/// # Panics
+/// Panics if the shared DDC state mutex is poisoned by a prior panic.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Backlight_SetDdcBrightness(
+    handle: *mut BacklightHandle,
+    connector: *const c_char,
+    percent: i32,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    let connector = c_string(connector);
+    let inner = (*handle).inner.clone();
+    let (bus, max) = {
+        let guard = inner.lock().expect("backlight state poisoned");
+        match guard.ddc_displays.get(&connector) {
+            Some(display) => (display.bus.clone(), display.max.unwrap_or(100)),
+            None => return false,
+        }
+    };
+
+    let raw = percent_to_ddc_raw(percent, max);
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let result = set_ddc_brightness_raw(&bus, raw).and_then(|()| read_ddc_brightness(&bus));
+        apply_ddc_brightness_result(&inner, &connector, result);
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, "{}".to_owned()) };
+    });
+    true
+}
+
+fn apply_ddc_brightness_result(
+    inner: &Arc<Mutex<BacklightInner>>,
+    connector: &str,
+    result: Result<(i32, i32), String>,
+) {
+    let mut guard = inner.lock().expect("backlight state poisoned");
+    if let Some(display) = guard.ddc_displays.get_mut(connector) {
+        match result {
+            Ok((current, max)) => {
+                display.current = Some(current);
+                display.max = Some(max);
+                display.error.clear();
+            }
             Err(error) => {
-                self.as_mut()
-                    .set_error(QString::from(format!("watch brightness: {error}")));
-                return;
-            }
-        };
-
-        if let Err(error) = watcher.watch(&path, RecursiveMode::NonRecursive) {
-            self.as_mut()
-                .set_error(QString::from(format!("watch brightness: {error}")));
-            return;
-        }
-
-        self.as_mut().rust_mut().as_mut().get_mut().monitor = Some(BacklightMonitor {
-            _watcher: watcher,
-            path,
-        });
-    }
-
-    fn apply_state(mut self: Pin<&mut Self>, state: BacklightState) {
-        self.as_mut().set_available(state.available);
-        self.as_mut()
-            .set_brightness_percent(state.brightness_percent);
-        self.as_mut().set_device(QString::from(state.device));
-        self.set_error(QString::from(state.error));
-    }
-
-    fn apply_ddc_brightness_result(
-        mut self: Pin<&mut Self>,
-        connector: String,
-        result: Result<(i32, i32), String>,
-    ) {
-        if let Some(display) = self
-            .as_mut()
-            .rust_mut()
-            .as_mut()
-            .get_mut()
-            .ddc_displays
-            .get_mut(&connector)
-        {
-            match result {
-                Ok((current, max)) => {
-                    display.current = Some(current);
-                    display.max = Some(max);
-                    display.error.clear();
-                }
-                Err(error) => {
-                    display.error = error;
-                }
+                display.error = error;
             }
         }
-        self.bump_ddc_version();
-    }
-
-    fn bump_ddc_version(mut self: Pin<&mut Self>) {
-        let next = self.as_ref().rust().ddc_version.saturating_add(1);
-        self.as_mut().set_ddc_version(next);
     }
 }
 
@@ -400,13 +496,23 @@ fn set_backlight_percent(percent: i32) -> Result<(), BacklightState> {
         .map_err(|error| BacklightState::from_device(&device, error.to_string()))
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "percent is bounded to roughly 0..=100 and truncating the rounded f64 to i32 is intentional"
+)]
 fn raw_to_percent(current: u32, max: u32) -> i32 {
-    ((current as f64 / max as f64) * 100.0).round() as i32
+    ((f64::from(current) / f64::from(max)) * 100.0).round() as i32
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    reason = "backlight max fits in i32, the clamped raw value is non-negative, and truncating the rounded f64 is intentional"
+)]
 fn percent_to_raw(percent: i32, max: u32) -> u32 {
     let clamped = percent.clamp(0, 100);
-    let raw = ((clamped as f64 / 100.0) * max as f64).round() as i32;
+    let raw = ((f64::from(clamped) / 100.0) * f64::from(max)).round() as i32;
     if clamped > 0 {
         raw.clamp(1, max as i32) as u32
     } else {
@@ -414,19 +520,27 @@ fn percent_to_raw(percent: i32, max: u32) -> u32 {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "percent is bounded to roughly 0..=100 and truncating the rounded f64 to i32 is intentional"
+)]
 fn normalized_percent(current: i32, max: i32) -> i32 {
     if max <= 0 {
         return 0;
     }
-    ((current as f64 / max as f64) * 100.0).round() as i32
+    ((f64::from(current) / f64::from(max)) * 100.0).round() as i32
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "value is clamped to 1.0..=max (which fits in i32) before truncating to i32"
+)]
 fn percent_to_ddc_raw(percent: i32, max: i32) -> i32 {
     let max = max.max(1);
     let clamped = percent.clamp(1, 100);
-    ((clamped as f64 / 100.0) * max as f64)
+    ((f64::from(clamped) / 100.0) * f64::from(max))
         .round()
-        .clamp(1.0, max as f64) as i32
+        .clamp(1.0, f64::from(max)) as i32
 }
 
 fn ddcutil_available() -> bool {
@@ -444,8 +558,7 @@ fn ddcutil_available() -> bool {
 fn is_executable(path: &std::path::Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()
-        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
+        .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(not(unix))]
@@ -568,7 +681,7 @@ fn parse_i2c_bus(line: &str) -> Option<String> {
     let index = value.rfind("i2c-")?;
     let bus = value[index + "i2c-".len()..]
         .chars()
-        .take_while(|character| character.is_ascii_digit())
+        .take_while(char::is_ascii_digit)
         .collect::<String>();
     (!bus.is_empty()).then_some(bus)
 }
@@ -646,7 +759,7 @@ mod tests {
     #[test]
     fn parses_ddc_detect_connector_to_bus_map() {
         let displays = parse_ddc_detect(
-            r#"
+            r"
 Display 1
    I2C bus:  /dev/i2c-7
    DRM connector: card1-DP-2
@@ -658,7 +771,7 @@ Display 2
 Invalid display
    I2C bus: /dev/i2c-9
    DRM connector: card1-DP-3
-"#,
+",
         );
 
         assert_eq!(

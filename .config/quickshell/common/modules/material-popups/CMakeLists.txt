@@ -20,24 +20,11 @@ else()
     find_program(QMLPLUGINDUMP_EXECUTABLE qmlplugindump REQUIRED)
 endif()
 
-set(MATERIAL_POPUPS_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
-add_custom_command(
-    OUTPUT "${MATERIAL_POPUPS_CXXQT_INCLUDE_DIR}/material_popups_backend/src/backend.cxxqt.h"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${MATERIAL_POPUPS_CXXQT_INCLUDE_DIR}/material_popups_backend/src"
-    COMMAND /bin/sh -c
-        "cp -R ${QS_CXXQT_CRATES_DIR}/material_popups_backend/include/. '${MATERIAL_POPUPS_CXXQT_INCLUDE_DIR}/'"
-    DEPENDS qs_rust_workspace_build
-    VERBATIM
-)
-add_custom_target(material_popups_backend_headers
-    DEPENDS "${MATERIAL_POPUPS_CXXQT_INCLUDE_DIR}/material_popups_backend/src/backend.cxxqt.h"
-)
-
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/materialpopups")
 
 add_library(materialpopups_plugin SHARED
     cpp/materialpopups_plugin.cpp
+    cpp/QsNativeMaterialPopup.cpp
 )
 
 set_target_properties(materialpopups_plugin
@@ -47,7 +34,7 @@ set_target_properties(materialpopups_plugin
 )
 
 target_include_directories(materialpopups_plugin PRIVATE
-    "${MATERIAL_POPUPS_CXXQT_INCLUDE_DIR}"
+    "${CMAKE_CURRENT_LIST_DIR}/cpp"
 )
 
 qs_apply_common_compile_options(materialpopups_plugin)
@@ -57,7 +44,6 @@ target_link_libraries(materialpopups_plugin PRIVATE
     Qt6::Qml
 )
 qs_link_rust_static(materialpopups_plugin material_popups_backend)
-add_dependencies(materialpopups_plugin material_popups_backend_headers)
 
 set_target_properties(materialpopups_plugin PROPERTIES
     BUILD_RPATH "$ORIGIN"

@@ -38,49 +38,22 @@ add_custom_command(
 )
 add_custom_target(qsnative_helper_bins ALL DEPENDS "${QSNATIVE_SECRETS_BIN}" "${QSNATIVE_GOOGLE_AUTH_BIN}")
 
-set(QSNATIVE_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
-add_custom_command(
-    OUTPUT
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/net_stats.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/backlight.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/bluetooth.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/config_resolver.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/ical.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/idle.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/keyboard_lock.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/pacman.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/privacy.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/sys_info.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/systemd_failed.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/todoist.cxxqt.h"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src"
-    COMMAND /bin/sh -c
-        "cp -R ${QS_CXXQT_CRATES_DIR}/qsnative_rust/include/. '${QSNATIVE_CXXQT_INCLUDE_DIR}/'"
-    DEPENDS qs_rust_workspace_build
-    VERBATIM
-)
-add_custom_target(qsnative_rust_headers
-    DEPENDS
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/net_stats.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/backlight.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/bluetooth.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/config_resolver.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/ical.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/idle.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/keyboard_lock.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/pacman.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/privacy.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/sys_info.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/systemd_failed.cxxqt.h"
-        "${QSNATIVE_CXXQT_INCLUDE_DIR}/qsnative_rust/src/todoist.cxxqt.h"
-)
-
 add_library(qsnative_plugin SHARED
     cpp/qsnative_plugin.cpp
     cpp/QsNativeAiSession.cpp
-    cpp/QsNativeSystemdFailed.cpp
     cpp/QsNativeBarModuleLogic.cpp
+    cpp/QsNativeSysInfo.cpp
+    cpp/QsNativeBacklight.cpp
+    cpp/QsNativeBluetooth.cpp
+    cpp/QsNativeConfigResolver.cpp
+    cpp/QsNativeIcal.cpp
+    cpp/QsNativeIdle.cpp
+    cpp/QsNativeKeyboardLock.cpp
+    cpp/QsNativeNetStats.cpp
+    cpp/QsNativePacman.cpp
+    cpp/QsNativePrivacy.cpp
+    cpp/QsNativeSystemdFailedProvider.cpp
+    cpp/QsNativeTodoist.cpp
 )
 
 set_target_properties(qsnative_plugin
@@ -89,12 +62,10 @@ set_target_properties(qsnative_plugin
     LIBRARY_OUTPUT_DIRECTORY "${QML_MODULE_DIR}"
 )
 
+# cpp/ holds both the hand-written QObject headers and the cbindgen-generated
+# qsnative_api.h (emitted by the Rust build.rs during qs_rust_workspace_build).
 target_include_directories(qsnative_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
-)
-
-target_include_directories(qsnative_plugin SYSTEM PRIVATE
-    "${QSNATIVE_CXXQT_INCLUDE_DIR}"
 )
 
 target_compile_options(qsnative_plugin PRIVATE
@@ -104,7 +75,6 @@ target_compile_options(qsnative_plugin PRIVATE
 qs_apply_common_compile_options(qsnative_plugin)
 
 add_dependencies(qsnative_plugin qsnative_helper_bins)
-add_dependencies(qsnative_plugin qsnative_rust_headers)
 
 target_link_libraries(qsnative_plugin PRIVATE
     Qt6::Core
@@ -112,6 +82,9 @@ target_link_libraries(qsnative_plugin PRIVATE
     Qt6::Qml
 )
 qs_link_rust_static(qsnative_plugin qsnative_rust)
+# rusqlite is unbundled (system sqlite): the Rust staticlib references sqlite3_*
+# but cargo's `-lsqlite3` link directive doesn't flow through a .a, so link it here.
+target_link_libraries(qsnative_plugin PRIVATE sqlite3)
 
 add_custom_command(
     OUTPUT "${QML_MODULE_DIR}/types.qmltypes"

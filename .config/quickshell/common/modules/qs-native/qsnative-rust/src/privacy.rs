@@ -1,42 +1,26 @@
-use core::pin::Pin;
+//! Privacy provider: camera-ownership watching (inotifywait + fuser + ps) and
+//! `PipeWire` node classification for the `PrivacyProvider` QML type.
+//!
+//! Rust owns the worker threads and the pure classification/probe logic; the
+//! hand-written C++ `QObject` (`cpp/QsNativePrivacy.{h,cpp}`) owns every Qt
+//! property and all state-transition/logging behaviour on the Qt thread.
+
 use std::collections::BTreeSet;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
+use std::os::raw::{c_char, c_void};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use chrono::Local;
-use cxx_qt::{CxxQtThread, CxxQtType, Threading};
-use cxx_qt_lib::QString;
 use serde::Deserialize;
+
+use crate::ffi::{c_string, emit_snapshot, into_c_string, QsNativeUpdateFn};
 
 const CAMERA_RETRY_ATTEMPTS: i32 = 3;
 const CAMERA_RETRY_INTERVAL: Duration = Duration::from_millis(150);
-const INOTIFY_RESTART_INTERVAL: Duration = Duration::from_millis(1000);
-
-#[derive(Default)]
-pub struct PrivacyProviderRust {
-    microphone_active: bool,
-    camera_active: bool,
-    screensharing_active: bool,
-    any_privacy_active: bool,
-    camera_device: QString,
-    camera_open_seen: bool,
-    camera_pending_confirmation: bool,
-    probing_camera: bool,
-    camera_holder_apps: QString,
-    camera_holders_summary: QString,
-    camera_activation_state: QString,
-    camera_retry_attempt: i32,
-    camera_degraded: bool,
-    error: QString,
-    debug: bool,
-    privacy_stdout_logging: bool,
-    privacy_file_logging: bool,
-    camera_log_path: QString,
-    started: bool,
-}
+const INOTIFY_RESTART_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 struct PipewireNodeSnapshot {
@@ -72,249 +56,148 @@ struct CameraHolderSnapshot {
     apps: Vec<String>,
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    impl cxx_qt::Threading for PrivacyProvider {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(bool, microphone_active, cxx_name = "microphone_active")]
-        #[qproperty(bool, camera_active, cxx_name = "camera_active")]
-        #[qproperty(bool, screensharing_active, cxx_name = "screensharing_active")]
-        #[qproperty(bool, any_privacy_active, cxx_name = "any_privacy_active")]
-        #[qproperty(QString, camera_device, cxx_name = "camera_device")]
-        #[qproperty(bool, camera_open_seen, cxx_name = "camera_open_seen")]
-        #[qproperty(
-            bool,
-            camera_pending_confirmation,
-            cxx_name = "camera_pending_confirmation"
-        )]
-        #[qproperty(bool, probing_camera, cxx_name = "probing_camera")]
-        #[qproperty(QString, camera_holder_apps, cxx_name = "camera_holder_apps")]
-        #[qproperty(QString, camera_holders_summary, cxx_name = "camera_holders_summary")]
-        #[qproperty(QString, camera_activation_state, cxx_name = "camera_activation_state")]
-        #[qproperty(i32, camera_retry_attempt, cxx_name = "camera_retry_attempt")]
-        #[qproperty(bool, camera_degraded, cxx_name = "camera_degraded")]
-        #[qproperty(QString, error)]
-        #[qproperty(bool, debug)]
-        #[qproperty(bool, privacy_stdout_logging, cxx_name = "privacy_stdout_logging")]
-        #[qproperty(bool, privacy_file_logging, cxx_name = "privacy_file_logging")]
-        #[qproperty(QString, camera_log_path, cxx_name = "camera_log_path")]
-        type PrivacyProvider = super::PrivacyProviderRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn start(self: Pin<&mut PrivacyProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "refreshCamera"]
-        fn refresh_camera(self: Pin<&mut PrivacyProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "updatePipewireSnapshot"]
-        fn update_pipewire_snapshot(
-            self: Pin<&mut PrivacyProvider>,
-            snapshot_json: &QString,
-        ) -> bool;
-    }
-
-    impl cxx_qt::Initialize for PrivacyProvider {}
+/// Opaque per-instance handle owned by the C++ `QsNativePrivacy` `QObject`.
+///
+/// `alive` is shared with the persistent inotify watcher and every probe worker
+/// so they stop delivering callbacks once the `QObject` has been destroyed.
+pub struct PrivacyHandle {
+    alive: Arc<AtomicBool>,
 }
 
-impl cxx_qt::Initialize for ffi::PrivacyProvider {
-    fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut()
-            .set_camera_device(QString::from("/dev/video0"));
-        self.as_mut()
-            .set_camera_activation_state(QString::from("inactive"));
-        self.as_mut()
-            .set_camera_log_path(QString::from("/tmp/quickshell-privacy-camera.log"));
-        self.as_mut().set_privacy_stdout_logging(true);
-        self.as_mut().set_privacy_file_logging(true);
+#[no_mangle]
+pub extern "C" fn QsNative_Privacy_New() -> *mut PrivacyHandle {
+    Box::into_raw(Box::new(PrivacyHandle {
+        alive: Arc::new(AtomicBool::new(true)),
+    }))
+}
+
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_Privacy_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Privacy_Delete(handle: *mut PrivacyHandle) {
+    if !handle.is_null() {
+        (*handle).alive.store(false, Ordering::SeqCst);
+        drop(Box::from_raw(handle));
     }
 }
 
-impl ffi::PrivacyProvider {
-    pub fn start(mut self: Pin<&mut Self>) {
-        if self.as_ref().rust().started {
-            self.refresh_camera();
-            return;
-        }
-
-        let device = self.camera_device().to_string();
-        let qt_thread = self.as_ref().qt_thread();
-        self.as_mut().rust_mut().as_mut().get_mut().started = true;
-
-        thread::spawn(move || watch_camera_device(device, qt_thread));
-        self.refresh_camera();
+/// Spawns the persistent inotify camera watcher. Delivers `camera_event` and
+/// `monitor_exited` JSON events via `cb`.
+///
+/// # Safety
+/// `handle`/`device` must be valid; `ctx`/`cb` must stay valid for the `QObject`
+/// lifetime (guarded by the handle's alive flag).
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Privacy_StartWatch(
+    handle: *mut PrivacyHandle,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+    device: *const c_char,
+) {
+    if handle.is_null() {
+        return;
     }
+    let alive = (*handle).alive.clone();
+    let device = c_string(device);
+    let ctx = ctx as usize;
+    thread::spawn(move || watch_camera_device(&device, &alive, ctx, cb));
+}
 
-    pub fn refresh_camera(mut self: Pin<&mut Self>) -> bool {
-        let device = self.camera_device().to_string();
-        let qt_thread = self.as_ref().qt_thread();
-        let debug = *self.debug();
-        self.as_mut().set_camera_pending_confirmation(true);
-        self.as_mut().set_probing_camera(true);
-        self.as_mut()
-            .set_camera_activation_state(QString::from("pending"));
-
-        thread::spawn(move || {
-            let result = probe_camera_holders_with_retries(&device, debug);
-            let _ = qt_thread.queue(move |mut provider| {
-                provider.as_mut().apply_camera_probe(result, true);
-            });
-        });
-
-        true
+/// Probes camera holders on a worker thread and delivers a `probe` JSON event.
+/// `from_open` selects the retry policy (used for OPEN events / explicit
+/// refreshes) and is echoed back so the C++ side can derive the retry counter.
+///
+/// # Safety
+/// `handle`/`device` must be valid; `ctx`/`cb` must stay valid until `cb` fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Privacy_Probe(
+    handle: *mut PrivacyHandle,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+    device: *const c_char,
+    from_open: bool,
+    debug: bool,
+) {
+    if handle.is_null() {
+        return;
     }
-
-    pub fn update_pipewire_snapshot(mut self: Pin<&mut Self>, snapshot_json: &QString) -> bool {
-        let nodes =
-            match serde_json::from_str::<Vec<PipewireNodeSnapshot>>(&snapshot_json.to_string()) {
-                Ok(nodes) => nodes,
-                Err(error) => {
-                    self.as_mut().set_error(QString::from(
-                        format!("pipewire snapshot: {error}").as_str(),
-                    ));
-                    return false;
-                }
-            };
-
-        let state = classify_pipewire_nodes(&nodes);
-        self.as_mut().set_microphone_active(state.microphone_active);
-        self.as_mut()
-            .set_screensharing_active(state.screensharing_active);
-        self.as_mut().set_error(QString::default());
-        self.as_mut().refresh_any_privacy_active();
-        true
-    }
-
-    fn refresh_any_privacy_active(mut self: Pin<&mut Self>) {
-        let active =
-            *self.microphone_active() || *self.camera_active() || *self.screensharing_active();
-        self.as_mut().set_any_privacy_active(active);
-    }
-
-    fn on_camera_event(mut self: Pin<&mut Self>, open_seen: bool) {
-        self.as_mut().set_camera_degraded(false);
-        self.as_mut().set_camera_open_seen(open_seen);
-        self.as_mut().set_camera_pending_confirmation(open_seen);
-        self.as_mut().set_camera_retry_attempt(0);
-        self.as_mut().set_probing_camera(true);
-        self.as_mut()
-            .set_camera_activation_state(QString::from("pending"));
-
-        let device = self.camera_device().to_string();
-        let qt_thread = self.as_ref().qt_thread();
-        let debug = *self.debug();
-        thread::spawn(move || {
-            let result = if open_seen {
-                probe_camera_holders_with_retries(&device, debug)
-            } else {
-                probe_camera_holders(&device)
-            };
-            let _ = qt_thread.queue(move |mut provider| {
-                provider.as_mut().apply_camera_probe(result, open_seen);
-            });
-        });
-    }
-
-    fn on_camera_monitor_exited(mut self: Pin<&mut Self>, error: String) {
-        self.as_mut().set_camera_degraded(true);
-        self.as_mut().set_camera_open_seen(false);
-        self.as_mut().set_camera_pending_confirmation(false);
-        self.as_mut().set_probing_camera(false);
-        self.as_mut().set_camera_retry_attempt(0);
-        self.as_mut().set_error(QString::from(error.as_str()));
-        self.as_mut()
-            .apply_camera_holder_state(CameraHolderSnapshot::default());
-    }
-
-    fn apply_camera_probe(
-        mut self: Pin<&mut Self>,
-        snapshot: CameraHolderSnapshot,
-        from_open: bool,
-    ) {
-        let retry_attempt = if from_open && snapshot.hits.is_empty() {
-            CAMERA_RETRY_ATTEMPTS
+    let alive = (*handle).alive.clone();
+    let device = c_string(device);
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let snapshot = if from_open {
+            probe_camera_holders_with_retries(&device, debug)
         } else {
-            0
+            probe_camera_holders(&device)
         };
-        self.as_mut().set_probing_camera(false);
-        self.as_mut().set_camera_pending_confirmation(false);
-        self.as_mut().set_camera_retry_attempt(retry_attempt);
-        self.as_mut().apply_camera_holder_state(snapshot);
-    }
-
-    fn apply_camera_holder_state(mut self: Pin<&mut Self>, snapshot: CameraHolderSnapshot) {
-        let was_active = *self.camera_active();
-        let holders_summary = snapshot.hits.join(",");
-        let apps_summary = snapshot.apps.join(", ");
-        let camera_active = !snapshot.apps.is_empty();
-        let activation = if camera_active {
-            "confirmed"
-        } else if *self.camera_pending_confirmation() || *self.probing_camera() {
-            "pending"
-        } else {
-            "inactive"
-        };
-
-        self.as_mut()
-            .set_camera_holder_apps(QString::from(apps_summary.as_str()));
-        self.as_mut()
-            .set_camera_holders_summary(QString::from(holders_summary.as_str()));
-        self.as_mut().set_camera_active(camera_active);
-        self.as_mut()
-            .set_camera_activation_state(QString::from(activation));
-        self.as_mut().refresh_any_privacy_active();
-
-        if was_active != camera_active {
-            let line = camera_log_line(self.as_ref(), &snapshot);
-            self.as_mut().persist_camera_log_line(line);
-        }
-    }
-
-    fn persist_camera_log_line(self: Pin<&mut Self>, line: String) {
-        if *self.privacy_stdout_logging() {
-            println!("{line}");
-        }
-        if !*self.privacy_file_logging() {
-            return;
-        }
-
-        let path = self.camera_log_path().to_string();
-        if path.trim().is_empty() {
-            return;
-        }
-
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(file, "{line}");
-        }
-    }
+        let json = serde_json::json!({
+            "type": "probe",
+            "from_open": from_open,
+            "hits": snapshot.hits,
+            "apps": snapshot.apps,
+        })
+        .to_string();
+        emit_event(&alive, ctx, cb, json);
+    });
 }
 
-fn watch_camera_device(device: String, qt_thread: CxxQtThread<ffi::PrivacyProvider>) {
-    loop {
+/// Classifies a JSON array of `PipeWire` nodes. Returns an owned JSON object:
+/// `{"ok":true,"microphone_active":bool,"screensharing_active":bool}` on success
+/// or `{"ok":false,"error":"..."}` on parse failure. Free with `QsNative_Free`.
+///
+/// # Safety
+/// `json` must be null or a valid NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Privacy_ClassifyPipewire(json: *const c_char) -> *mut c_char {
+    let input = c_string(json);
+    let result = match serde_json::from_str::<Vec<PipewireNodeSnapshot>>(&input) {
+        Ok(nodes) => {
+            let state = classify_pipewire_nodes(&nodes);
+            serde_json::json!({
+                "ok": true,
+                "microphone_active": state.microphone_active,
+                "screensharing_active": state.screensharing_active,
+            })
+        }
+        Err(error) => serde_json::json!({
+            "ok": false,
+            "error": format!("pipewire snapshot: {error}"),
+        }),
+    };
+    into_c_string(result.to_string())
+}
+
+fn emit_event(alive: &Arc<AtomicBool>, ctx: usize, cb: QsNativeUpdateFn, json: String) {
+    if !alive.load(Ordering::SeqCst) {
+        return;
+    }
+    unsafe { emit_snapshot(cb, ctx as *mut c_void, json) };
+}
+
+fn camera_event_json(open_seen: bool) -> String {
+    serde_json::json!({ "type": "camera_event", "open_seen": open_seen }).to_string()
+}
+
+fn monitor_exited_json(error: &str) -> String {
+    serde_json::json!({ "type": "monitor_exited", "error": error }).to_string()
+}
+
+fn watch_camera_device(device: &str, alive: &Arc<AtomicBool>, ctx: usize, cb: QsNativeUpdateFn) {
+    while alive.load(Ordering::SeqCst) {
         let mut child = match Command::new("inotifywait")
-            .args(["-m", "-e", "open", "-e", "close", device.as_str()])
+            .args(["-m", "-e", "open", "-e", "close", device])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
         {
             Ok(child) => child,
             Err(error) => {
-                let message = format!("inotifywait: {error}");
-                let _ = qt_thread.queue(move |mut provider| {
-                    provider.as_mut().on_camera_monitor_exited(message);
-                });
+                emit_event(
+                    alive,
+                    ctx,
+                    cb,
+                    monitor_exited_json(&format!("inotifywait: {error}")),
+                );
                 thread::sleep(INOTIFY_RESTART_INTERVAL);
                 continue;
             }
@@ -322,6 +205,10 @@ fn watch_camera_device(device: String, qt_thread: CxxQtThread<ffi::PrivacyProvid
 
         if let Some(stdout) = child.stdout.take() {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if !alive.load(Ordering::SeqCst) {
+                    let _ = child.kill();
+                    return;
+                }
                 let open_seen = if line.contains("OPEN") {
                     Some(true)
                 } else if line.contains("CLOSE") {
@@ -330,9 +217,7 @@ fn watch_camera_device(device: String, qt_thread: CxxQtThread<ffi::PrivacyProvid
                     None
                 };
                 if let Some(open_seen) = open_seen {
-                    let _ = qt_thread.queue(move |mut provider| {
-                        provider.as_mut().on_camera_event(open_seen);
-                    });
+                    emit_event(alive, ctx, cb, camera_event_json(open_seen));
                 }
             }
         }
@@ -342,9 +227,7 @@ fn watch_camera_device(device: String, qt_thread: CxxQtThread<ffi::PrivacyProvid
             Ok(status) => format!("inotifywait exited {status}"),
             Err(error) => format!("inotifywait wait: {error}"),
         };
-        let _ = qt_thread.queue(move |mut provider| {
-            provider.as_mut().on_camera_monitor_exited(message);
-        });
+        emit_event(alive, ctx, cb, monitor_exited_json(&message));
         thread::sleep(INOTIFY_RESTART_INTERVAL);
     }
 }
@@ -483,35 +366,6 @@ fn parse_holder_details(raw: &str) -> CameraHolderSnapshot {
     }
 
     CameraHolderSnapshot { hits, apps }
-}
-
-fn camera_log_line(
-    provider: Pin<&ffi::PrivacyProvider>,
-    snapshot: &CameraHolderSnapshot,
-) -> String {
-    let holder_count = snapshot.apps.len();
-    let holders = if snapshot.hits.is_empty() {
-        "none".to_owned()
-    } else {
-        snapshot.hits.join(",")
-    };
-    let apps = if snapshot.apps.is_empty() {
-        String::new()
-    } else {
-        format!(" camera_apps={}", snapshot.apps.join(", "))
-    };
-
-    format!(
-        "[PrivacyService][{}] camera {}; device={} open_seen={} activation={} holder_count={} holders={}{}",
-        Local::now().to_rfc3339(),
-        if *provider.camera_active() { "ACTIVE" } else { "INACTIVE" },
-        provider.camera_device(),
-        if *provider.camera_open_seen() { "yes" } else { "no" },
-        provider.camera_activation_state(),
-        holder_count,
-        holders,
-        apps
-    )
 }
 
 #[cfg(test)]

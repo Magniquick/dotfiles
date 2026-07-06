@@ -1,14 +1,25 @@
-use core::pin::Pin;
+//! Bluetooth discovery diagnostics provider (`BluetoothDiagnosticsProvider`).
+//!
+//! Debug-only helpers for the Bluetooth bar module: a system-bus D-Bus monitor
+//! that resolves which client issued `Adapter1.StartDiscovery`, a synchronous
+//! procfs scan for processes that might be holding discovery open, and a
+//! session-bus probe for the librepods `StatusNotifierItem` tooltip.
+//!
+//! The `extern "C"` surface is an opaque handle plus threaded callbacks; the C++
+//! `QsNativeBluetooth` `QObject` owns the properties and marshals worker updates
+//! back onto the Qt thread. Worker threads deliver a partial JSON snapshot
+//! (only the keys they touch); C++ applies each present key and emits the
+//! matching per-property change signal.
+
 use std::fs;
+use std::os::raw::{c_char, c_void};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::thread;
 use std::time::Duration;
 
-use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
 use futures_util::StreamExt;
 use procfs::process::{all_processes, Process};
 use zbus::names::BusName;
@@ -19,6 +30,8 @@ use zbus::{
     Connection, MatchRule, MessageStream, Proxy,
 };
 
+use crate::ffi::{emit_snapshot, into_c_string, QsNativeUpdateFn};
+
 const HOLDER_KEYWORDS: &[&str] = &[
     "btmgmt",
     "bluetoothctl",
@@ -27,18 +40,6 @@ const HOLDER_KEYWORDS: &[&str] = &[
     "kdeconnectd",
     "librepods",
 ];
-
-#[derive(Default)]
-pub struct BluetoothDiagnosticsProviderRust {
-    last_start_discovery_sender: QString,
-    last_start_discovery_pid: i32,
-    last_start_discovery_process: QString,
-    last_scan_holders: QString,
-    librepods_tooltip: QString,
-    error: QString,
-    monitoring: bool,
-    stop_monitor: Option<Arc<AtomicBool>>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DiscoveryCaller {
@@ -59,138 +60,166 @@ impl TryFrom<zbus::zvariant::OwnedValue> for StatusNotifierTooltip {
     }
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    impl cxx_qt::Threading for BluetoothDiagnosticsProvider {}
-
-    #[auto_cxx_name]
-    unsafe extern "RustQt" {
-        #[qobject]
-        #[qproperty(
-            QString,
-            last_start_discovery_sender,
-            cxx_name = "last_start_discovery_sender"
-        )]
-        #[qproperty(i32, last_start_discovery_pid, cxx_name = "last_start_discovery_pid")]
-        #[qproperty(
-            QString,
-            last_start_discovery_process,
-            cxx_name = "last_start_discovery_process"
-        )]
-        #[qproperty(QString, last_scan_holders, cxx_name = "last_scan_holders")]
-        #[qproperty(QString, librepods_tooltip, cxx_name = "librepods_tooltip")]
-        #[qproperty(QString, error)]
-        #[qproperty(bool, monitoring)]
-        type BluetoothDiagnosticsProvider = super::BluetoothDiagnosticsProviderRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        #[cxx_name = "startDiscoveryMonitor"]
-        fn start_discovery_monitor(self: Pin<&mut BluetoothDiagnosticsProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "stopDiscoveryMonitor"]
-        fn stop_discovery_monitor(self: Pin<&mut BluetoothDiagnosticsProvider>);
-
-        #[qinvokable]
-        #[cxx_name = "probeScanHolders"]
-        fn probe_scan_holders(self: Pin<&mut BluetoothDiagnosticsProvider>) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "probeLibrepodsTooltip"]
-        fn probe_librepods_tooltip(self: Pin<&mut BluetoothDiagnosticsProvider>) -> bool;
-    }
-
-    impl cxx_qt::Initialize for BluetoothDiagnosticsProvider {}
+/// A running discovery-monitor worker: its stop flag and join handle.
+struct MonitorThread {
+    stop: Arc<AtomicBool>,
+    join: thread::JoinHandle<()>,
 }
 
-impl cxx_qt::Initialize for ffi::BluetoothDiagnosticsProvider {
-    fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut().set_last_start_discovery_pid(-1);
+/// Opaque per-instance handle owned by the C++ `QsNativeBluetooth` `QObject`.
+///
+/// Holds the currently-running discovery monitor (if any). All access is from
+/// the Qt thread, but the worker join happens under the lock so `_Delete`
+/// during an in-flight monitor is safe.
+pub struct BluetoothHandle {
+    monitor: Mutex<Option<MonitorThread>>,
+}
+
+#[no_mangle]
+pub extern "C" fn QsNative_Bluetooth_New() -> *mut BluetoothHandle {
+    Box::into_raw(Box::new(BluetoothHandle {
+        monitor: Mutex::new(None),
+    }))
+}
+
+/// # Panics
+/// Panics if the monitor mutex is poisoned (a worker thread panicked while holding it).
+///
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_Bluetooth_New` not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Bluetooth_Delete(handle: *mut BluetoothHandle) {
+    if handle.is_null() {
+        return;
+    }
+    let handle = Box::from_raw(handle);
+    // Release the mutex guard (a temporary) before `handle` is dropped at the
+    // end of the block, otherwise its borrow outlives the owner.
+    let monitor = handle.monitor.lock().expect("bt monitor poisoned").take();
+    if let Some(monitor) = monitor {
+        monitor.stop.store(true, Ordering::Relaxed);
+        let _ = monitor.join.join();
     }
 }
 
-impl ffi::BluetoothDiagnosticsProvider {
-    pub fn start_discovery_monitor(mut self: Pin<&mut Self>) -> bool {
-        if *self.monitoring() {
-            return true;
-        }
+/// Spawns the system-bus discovery monitor. Each resolved caller is delivered as
+/// a partial snapshot; when the monitor thread exits it delivers `monitoring =
+/// false` (plus `error` on failure). Re-entrancy is guarded on the C++ side via
+/// the `monitoring` property, so any previously-finished thread is joined and
+/// replaced here.
+///
+/// # Panics
+/// Panics if the monitor mutex is poisoned (a worker thread panicked while holding it).
+///
+/// # Safety
+/// `handle` must be valid; `ctx`/`cb` must remain valid until the worker exits
+/// (the C++ side joins it in `_Delete`).
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Bluetooth_StartDiscoveryMonitor(
+    handle: *mut BluetoothHandle,
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) {
+    if handle.is_null() {
+        return;
+    }
+    let mut guard = (*handle).monitor.lock().expect("bt monitor poisoned");
+    if let Some(old) = guard.take() {
+        old.stop.store(true, Ordering::Relaxed);
+        let _ = old.join.join();
+    }
 
-        let stop = Arc::new(AtomicBool::new(false));
-        let qt_thread = self.as_ref().qt_thread();
-        let event_thread = qt_thread.clone();
-        self.as_mut().rust_mut().as_mut().get_mut().stop_monitor = Some(stop.clone());
-        self.as_mut().set_monitoring(true);
-
-        thread::spawn(move || {
-            let result = run_discovery_monitor(stop, move |caller| {
-                let _ = event_thread.queue(move |mut provider| {
-                    provider.as_mut().apply_discovery_caller(caller);
-                });
-            });
-
-            let _ = qt_thread.queue(move |mut provider| {
-                provider.as_mut().set_monitoring(false);
-                if let Err(error) = result {
-                    provider.as_mut().set_error(QString::from(error));
-                }
-            });
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_stop = stop.clone();
+    let ctx = ctx as usize;
+    let join = thread::spawn(move || {
+        let mut last_sender = String::new();
+        let result = run_discovery_monitor(thread_stop, |caller| {
+            if caller.sender == last_sender {
+                return;
+            }
+            last_sender.clone_from(&caller.sender);
+            unsafe { emit_snapshot(cb, ctx as *mut c_void, caller_json(&caller)) };
         });
+        let json = match result {
+            Ok(()) => stopped_json(None),
+            Err(error) => stopped_json(Some(error)),
+        };
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, json) };
+    });
 
-        true
-    }
+    *guard = Some(MonitorThread { stop, join });
+}
 
-    pub fn stop_discovery_monitor(mut self: Pin<&mut Self>) {
-        if let Some(stop) = self.as_ref().rust().stop_monitor.as_ref() {
-            stop.store(true, Ordering::Relaxed);
-        }
-        self.as_mut().rust_mut().as_mut().get_mut().stop_monitor = None;
+/// Signals the running discovery monitor to stop. The worker notices the flag,
+/// exits, and delivers `monitoring = false`.
+///
+/// # Panics
+/// Panics if the monitor mutex is poisoned (a worker thread panicked while holding it).
+///
+/// # Safety
+/// `handle` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Bluetooth_StopDiscoveryMonitor(handle: *mut BluetoothHandle) {
+    if handle.is_null() {
+        return;
     }
+    if let Some(monitor) = (*handle).monitor.lock().expect("bt monitor poisoned").as_ref() {
+        monitor.stop.store(true, Ordering::Relaxed);
+    }
+}
 
-    pub fn probe_scan_holders(mut self: Pin<&mut Self>) -> bool {
-        let holders = scan_holder_processes();
-        self.as_mut().set_last_scan_holders(QString::from(holders));
-        true
-    }
+/// Scans procfs for processes matching `HOLDER_KEYWORDS`, returning the
+/// newline-joined table. Runs synchronously on the caller (Qt) thread. The
+/// returned pointer must be released with `QsNative_Free`.
+#[no_mangle]
+pub extern "C" fn QsNative_Bluetooth_ScanHolders() -> *mut c_char {
+    into_c_string(scan_holder_processes())
+}
 
-    pub fn probe_librepods_tooltip(self: Pin<&mut Self>) -> bool {
-        let qt_thread = self.as_ref().qt_thread();
-        thread::spawn(move || {
-            let result = read_librepods_tooltip();
-            let _ = qt_thread.queue(move |mut provider| match result {
-                Ok(tooltip) => {
-                    provider
-                        .as_mut()
-                        .set_librepods_tooltip(QString::from(tooltip));
-                    provider.as_mut().set_error(QString::default());
-                }
-                Err(error) => {
-                    provider.as_mut().set_librepods_tooltip(QString::default());
-                    provider.as_mut().set_error(QString::from(error));
-                }
-            });
-        });
-        true
-    }
+/// Spawns a session-bus probe for the librepods `StatusNotifierItem` tooltip.
+/// Delivers `librepods_tooltip` + `error` (error cleared on success).
+///
+/// # Safety
+/// `ctx`/`cb` must remain valid until the worker fires.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_Bluetooth_ProbeLibrepodsTooltip(
+    ctx: *mut c_void,
+    cb: QsNativeUpdateFn,
+) {
+    let ctx = ctx as usize;
+    thread::spawn(move || {
+        let json = match read_librepods_tooltip() {
+            Ok(tooltip) => librepods_json(&tooltip, ""),
+            Err(error) => librepods_json("", &error),
+        };
+        unsafe { emit_snapshot(cb, ctx as *mut c_void, json) };
+    });
+}
 
-    fn apply_discovery_caller(mut self: Pin<&mut Self>, caller: DiscoveryCaller) {
-        if caller.sender == self.last_start_discovery_sender().to_string() {
-            return;
-        }
-        self.as_mut()
-            .set_last_start_discovery_sender(QString::from(caller.sender));
-        self.as_mut().set_last_start_discovery_pid(caller.pid);
-        self.as_mut()
-            .set_last_start_discovery_process(QString::from(caller.process));
-        self.as_mut().set_error(QString::default());
+fn caller_json(caller: &DiscoveryCaller) -> String {
+    serde_json::json!({
+        "last_start_discovery_sender": caller.sender,
+        "last_start_discovery_pid": caller.pid,
+        "last_start_discovery_process": caller.process,
+        "error": "",
+    })
+    .to_string()
+}
+
+fn stopped_json(error: Option<String>) -> String {
+    match error {
+        Some(error) => serde_json::json!({ "monitoring": false, "error": error }).to_string(),
+        None => serde_json::json!({ "monitoring": false }).to_string(),
     }
+}
+
+fn librepods_json(tooltip: &str, error: &str) -> String {
+    serde_json::json!({
+        "librepods_tooltip": tooltip,
+        "error": error,
+    })
+    .to_string()
 }
 
 fn run_discovery_monitor<F>(stop: Arc<AtomicBool>, mut on_caller: F) -> Result<(), String>
@@ -242,9 +271,10 @@ where
             if header.message_type() != MessageType::MethodCall {
                 continue;
             }
-            if header.destination().map(|value| value.as_str()) != Some("org.bluez")
-                || header.interface().map(|value| value.as_str()) != Some("org.bluez.Adapter1")
-                || header.member().map(|value| value.as_str()) != Some("StartDiscovery")
+            if header.destination().map(BusName::as_str) != Some("org.bluez")
+                || header.interface().map(zbus::names::InterfaceName::as_str)
+                    != Some("org.bluez.Adapter1")
+                || header.member().map(zbus::names::MemberName::as_str) != Some("StartDiscovery")
             {
                 continue;
             }
@@ -265,8 +295,7 @@ async fn resolve_discovery_caller(connection: &Connection, sender: String) -> Di
             Ok(bus_name) => proxy
                 .get_connection_unix_process_id(bus_name)
                 .await
-                .map(|pid| pid.try_into().unwrap_or(i32::MAX))
-                .unwrap_or(-1),
+                .map_or(-1, |pid| pid.try_into().unwrap_or(i32::MAX)),
             Err(_) => -1,
         },
         Err(_) => -1,
@@ -303,10 +332,7 @@ fn scan_holder_processes() -> String {
             continue;
         }
         let lower = cmd.to_lowercase();
-        if !HOLDER_KEYWORDS
-            .iter()
-            .any(|keyword| lower.contains(keyword))
-        {
+        if !HOLDER_KEYWORDS.iter().any(|keyword| lower.contains(keyword)) {
             continue;
         }
         let user = process

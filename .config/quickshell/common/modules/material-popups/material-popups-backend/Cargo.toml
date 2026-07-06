@@ -8,11 +8,11 @@ name = "material_popups_backend"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-cxx = "1.0.194"
-cxx-qt = "0.9.0"
-cxx-qt-lib = "0.9.0"
 evdev = "0.13"
 wayland-clipboard-listener = { version = "0.6.1", features = ["wlr-data-control"] }
 
 [build-dependencies]
-cxx-qt-build = "0.9.0"
+cbindgen = "0.29"
+
+[lints]
+workspace = true

@@ -12,8 +12,16 @@ pub fn install_panic_hook() {
 }
 
 /// Convert a `usize` count to `i32`, clamping to `i32::MAX` on overflow.
+#[must_use]
 pub fn count_to_i32(count: usize) -> i32 {
     count.try_into().unwrap_or(i32::MAX)
+}
+
+/// Installs the fatal-abort panic hook. Called once from the QML plugin's
+/// `registerTypes` so it is not coupled to any single provider's lifecycle.
+#[no_mangle]
+pub extern "C" fn QsNative_InstallPanicHook() {
+    install_panic_hook();
 }
 
 pub mod ai;
@@ -24,6 +32,7 @@ pub mod bluetooth;
 pub mod chatstore;
 pub mod config_resolver;
 pub mod email;
+pub mod ffi;
 pub mod gmail;
 pub mod google_auth;
 pub mod ical;

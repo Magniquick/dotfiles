@@ -1,5 +1,11 @@
+use std::path::Path;
+
 fn main() {
-    cxx_qt_build::CxxQtBuilder::new()
-        .file("src/backend.rs")
-        .build();
+    let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let header = Path::new(&crate_dir).join("../cpp/material_popups_api.h");
+    cbindgen::generate(&crate_dir)
+        .expect("cbindgen failed to generate material_popups_api.h")
+        .write_to_file(&header);
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=cbindgen.toml");
 }

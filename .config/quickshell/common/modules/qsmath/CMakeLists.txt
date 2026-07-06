@@ -15,21 +15,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../cmake/QuickshellCompilerOptions.cmake")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Concurrent)
 
-set(QSMATH_CXXQT_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated-cxxqt/include")
-add_custom_command(
-    OUTPUT "${QSMATH_CXXQT_INCLUDE_DIR}/qsmath_stream/src/markdown_stream.cxxqt.h"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "${QSMATH_CXXQT_INCLUDE_DIR}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${QS_CXXQT_CRATES_DIR}/qsmath_stream/include"
-        "${QSMATH_CXXQT_INCLUDE_DIR}"
-    DEPENDS qs_rust_workspace_build
-    VERBATIM
-)
-add_custom_target(qsmath_stream_headers
-    DEPENDS "${QSMATH_CXXQT_INCLUDE_DIR}/qsmath_stream/src/markdown_stream.cxxqt.h"
-)
-
 set(QML_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/qml/qsmath")
 set(QSMATH_RENDERER "${CMAKE_CURRENT_BINARY_DIR}/qsmath-render-svg")
 
@@ -45,6 +30,7 @@ add_custom_target(qsmath_renderer ALL DEPENDS "${QSMATH_RENDERER}")
 add_library(qsmath_plugin SHARED
     cpp/MathRenderer.cpp
     cpp/qsmath_plugin.cpp
+    cpp/QsNativeMarkdownStream.cpp
 )
 
 set_target_properties(qsmath_plugin
@@ -55,7 +41,6 @@ set_target_properties(qsmath_plugin
 
 target_include_directories(qsmath_plugin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpp"
-    "${QSMATH_CXXQT_INCLUDE_DIR}"
 )
 
 target_compile_definitions(qsmath_plugin PRIVATE
@@ -72,7 +57,6 @@ target_link_libraries(qsmath_plugin PRIVATE
 )
 qs_link_rust_static(qsmath_plugin qsmath_stream)
 add_dependencies(qsmath_plugin qsmath_renderer)
-add_dependencies(qsmath_plugin qsmath_stream_headers)
 
 set_target_properties(qsmath_plugin PROPERTIES
     BUILD_RPATH "$ORIGIN"
@@ -98,7 +82,6 @@ if(BUILD_TESTING)
     )
     target_include_directories(qsmath_render_smoke PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cpp"
-        "${QSMATH_CXXQT_INCLUDE_DIR}"
     )
     target_link_libraries(qsmath_render_smoke PRIVATE
         Qt6::Core
@@ -112,6 +95,5 @@ if(BUILD_TESTING)
     )
     qs_apply_common_compile_options(qsmath_render_smoke)
     add_dependencies(qsmath_render_smoke qsmath_renderer)
-    add_dependencies(qsmath_render_smoke qsmath_stream_headers)
     add_test(NAME qsmath_render_smoke COMMAND qsmath_render_smoke)
 endif()

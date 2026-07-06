@@ -7,6 +7,20 @@ members = [
   "unified-lyrics-api/unifiedlyrics-rust",
 ]
 
+[workspace.lints.clippy]
+# Strict baseline: warn on the whole pedantic group...
+pedantic = { level = "warn", priority = -1 }
+# ...require every allow/expect to carry a `reason = "..."`,
+allow_attributes_without_reason = "warn"
+# ...and prefer `#[expect(...)]` over `#[allow(...)]` so stale suppressions surface.
+allow_attributes = "warn"
+
 [profile.release]
 strip = true
 lto = "thin"
+
+# No debuginfo on dev builds — cuts bytes written to the target dir during
+# cargo test/check loops (SSD write-endurance). Loses debugger variable
+# inspection; backtraces lose line numbers.
+[profile.dev]
+debug = 0

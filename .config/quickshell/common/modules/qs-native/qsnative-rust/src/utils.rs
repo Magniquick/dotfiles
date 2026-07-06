@@ -47,6 +47,7 @@ pub(crate) fn build_multi_thread_runtime() -> Result<tokio::runtime::Runtime, St
 /// Returns `true` when `value` is `false`.
 ///
 /// Intended for use with `#[serde(skip_serializing_if = "crate::utils::is_false")]`.
+#[must_use]
 pub fn is_false(value: &bool) -> bool {
     !*value
 }

@@ -1,12 +1,20 @@
-use core::pin::Pin;
+//! Clipboard + input-watcher backend behind a hand-written C ABI.
+//!
+//! The C++ `QsNativeMaterialPopup` `QObject` owns one opaque handle and receives
+//! events (new clipboard text, keyboard/pointer activity, worker errors) through
+//! a borrowed-JSON callback that it marshals back onto the Qt thread. This crate
+//! is standalone (no shared `crate::ffi`), so the few ABI helpers it needs are
+//! inlined below.
+
+use std::ffi::CString;
+use std::fmt::Write as _;
+use std::os::raw::{c_char, c_void};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 
-use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
 use evdev::{Device, EventType, KeyCode};
 use wayland_clipboard_listener::{WlClipboardPasteStreamWlr, WlListenType};
 
@@ -19,122 +27,191 @@ const TEXT_MIMES: &[&str] = &[
     "TEXT",
 ];
 
-#[derive(Default)]
-pub struct MaterialPopupBackendRust {
+/// Callback used to deliver a JSON event to C++. The `json` pointer is borrowed
+/// for the duration of the call only: C++ copies it (`QString::fromUtf8`) and
+/// must **not** free it.
+pub type MaterialPopupUpdateFn = unsafe extern "C" fn(ctx: *mut c_void, json: *const c_char);
+
+/// Where delivered events go. A function pointer plus `usize` context are both
+/// `Send`, so the whole shared state can cross the worker-thread boundary.
+#[derive(Clone, Copy)]
+struct CallbackTarget {
+    cb: MaterialPopupUpdateFn,
+    ctx: usize,
+}
+
+/// Per-instance state shared with any live worker threads. Held behind a mutex
+/// so `_Delete` can atomically drop the callback (blocking any in-flight
+/// delivery) before the C++ object is torn down.
+struct SharedState {
+    callback: Option<CallbackTarget>,
     running: bool,
-    available: bool,
-    error: QString,
-    last_text: QString,
-    copy_serial: i32,
-    activity_kind: QString,
-    activity_serial: i32,
-    stop_flag: Option<Arc<AtomicBool>>,
+    stop_flag: Arc<AtomicBool>,
 }
 
-#[cxx_qt::bridge]
-pub mod ffi {
-    unsafe extern "C++" {
-        include!("cxx-qt-lib/qstring.h");
-        type QString = cxx_qt_lib::QString;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qobject]
-        #[qproperty(bool, running)]
-        #[qproperty(bool, available)]
-        #[qproperty(QString, error)]
-        #[qproperty(QString, last_text, cxx_name = "lastText")]
-        #[qproperty(i32, copy_serial, cxx_name = "copySerial")]
-        #[qproperty(QString, activity_kind, cxx_name = "activityKind")]
-        #[qproperty(i32, activity_serial, cxx_name = "activitySerial")]
-        type MaterialPopupBackend = super::MaterialPopupBackendRust;
-    }
-
-    #[auto_cxx_name]
-    extern "RustQt" {
-        #[qinvokable]
-        fn start(self: Pin<&mut MaterialPopupBackend>);
-
-        #[qinvokable]
-        fn stop(self: Pin<&mut MaterialPopupBackend>);
-    }
-
-    impl cxx_qt::Threading for MaterialPopupBackend {}
-
-    impl cxx_qt::Initialize for MaterialPopupBackend {}
+/// Opaque per-instance handle owned by the C++ `QsNativeMaterialPopup` `QObject`.
+pub struct MaterialPopupHandle {
+    shared: Arc<Mutex<SharedState>>,
 }
 
-impl ffi::MaterialPopupBackend {
-    pub fn start(mut self: Pin<&mut Self>) {
-        if *self.running() {
+/// Escapes a string for embedding inside a JSON string literal.
+fn json_escape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() + 2);
+    for ch in input.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Delivers `json` to C++ while holding the lock, so a concurrent `_Delete` that
+/// clears the callback cannot free the receiver mid-call.
+fn emit_event(shared: &Arc<Mutex<SharedState>>, json: String) {
+    let guard = shared.lock().expect("material popup state poisoned");
+    if let Some(target) = &guard.callback {
+        let buf =
+            CString::new(json).unwrap_or_else(|_| CString::new("{}").expect("literal cstring"));
+        unsafe { (target.cb)(target.ctx as *mut c_void, buf.as_ptr()) };
+    }
+}
+
+fn emit_clipboard(shared: &Arc<Mutex<SharedState>>, text: &str) {
+    emit_event(
+        shared,
+        format!("{{\"kind\":\"clipboard\",\"text\":\"{}\"}}", json_escape(text)),
+    );
+}
+
+fn emit_activity(shared: &Arc<Mutex<SharedState>>, kind: &str) {
+    emit_event(
+        shared,
+        format!("{{\"kind\":\"activity\",\"activity\":\"{}\"}}", json_escape(kind)),
+    );
+}
+
+fn emit_error(shared: &Arc<Mutex<SharedState>>, error: &str) {
+    emit_event(
+        shared,
+        format!("{{\"kind\":\"error\",\"error\":\"{}\"}}", json_escape(error)),
+    );
+}
+
+/// Creates a handle that delivers events to `cb`/`ctx`. The caller must keep
+/// `ctx`/`cb` valid until `QsNative_MaterialPopup_Delete`.
+#[no_mangle]
+pub extern "C" fn QsNative_MaterialPopup_New(
+    ctx: *mut c_void,
+    cb: MaterialPopupUpdateFn,
+) -> *mut MaterialPopupHandle {
+    Box::into_raw(Box::new(MaterialPopupHandle {
+        shared: Arc::new(Mutex::new(SharedState {
+            callback: Some(CallbackTarget {
+                cb,
+                ctx: ctx as usize,
+            }),
+            running: false,
+            stop_flag: Arc::new(AtomicBool::new(false)),
+        })),
+    }))
+}
+
+/// # Safety
+/// `handle` must be null or a pointer from `QsNative_MaterialPopup_New` not yet
+/// freed.
+///
+/// # Panics
+/// Panics if the shared-state mutex has been poisoned by a panic in a worker
+/// thread.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_MaterialPopup_Delete(handle: *mut MaterialPopupHandle) {
+    if handle.is_null() {
+        return;
+    }
+    {
+        let mut guard = (*handle).shared.lock().expect("material popup state poisoned");
+        guard.stop_flag.store(true, Ordering::Relaxed);
+        guard.running = false;
+        // Disable delivery so any in-flight worker cannot call into the C++
+        // object once this returns and the QObject is destroyed.
+        guard.callback = None;
+    }
+    drop(Box::from_raw(handle));
+}
+
+/// Spawns the clipboard watcher and input monitor if not already running.
+///
+/// # Safety
+/// `handle` must be valid.
+///
+/// # Panics
+/// Panics if the shared-state mutex has been poisoned by a panic in a worker
+/// thread.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_MaterialPopup_Start(handle: *mut MaterialPopupHandle) {
+    if handle.is_null() {
+        return;
+    }
+    let shared = (*handle).shared.clone();
+    let stop_flag = {
+        let mut guard = shared.lock().expect("material popup state poisoned");
+        if guard.running {
             return;
         }
-
+        guard.running = true;
         let stop_flag = Arc::new(AtomicBool::new(false));
-        let clipboard_stop = Arc::clone(&stop_flag);
-        let input_stop = Arc::clone(&stop_flag);
-        self.as_mut().rust_mut().as_mut().get_mut().stop_flag = Some(stop_flag);
-        self.as_mut().set_running(true);
-        self.as_mut().set_available(true);
-        self.as_mut().set_error(QString::default());
+        guard.stop_flag = Arc::clone(&stop_flag);
+        stop_flag
+    };
 
-        let clipboard_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            run_clipboard_watcher(clipboard_stop, clipboard_thread);
-        });
+    let clipboard_shared = Arc::clone(&shared);
+    let clipboard_stop = Arc::clone(&stop_flag);
+    std::thread::spawn(move || run_clipboard_watcher(&clipboard_stop, &clipboard_shared));
 
-        let input_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            run_input_monitor(input_stop, input_thread);
-        });
-    }
-
-    pub fn stop(mut self: Pin<&mut Self>) {
-        let stop_flag = self.as_mut().rust_mut().as_mut().get_mut().stop_flag.take();
-        if let Some(stop_flag) = stop_flag {
-            stop_flag.store(true, Ordering::Relaxed);
-        }
-        self.as_mut().set_running(false);
-    }
-
-    fn publish_clipboard(mut self: Pin<&mut Self>, text: String) {
-        let next_serial = (*self.copy_serial()).wrapping_add(1);
-        self.as_mut().set_last_text(QString::from(text.as_str()));
-        self.as_mut().set_copy_serial(next_serial);
-    }
-
-    fn publish_activity(mut self: Pin<&mut Self>, kind: &'static str) {
-        let next_serial = (*self.activity_serial()).wrapping_add(1);
-        self.as_mut().set_activity_kind(QString::from(kind));
-        self.as_mut().set_activity_serial(next_serial);
-    }
-
-    fn publish_error(mut self: Pin<&mut Self>, error: String) {
-        self.as_mut().set_error(QString::from(error.as_str()));
-        self.as_mut().set_available(false);
-    }
+    let input_shared = Arc::clone(&shared);
+    let input_stop = stop_flag;
+    std::thread::spawn(move || run_input_monitor(&input_stop, &input_shared));
 }
 
-impl cxx_qt::Initialize for ffi::MaterialPopupBackend {
-    fn initialize(self: Pin<&mut Self>) {}
+/// Signals the worker threads to stop and clears the running flag.
+///
+/// # Safety
+/// `handle` must be valid.
+///
+/// # Panics
+/// Panics if the shared-state mutex has been poisoned by a panic in a worker
+/// thread.
+#[no_mangle]
+pub unsafe extern "C" fn QsNative_MaterialPopup_Stop(handle: *mut MaterialPopupHandle) {
+    if handle.is_null() {
+        return;
+    }
+    let mut guard = (*handle).shared.lock().expect("material popup state poisoned");
+    guard.stop_flag.store(true, Ordering::Relaxed);
+    guard.running = false;
 }
 
-fn run_clipboard_watcher(
-    stop_flag: Arc<AtomicBool>,
-    qt_thread: cxx_qt::CxxQtThread<ffi::MaterialPopupBackend>,
-) {
+fn run_clipboard_watcher(stop_flag: &Arc<AtomicBool>, shared: &Arc<Mutex<SharedState>>) {
     let mut stream = match WlClipboardPasteStreamWlr::init(WlListenType::ListenOnCopy) {
         Ok(stream) => stream,
         Err(err) => {
-            queue_error(&qt_thread, format!("clipboard watcher: {err}"));
+            emit_error(shared, &format!("clipboard watcher: {err}"));
             return;
         }
     };
 
     let mut ignore_first = true;
     let mut last_text = String::new();
-    let mut last_event = Instant::now() - CLIPBOARD_DEDUPE_WINDOW;
+    let now = Instant::now();
+    let mut last_event = now.checked_sub(CLIPBOARD_DEDUPE_WINDOW).unwrap_or(now);
 
     for msg in stream.paste_stream().flatten() {
         if stop_flag.load(Ordering::Relaxed) {
@@ -161,11 +238,9 @@ fn run_clipboard_watcher(
         }
 
         ignore_first = false;
-        last_text = text.clone();
+        last_text.clone_from(&text);
         last_event = now;
-        let _ = qt_thread.queue(move |backend| {
-            backend.publish_clipboard(text);
-        });
+        emit_clipboard(shared, &text);
     }
 }
 
@@ -179,14 +254,11 @@ fn should_ignore_clipboard_event(
     ignore_first || (last_text == text && now.duration_since(last_event) < CLIPBOARD_DEDUPE_WINDOW)
 }
 
-fn run_input_monitor(
-    stop_flag: Arc<AtomicBool>,
-    qt_thread: cxx_qt::CxxQtThread<ffi::MaterialPopupBackend>,
-) {
+fn run_input_monitor(stop_flag: &Arc<AtomicBool>, shared: &Arc<Mutex<SharedState>>) {
     let entries = match std::fs::read_dir("/dev/input") {
         Ok(entries) => entries,
         Err(err) => {
-            queue_error(&qt_thread, format!("input monitor: {err}"));
+            emit_error(shared, &format!("input monitor: {err}"));
             return;
         }
     };
@@ -201,8 +273,7 @@ fn run_input_monitor(
         if !path
             .file_name()
             .and_then(|name| name.to_str())
-            .map(|name| name.starts_with("event"))
-            .unwrap_or(false)
+            .is_some_and(|name| name.starts_with("event"))
         {
             continue;
         }
@@ -222,17 +293,17 @@ fn run_input_monitor(
         };
 
         found += 1;
-        let device_stop = Arc::clone(&stop_flag);
-        let device_thread = qt_thread.clone();
+        let device_stop = Arc::clone(stop_flag);
+        let device_shared = Arc::clone(shared);
         std::thread::spawn(move || {
-            monitor_input_device(device, kind, device_stop, device_thread);
+            monitor_input_device(device, kind, &device_stop, &device_shared);
         });
     }
 
     if found == 0 {
-        queue_error(
-            &qt_thread,
-            "input monitor: no readable keyboard or pointer devices".to_owned(),
+        emit_error(
+            shared,
+            "input monitor: no readable keyboard or pointer devices",
         );
     }
 }
@@ -240,13 +311,12 @@ fn run_input_monitor(
 fn monitor_input_device(
     mut device: Device,
     kind: &'static str,
-    stop_flag: Arc<AtomicBool>,
-    qt_thread: cxx_qt::CxxQtThread<ffi::MaterialPopupBackend>,
+    stop_flag: &Arc<AtomicBool>,
+    shared: &Arc<Mutex<SharedState>>,
 ) {
     while !stop_flag.load(Ordering::Relaxed) {
-        let events = match device.fetch_events() {
-            Ok(events) => events,
-            Err(_) => break,
+        let Ok(events) = device.fetch_events() else {
+            break;
         };
 
         for event in events {
@@ -267,9 +337,7 @@ fn monitor_input_device(
                 continue;
             }
 
-            let _ = qt_thread.queue(move |backend| {
-                backend.publish_activity(kind);
-            });
+            emit_activity(shared, kind);
         }
     }
 }
@@ -292,15 +360,9 @@ fn is_pointer(device: &Device) -> bool {
         && (events.contains(EventType::RELATIVE) || events.contains(EventType::ABSOLUTE))
 }
 
-fn queue_error(qt_thread: &cxx_qt::CxxQtThread<ffi::MaterialPopupBackend>, error: String) {
-    let _ = qt_thread.queue(move |backend| {
-        backend.publish_error(error);
-    });
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{should_ignore_clipboard_event, CLIPBOARD_DEDUPE_WINDOW};
+    use super::{json_escape, should_ignore_clipboard_event, CLIPBOARD_DEDUPE_WINDOW};
     use std::time::Instant;
 
     #[test]
@@ -325,5 +387,12 @@ mod tests {
         assert!(!should_ignore_clipboard_event(
             false, "hello", first, "hello", second
         ));
+    }
+
+    #[test]
+    fn escapes_json_control_and_quotes() {
+        assert_eq!(json_escape("a\"b\\c"), "a\\\"b\\\\c");
+        assert_eq!(json_escape("line\nbreak"), "line\\nbreak");
+        assert_eq!(json_escape("tab\tend"), "tab\\tend");
     }
 }

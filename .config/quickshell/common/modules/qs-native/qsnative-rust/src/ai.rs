@@ -131,6 +131,10 @@ struct Provider {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors MCP tool annotation metadata (read_only/destructive/open_world/idempotent); each is an independent serde field, not a state machine"
+)]
 pub struct ToolCall {
     #[serde(default)]
     id: String,
@@ -190,6 +194,10 @@ struct StreamResult {
 /// strings for the duration of this call. `cb` must remain valid until the
 /// stream sends a terminal callback, and `ctx` must remain valid for each
 /// callback invocation.
+///
+/// # Panics
+///
+/// Panics if the internal session registry mutex is poisoned.
 pub unsafe extern "C" fn QsNative_AiChat_Stream(
     model_id: *const c_char,
     provider_config_json: *const c_char,
@@ -198,13 +206,12 @@ pub unsafe extern "C" fn QsNative_AiChat_Stream(
     message: *const c_char,
     attachments_json: *const c_char,
     disabled_tool_servers_json: *const c_char,
-    cb: Option<TokenCallback>,
+    cb: TokenCallback,
     ctx: *mut c_void,
 ) -> c_int {
-    let Some(cb) = cb else {
-        return -1;
-    };
-
+    // cbindgen (this version) doesn't collapse `Option<fn>` into a nullable C
+    // pointer, so the callback is taken non-optional; the C++ caller never
+    // passes null.
     let id = NEXT_SESSION_ID.fetch_add(1, Ordering::SeqCst);
     let cancelled = Arc::new(AtomicBool::new(false));
     sessions()
@@ -226,11 +233,16 @@ pub unsafe extern "C" fn QsNative_AiChat_Stream(
         id,
     };
 
-    thread::spawn(move || run_stream(args));
+    thread::spawn(move || run_stream(&args));
     id
 }
 
 #[no_mangle]
+/// Requests cancellation of an in-flight streaming session by id.
+///
+/// # Panics
+///
+/// Panics if the internal session registry mutex is poisoned.
 pub extern "C" fn QsNative_AiChat_Cancel(id: c_int) {
     if let Some(cancelled) = sessions().lock().expect("session mutex").get(&id).cloned() {
         cancelled.store(true, Ordering::SeqCst);
@@ -238,6 +250,11 @@ pub extern "C" fn QsNative_AiChat_Cancel(id: c_int) {
 }
 
 #[no_mangle]
+/// Returns the JSON-encoded metrics for the most recently completed turn.
+///
+/// # Panics
+///
+/// Panics if the internal metrics mutex is poisoned.
 pub extern "C" fn QsNative_AiChat_LastMetrics() -> *mut c_char {
     let metrics = last_metrics().lock().expect("metrics mutex").clone();
     into_c_string(serde_json::to_string(&metrics).unwrap_or_else(|_| "{}".to_owned()))
@@ -271,8 +288,8 @@ struct StreamArgs {
     id: i32,
 }
 
-fn run_stream(args: StreamArgs) {
-    let result = run_stream_inner(&args);
+fn run_stream(args: &StreamArgs) {
+    let result = run_stream_inner(args);
     sessions().lock().expect("session mutex").remove(&args.id);
     if let Err(error) = result {
         callback(args.cb, args.ctx, &error, -1);
@@ -320,7 +337,7 @@ fn run_stream_inner(args: &StreamArgs) -> Result<(), String> {
         req.tools = mcp_tool_descriptors(&disabled_tool_servers);
     }
 
-    stream::run(args, req)
+    stream::run(args, &req)
 }
 
 fn tool_start_event_json(call: &ToolCall) -> String {
@@ -406,8 +423,8 @@ fn enrich_tool_call(call: &mut ToolCall, tools: &[ToolDescriptor]) {
         {
             continue;
         }
-        call.server_id = tool.server_id.clone();
-        call.server_label = tool.server_label.clone();
+        call.server_id.clone_from(&tool.server_id);
+        call.server_label.clone_from(&tool.server_label);
         call.tool_title = first_non_empty([&tool.title, &call.name]);
         call.read_only = tool.read_only;
         call.destructive = tool.destructive;
@@ -415,7 +432,7 @@ fn enrich_tool_call(call: &mut ToolCall, tools: &[ToolDescriptor]) {
         call.idempotent = tool.idempotent;
         call.risk = first_non_empty([&tool.risk, &call.risk]);
         if call.namespace.trim().is_empty() {
-            call.namespace = tool.namespace.clone();
+            call.namespace.clone_from(&tool.namespace);
         }
         return;
     }
@@ -439,7 +456,7 @@ fn call_mcp_tool(call: &ToolCall) -> ToolResult {
     } else {
         call.server_id.clone()
     };
-    crate::mcp::call_tool(&server_id, &call.name, call.arguments.clone())
+    crate::mcp::call_tool(&server_id, &call.name, &call.arguments)
 }
 
 fn supports_tools(req: &StreamRequest) -> bool {
@@ -452,8 +469,7 @@ fn supports_tools(req: &StreamRequest) -> bool {
 fn provider_search_enabled(req: &StreamRequest) -> bool {
     match req.provider.as_str() {
         "openai" => true,
-        "local" => req.raw_model_id.trim().starts_with("gemini-3"),
-        "gemini" => req.raw_model_id.trim().starts_with("gemini-3"),
+        "local" | "gemini" => req.raw_model_id.trim().starts_with("gemini-3"),
         _ => false,
     }
 }
@@ -582,10 +598,10 @@ fn recommended_models(configured_models_json: &str) -> Vec<RecommendedModel> {
                 },
             });
         if entry.description.is_empty() && !model.description.trim().is_empty() {
-            entry.description = model.description.trim().to_owned();
+            model.description.trim().clone_into(&mut entry.description);
         }
         if entry.label == model_label(&entry.raw_id) && !model.label.trim().is_empty() {
-            entry.label = model.label.trim().to_owned();
+            model.label.trim().clone_into(&mut entry.label);
         }
     }
     by_raw.into_values().collect()
@@ -612,7 +628,7 @@ fn providers_from_config(
 fn live_local_model_ids(provider_config: &HashMap<String, ProviderConfig>) -> Option<Vec<String>> {
     let config = provider_config.get("local")?;
     let base_url = base_url(&config.base_url, "http://127.0.0.1:8317/v1");
-    let url = format!("{}/models", base_url);
+    let url = format!("{base_url}/models");
     let Ok(mut response) = ureq::get(&url).call() else {
         return None;
     };

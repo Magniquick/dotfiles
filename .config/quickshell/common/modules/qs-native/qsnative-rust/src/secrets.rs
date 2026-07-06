@@ -8,11 +8,13 @@ pub const DEFAULT_SERVICE: &str = "quickshell";
 
 type SecretResult<T> = Result<T, Box<dyn Error>>;
 
+#[must_use]
 pub fn normalize_key(key: &str) -> Option<String> {
     let key = key.trim();
     (!key.is_empty()).then(|| key.to_owned())
 }
 
+#[must_use]
 pub fn lookup(key: &str) -> Option<String> {
     let key = normalize_key(key)?;
     let service = SecretService::connect(EncryptionType::Dh).ok()?;
@@ -31,6 +33,10 @@ pub fn lookup(key: &str) -> Option<String> {
     None
 }
 
+/// # Errors
+///
+/// Returns an error if the key is empty, the Secret Service is unavailable, the
+/// default collection cannot be unlocked, or the item cannot be created.
 pub fn set(key: &str, value: &str) -> SecretResult<()> {
     let key = require_key(key)?;
     let service = SecretService::connect(EncryptionType::Dh)?;
@@ -50,6 +56,10 @@ pub fn set(key: &str, value: &str) -> SecretResult<()> {
     Ok(())
 }
 
+/// # Errors
+///
+/// Returns an error if the key is empty, the Secret Service is unavailable,
+/// matching items cannot be unlocked, or an item cannot be deleted.
 pub fn delete(key: &str) -> SecretResult<()> {
     let key = require_key(key)?;
     let service = SecretService::connect(EncryptionType::Dh)?;
@@ -81,6 +91,10 @@ pub async fn lookup_async(key: &str) -> Option<String> {
     String::from_utf8(item.get_secret().await.ok()?).ok()
 }
 
+/// # Errors
+///
+/// Returns an error if the key is empty, the Secret Service is unavailable, the
+/// default collection cannot be unlocked, or the item cannot be created.
 pub async fn set_async(key: &str, value: &str) -> SecretResult<()> {
     let key = require_key(key)?;
     let service = AsyncSecretService::connect(EncryptionType::Dh).await?;
@@ -100,6 +114,10 @@ pub async fn set_async(key: &str, value: &str) -> SecretResult<()> {
     Ok(())
 }
 
+/// # Errors
+///
+/// Returns an error if the key is empty, the Secret Service is unavailable,
+/// matching items cannot be unlocked, or an item cannot be deleted.
 pub async fn delete_async(key: &str) -> SecretResult<()> {
     let key = require_key(key)?;
     let service = AsyncSecretService::connect(EncryptionType::Dh).await?;

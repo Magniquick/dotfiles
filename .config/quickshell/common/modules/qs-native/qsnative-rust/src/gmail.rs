@@ -44,12 +44,16 @@ pub struct GmailMessage {
 }
 
 impl GmailClient {
+    #[must_use]
     pub fn new(account: &GmailAccount) -> Self {
         Self {
             account_id: account.id.clone(),
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error string if the underlying Gmail list request fails.
     pub fn list_messages(&self, query: &str, limit: u32) -> Result<GmailListResult, String> {
         let response = google_auth::gmail_list_messages(&self.account_id, query, limit)?;
         Ok(GmailListResult {
@@ -69,6 +73,9 @@ impl GmailClient {
         })
     }
 
+    /// # Errors
+    ///
+    /// Returns an error string if the id is empty or the Gmail get request fails.
     pub fn get_message(
         &self,
         id: &str,

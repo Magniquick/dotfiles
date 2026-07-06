@@ -99,7 +99,7 @@ fn parse_flags(
         match args[index].as_str() {
             "--account" => {
                 index += 1;
-                opts.account_id = require_value(args, index, "--account")?.to_owned();
+                require_value(args, index, "--account")?.clone_into(&mut opts.account_id);
             }
             "--config" => {
                 index += 1;
@@ -107,7 +107,7 @@ fn parse_flags(
             }
             "--client-json" => {
                 index += 1;
-                opts.client_json = require_value(args, index, "--client-json")?.to_owned();
+                require_value(args, index, "--client-json")?.clone_into(&mut opts.client_json);
             }
             value => return Err(format!("unknown flag {value:?}")),
         }
