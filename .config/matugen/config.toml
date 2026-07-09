@@ -1,0 +1,54 @@
+[config]
+version_check = false
+fallback_color = "#1e1e2e"
+caching = true
+
+[templates.quickshell]
+input_path = '~/.config/quickshell/common/colors.json.template'
+output_path = '~/.config/quickshell/common/colors.json'
+
+[templates.kitty]
+input_path = '~/.config/matugen/templates/kitty.conf'
+output_path = '~/.config/kitty/themes/matugen.conf'
+post_hook = "kitty +kitten themes --reload-in=all Matugen"
+
+[templates.hyprland]
+input_path = '~/.config/matugen/templates/hypr.conf'
+output_path = '~/.config/hypr/common/matugen.conf'
+
+[templates.hyprland_lua]
+input_path = '~/.config/matugen/templates/hypr.lua'
+output_path = '~/.config/hypr/hyprland/generated_theme.lua'
+post_hook = "hyprctl reload"
+
+[templates.brave]
+input_path = '~/.config/matugen/templates/brave.conf'
+output_path = "/etc/brave/policies/managed/20_theme.json"
+post_hook = "brave --refresh-platform-policy --no-startup-window"
+
+[templates.shadow_newtab]
+input_path = '~/.config/matugen/templates/shadow-newtab.json'
+output_path = '~/.config/shadow/newtab-theme.json'
+post_hook = "systemctl --user reload-or-restart shadow-native-host.service"
+
+[templates.vicinae]
+input_path = '~/.config/matugen/templates/vicinae.toml'
+output_path = '~/.local/share/vicinae/themes/matugen.toml'
+post_hook = "vicinae theme set matugen"
+
+[templates.vscode_raw]
+input_path = '~/.config/matugen/templates/vscode-colors'
+output_path = '~/.cache/matugen/vscode-colors'
+
+[templates.vscode_json]
+input_path = '~/.config/matugen/templates/vscode-colors.json'
+output_path = '~/.cache/matugen/vscode-colors.json'
+
+[templates.zsh]
+input_path = '~/.config/matugen/templates/zsh.conf'
+output_path = '~/.config/zsh/.p10k.colors.zsh'
+post_hook = "pkill -USR1 zsh"
+
+[templates.obsidian]
+input_path = '~/.config/matugen/templates/obsidian.css'
+output_path = '~/Documents/obsidian/.obsidian/snippets/matugen.css'

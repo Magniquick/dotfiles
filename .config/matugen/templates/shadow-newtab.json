@@ -1,0 +1,12 @@
+{
+  "colors": {
+    "bg1": "{{ colors.surface.default.hex }}",
+    "bg2": "{{ colors.surface_container.default.hex }}",
+    "bg3": "{{ colors.surface_container_high.default.hex }}",
+    "txt1": "{{ colors.on_surface.default.hex }}",
+    "txt2": "{{ colors.on_surface_variant.default.hex }}",
+    "txt3": "{{ colors.outline.default.hex }}",
+    "txt4": "{{ colors.primary.default.hex }}",
+    "txtErr": "{{ colors.error.default.hex }}"
+  }
+}

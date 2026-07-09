@@ -782,6 +782,136 @@ group = "magni"
 size = 696
 
 [[entry]]
+path = ".config/matugen"
+type = "directory"
+mode = 16877
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 40
+
+[[entry]]
+path = ".config/matugen/config.toml"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 1842
+
+[[entry]]
+path = ".config/matugen/templates"
+type = "directory"
+mode = 16877
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 236
+
+[[entry]]
+path = ".config/matugen/templates/brave.conf"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 93
+
+[[entry]]
+path = ".config/matugen/templates/hypr.conf"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 749
+
+[[entry]]
+path = ".config/matugen/templates/hypr.lua"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 753
+
+[[entry]]
+path = ".config/matugen/templates/kitty.conf"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 1542
+
+[[entry]]
+path = ".config/matugen/templates/obsidian.css"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 7795
+
+[[entry]]
+path = ".config/matugen/templates/shadow-newtab.json"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 441
+
+[[entry]]
+path = ".config/matugen/templates/vicinae.toml"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 3141
+
+[[entry]]
+path = ".config/matugen/templates/vscode-colors"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 862
+
+[[entry]]
+path = ".config/matugen/templates/vscode-colors.json"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 1415
+
+[[entry]]
+path = ".config/matugen/templates/zsh.conf"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 468
+
+[[entry]]
 path = ".config/metapac"
 type = "directory"
 mode = 16877
@@ -63939,7 +64069,17 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 132
+size = 194
+
+[[entry]]
+path = ".local/share/applications/claude-code-url-handler.desktop"
+type = "file"
+mode = 33188
+uid = 1000
+gid = 1000
+user = "magni"
+group = "magni"
+size = 222
 
 [[entry]]
 path = ".local/share/applications/mimeinfo.cache"

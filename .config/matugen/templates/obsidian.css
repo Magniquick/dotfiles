@@ -1,0 +1,186 @@
+/* Matugen -> Obsidian + Minimal variable bridge */
+
+.theme-dark {
+  /* Minimal core palette */
+  --base-h: calc({{colors.primary.dark.hue}} / 255 * 360) !important;
+  --base-s: calc({{colors.primary.dark.saturation}} / 255 * 100%) !important;
+  --base-l: 14% !important;
+
+  --accent-h: calc({{colors.primary.dark.hue}} / 255 * 360) !important;
+  --accent-s: calc({{colors.primary.dark.saturation}} / 255 * 100%) !important;
+  --accent-l: calc({{colors.primary.dark.lightness}} / 255 * 100%) !important;
+
+  --bg1: {{colors.surface.dark.hex}} !important;
+  --bg2: {{colors.surface_dim.dark.hex}} !important;
+  --bg3: {{colors.secondary_container.dark.hex}} !important;
+
+  --ui1: {{colors.secondary_container.dark.hex}} !important;
+  --ui2: {{colors.secondary.dark.hex}} !important;
+  --ui3: {{colors.primary_container.dark.hex}} !important;
+
+  --tx1: {{colors.on_surface.dark.hex}} !important;
+  --tx2: {{colors.on_surface_variant.dark.hex}} !important;
+  --tx3: {{colors.outline.dark.hex}} !important;
+  --tx4: {{colors.on_secondary_container.dark.hex}} !important;
+
+  --ax1: {{colors.primary.dark.hex}} !important;
+  --ax2: {{colors.tertiary.dark.hex}} !important;
+  --ax3: {{colors.primary_container.dark.hex}} !important;
+
+  --hl1: color-mix(in srgb, {{colors.primary.dark.hex}} 35%, transparent) !important;
+  --hl2: color-mix(in srgb, {{colors.secondary.dark.hex}} 30%, transparent) !important;
+  --sp1: {{colors.on_primary.dark.hex}} !important;
+
+  /* Core Obsidian variables */
+  --text-normal: var(--tx1) !important;
+  --text-muted: var(--tx2) !important;
+  --text-faint: var(--tx3) !important;
+
+  --background-primary: var(--bg1) !important;
+  --background-primary-alt: var(--bg2) !important;
+  --background-secondary: var(--bg2) !important;
+  --background-secondary-alt: var(--bg1) !important;
+
+  --background-modifier-hover: var(--bg3) !important;
+  --background-modifier-active-hover: var(--ui2) !important;
+  --background-modifier-message: var(--bg2) !important;
+  --background-modifier-form-field: var(--ui1) !important;
+
+  --interactive-accent: var(--ax3) !important;
+  --interactive-accent-hover: var(--ax1) !important;
+
+  --ribbon-background: var(--bg2) !important;
+  --divider-color: var(--ui1) !important;
+  --status-bar-border-color: var(--ui1) !important;
+  --status-bar-background: var(--bg2) !important;
+  --titlebar-background: var(--bg2) !important;
+  --titlebar-text-color: var(--tx1) !important;
+
+  --nav-item-color: var(--tx2) !important;
+  --nav-item-color-active: var(--tx1) !important;
+  --nav-item-background-active: var(--bg3) !important;
+  --nav-item-color-hover: var(--tx1) !important;
+  --nav-item-background-hover: var(--bg3) !important;
+
+  --tab-background-active: var(--ui1) !important;
+  --tab-text-color-active: var(--tx1) !important;
+  --tab-text-color: var(--tx2) !important;
+
+  --icon-color: var(--tx1) !important;
+
+  --h1-color: {{colors.primary.dark.hex}} !important;
+  --h2-color: color-mix(in srgb, {{colors.primary.dark.hex}}, {{colors.tertiary.dark.hex}}) !important;
+  --h3-color: {{colors.tertiary.dark.hex}} !important;
+  --h4-color: color-mix(in srgb, {{colors.primary.dark.hex}}, {{colors.secondary.dark.hex}}) !important;
+  --h5-color: {{colors.secondary.dark.hex}} !important;
+  --h6-color: color-mix(in srgb, {{colors.tertiary.dark.hex}}, {{colors.secondary.dark.hex}}) !important;
+}
+
+.theme-light {
+  --base-h: calc({{colors.primary.light.hue}} / 255 * 360) !important;
+  --base-s: calc({{colors.primary.light.saturation}} / 255 * 100%) !important;
+  --base-l: 96% !important;
+
+  --accent-h: calc({{colors.primary.light.hue}} / 255 * 360) !important;
+  --accent-s: calc({{colors.primary.light.saturation}} / 255 * 100%) !important;
+  --accent-l: calc({{colors.primary.light.lightness}} / 255 * 100%) !important;
+
+  --bg1: {{colors.surface.light.hex}} !important;
+  --bg2: {{colors.surface_dim.light.hex}} !important;
+  --bg3: {{colors.secondary_container.light.hex}} !important;
+
+  --ui1: {{colors.secondary_container.light.hex}} !important;
+  --ui2: {{colors.secondary.light.hex}} !important;
+  --ui3: {{colors.primary_container.light.hex}} !important;
+
+  --tx1: {{colors.on_surface.light.hex}} !important;
+  --tx2: {{colors.on_surface_variant.light.hex}} !important;
+  --tx3: {{colors.outline.light.hex}} !important;
+  --tx4: {{colors.on_secondary_container.light.hex}} !important;
+
+  --ax1: {{colors.primary.light.hex}} !important;
+  --ax2: {{colors.tertiary.light.hex}} !important;
+  --ax3: {{colors.primary_container.light.hex}} !important;
+
+  --hl1: color-mix(in srgb, {{colors.primary.light.hex}} 25%, transparent) !important;
+  --hl2: color-mix(in srgb, {{colors.secondary.light.hex}} 25%, transparent) !important;
+  --sp1: {{colors.on_primary.light.hex}} !important;
+
+  --text-normal: var(--tx1) !important;
+  --text-muted: var(--tx2) !important;
+  --text-faint: var(--tx3) !important;
+
+  --background-primary: var(--bg1) !important;
+  --background-primary-alt: var(--bg2) !important;
+  --background-secondary: var(--bg2) !important;
+  --background-secondary-alt: var(--bg1) !important;
+
+  --background-modifier-hover: var(--bg3) !important;
+  --background-modifier-active-hover: var(--ui2) !important;
+  --background-modifier-message: var(--bg2) !important;
+  --background-modifier-form-field: var(--ui1) !important;
+
+  --interactive-accent: var(--ax3) !important;
+  --interactive-accent-hover: var(--ax1) !important;
+
+  --ribbon-background: var(--bg2) !important;
+  --divider-color: var(--ui1) !important;
+  --status-bar-border-color: var(--ui1) !important;
+  --status-bar-background: var(--bg2) !important;
+  --titlebar-background: var(--bg2) !important;
+  --titlebar-text-color: var(--tx1) !important;
+
+  --nav-item-color: var(--tx2) !important;
+  --nav-item-color-active: var(--tx1) !important;
+  --nav-item-background-active: var(--bg3) !important;
+  --nav-item-color-hover: var(--tx1) !important;
+  --nav-item-background-hover: var(--bg3) !important;
+
+  --tab-background-active: var(--ui1) !important;
+  --tab-text-color-active: var(--tx1) !important;
+  --tab-text-color: var(--tx2) !important;
+
+  --icon-color: var(--tx1) !important;
+
+  --h1-color: {{colors.primary.light.hex}} !important;
+  --h2-color: color-mix(in srgb, {{colors.primary.light.hex}}, {{colors.tertiary.light.hex}}) !important;
+  --h3-color: {{colors.tertiary.light.hex}} !important;
+  --h4-color: color-mix(in srgb, {{colors.primary.light.hex}}, {{colors.secondary.light.hex}}) !important;
+  --h5-color: {{colors.secondary.light.hex}} !important;
+  --h6-color: color-mix(in srgb, {{colors.tertiary.light.hex}}, {{colors.secondary.light.hex}}) !important;
+}
+
+/* Reduce border prominence for Minimal */
+.theme-dark,
+.theme-light {
+  --divider-color: color-mix(in srgb, var(--ui1) 30%, transparent) !important;
+  --tab-outline-color: color-mix(in srgb, var(--ui1) 24%, transparent) !important;
+  --background-modifier-border: color-mix(in srgb, var(--ui2) 18%, transparent) !important;
+  --background-modifier-border-hover: color-mix(in srgb, var(--ui2) 28%, transparent) !important;
+  --background-modifier-border-focus: color-mix(in srgb, var(--ui2) 40%, transparent) !important;
+  --hr-color: color-mix(in srgb, var(--ui1) 20%, transparent) !important;
+}
+
+/* Layout density: reduce note side whitespace */
+.theme-dark,
+.theme-light {
+  --max-width: 94% !important;
+}
+
+.markdown-source-view.mod-cm6 .cm-contentContainer,
+.markdown-preview-view .markdown-preview-sizer {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+/* Wider main editor/readable width */
+.theme-dark,
+.theme-light {
+  --line-width: 76rem !important;
+  --line-width-wide: 90rem !important;
+}
+
+.markdown-source-view.is-readable-line-width .cm-contentContainer,
+.markdown-preview-view.is-readable-line-width .markdown-preview-sizer {
+  max-width: 96% !important;
+}
