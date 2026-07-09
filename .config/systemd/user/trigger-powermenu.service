@@ -1,9 +1,0 @@
-[Unit]
-Description=Open Eww Powermenu on Power Key Press
-After=logind.service
-Requires=eww.service
-After=eww.service
-
-[Service]
-Type=oneshot
-ExecStart=%E/eww/powermenu.sh

@@ -62899,7 +62899,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 1380
+size = 1218
 
 [[entry]]
 path = ".config/systemd/user/appimages-update.service"
@@ -62930,16 +62930,6 @@ gid = 1000
 user = "magni"
 group = "magni"
 size = 225
-
-[[entry]]
-path = ".config/systemd/user/batwatch.service"
-type = "file"
-mode = 33188
-uid = 1000
-gid = 1000
-user = "magni"
-group = "magni"
-size = 324
 
 [[entry]]
 path = ".config/systemd/user/cli-proxy-api.service"
@@ -62999,17 +62989,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 468
-
-[[entry]]
-path = ".config/systemd/user/default.target.wants/appimagelauncherd.service"
-type = "symlink"
-mode = 41471
-uid = 1000
-gid = 1000
-user = "magni"
-group = "magni"
-size = 47
+size = 418
 
 [[entry]]
 path = ".config/systemd/user/default.target.wants/cli-proxy-api.service"
@@ -63412,16 +63392,6 @@ group = "magni"
 size = 568
 
 [[entry]]
-path = ".config/systemd/user/symlink_pipewire-session-manager.service"
-type = "file"
-mode = 33188
-uid = 1000
-gid = 1000
-user = "magni"
-group = "magni"
-size = 42
-
-[[entry]]
 path = ".config/systemd/user/sync-roommate-sheets.service"
 type = "file"
 mode = 33188
@@ -63490,16 +63460,6 @@ gid = 1000
 user = "magni"
 group = "magni"
 size = 51
-
-[[entry]]
-path = ".config/systemd/user/trigger-powermenu.service"
-type = "file"
-mode = 33188
-uid = 1000
-gid = 1000
-user = "magni"
-group = "magni"
-size = 171
 
 [[entry]]
 path = ".config/systemd/user/vicinae.service"
@@ -63979,17 +63939,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 194
-
-[[entry]]
-path = ".local/share/applications/claude-code-url-handler.desktop"
-type = "file"
-mode = 33188
-uid = 1000
-gid = 1000
-user = "magni"
-group = "magni"
-size = 222
+size = 132
 
 [[entry]]
 path = ".local/share/applications/mimeinfo.cache"
