@@ -1,16 +1,16 @@
 return {
-    border = "rgb(c0c1ff)",
+    border = "rgb(ffb3b1)",
     red = "rgb(ffb4ab)",
-    surface1 = "rgb(2a292f)",
-    base = "rgb(131318)",
+    surface1 = "rgb(322827)",
+    base = "rgb(1a1111)",
 
-    text_hex = "e4e1e9",
-    subtext_hex = "c7c5d0",
+    text_hex = "f0dedd",
+    subtext_hex = "d7c1c0",
 
-    text = "rgb(e4e1e9)",
-    subtext = "rgb(c7c5d0)",
-    overlay1 = "rgb(918f9a)",
-    overlay2 = "rgb(46464f)",
+    text = "rgb(f0dedd)",
+    subtext = "rgb(d7c1c0)",
+    overlay1 = "rgb(a08c8b)",
+    overlay2 = "rgb(524342)",
 
-    blue_glow = "rgba(c0c1ff)",
+    blue_glow = "rgba(ffb3b1)",
 }
