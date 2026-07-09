@@ -18,7 +18,7 @@
  *
  * Dependencies:
  * - Quickshell.Services.Mpris: Built-in MPRIS service provider
- * - Qt5Compat.GraphicalEffects: Album art blur effects
+ * - QtQuick.Effects: Album art rounded-corner masking (MultiEffect)
  *
  * Configuration:
  * - maxLength: Maximum text length before truncation (default: 45 characters)
@@ -66,7 +66,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 import Quickshell.Services.Mpris
 import qsnative
 import "../../common/materialkit" as MK
@@ -773,15 +773,18 @@ ModuleContainer {
               anchors.fill: parent
               radius: Config.shape.corner.sm
               visible: false
+              layer.enabled: true
             }
             Loader {
               anchors.fill: parent
               active: root.tooltipVisualActive && root.hasArt && artImage.status === Image.Ready
-              sourceComponent: OpacityMask {
+              sourceComponent: MultiEffect {
                 anchors.fill: parent
-                cached: true
                 source: artImage
+                maskEnabled: true
                 maskSource: artMask
+                maskThresholdMin: 0.5
+                maskSpreadAtMin: 1.0
               }
             }
           }

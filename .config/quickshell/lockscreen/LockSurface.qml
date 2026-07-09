@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
-import Qt5Compat.GraphicalEffects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
@@ -677,14 +676,22 @@ WlSessionLockSurface {
             visible: false
           }
 
-          OpacityMask {
+          Rectangle {
+            id: profileMask
+
+            anchors.fill: profileImage
+            radius: width / 2
+            visible: false
+            layer.enabled: true
+          }
+
+          MultiEffect {
             anchors.fill: profileImage
             source: profileImage
-            maskSource: Rectangle {
-              width: profileImage.width
-              height: profileImage.height
-              radius: width / 2
-            }
+            maskEnabled: true
+            maskSource: profileMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 1.0
           }
         }
 

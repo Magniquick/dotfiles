@@ -4249,7 +4249,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 49551
+size = 49667
 
 [[entry]]
 path = ".config/quickshell/bar/modules/NetworkModule.qml"
@@ -10969,7 +10969,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 29382
+size = 29509
 
 [[entry]]
 path = ".config/quickshell/lockscreen/assets"
