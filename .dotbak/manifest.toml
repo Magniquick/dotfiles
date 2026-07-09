@@ -63319,7 +63319,7 @@ uid = 1000
 gid = 1000
 user = "magni"
 group = "magni"
-size = 484
+size = 449
 
 [[entry]]
 path = ".config/systemd/user/shadow-native-host.service"

@@ -9,7 +9,7 @@ StartLimitBurst=5
 
 [Service]
 ExecStart=%E/quickshell/qs
-ExecStop=/usr/bin/quickshell kill --path %h/.local/share/dotbak/managed/config/quickshell
+ExecStop=/usr/bin/quickshell kill --path %E/quickshell
 Restart=on-failure
 RestartPreventExitStatus=SIGABRT
 MemoryMax=2G
